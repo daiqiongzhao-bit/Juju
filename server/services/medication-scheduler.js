@@ -13,7 +13,7 @@ import { createNotificationChannelStore } from './notification-channels.js';
 import { defaultProviders } from './notifications.js';
 
 const log = createLogger('MedicationScheduler');
-const APP_NAME = 'Yuvomi';
+const APP_NAME = 'Juju';
 // Fallback-Body, falls der Medikamentenname fehlt: nie den App-Namen wiederholen (#581).
 const FALLBACK_BODY = 'Medication reminder';
 const PROVIDER_TIMEOUT_MS = 8_000;

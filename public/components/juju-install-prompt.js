@@ -18,13 +18,13 @@ import {
   promptPwaInstall,
 } from '/utils/pwa-install.js';
 
-const DISMISS_KEY = 'yuvomi-install-dismissed';
+const DISMISS_KEY = 'juju-install-dismissed';
 const DISMISS_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 Tage
 
-const INTERACTION_KEY = 'yuvomi-install-interactions';
+const INTERACTION_KEY = 'juju-install-interactions';
 const INTERACTION_THRESHOLD = 2;
 
-class YuvomiInstallPrompt extends HTMLElement {
+class JujuInstallPrompt extends HTMLElement {
   constructor() {
     super();
     this._deferredPrompt = null;
@@ -289,7 +289,7 @@ class YuvomiInstallPrompt extends HTMLElement {
     const icon = document.createElement('img');
     icon.className = 'icon';
     icon.src = '/icons/icon-192.png';
-    icon.alt = 'Yuvomi';
+    icon.alt = 'Juju';
     icon.width = 40;
     icon.height = 40;
     banner.appendChild(icon);
@@ -460,4 +460,4 @@ class YuvomiInstallPrompt extends HTMLElement {
   }
 }
 
-customElements.define('yuvomi-install-prompt', YuvomiInstallPrompt);
+customElements.define('yuvomi-install-prompt', JujuInstallPrompt);

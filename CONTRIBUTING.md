@@ -1,6 +1,6 @@
-# Contributing to Yuvomi
+# Contributing to Juju
 
-Thanks for your interest in contributing! Yuvomi is a small, opinionated project with deliberate architectural constraints. This guide covers what you need to know before submitting code.
+Thanks for your interest in contributing! Juju is a small, opinionated project with deliberate architectural constraints. This guide covers what you need to know before submitting code.
 
 Have a question before diving in? Start a thread in [Discussions](https://github.com/daiqiongzhao-bit/Juju/discussions).
 
@@ -8,7 +8,7 @@ Have a question before diving in? Start a thread in [Discussions](https://github
 
 ## Hard Constraints
 
-**Yuvomi enforces a strict "no frameworks, no build tools" policy.** This is a permanent architectural decision, not a temporary limitation.
+**Juju enforces a strict "no frameworks, no build tools" policy.** This is a permanent architectural decision, not a temporary limitation.
 
 Specifically - the following will **not** be merged:
 
@@ -32,7 +32,7 @@ Backend dependencies are evaluated case-by-case but must remain minimal. When in
 
 ```bash
 git clone https://github.com/daiqiongzhao-bit/Juju.git
-cd yuvomi
+cd Juju
 npm install
 cp .env.example .env
 # Set SESSION_SECRET - and CLEAR the prefilled DB_ENCRYPTION_KEY line
@@ -107,7 +107,7 @@ public/
   api.js               # Fetch wrapper (auth, CSRF, error handling)
   styles/
     tokens.css         # Design tokens - all colors, radii, shadows, fonts
-  components/          # Reusable Web Components (yuvomi-* prefix)
+  components/          # Reusable Web Components (juju-* prefix)
   pages/               # Page modules - each exports a render() function
   sw.js                # Service worker
   offline.html         # Offline fallback page (served by service worker)
@@ -134,8 +134,8 @@ Before starting work, check the [existing issues](https://github.com/daiqiongzha
 
 ```bash
 # Fork on GitHub, then:
-git clone https://github.com/YOUR-USERNAME/yuvomi.git
-cd yuvomi
+git clone https://github.com/YOUR-USERNAME/Juju.git
+cd Juju
 git remote add upstream https://github.com/daiqiongzhao-bit/Juju.git
 git checkout -b feat/your-feature-name
 ```
@@ -253,7 +253,7 @@ reviewed", not "every run reviewed it".
 
 ### Frontend
 
-- Web Component prefix: `yuvomi-` (one component per file)
+- Web Component prefix: `juju-` (one component per file)
 - All UI text via i18n keys (`t('key')`) - never hardcode text in components. German (`de`) is the reference locale.
 - **Adding a new i18n key:** add it to **all** files in `public/locales/` (24 languages; a
   non-German value may start as the English text). The JSON files are 4-space indented

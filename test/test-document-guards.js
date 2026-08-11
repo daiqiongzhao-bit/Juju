@@ -1772,7 +1772,7 @@ test('Sonde 10 - jedes Dokument traegt dieselbe Struktur, angemeldet wie davor',
     if (!r.lang) findings.push(`${at}: kein lang-Attribut am Dokument`);
 
     // Der Titel ist in einer SPA die einzige Ansage beim Seitenwechsel
-    // (WCAG 2.4.2, Level A). „Yuvomi · Yuvomi" war der gemessene Verstoss.
+    // (WCAG 2.4.2, Level A). „Juju · Juju" war der gemessene Verstoss.
     const parts = r.title.split('·').map((s) => s.trim());
     if (!r.title.trim()) findings.push(`${at}: leerer Dokumenttitel`);
     else if (parts.length > 1 && parts[0] === parts[1]) {

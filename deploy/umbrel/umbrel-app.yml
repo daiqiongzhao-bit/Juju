@@ -1,11 +1,11 @@
 manifestVersion: 1
-id: yuvomi
+id: juju
 category: files
-name: Yuvomi
+name: Juju
 version: "1.77.0"
 tagline: Self-hosted family planner — calendar, tasks, shopping, meals & budget
 description: >-
-  Yuvomi is a self-hosted, privacy-focused family planner that bundles everything
+  Juju is a self-hosted, privacy-focused family planner that bundles everything
   a household needs into a single fast PWA — no cloud, no tracking, no ads.
 
 
@@ -40,7 +40,7 @@ description: >-
   🔒 PRIVACY
 
 
-  Yuvomi keeps all data in a local SQLite database (optionally encrypted with
+  Juju keeps all data in a local SQLite database (optionally encrypted with
   SQLCipher). Nothing leaves your device unless you explicitly enable a calendar
   or contacts sync to a provider you choose.
 
@@ -48,7 +48,7 @@ description: >-
   🛠️ SET-UP
 
 
-  Open Yuvomi from your Umbrel dashboard and create the first account — that
+  Open Juju from your Umbrel dashboard and create the first account — that
   account becomes the family admin and can invite the rest of the household.
 releaseNotes: >-
   Loans can now track whether your household borrowed or lent money, optionally

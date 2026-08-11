@@ -1,5 +1,5 @@
 {
-  "title": "Pag-set up ng Yuvomi",
+  "title": "Pag-set up ng Juju",
   "common": {
     "continue": "Magpatuloy",
     "back": "Bumalik",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Batayang Pagsasaayos",
-    "subtitle": "Paano mo aabutin ang Yuvomi?",
+    "subtitle": "Paano mo aabutin ang Juju?",
     "existing": "May natukoy na umiiral na pagsasaayos - bibinbinan ang iyong kasalukuyang .env file bago mag-save.",
     "hostLabel": "Domain o IP address",
-    "hostHint": "Ang address na gagamitin mo para buksan ang Yuvomi sa iyong browser.",
+    "hostHint": "Ang address na gagamitin mo para buksan ang Juju sa iyong browser.",
     "portLabel": "Port",
     "tzLabel": "Time zone",
     "errHost": "Hindi wastong hostname. Gumamit lamang ng mga titik, numero, gitling at tuldok.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Pag-sync ng Kalendaryo",
-    "subtitle": "Ikonekta ang Yuvomi sa Google Calendar o Apple iCloud. Parehong opsyonal - palawakin para i-configure.",
+    "subtitle": "Ikonekta ang Juju sa Google Calendar o Apple iCloud. Parehong opsyonal - palawakin para i-configure.",
     "google": "Google Calendar",
     "googleHint": "Gumawa ng mga kredensyal na OAuth sa {{link}}. Redirect URI: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -73,7 +73,7 @@
     "tag": "Advanced · opsyonal",
     "title": "Mga Advanced na Setting",
     "subtitle": "Reverse proxy, single sign-on at awtomatikong backup. Lahat opsyonal - ligtas na laktawan.",
-    "proxyLabel": "Paano naaabot ang Yuvomi?",
+    "proxyLabel": "Paano naaabot ang Juju?",
     "proxyBehindHttps": "Sa likod ng reverse proxy na may HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Direktang access sa localhost / HTTP",
     "proxyHint": "Kapag hindi sigurado, piliin ang \"Reverse proxy\": ipinapatupad nito ang ligtas na cookie. Piliin ang \"Direkta\" para lamang sa lokal na HTTP na access na walang HTTPS.",
@@ -167,7 +167,7 @@
     "documentGoogleDrive": "Mga dokumento sa Google Drive"
   },
   "docker": {
-    "title": "Sinisimulan ang Yuvomi",
+    "title": "Sinisimulan ang Juju",
     "subtitle": "Kinukuha ang image at sinisimulan ang Docker container.",
     "elapsed": "{{n}}s ang lumipas",
     "running": "Malusog at tumatakbo ang container",
@@ -186,7 +186,7 @@
   },
   "admin": {
     "title": "Gumawa ng Admin Account",
-    "subtitle": "I-set up ang iyong unang pag-log in. May buong access sa Yuvomi ang account na ito.",
+    "subtitle": "I-set up ang iyong unang pag-log in. May buong access sa Juju ang account na ito.",
     "userLabel": "Username",
     "userHint": "3-64 na karakter: mga titik, numero, . - _",
     "nameLabel": "Pangalang Ipapakita",
@@ -202,19 +202,19 @@
     "errCreate": "Nabigo ang paggawa ng admin account."
   },
   "done": {
-    "title": "Handa na ang Yuvomi!",
+    "title": "Handa na ang Juju!",
     "subtitle": "Tumatakbo na ang iyong family planner at naka-set up na ang iyong admin account.",
-    "open": "Buksan ang Yuvomi →",
+    "open": "Buksan ang Juju →",
     "backupReminder": "Tandaang i-backup ngayon ang iyong .env file - naroon ang iyong mga susi.",
     "download": "I-download ang .env file",
     "savedTo": "Na-save sa {{path}}"
   },
   "welcome": {
-    "title": "Maligayang pagdating sa Yuvomi",
+    "title": "Maligayang pagdating sa Juju",
     "subtitle": "Patakbuhin natin ang iyong pribadong family planner. Piliin kung paano mo ito gustong i-set up.",
     "simpleTitle": "Simpleng setup",
     "simpleBadge": "Inirerekomenda",
-    "simpleDesc": "Kami ang bahala sa mga teknikal na detalye. Angkop na angkop para patakbuhin ang Yuvomi sa bahay.",
+    "simpleDesc": "Kami ang bahala sa mga teknikal na detalye. Angkop na angkop para patakbuhin ang Juju sa bahay.",
     "simpleTime": "Mga 2 minuto",
     "advancedTitle": "Advanced na setup",
     "advancedDesc": "Buong kontrol: reverse proxy, pag-sync ng kalendaryo, email, single sign-on at mga backup.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "May lokal na backup na itinatago gabi-gabi.",
     "backupReminder": "Pagkatapos ng setup, i-backup ang nagawang .env file - naroon ang iyong tanging susi sa pag-encrypt.",
     "switchAdvanced": "Kailangan ng higit pang opsyon? Lumipat sa advanced na setup",
-    "start": "I-set up at simulan ang Yuvomi"
+    "start": "I-set up at simulan ang Juju"
   },
   "email": {
     "title": "Email at Pag-reset ng Password",

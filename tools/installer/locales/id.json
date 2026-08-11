@@ -1,5 +1,5 @@
 {
-  "title": "Siapkan Yuvomi",
+  "title": "Siapkan Juju",
   "common": {
     "continue": "Lanjut",
     "back": "Kembali",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Konfigurasi dasar",
-    "subtitle": "Bagaimana Anda ingin mengakses Yuvomi?",
+    "subtitle": "Bagaimana Anda ingin mengakses Juju?",
     "existing": "Konfigurasi yang ada terdeteksi — file .env Anda saat ini dicadangkan sebelum menyimpan.",
     "hostLabel": "Domain atau alamat IP",
-    "hostHint": "Alamat yang Anda gunakan untuk membuka Yuvomi di browser.",
+    "hostHint": "Alamat yang Anda gunakan untuk membuka Juju di browser.",
     "portLabel": "Port",
     "tzLabel": "Zona waktu",
     "errHost": "Nama host tidak valid. Gunakan hanya huruf, angka, tanda hubung, dan titik.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Sinkronisasi kalender",
-    "subtitle": "Sambungkan Yuvomi dengan Google Calendar atau Apple iCloud. Keduanya opsional — bentangkan untuk mengonfigurasi.",
+    "subtitle": "Sambungkan Juju dengan Google Calendar atau Apple iCloud. Keduanya opsional — bentangkan untuk mengonfigurasi.",
     "google": "Google Calendar",
     "googleHint": "Buat kredensial OAuth di {{link}}. Redirect URI: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -73,7 +73,7 @@
     "tag": "Lanjutan · opsional",
     "title": "Pengaturan lanjutan",
     "subtitle": "Reverse proxy, single sign-on, dan cadangan otomatis. Semua opsional — melewatinya tidak berisiko.",
-    "proxyLabel": "Bagaimana Yuvomi disediakan?",
+    "proxyLabel": "Bagaimana Juju disediakan?",
     "proxyBehindHttps": "Di belakang reverse proxy dengan HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Akses langsung melalui localhost / HTTP",
     "proxyHint": "Akses langsung menonaktifkan cookie Secure murni, sehingga login berfungsi tanpa HTTPS.",
@@ -167,7 +167,7 @@
     "documentGoogleDrive": "Dokumen Google Drive"
   },
   "docker": {
-    "title": "Yuvomi sedang dimulai",
+    "title": "Juju sedang dimulai",
     "subtitle": "Image dimuat dan kontainer Docker dimulai.",
     "elapsed": "{{n}} d berlalu",
     "running": "Kontainer sehat dan berjalan",
@@ -186,7 +186,7 @@
   },
   "admin": {
     "title": "Buat akun admin",
-    "subtitle": "Siapkan login pertama Anda. Akun ini memiliki akses penuh ke Yuvomi.",
+    "subtitle": "Siapkan login pertama Anda. Akun ini memiliki akses penuh ke Juju.",
     "userLabel": "Nama pengguna",
     "userHint": "3-64 karakter: huruf, angka, . - _",
     "nameLabel": "Nama tampilan",
@@ -202,19 +202,19 @@
     "errCreate": "Akun admin tidak dapat dibuat."
   },
   "done": {
-    "title": "Yuvomi siap!",
+    "title": "Juju siap!",
     "subtitle": "Perencana keluarga Anda berjalan dan akun admin Anda telah disiapkan.",
-    "open": "Buka Yuvomi →",
+    "open": "Buka Juju →",
     "backupReminder": "Ingat untuk mencadangkan berkas .env Anda sekarang — berkas itu berisi kunci Anda.",
     "download": "Unduh berkas .env",
     "savedTo": "Disimpan di {{path}}"
   },
   "welcome": {
-    "title": "Selamat datang di Yuvomi",
+    "title": "Selamat datang di Juju",
     "subtitle": "Mari jalankan perencana keluarga pribadi Anda. Pilih cara menyiapkannya.",
     "simpleTitle": "Penyiapan sederhana",
     "simpleBadge": "Disarankan",
-    "simpleDesc": "Kami mengurus detail teknis untuk Anda. Ideal untuk menjalankan Yuvomi di rumah.",
+    "simpleDesc": "Kami mengurus detail teknis untuk Anda. Ideal untuk menjalankan Juju di rumah.",
     "simpleTime": "Sekitar 2 menit",
     "advancedTitle": "Penyiapan lanjutan",
     "advancedDesc": "Kontrol penuh: reverse proxy, sinkronisasi kalender, email, single sign-on, dan pencadangan.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Cadangan lokal disimpan setiap malam.",
     "backupReminder": "Setelah penyiapan, cadangkan berkas .env yang dibuat — berkas itu menyimpan satu-satunya kunci enkripsi Anda.",
     "switchAdvanced": "Butuh lebih banyak opsi? Beralih ke penyiapan lanjutan",
-    "start": "Siapkan & jalankan Yuvomi"
+    "start": "Siapkan & jalankan Juju"
   },
   "email": {
     "title": "Email & atur ulang kata sandi",

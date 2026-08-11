@@ -1,6 +1,6 @@
-# Yuvomi Web Installer
+# Juju Web Installer
 
-A browser-based setup wizard for Yuvomi. Run it once to configure your `.env`,
+A browser-based setup wizard for Juju. Run it once to configure your `.env`,
 start your container engine, and create your admin account — no hand-editing of
 config files. Works with both Docker and Podman (auto-detected).
 
@@ -31,7 +31,7 @@ dedicated `podman-compose.yml` (SELinux `:Z` labels).
 ## What it does
 
 1. Detects the container engine (Docker or Podman), checks its prerequisites, and
-   reports any existing `.env` file or running `yuvomi` container before you start
+   reports any existing `.env` file or running `juju` container before you start
 2. Lets you pick a setup path on the welcome screen:
    - **Simple setup** (recommended for non-technical users) — auto-generates the
      security keys, applies safe localhost/HTTP defaults, and goes straight to

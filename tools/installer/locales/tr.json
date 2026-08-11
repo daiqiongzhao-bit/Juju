@@ -1,5 +1,5 @@
 {
-  "title": "Yuvomi Kurulumu",
+  "title": "Juju Kurulumu",
   "common": {
     "continue": "Devam",
     "back": "Geri",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Temel Yapılandırma",
-    "subtitle": "Yuvomi'a nasıl erişeceksiniz?",
+    "subtitle": "Juju'a nasıl erişeceksiniz?",
     "existing": "Mevcut yapılandırma algılandı — kaydetmeden önce geçerli .env dosyanızın yedeği alınacak.",
     "hostLabel": "Alan adı veya IP adresi",
-    "hostHint": "Yuvomi'u tarayıcınızda açmak için kullanacağınız adres.",
+    "hostHint": "Juju'u tarayıcınızda açmak için kullanacağınız adres.",
     "portLabel": "Bağlantı noktası",
     "tzLabel": "Saat dilimi",
     "errHost": "Geçersiz ana bilgisayar adı. Yalnızca harf, rakam, tire ve nokta kullanın.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Takvim Senkronizasyonu",
-    "subtitle": "Yuvomi'u Google Takvim veya Apple iCloud'a bağlayın. İkisi de isteğe bağlı — yapılandırmak için genişletin.",
+    "subtitle": "Juju'u Google Takvim veya Apple iCloud'a bağlayın. İkisi de isteğe bağlı — yapılandırmak için genişletin.",
     "google": "Google Takvim",
     "googleHint": "{{link}} adresinde OAuth kimlik bilgileri oluşturun. Yönlendirme URI'si: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -99,7 +99,7 @@
     "documentGoogleDrive": "Google Drive belgeleri"
   },
   "docker": {
-    "title": "Yuvomi başlatılıyor",
+    "title": "Juju başlatılıyor",
     "subtitle": "İmaj indiriliyor ve Docker kapsayıcısı başlatılıyor.",
     "elapsed": "{{n}} sn geçti",
     "running": "Kapsayıcı sağlıklı ve çalışıyor",
@@ -118,7 +118,7 @@
   },
   "admin": {
     "title": "Yönetici Hesabı Oluştur",
-    "subtitle": "İlk girişinizi ayarlayın. Bu hesap Yuvomi'a tam erişime sahiptir.",
+    "subtitle": "İlk girişinizi ayarlayın. Bu hesap Juju'a tam erişime sahiptir.",
     "userLabel": "Kullanıcı adı",
     "userHint": "3-64 karakter: harfler, rakamlar, . - _",
     "nameLabel": "Görünen ad",
@@ -134,9 +134,9 @@
     "errCreate": "Yönetici hesabı oluşturulamadı."
   },
   "done": {
-    "title": "Yuvomi hazır!",
+    "title": "Juju hazır!",
     "subtitle": "Aile planlayıcınız çalışıyor ve yönetici hesabınız ayarlandı.",
-    "open": "Yuvomi'u aç →",
+    "open": "Juju'u aç →",
     "backupReminder": "Şimdi .env dosyanızı yedeklemeyi unutmayın — anahtarlarınızı içerir.",
     "download": ".env dosyasını indir",
     "savedTo": "Şuraya kaydedildi: {{path}}"
@@ -145,7 +145,7 @@
     "tag": "Gelişmiş · isteğe bağlı",
     "title": "Gelişmiş Ayarlar",
     "subtitle": "Ters proxy, çoklu oturum açma ve otomatik yedeklemeler. Tümü isteğe bağlı — atlamak güvenlidir.",
-    "proxyLabel": "Yuvomi nasıl yayınlanıyor?",
+    "proxyLabel": "Juju nasıl yayınlanıyor?",
     "proxyBehindHttps": "HTTPS'li bir ters proxy arkasında (Caddy, nginx, Traefik)",
     "proxyDirect": "localhost / HTTP üzerinden doğrudan erişim",
     "proxyHint": "Doğrudan erişim, yalnızca güvenli çerezleri devre dışı bırakır; böylece oturum açma HTTPS olmadan çalışır.",
@@ -210,11 +210,11 @@
     "oidcTrustEmailHint": "Yalnızca sağlayıcınız email_verified göndermiyorsa ve ona güveniyorsanız etkinleştirin."
   },
   "welcome": {
-    "title": "Yuvomi’ye hoş geldiniz",
+    "title": "Juju’ye hoş geldiniz",
     "subtitle": "Özel aile planlayıcınızı çalıştıralım. Nasıl kuracağınızı seçin.",
     "simpleTitle": "Basit kurulum",
     "simpleBadge": "Önerilen",
-    "simpleDesc": "Teknik ayrıntıları sizin için biz hallederiz. Yuvomi’yi evde çalıştırmak için idealdir.",
+    "simpleDesc": "Teknik ayrıntıları sizin için biz hallederiz. Juju’yi evde çalıştırmak için idealdir.",
     "simpleTime": "Yaklaşık 2 dakika",
     "advancedTitle": "Gelişmiş kurulum",
     "advancedDesc": "Tam kontrol: ters proxy, takvim senkronizasyonu, e-posta, tek oturum açma ve yedeklemeler.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Her gece yerel bir yedek saklanır.",
     "backupReminder": "Kurulumdan sonra oluşturulan .env dosyasını yedekleyin — tek şifreleme anahtarlarınızı içerir.",
     "switchAdvanced": "Daha fazla seçenek mi lazım? Gelişmiş kuruluma geçin",
-    "start": "Yuvomi’yi kur ve başlat"
+    "start": "Juju’yi kur ve başlat"
   },
   "email": {
     "title": "E-posta ve parola sıfırlama",

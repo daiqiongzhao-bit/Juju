@@ -1,5 +1,5 @@
 /**
- * Demo Seed Script - Yuvomi
+ * Demo Seed Script - Juju
  * Fills the database with realistic demo content for screenshots/mockups,
  * in English or German.
  * Usage: node scripts/seed-demo.js [--db /path/to/yuvomi.db] [--locale en|de]
@@ -175,7 +175,7 @@ const cfgSet = db.prepare(`
 cfgSet.run('currency', 'EUR');
 cfgSet.run('date_format', 'dmy_dot');
 cfgSet.run('time_format', '24h');
-cfgSet.run('app_name', 'Yuvomi');
+cfgSet.run('app_name', 'Juju');
 cfgSet.run('visible_meal_types', 'breakfast,lunch,dinner,snack');
 // Weather widget — Dortmund via Open-Meteo (no API key required)
 cfgSet.run('weather_provider', 'open-meteo');
@@ -744,8 +744,8 @@ const insertNote = db.prepare('INSERT INTO notes (title, content, color, pinned,
    L('Passports (exp. 2028)\nTravel insurance — check!\nEuro cash — €300\nBook airport parking\nAsk Mike to water the plants\nPack sunscreen SPF 50',
      'Reisepässe (gültig bis 2028)\nAuslandskrankenschein — prüfen!\nBargeld — 300 €\nParkplatz am Flughafen buchen\nMike wegen Blumengießen fragen\nSonnencreme LSF 50 einpacken'), '#0EA5E9', 1, alexId],
   [L('WiFi & Smart Home', 'WLAN & Smart Home'),
-   L('WiFi: Yuvomi_Home_5G (password in the router app)\nPhilips Hue: bridge 192.168.1.42\nThermostat: eco mode 18°C\nRouter admin: fritz.box',
-     'WLAN: Yuvomi_Home_5G (Passwort in der Router-App)\nPhilips Hue: Bridge 192.168.1.42\nThermostat: Eco-Modus 18 °C\nRouter-Verwaltung: fritz.box'), '#F59E0B', 1, alexId],
+   L('WiFi: Juju_Home_5G (password in the router app)\nPhilips Hue: bridge 192.168.1.42\nThermostat: eco mode 18°C\nRouter admin: fritz.box',
+     'WLAN: Juju_Home_5G (Passwort in der Router-App)\nPhilips Hue: Bridge 192.168.1.42\nThermostat: Eco-Modus 18 °C\nRouter-Verwaltung: fritz.box'), '#F59E0B', 1, alexId],
   [L("Emma's School Info", 'Emmas Schulinfos'),
    L('Class: 3b — Mrs Bauer\nSchool starts: 08:10\nCollection: 13:30 (Tue/Thu 15:00)\nAllergy: mild lactose intolerance\nBest friends: Lena, Sophie, Tim',
      'Klasse: 3b — Frau Bauer\nSchulbeginn: 08:10\nAbholung: 13:30 (Di/Do 15:00)\nUnverträglichkeit: leichte Laktoseintoleranz\nBeste Freunde: Lena, Sophie, Tim'), '#EC4899', 1, lindaId],

@@ -7,7 +7,7 @@
  *
  * Hintergrund: CardDAV-Quellen formatieren `FN` beliebig — mal `Given Family`,
  * mal `Family, Given`, mal mit Titel oder Spitzname. `N` trägt die Struktur
- * (Family;Given;Additional;Prefix;Suffix). Yuvomi speichert die Komponenten und
+ * (Family;Given;Additional;Prefix;Suffix). Juju speichert die Komponenten und
  * leitet die Anzeige daraus ab, damit Liste und Sortierung konsistent bleiben.
  */
 

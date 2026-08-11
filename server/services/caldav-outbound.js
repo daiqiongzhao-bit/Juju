@@ -210,7 +210,7 @@ export async function processPendingUpdates(client, source, objectIndex, calenda
 
     if (!known?.data) {
       // Ohne das Originalobjekt bliebe nur, es neu zu bauen - und das verlöre
-      // alles, was Yuvomi nicht kennt (Teilnehmer, Alarme, Kategorien).
+      // alles, was Juju nicht kennt (Teilnehmer, Alarme, Kategorien).
       log.warn(`[${label(source)}] No source object for event ${event.id} in this run, deferring its update.`);
       continue;
     }

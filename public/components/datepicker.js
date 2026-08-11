@@ -73,7 +73,7 @@ const ICON = {
 
 const VALID_TYPES = ['date', 'time', 'datetime'];
 
-class YuvomiDatepicker extends HTMLElement {
+class JujuDatepicker extends HTMLElement {
   // form-associated: erscheint in form.elements / FormData über `name`,
   // damit `name`-basierte Reads (form.elements.x.value) den ISO-Wert erhalten.
   static formAssociated = true;
@@ -626,7 +626,7 @@ class YuvomiDatepicker extends HTMLElement {
 }
 
 if (!customElements.get('yuvomi-datepicker')) {
-  customElements.define('yuvomi-datepicker', YuvomiDatepicker);
+  customElements.define('yuvomi-datepicker', JujuDatepicker);
 }
 
-export { YuvomiDatepicker };
+export { JujuDatepicker };

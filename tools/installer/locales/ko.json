@@ -1,5 +1,5 @@
 {
-  "title": "Yuvomi 설정",
+  "title": "Juju 설정",
   "common": {
     "continue": "계속",
     "back": "뒤로",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "기본 구성",
-    "subtitle": "Yuvomi에 어떻게 접속하시겠습니까?",
+    "subtitle": "Juju에 어떻게 접속하시겠습니까?",
     "existing": "기존 구성이 감지되었습니다 — 저장 전에 현재 .env 파일이 백업됩니다.",
     "hostLabel": "도메인 또는 IP 주소",
-    "hostHint": "브라우저에서 Yuvomi를 여는 주소입니다.",
+    "hostHint": "브라우저에서 Juju를 여는 주소입니다.",
     "portLabel": "포트",
     "tzLabel": "시간대",
     "errHost": "잘못된 호스트 이름입니다. 문자, 숫자, 하이픈, 마침표만 사용하세요.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "캘린더 동기화",
-    "subtitle": "Yuvomi를 Google 캘린더 또는 Apple iCloud에 연결하세요. 둘 다 선택 사항 — 구성하려면 펼치세요.",
+    "subtitle": "Juju를 Google 캘린더 또는 Apple iCloud에 연결하세요. 둘 다 선택 사항 — 구성하려면 펼치세요.",
     "google": "Google 캘린더",
     "googleHint": "{{link}}에서 OAuth 자격 증명을 만드세요. 리디렉션 URI: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -73,7 +73,7 @@
     "tag": "고급 · 선택 사항",
     "title": "고급 설정",
     "subtitle": "리버스 프록시, 싱글 사인온, 자동 백업. 모두 선택 사항 — 건너뛰어도 문제없습니다.",
-    "proxyLabel": "Yuvomi가 어떻게 제공됩니까?",
+    "proxyLabel": "Juju가 어떻게 제공됩니까?",
     "proxyBehindHttps": "HTTPS를 사용하는 리버스 프록시 뒤 (Caddy, nginx, Traefik)",
     "proxyDirect": "localhost / HTTP를 통한 직접 접속",
     "proxyHint": "직접 접속은 순수 Secure 쿠키를 비활성화하여 HTTPS 없이도 로그인이 작동하게 합니다.",
@@ -167,7 +167,7 @@
     "documentGoogleDrive": "Google Drive 문서"
   },
   "docker": {
-    "title": "Yuvomi 시작 중",
+    "title": "Juju 시작 중",
     "subtitle": "이미지를 불러오고 Docker 컨테이너를 시작합니다.",
     "elapsed": "{{n}}초 경과",
     "running": "컨테이너가 정상이며 실행 중입니다",
@@ -186,7 +186,7 @@
   },
   "admin": {
     "title": "관리자 계정 만들기",
-    "subtitle": "첫 로그인을 설정하세요. 이 계정은 Yuvomi에 대한 전체 접근 권한을 가집니다.",
+    "subtitle": "첫 로그인을 설정하세요. 이 계정은 Juju에 대한 전체 접근 권한을 가집니다.",
     "userLabel": "사용자 이름",
     "userHint": "3~64자: 문자, 숫자, . - _",
     "nameLabel": "표시 이름",
@@ -202,19 +202,19 @@
     "errCreate": "관리자 계정을 만들지 못했습니다."
   },
   "done": {
-    "title": "Yuvomi 준비 완료!",
+    "title": "Juju 준비 완료!",
     "subtitle": "가족 플래너가 실행 중이며 관리자 계정이 설정되었습니다.",
-    "open": "Yuvomi 열기 →",
+    "open": "Juju 열기 →",
     "backupReminder": "지금 .env 파일을 백업하는 것을 잊지 마세요 — 키가 들어 있습니다.",
     "download": ".env 파일 다운로드",
     "savedTo": "{{path}}에 저장됨"
   },
   "welcome": {
-    "title": "Yuvomi에 오신 것을 환영합니다",
+    "title": "Juju에 오신 것을 환영합니다",
     "subtitle": "개인 가족 플래너를 실행해 봅시다. 설정 방법을 선택하세요.",
     "simpleTitle": "간편 설정",
     "simpleBadge": "권장",
-    "simpleDesc": "기술적인 세부 사항은 저희가 처리합니다. 집에서 Yuvomi를 운영하기에 적합합니다.",
+    "simpleDesc": "기술적인 세부 사항은 저희가 처리합니다. 집에서 Juju를 운영하기에 적합합니다.",
     "simpleTime": "약 2분",
     "advancedTitle": "고급 설정",
     "advancedDesc": "완전한 제어: 리버스 프록시, 캘린더 동기화, 이메일, 싱글 사인온, 백업.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "매일 밤 로컬 백업을 보관합니다.",
     "backupReminder": "설정 후 생성된 .env 파일을 백업하세요 — 유일한 암호화 키가 들어 있습니다.",
     "switchAdvanced": "옵션이 더 필요하세요? 고급 설정으로 전환",
-    "start": "Yuvomi 설정 및 시작"
+    "start": "Juju 설정 및 시작"
   },
   "email": {
     "title": "이메일 및 비밀번호 재설정",

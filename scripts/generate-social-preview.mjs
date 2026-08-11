@@ -238,11 +238,11 @@ body::after {
   <div class="brand">
     <div class="mark">
       <svg viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <g fill="white" fill-opacity="0.82"><circle cx="64" cy="72" r="27"/><circle cx="100" cy="78" r="25"/><circle cx="80" cy="106" r="24"/></g>
+        <g fill="white" fill-opacity="0.82"><path d="M104 46 L104 100 Q104 120 82 122 Q54 124 48 102" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/></g>
         
       </svg>
     </div>
-    <div class="name">Yuvomi</div>
+    <div class="name">Juju</div>
   </div>
 
   <div class="kicker"><span class="dot"></span>Self-hosted · Open Source</div>
@@ -274,10 +274,10 @@ body::after {
       <span class="addr">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
              stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        yuvomi.local
+        juju.local
       </span>
     </div>
-    <img src="${imgSrc}" alt="Yuvomi Dashboard">
+    <img src="${imgSrc}" alt="Juju Dashboard">
   </div>
 </div>
 

@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The whole interface has been redesigned in Apple's Human Interface Guidelines and its liquid-glass design language. Yuvomi should now feel like an app that shipped with the device: the system font stack and Apple's type scale, cool system neutrals, capsule controls and inset-grouped lists. Glass is chrome and nothing else - the tab bar, the sidebar, sheets and the action button are made of it, while everything you actually read sits on an opaque surface. Each of the seventeen modules keeps its own accent colour so you can tell at a glance where you are, and all of them were verified against the surfaces they are used on: WCAG AA in light *and* dark, with the same values holding under reduced transparency and increased contrast. On phones the module title now starts as a large title and collapses into the bar as you scroll, the way it does elsewhere on the platform. Nothing about your data, your household or your integrations changes
+- The whole interface has been redesigned in Apple's Human Interface Guidelines and its liquid-glass design language. Juju should now feel like an app that shipped with the device: the system font stack and Apple's type scale, cool system neutrals, capsule controls and inset-grouped lists. Glass is chrome and nothing else - the tab bar, the sidebar, sheets and the action button are made of it, while everything you actually read sits on an opaque surface. Each of the seventeen modules keeps its own accent colour so you can tell at a glance where you are, and all of them were verified against the surfaces they are used on: WCAG AA in light *and* dark, with the same values holding under reduced transparency and increased contrast. On phones the module title now starts as a large title and collapses into the bar as you scroll, the way it does elsewhere on the platform. Nothing about your data, your household or your integrations changes
 - The same swipe now means the same thing in every list. Until now only the shopping list and tasks answered a swipe at all, and they disagreed: swiping right checked off a shopping item but opened a task for editing. The start of the row now always carries the positive action and the end the destructive or secondary one, so **tasks and the shopping list have swapped sides** - a swipe that used to open a task now completes it. Because this is muscle memory, a one-time hint appears the first time you complete a swipe after updating. **Birthdays and subscriptions gained the two gestures**, which they never had: in birthdays a swipe towards the start of the row edits and one towards the end deletes, with the same five-second undo the delete button already offered; in subscriptions the pair replaces four buttons per row. The rule assigns a rank rather than a fixed role, which is why editing sits at the end in tasks and at the start in birthdays: it is the secondary action where a positive one stands beside it, and the primary one where none does
 
 ### Fixed
@@ -228,7 +228,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Deleting a CalDAV account left the tasks and shopping items it had mirrored pointing at an account that no longer existed, and those entries could then not be deleted at all. Deleting a mirrored entry first records the deletion for the server, and that record requires a live account: the record failed, and because it is written before the entry itself is removed, the removal never happened. The entry stayed put in Yuvomi while its copy on the server was already out of reach, with nothing to explain why it kept coming back. Deleting an account now detaches everything it had mirrored, so those tasks and shopping items remain as ordinary local ones, and entries left behind by an earlier account deletion are repaired during the update.
+- Deleting a CalDAV account left the tasks and shopping items it had mirrored pointing at an account that no longer existed, and those entries could then not be deleted at all. Deleting a mirrored entry first records the deletion for the server, and that record requires a live account: the record failed, and because it is written before the entry itself is removed, the removal never happened. The entry stayed put in Juju while its copy on the server was already out of reach, with nothing to explain why it kept coming back. Deleting an account now detaches everything it had mirrored, so those tasks and shopping items remain as ordinary local ones, and entries left behind by an earlier account deletion are repaired during the update.
 
 ## [1.75.4] - 2026-08-03
 
@@ -248,8 +248,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Signing in through an identity provider that sends no `preferred_username` claim named the new account after its email address. That claim is optional in the OIDC spec, and Synology DSM SSO is one of the providers that leaves it out. An email makes a poor account name: a household commonly shares one address across several members, so it identifies nobody in particular, and the domain part only makes it unwieldy. The name is now taken from `preferred_username`, then from the non-standard `username` claim that Synology and others do send, then from `sub`, and never from the email. Accounts that already exist keep the name they have, because sign-in matches on `sub`, not on the name.
-- An account created through SSO could end up carrying a username that no other part of Yuvomi accepts. Everywhere else a user is named, the name must be letters, digits, dots, hyphens or underscores, but the SSO path wrote through whatever the provider sent, and both an email address and a Synology `sub` carry an `@`. Such an account could then not be saved under Settings → Administration → Family at all, not even to change something unrelated to the name, because saving revalidates the name the account already had. Names derived from SSO now pass through the same format, with accented letters transliterated instead of mangled.
-- Yuvomi recorded which provider an SSO account came from by copying the configured `OIDC_ISSUER`. It now reads the issuer out of the validated ID token instead. That is the name the provider gives itself, and it can differ from the URL you configured, for instance when yours is a CNAME pointing at it.
+- An account created through SSO could end up carrying a username that no other part of Juju accepts. Everywhere else a user is named, the name must be letters, digits, dots, hyphens or underscores, but the SSO path wrote through whatever the provider sent, and both an email address and a Synology `sub` carry an `@`. Such an account could then not be saved under Settings → Administration → Family at all, not even to change something unrelated to the name, because saving revalidates the name the account already had. Names derived from SSO now pass through the same format, with accented letters transliterated instead of mangled.
+- Juju recorded which provider an SSO account came from by copying the configured `OIDC_ISSUER`. It now reads the issuer out of the validated ID token instead. That is the name the provider gives itself, and it can differ from the URL you configured, for instance when yours is a CNAME pointing at it.
 
 ## [1.75.2] - 2026-08-03
 
@@ -338,7 +338,7 @@ This release changes nothing in the application itself. Apart from the service w
 
 ### Fixed
 
-- The button for adding an entry no longer disappears while you are not typing. Yuvomi hides it whenever the on-screen keyboard is open, so that it does not cover the field you are filling in, but it inferred the keyboard from the size of the visible page alone - and on an iPhone the address bar shrinks that page just as a keyboard would. A single such change could therefore take the button away in any module that has one, with nothing to bring it back, which is what remained of the report in #634 after the previous fix: the same button, gone for the same reason, this time in Tasks and Pantry alike. The keyboard now counts as open only while a text field actually has the focus. Leaving that field brings the button straight back, and so does moving to another module. Date and colour fields no longer count, since they open a picker rather than a keyboard.
+- The button for adding an entry no longer disappears while you are not typing. Juju hides it whenever the on-screen keyboard is open, so that it does not cover the field you are filling in, but it inferred the keyboard from the size of the visible page alone - and on an iPhone the address bar shrinks that page just as a keyboard would. A single such change could therefore take the button away in any module that has one, with nothing to bring it back, which is what remained of the report in #634 after the previous fix: the same button, gone for the same reason, this time in Tasks and Pantry alike. The keyboard now counts as open only while a text field actually has the focus. Leaving that field brings the button straight back, and so does moving to another module. Date and colour fields no longer count, since they open a picker rather than a keyboard.
 
 ## [1.73.0] - 2026-08-02
 
@@ -370,9 +370,9 @@ This release changes nothing in the application itself. Apart from the service w
 
 ### Fixed
 
-- Changes to a birthday now reach the calendar you sync it to. Editing one detached its appointment from the copy in iCloud, Google or Nextcloud: the new name showed up in Yuvomi while the external calendar kept the old one forever. Deleting a birthday, or setting its reminder to "none", now removes the appointment there too instead of leaving it behind for the next sync to bring back.
-- Moving or deleting a housekeeping visit reaches the external calendar as well. A visit shifted to another day showed the new date in Yuvomi and the old one everywhere else.
-- Visit and payment entries that Yuvomi writes for you now follow the household data language, with the amount formatted as currency and the date in your chosen format. Only the app sent translated text before; anything else - the API, scripts, integrations - got English and a raw date.
+- Changes to a birthday now reach the calendar you sync it to. Editing one detached its appointment from the copy in iCloud, Google or Nextcloud: the new name showed up in Juju while the external calendar kept the old one forever. Deleting a birthday, or setting its reminder to "none", now removes the appointment there too instead of leaving it behind for the next sync to bring back.
+- Moving or deleting a housekeeping visit reaches the external calendar as well. A visit shifted to another day showed the new date in Juju and the old one everywhere else.
+- Visit and payment entries that Juju writes for you now follow the household data language, with the amount formatted as currency and the date in your chosen format. Only the app sent translated text before; anything else - the API, scripts, integrations - got English and a raw date.
 
 ## [1.71.0] - 2026-08-01
 
@@ -383,7 +383,7 @@ This release changes nothing in the application itself. Apart from the service w
 
 ### Added
 
-- Settings → Personal → Appearance → Language now carries a second setting: the language Yuvomi writes into the entries it creates for you. It is separate from the language of the app itself, because a saved appointment has one wording no matter which member opens it later. Households that picked a region already get it for free - a German region means German birthday appointments, with nothing to configure. A household that never picked a region keeps the English wording it has today until someone chooses a language, so nothing changes underfoot on update.
+- Settings → Personal → Appearance → Language now carries a second setting: the language Juju writes into the entries it creates for you. It is separate from the language of the app itself, because a saved appointment has one wording no matter which member opens it later. Households that picked a region already get it for free - a German region means German birthday appointments, with nothing to configure. A household that never picked a region keeps the English wording it has today until someone chooses a language, so nothing changes underfoot on update.
 
 ## [1.70.0] - 2026-08-01
 
@@ -427,7 +427,7 @@ This release changes nothing in the application itself. Apart from the service w
 - Tags can be managed for the whole household. "Manage tags" in the tasks toolbar renames a tag everywhere at once, merges it into another by renaming it onto an existing name, or detaches it from every task. Fixing a typo no longer means opening every task that carries it.
 - Several tasks can be tagged at once. With multiple tasks selected, the bulk bar adds or removes a tag on all of them in one step.
 - Tags travel both ways with CalDAV reminder lists, as that list's categories. A label you set in Nextcloud Tasks, Radicale or another reminder app shows up here, and one you set here reaches the server. Until now those categories were read past and lost.
-- Shopping items show the categories of the reminder list they came from as tags. A reminder list can feed either the task list or the shopping list, and on the shopping side those labels used to be dropped without a trace. They are shown, not managed here: they belong to the source list, so nothing Yuvomi does overwrites them on the server.
+- Shopping items show the categories of the reminder list they came from as tags. A reminder list can feed either the task list or the shopping list, and on the shopping side those labels used to be dropped without a trace. They are shown, not managed here: they belong to the source list, so nothing Juju does overwrites them on the server.
 - The global search finds tasks and shopping items by their tags, so the same word leads to a hit whether you type it into the search or the filter bar.
 - An AI or automation client connected over MCP sees a task's tags, can filter by them, and can set them when creating a task.
 
@@ -464,7 +464,7 @@ This release changes nothing in the application itself. Apart from the service w
 ### Added
 
 - Reminder lists sync both ways now. A task or shopping item that came from a CalDAV list follows you back to the server when you tick it off, rename it, change its due date or priority, or delete it. Until now the mirror was one-way: the change stayed local and the next sync run quietly undid it. This works with any CalDAV server that serves reminder collections - iCloud, Radicale, Nextcloud - not only Apple Reminders.
-- A change is written into the existing item on the server instead of replacing it, so alarms, categories and whatever else your other apps put there survive the round trip. Tasks created in Yuvomi stay local: unlike an event, a task has no target list it could be created in.
+- A change is written into the existing item on the server instead of replacing it, so alarms, categories and whatever else your other apps put there survive the round trip. Tasks created in Juju stay local: unlike an event, a task has no target list it could be created in.
 
 ### Fixed
 
@@ -657,7 +657,7 @@ This release changes nothing in the application itself. Apart from the service w
 ## [1.56.0] - 2026-07-29
 
 ### Changed
-- Recurring appointments from Google are now held as one series with its repeat rule, the way appointments from CalDAV and iCloud have always been held. Google used to hand each occurrence over separately, so a weekly appointment arrived as dozens of individual entries that only looked like a series. Editing the repeat rule of such an appointment or moving it to another calendar was rejected, and a series created in Yuvomi and synced to Google was the odd one out among its own occurrences. Cancelled occurrences are carried over as gaps in the series, and an occurrence moved to another time becomes an entry of its own on its new date. (#593)
+- Recurring appointments from Google are now held as one series with its repeat rule, the way appointments from CalDAV and iCloud have always been held. Google used to hand each occurrence over separately, so a weekly appointment arrived as dozens of individual entries that only looked like a series. Editing the repeat rule of such an appointment or moving it to another calendar was rejected, and a series created in Juju and synced to Google was the odd one out among its own occurrences. Cancelled occurrences are carried over as gaps in the series, and an occurrence moved to another time becomes an entry of its own on its new date. (#593)
 - The first sync after this update reads every enabled Google calendar in full once, which takes longer than a normal run before returning to the usual incremental ones. That run also merges appointments stored as separate occurrences by earlier versions back into their series. An occurrence you had assigned to someone or given its own colour is not merged away: it stays as a separate appointment on its date, and the series skips that date so nothing appears twice.
 
 ## [1.55.0] - 2026-07-29
@@ -710,13 +710,13 @@ This release changes nothing in the application itself. Apart from the service w
 ## [1.52.1] - 2026-07-28
 
 ### Fixed
-- A recurring event created in Yuvomi and synced to Google appeared twice in the calendar, once per occurrence. Yuvomi kept the series as a single entry with its repeat rule and worked out the occurrences itself, while Google returned the same series as separate events for every occurrence, and both were shown. Google's copies are now recognised as belonging to the series Yuvomi already has. Duplicates left behind by earlier syncs disappear on the next one, except where you had given a copy its own colour or assigned someone to it, since that would throw away your own edit. (#593)
+- A recurring event created in Juju and synced to Google appeared twice in the calendar, once per occurrence. Juju kept the series as a single entry with its repeat rule and worked out the occurrences itself, while Google returned the same series as separate events for every occurrence, and both were shown. Google's copies are now recognised as belonging to the series Juju already has. Duplicates left behind by earlier syncs disappear on the next one, except where you had given a copy its own colour or assigned someone to it, since that would throw away your own edit. (#593)
 
 ## [1.52.0] - 2026-07-28
 
 ### Added
-- Deleting or editing an event in Yuvomi now reaches CalDAV and iCloud servers too, the same way it already reached Google. Outbound sync could only ever create events there; once an event had been uploaded, nothing that happened to it in Yuvomi arrived on the server again. Editing a synced event preserves everything the server holds that Yuvomi does not: attendees, alarms, categories, and the exceptions of a recurring series stay exactly as they were, because only the fields Yuvomi manages are replaced. (#593)
-- A synced event can be moved to a different CalDAV calendar by picking another target. Since CalDAV cannot move an object between calendars, Yuvomi creates it in the destination first and removes it from the source afterwards, so a failure at the second step leaves the event twice rather than not at all.
+- Deleting or editing an event in Juju now reaches CalDAV and iCloud servers too, the same way it already reached Google. Outbound sync could only ever create events there; once an event had been uploaded, nothing that happened to it in Juju arrived on the server again. Editing a synced event preserves everything the server holds that Juju does not: attendees, alarms, categories, and the exceptions of a recurring series stay exactly as they were, because only the fields Juju manages are replaced. (#593)
+- A synced event can be moved to a different CalDAV calendar by picking another target. Since CalDAV cannot move an object between calendars, Juju creates it in the destination first and removes it from the source afterwards, so a failure at the second step leaves the event twice rather than not at all.
 
 ### Changed
 - Outbound changes are attempted the moment you save, for every provider. For CalDAV and iCloud this fetches only the affected calendar object instead of whole calendars, so a deletion is a single request. Anything that does not succeed right away is retried by the next sync run.
@@ -731,9 +731,9 @@ This release changes nothing in the application itself. Apart from the service w
 - Changes headed for Google are attempted the moment you save and retried by the next sync run if Google cannot be reached, so a brief outage no longer means the change is lost. A change that is rejected five times in a row is given up on and written to the log.
 
 ### Fixed
-- Deleting an event in Yuvomi left it standing in Google Calendar. Outbound sync only ever created events; once an event had been pushed to Google, nothing that happened to it in Yuvomi reached Google again. Deletions now follow. The other direction was never affected: events deleted or edited in Google kept arriving in Yuvomi. (#593)
-- Editing an event that is synced to Google changed nothing in Google, for the same reason. Title, notes, location, colour, all-day, start and end time and the repeat rule are now sent along. Assignment, visibility, icon and attachments stay in Yuvomi, as before. A local edit that has not reached Google yet is no longer overwritten by an incoming sync before it gets its chance. (#593)
-- An event moved between two synced calendars inside Google could vanish from Yuvomi. The source calendar reports it as cancelled while the destination still lists it under the same identifier, and the deletion was applied by identifier alone, so it could remove the entry the destination had just written. The event stays now. (#593)
+- Deleting an event in Juju left it standing in Google Calendar. Outbound sync only ever created events; once an event had been pushed to Google, nothing that happened to it in Juju reached Google again. Deletions now follow. The other direction was never affected: events deleted or edited in Google kept arriving in Juju. (#593)
+- Editing an event that is synced to Google changed nothing in Google, for the same reason. Title, notes, location, colour, all-day, start and end time and the repeat rule are now sent along. Assignment, visibility, icon and attachments stay in Juju, as before. A local edit that has not reached Google yet is no longer overwritten by an incoming sync before it gets its chance. (#593)
+- An event moved between two synced calendars inside Google could vanish from Juju. The source calendar reports it as cancelled while the destination still lists it under the same identifier, and the deletion was applied by identifier alone, so it could remove the entry the destination had just written. The event stays now. (#593)
 
 ## [1.50.1] - 2026-07-28
 
@@ -836,7 +836,7 @@ This release changes nothing in the application itself. Apart from the service w
 ## [1.46.3] - 2026-07-27
 
 ### Fixed
-- Reminders for a subscription now name the subscription in the notification. Web Push, Gotify and ntfy received a notification whose title and body both read "Yuvomi", so a due renewal was indistinguishable from any other alert and gave no hint which subscription it was about. The reminder centre inside the app had shown the name correctly all along, and delivery itself always worked, which is why the server log reported sent notifications and the test button looked healthy (#581).
+- Reminders for a subscription now name the subscription in the notification. Web Push, Gotify and ntfy received a notification whose title and body both read "Juju", so a due renewal was indistinguishable from any other alert and gave no hint which subscription it was about. The reminder centre inside the app had shown the name correctly all along, and delivery itself always worked, which is why the server log reported sent notifications and the test button looked healthy (#581).
 - A reminder whose task, event or subscription has been deleted no longer arrives as a notification consisting only of the app name. It now carries a neutral fallback text, so the body never just repeats the title (#581).
 - Medication reminders use the same fallback, instead of repeating the app name when a medication has no name to show (#581).
 
@@ -900,7 +900,7 @@ This release changes nothing in the application itself. Apart from the service w
 ## [1.45.11] - 2026-07-26
 
 ### Fixed
-- Google Calendar: timed events pushed from Yuvomi no longer arrive at the wrong time outside Central European Time. The outbound sync used to declare a fixed `Europe/Berlin` zone, which shifted every event for households in other regions (7.5 hours in Australia). Events now carry the target calendar's own time zone, so Google shows the same clock time as Yuvomi. If Google reports no zone for that calendar, the container's `TZ` is used, then the host zone, then UTC (#572).
+- Google Calendar: timed events pushed from Juju no longer arrive at the wrong time outside Central European Time. The outbound sync used to declare a fixed `Europe/Berlin` zone, which shifted every event for households in other regions (7.5 hours in Australia). Events now carry the target calendar's own time zone, so Google shows the same clock time as Juju. If Google reports no zone for that calendar, the container's `TZ` is used, then the host zone, then UTC (#572).
 
 ## [1.45.10] - 2026-07-25
 
@@ -1197,7 +1197,7 @@ App-wide UX/UI audit (all modules, light/dark, desktop/mobile). The findings, th
 ### Added
 - Contacts keep the structured name components of a vCard (given, family, additional, prefix, suffix) instead of only the combined `FN` string. CardDAV sources format that string however they like — `Given Family` on one server, `Family, Given` on the next, sometimes with a title mixed in — which made the list read and sort differently depending on where a contact came from. The display name is now composed as `First [Middle] Last` from the components, and the list sorts by last name. `FN` remains the fallback for cards whose `N` carries no name parts, such as organisation entries.
 - The contact dialog has separate fields for first and last name, grouped under one required marker: at least one of them must be filled. A contact that has no components yet is pre-filled by splitting its display name at the last word, and that guess is only saved once a name field is actually edited — so changing a phone number never invents a surname for a company contact.
-- The vCard export writes real `N` components where they exist, and the import reads them, so a contact exported from Yuvomi and read back elsewhere keeps its name structure.
+- The vCard export writes real `N` components where they exist, and the import reads them, so a contact exported from Juju and read back elsewhere keeps its name structure.
 
 ### Changed
 - Existing CardDAV contacts are picked up on the next sync: contacts created purely from a vCard also get their display name normalised once, while contacts that were adopted from a local entry keep the name the household gave them.
@@ -1534,31 +1534,31 @@ App-wide UX/UI audit (all modules, light/dark, desktop/mobile). The findings, th
 ## [1.24.0] - 2026-07-15
 
 ### Added
-- Contacts now sync automatically. CardDAV addressbooks only ever synced when "Sync now" was pressed in Settings → Synchronization; they now run on the same `SYNC_INTERVAL_MINUTES` schedule (default 15) as calendars, with the manual trigger still available. This was documented behaviour rather than a bug, but it meant a contact added on the phone did not appear in Yuvomi until someone remembered to press a button.
-- Contacts deleted on the CardDAV server are now removed from Yuvomi as well, instead of lingering forever. Contacts that Yuvomi imported purely from CardDAV are deleted. A contact that already existed locally and was only adopted by the smart-merge logic (matched via email or phone) is **kept**: it carries locally maintained data that never existed on the server, so only its CardDAV link is dropped and it stays as a plain local contact. Contacts from before this release are treated as adopted, since their origin cannot be reconstructed — they are never deleted automatically, only unlinked. Deletion is suspended entirely, with a warning, whenever the addressbook returns nothing, its fetch fails, or a single vCard cannot be parsed: an incomplete list of contacts must never be read as "everything else was deleted".
+- Contacts now sync automatically. CardDAV addressbooks only ever synced when "Sync now" was pressed in Settings → Synchronization; they now run on the same `SYNC_INTERVAL_MINUTES` schedule (default 15) as calendars, with the manual trigger still available. This was documented behaviour rather than a bug, but it meant a contact added on the phone did not appear in Juju until someone remembered to press a button.
+- Contacts deleted on the CardDAV server are now removed from Juju as well, instead of lingering forever. Contacts that Juju imported purely from CardDAV are deleted. A contact that already existed locally and was only adopted by the smart-merge logic (matched via email or phone) is **kept**: it carries locally maintained data that never existed on the server, so only its CardDAV link is dropped and it stays as a plain local contact. Contacts from before this release are treated as adopted, since their origin cannot be reconstructed — they are never deleted automatically, only unlinked. Deletion is suspended entirely, with a warning, whenever the addressbook returns nothing, its fetch fails, or a single vCard cannot be parsed: an incomplete list of contacts must never be read as "everything else was deleted".
 
 ### Changed
 - Migration v89 adds `contacts.carddav_origin` (`remote` / `merged`) to record how a contact's CardDAV link came about. Existing linked contacts are backfilled to `merged`. No data is removed.
 
 ### Fixed
 - CalDAV reminders: a single failed fetch could delete every mirrored reminder of an account. The sync mirrors Apple Reminders lists into Tasks or Shopping and prunes rows that vanished remotely, but it treated "the server returned nothing" as "everything was deleted remotely" — including when the fetch had just failed and the sync had already skipped that list. One transient iCloud error was therefore enough to wipe all imported tasks or shopping items of that account, taking their subtasks, assignments and document links with them via CASCADE; a re-import could not restore those, since it creates new rows. An empty result now never deletes anything and logs a warning instead, and a list that could not be fetched suspends deletion for its whole target module. Found while auditing the other sync providers for the issues fixed in #508.
-- Apple Calendar (legacy single-account sync via `APPLE_*`): events deleted in iCloud stayed in Yuvomi forever, the same defect fixed for multi-account CalDAV in v1.23.1. The inbound sync only ever inserted and updated. It now runs the same deletion pass, with the same guards: only synced Apple events of that calendar are affected, calendars whose fetch failed are never pruned, and a calendar returning no events at all is left alone with a warning.
+- Apple Calendar (legacy single-account sync via `APPLE_*`): events deleted in iCloud stayed in Juju forever, the same defect fixed for multi-account CalDAV in v1.23.1. The inbound sync only ever inserted and updated. It now runs the same deletion pass, with the same guards: only synced Apple events of that calendar are affected, calendars whose fetch failed are never pruned, and a calendar returning no events at all is left alone with a warning.
 
 ### Fixed
 - CalDAV calendars never synced automatically (#508). The auto-sync scheduler ran Google, Apple, ICS, CalDAV reminders and holidays, but the CalDAV calendar sync was never wired into it. Calendars therefore only updated when "Sync now" was pressed in Settings, even though the log announced "Auto-sync active every 15 minutes". CalDAV calendars now sync on the same `SYNC_INTERVAL_MINUTES` schedule (default 15) as every other provider.
-- CalDAV: events deleted on the server stayed in Yuvomi forever (#508). The inbound sync only ever inserted and updated events, so deleting an event in iCloud or Nextcloud never reached Yuvomi. Each sync now also removes local events that the calendar no longer returns. Only synced CalDAV events of that calendar are affected: local events and events still waiting to be uploaded are never touched, and an event moved between two calendars of the same account keeps its assignments instead of being deleted and re-created. If a calendar returns no events at all while local events still reference it, nothing is deleted and a warning is logged, since an empty response is far more often a server or auth error than a genuinely emptied calendar.
+- CalDAV: events deleted on the server stayed in Juju forever (#508). The inbound sync only ever inserted and updated events, so deleting an event in iCloud or Nextcloud never reached Juju. Each sync now also removes local events that the calendar no longer returns. Only synced CalDAV events of that calendar are affected: local events and events still waiting to be uploaded are never touched, and an event moved between two calendars of the same account keeps its assignments instead of being deleted and re-created. If a calendar returns no events at all while local events still reference it, nothing is deleted and a warning is logged, since an empty response is far more often a server or auth error than a genuinely emptied calendar.
 
 ## [1.23.2] - 2026-07-15
 
 ### Fixed
 - CalDAV reminders: a single failed fetch could delete every mirrored reminder of an account. The sync mirrors Apple Reminders lists into Tasks or Shopping and prunes rows that vanished remotely, but it treated "the server returned nothing" as "everything was deleted remotely" — including when the fetch had just failed and the sync had already skipped that list. One transient iCloud error was therefore enough to wipe all imported tasks or shopping items of that account, taking their subtasks, assignments and document links with them via CASCADE; a re-import could not restore those, since it creates new rows. An empty result now never deletes anything and logs a warning instead, and a list that could not be fetched suspends deletion for its whole target module. Found while auditing the other sync providers for the issues fixed in #508.
-- Apple Calendar (legacy single-account sync via `APPLE_*`): events deleted in iCloud stayed in Yuvomi forever, the same defect fixed for multi-account CalDAV in v1.23.1. The inbound sync only ever inserted and updated. It now runs the same deletion pass, with the same guards: only synced Apple events of that calendar are affected, calendars whose fetch failed are never pruned, and a calendar returning no events at all is left alone with a warning.
+- Apple Calendar (legacy single-account sync via `APPLE_*`): events deleted in iCloud stayed in Juju forever, the same defect fixed for multi-account CalDAV in v1.23.1. The inbound sync only ever inserted and updated. It now runs the same deletion pass, with the same guards: only synced Apple events of that calendar are affected, calendars whose fetch failed are never pruned, and a calendar returning no events at all is left alone with a warning.
 
 ## [1.23.1] - 2026-07-15
 
 ### Fixed
 - CalDAV calendars never synced automatically (#508). The auto-sync scheduler ran Google, Apple, ICS, CalDAV reminders and holidays, but the CalDAV calendar sync was never wired into it. Calendars therefore only updated when "Sync now" was pressed in Settings, even though the log announced "Auto-sync active every 15 minutes". CalDAV calendars now sync on the same `SYNC_INTERVAL_MINUTES` schedule (default 15) as every other provider.
-- CalDAV: events deleted on the server stayed in Yuvomi forever (#508). The inbound sync only ever inserted and updated events, so deleting an event in iCloud or Nextcloud never reached Yuvomi. Each sync now also removes local events that the calendar no longer returns. Only synced CalDAV events of that calendar are affected: local events and events still waiting to be uploaded are never touched, and an event moved between two calendars of the same account keeps its assignments instead of being deleted and re-created. If a calendar returns no events at all while local events still reference it, nothing is deleted and a warning is logged, since an empty response is far more often a server or auth error than a genuinely emptied calendar.
+- CalDAV: events deleted on the server stayed in Juju forever (#508). The inbound sync only ever inserted and updated events, so deleting an event in iCloud or Nextcloud never reached Juju. Each sync now also removes local events that the calendar no longer returns. Only synced CalDAV events of that calendar are affected: local events and events still waiting to be uploaded are never touched, and an event moved between two calendars of the same account keeps its assignments instead of being deleted and re-created. If a calendar returns no events at all while local events still reference it, nothing is deleted and a warning is logged, since an empty response is far more often a server or auth error than a genuinely emptied calendar.
 
 ## [1.23.0] - 2026-07-14
 
@@ -1796,7 +1796,7 @@ App-wide UX/UI audit (all modules, light/dark, desktop/mobile). The findings, th
 ## [1.11.1] - 2026-07-11
 
 ### Changed
-- **New app icon and logo.** The house glyph has been replaced with a mark of three overlapping, translucent circles representing the family. The redesign has two reasons: the house referenced "Oikos" (Greek for *household*) and no longer fit after the rename to **Yuvomi**, and the old house-on-a-rounded-square looked too much like smart-home apps such as Apple Home. The brand violet is unchanged; the mark is applied everywhere (app icon, maskable/PWA icons, favicon, in-app sidebar, the website, and the Unraid/Umbrel catalog icons). The TrueNAS catalog icon is hosted upstream and updates with the pending catalog rename.
+- **New app icon and logo.** The house glyph has been replaced with a mark of three overlapping, translucent circles representing the family. The redesign has two reasons: the house referenced "Oikos" (Greek for *household*) and no longer fit after the rename to **Juju**, and the old house-on-a-rounded-square looked too much like smart-home apps such as Apple Home. The brand violet is unchanged; the mark is applied everywhere (app icon, maskable/PWA icons, favicon, in-app sidebar, the website, and the Unraid/Umbrel catalog icons). The TrueNAS catalog icon is hosted upstream and updates with the pending catalog rename.
 
 ### Fixed
 - Count placeholders in translated text no longer leak stray braces. The dashboard birthdays widget, the health lab-report badges, and other counters showed strings like "{63}" or "{8} analytes" instead of the number, because of a triple-brace typo (`{{{count}}}`) that was present in every locale. Corrected to `{{count}}` across all 23 languages.
@@ -2294,7 +2294,7 @@ A design and accessibility overhaul of three core areas — the Dashboard, the K
 ## [0.92.2] - 2026-07-04
 
 ### Changed
-- **Clearer README on catalog naming** — the README now explains that the TrueNAS and Unraid catalog listings stay registered under the legacy `oikos` slug so existing installs upgrade seamlessly, while the app itself installs and appears as Yuvomi.
+- **Clearer README on catalog naming** — the README now explains that the TrueNAS and Unraid catalog listings stay registered under the legacy `oikos` slug so existing installs upgrade seamlessly, while the app itself installs and appears as Juju.
 - **README Node requirement clarified** — the web installer's Node.js 18+ requirement is now noted as host-only; the app container ships its own Node 22.
 - **README polish** — unified the "See all screenshots" links and condensed the Health module row.
 
@@ -2310,7 +2310,7 @@ A design and accessibility overhaul of three core areas — the Dashboard, the K
 - **Themed visibility toggles in the installer** — show/hide controls use themed icons with pressed-state semantics instead of an emoji glyph.
 
 ### Fixed
-- **Correct scheme for installer redirect links** — generated Google/OIDC redirect URIs and the final "Open Yuvomi" link now use https or http based on the reverse-proxy choice instead of always using http.
+- **Correct scheme for installer redirect links** — generated Google/OIDC redirect URIs and the final "Open Juju" link now use https or http based on the reverse-proxy choice instead of always using http.
 - **Installer accessibility and mobile polish** — the wizard now respects reduced-motion, enlarges touch targets to 44px, keeps the footer reachable on mobile, and aligns correctly in right-to-left languages.
 - **Safer installer input handling** — the backup cron schedule and retention count are validated, the admin step has a Back button, text fields submit on Enter, and a failed `.env` save now surfaces the actual server error.
 
@@ -2385,7 +2385,7 @@ A design and accessibility overhaul of three core areas — the Dashboard, the K
 ## [0.88.0] - 2026-07-03
 
 ### Added
-- **Three new languages** — Yuvomi is now available in Korean (`ko`), Indonesian (`id`), and Persian/Farsi (`fa`), bringing the total to 23 languages. Persian renders right-to-left (RTL), like Arabic. Each language covers the full app UI as well as the web and CLI installers, and is auto-detected from the browser or shell environment.
+- **Three new languages** — Juju is now available in Korean (`ko`), Indonesian (`id`), and Persian/Farsi (`fa`), bringing the total to 23 languages. Persian renders right-to-left (RTL), like Arabic. Each language covers the full app UI as well as the web and CLI installers, and is auto-detected from the browser or shell environment.
 - **Three new currencies** — the budget module now supports the South Korean won (`KRW`), Indonesian rupiah (`IDR`), and Iranian rial (`IRR`). Matching region presets (`ko-KR`, `id-ID`, `fa-IR`) set currency, date, and time formats in one step.
 
 ## [0.87.0] - 2026-07-02
@@ -2401,15 +2401,15 @@ A design and accessibility overhaul of three core areas — the Dashboard, the K
 ## [0.85.0] - 2026-07-02
 
 ### Added
-- **MCP endpoint for AI agents (Discussion #429)** — Yuvomi now serves a stateless [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp` (JSON-RPC 2.0 over HTTP). AI clients such as Claude Desktop can list and create tasks, shopping items, and calendar events through natural language. It authenticates with the existing API tokens (`Authorization: Bearer <token>`), so no new environment variable, port, or setup step is required.
+- **MCP endpoint for AI agents (Discussion #429)** — Juju now serves a stateless [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp` (JSON-RPC 2.0 over HTTP). AI clients such as Claude Desktop can list and create tasks, shopping items, and calendar events through natural language. It authenticates with the existing API tokens (`Authorization: Bearer <token>`), so no new environment variable, port, or setup step is required.
 
 ## [0.84.0] - 2026-07-02
 
 ### Added
-- **Calendar event colors now sync per event (Discussion #427)** — Google Calendar event colors are shown in Yuvomi, and per-event colors are also read from CalDAV, Apple, and ICS calendars (iCalendar `COLOR`, RFC 7986); an event without its own color still inherits its calendar's color. When a local event is pushed out to Google, its color is mapped to the nearest of Google's event colors.
+- **Calendar event colors now sync per event (Discussion #427)** — Google Calendar event colors are shown in Juju, and per-event colors are also read from CalDAV, Apple, and ICS calendars (iCalendar `COLOR`, RFC 7986); an event without its own color still inherits its calendar's color. When a local event is pushed out to Google, its color is mapped to the nearest of Google's event colors.
 
 ### Fixed
-- **CalDAV and Apple syncs no longer discard an event color you set in Yuvomi** — previously every resync overwrote it with the calendar color. A resync now only updates the color of events you haven't recolored yourself, matching how Google and ICS calendars already behaved.
+- **CalDAV and Apple syncs no longer discard an event color you set in Juju** — previously every resync overwrote it with the calendar color. A resync now only updates the color of events you haven't recolored yourself, matching how Google and ICS calendars already behaved.
 
 ## [0.83.1] - 2026-07-02
 
@@ -2426,7 +2426,7 @@ A design and accessibility overhaul of three core areas — the Dashboard, the K
 - **Activity** — training log (type preset or free text, duration, distance, intensity, calories) with a weekly summary and a native SVG bar chart.
 - **Overview** — today's due doses with inline take/skip, adherence rate and streak, latest-vitals cards, upcoming reminders, quick-capture shortcuts, and CSV export per area over any date range.
 - **Health entries in global search** — medications and activities are indexed and deep-link back to their tab.
-- **Medical disclaimer** in the overview and capture modals — Yuvomi is for personal record-keeping only and makes no diagnostic claims. Health data is sensitive; database encryption (`DB_ENCRYPTION_KEY`, SQLCipher) is recommended.
+- **Medical disclaimer** in the overview and capture modals — Juju is for personal record-keeping only and makes no diagnostic claims. Health data is sensitive; database encryption (`DB_ENCRYPTION_KEY`, SQLCipher) is recommended.
 
 ## [0.82.0] - 2026-07-01
 
@@ -2493,7 +2493,7 @@ A design and accessibility overhaul of three core areas — the Dashboard, the K
 ## [0.79.0] - 2026-06-30
 
 ### Changed
-- **Oikos → Yuvomi migration (automatic, no user action required):** the SQLite database file (`oikos.db` → `yuvomi.db`), the session cookie, browser storage keys, service-worker caches, the API-token prefix, and internal web-component/global identifiers are renamed to Yuvomi. On the first start after updating, an existing database is migrated in place, you stay signed in (the session cookie is migrated seamlessly), and stored preferences carry over. Existing Docker / Podman / Unraid / TrueNAS installations keep receiving updates without editing any configuration — the legacy `ghcr.io/daiqiongzhao-bit/Juju` image mirror is retained permanently, and a `window.oikos` alias keeps pre-rename third-party modules working.
+- **Oikos → Juju migration (automatic, no user action required):** the SQLite database file (`oikos.db` → `yuvomi.db`), the session cookie, browser storage keys, service-worker caches, the API-token prefix, and internal web-component/global identifiers are renamed to Juju. On the first start after updating, an existing database is migrated in place, you stay signed in (the session cookie is migrated seamlessly), and stored preferences carry over. Existing Docker / Podman / Unraid / TrueNAS installations keep receiving updates without editing any configuration — the legacy `ghcr.io/daiqiongzhao-bit/Juju` image mirror is retained permanently, and a `window.oikos` alias keeps pre-rename third-party modules working.
 - **Default database path** for new installations is now `/data/yuvomi.db` across all deploy targets (Docker Compose, Podman, Portainer, Unraid, TrueNAS, Quadlet). Existing `/data/oikos.db` installs are migrated automatically on boot; custom `DB_PATH` values are left untouched.
 - **Database backups** are now written with a `yuvomi-backup-` filename prefix; previously created `oikos-backup-` files remain restorable.
 - New API tokens use the `yuvomi_` prefix; existing `oikos_` tokens remain valid.
@@ -2550,7 +2550,7 @@ A design and accessibility overhaul of three core areas — the Dashboard, the K
 ## [0.78.6] - 2026-06-30
 
 ### Fixed
-- **CI test suite:** updated the installer-schema test to expect the renamed internal shell variables (`YUVOMI_TZ`, `YUVOMI_PORT`) in `install.sh`, fixing the red `test:installer-schema` check after the Oikos→Yuvomi branding rename.
+- **CI test suite:** updated the installer-schema test to expect the renamed internal shell variables (`YUVOMI_TZ`, `YUVOMI_PORT`) in `install.sh`, fixing the red `test:installer-schema` check after the Oikos→Juju branding rename.
 
 ## [0.78.5] - 2026-06-30
 
@@ -2574,7 +2574,7 @@ A design and accessibility overhaul of three core areas — the Dashboard, the K
 ## [0.78.2] - 2026-06-29
 
 ### Changed
-- **Third-party module documentation:** clarified that module API calls should use `/api.js` for built-in Yuvomi endpoints and that reverse-proxied dynamic backend services should live under a same-origin `/api/...` path to avoid stale service-worker cache responses. (Discussion #386)
+- **Third-party module documentation:** clarified that module API calls should use `/api.js` for built-in Juju endpoints and that reverse-proxied dynamic backend services should live under a same-origin `/api/...` path to avoid stale service-worker cache responses. (Discussion #386)
 
 ### Fixed
 - **Dashboard → Today Meals widget:** hidden meal types from Settings → Modules → Kitchen are no longer rendered as empty slots in the widget. (Discussion #407)
@@ -2582,7 +2582,7 @@ A design and accessibility overhaul of three core areas — the Dashboard, the K
 ## [0.78.1] - 2026-06-29
 
 ### Added
-- **Meals → Weekly recurrence:** new meals can be marked as weekly repeats from the advanced meal dialog; Yuvomi materializes future occurrences on the same weekday, shows a repeat badge on recurring meals, and remembers skipped dates when a single occurrence is deleted. (Closes #412)
+- **Meals → Weekly recurrence:** new meals can be marked as weekly repeats from the advanced meal dialog; Juju materializes future occurrences on the same weekday, shows a repeat badge on recurring meals, and remembers skipped dates when a single occurrence is deleted. (Closes #412)
 
 ## [0.78.0] - 2026-06-29
 
@@ -3191,7 +3191,7 @@ All DMS operations are admin-only, and the API token is never returned in respon
 ## [0.66.5] - 2026-06-09
 
 ### Fixed
-- Unraid Community Applications: removed the leftover `oikos.xml` template, which carried the same `<Name>Yuvomi</Name>` (and the same `ghcr.io/daiqiongzhao-bit/Juju` image) as the current `yuvomi.xml`. The duplicate name caused a conflict in the Community Apps feed; `yuvomi.xml` is now the single, authoritative Unraid template.
+- Unraid Community Applications: removed the leftover `oikos.xml` template, which carried the same `<Name>Juju</Name>` (and the same `ghcr.io/daiqiongzhao-bit/Juju` image) as the current `juju.xml`. The duplicate name caused a conflict in the Community Apps feed; `juju.xml` is now the single, authoritative Unraid template.
 
 ## [0.66.4] - 2026-06-09
 
@@ -3220,7 +3220,7 @@ All DMS operations are admin-only, and the API token is never returned in respon
 ## [0.66.0] - 2026-06-09
 
 ### Changed
-- Renamed the project from **Oikos** to **Yuvomi** to avoid a trademark conflict with an unrelated product of the same name. The app name, documentation, GitHub Pages and deploy descriptors now read Yuvomi — your existing data and settings are fully preserved on upgrade.
+- Renamed the project from **Oikos** to **Juju** to avoid a trademark conflict with an unrelated product of the same name. The app name, documentation, GitHub Pages and deploy descriptors now read Juju — your existing data and settings are fully preserved on upgrade.
 - The Docker image moved to `ghcr.io/daiqiongzhao-bit/Juju`. The previous `ghcr.io/daiqiongzhao-bit/Juju` image keeps publishing for a couple more releases so existing deployments keep working — please update your image reference at your convenience.
 - The repository moved to `https://github.com/daiqiongzhao-bit/Juju`; existing `daiqiongzhao-bit/oikos` links (clone URLs, raw assets, releases) redirect automatically.
 

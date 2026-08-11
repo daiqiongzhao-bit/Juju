@@ -55,7 +55,7 @@ function calendarEventRoute(event) {
 }
 
 function getAppName() {
-  return localStorage.getItem(APP_NAME_STORAGE_KEY) || 'Yuvomi';
+  return localStorage.getItem(APP_NAME_STORAGE_KEY) || 'Juju';
 }
 
 function getOnboardingSteps() {

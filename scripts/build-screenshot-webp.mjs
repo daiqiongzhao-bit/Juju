@@ -1,5 +1,5 @@
 /**
- * WebP-Derivate der Screenshots - Yuvomi
+ * WebP-Derivate der Screenshots - Juju
  *
  * Die GitHub-Pages-Seite lädt jeden Screenshot als WebP in zwei Breiten
  * (`<name>@1x.webp` 1x, `<name>.webp` 2x) und fällt per onerror auf das PNG

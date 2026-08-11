@@ -1,5 +1,5 @@
 {
-  "title": "Configurazione di Yuvomi",
+  "title": "Configurazione di Juju",
   "common": {
     "continue": "Continua",
     "back": "Indietro",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Configurazione di base",
-    "subtitle": "Come accederai a Yuvomi?",
+    "subtitle": "Come accederai a Juju?",
     "existing": "Configurazione esistente rilevata: verrà eseguito un backup del tuo file .env attuale prima del salvataggio.",
     "hostLabel": "Dominio o indirizzo IP",
-    "hostHint": "L'indirizzo che userai per aprire Yuvomi nel browser.",
+    "hostHint": "L'indirizzo che userai per aprire Juju nel browser.",
     "portLabel": "Porta",
     "tzLabel": "Fuso orario",
     "errHost": "Nome host non valido. Usa solo lettere, cifre, trattini e punti.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Sincronizzazione calendario",
-    "subtitle": "Collega Yuvomi a Google Calendar o Apple iCloud. Entrambi facoltativi: espandi per configurare.",
+    "subtitle": "Collega Juju a Google Calendar o Apple iCloud. Entrambi facoltativi: espandi per configurare.",
     "google": "Google Calendar",
     "googleHint": "Crea le credenziali OAuth su {{link}}. URI di reindirizzamento: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -99,7 +99,7 @@
     "documentGoogleDrive": "Documenti di Google Drive"
   },
   "docker": {
-    "title": "Avvio di Yuvomi",
+    "title": "Avvio di Juju",
     "subtitle": "Download dell'immagine e avvio del container Docker.",
     "elapsed": "{{n}} s trascorsi",
     "running": "Il container è integro e in esecuzione",
@@ -118,7 +118,7 @@
   },
   "admin": {
     "title": "Crea account amministratore",
-    "subtitle": "Configura il tuo primo accesso. Questo account ha accesso completo a Yuvomi.",
+    "subtitle": "Configura il tuo primo accesso. Questo account ha accesso completo a Juju.",
     "userLabel": "Nome utente",
     "userHint": "3-64 caratteri: lettere, numeri, . - _",
     "nameLabel": "Nome visualizzato",
@@ -134,9 +134,9 @@
     "errCreate": "Impossibile creare l'account amministratore."
   },
   "done": {
-    "title": "Yuvomi è pronto!",
+    "title": "Juju è pronto!",
     "subtitle": "Il tuo organizer familiare è in funzione e il tuo account amministratore è configurato.",
-    "open": "Apri Yuvomi →",
+    "open": "Apri Juju →",
     "backupReminder": "Ricorda di salvare ora il file .env: contiene le tue chiavi.",
     "download": "Scarica il file .env",
     "savedTo": "Salvato in {{path}}"
@@ -145,7 +145,7 @@
     "tag": "Avanzate · opzionale",
     "title": "Impostazioni avanzate",
     "subtitle": "Reverse proxy, single sign-on e backup automatici. Tutto opzionale: puoi saltare in sicurezza.",
-    "proxyLabel": "Come viene esposto Yuvomi?",
+    "proxyLabel": "Come viene esposto Juju?",
     "proxyBehindHttps": "Dietro un reverse proxy con HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Accesso diretto tramite localhost / HTTP",
     "proxyHint": "L'accesso diretto disattiva i cookie solo sicuri così l'accesso funziona senza HTTPS.",
@@ -210,11 +210,11 @@
     "oidcTrustEmailHint": "Attivalo solo se il tuo provider non invia email_verified e ti fidi di esso."
   },
   "welcome": {
-    "title": "Ti diamo il benvenuto in Yuvomi",
+    "title": "Ti diamo il benvenuto in Juju",
     "subtitle": "Mettiamo in funzione il tuo organizer familiare privato. Scegli come configurarlo.",
     "simpleTitle": "Configurazione semplice",
     "simpleBadge": "Consigliata",
-    "simpleDesc": "Pensiamo noi ai dettagli tecnici. Ideale per usare Yuvomi a casa.",
+    "simpleDesc": "Pensiamo noi ai dettagli tecnici. Ideale per usare Juju a casa.",
     "simpleTime": "Circa 2 minuti",
     "advancedTitle": "Configurazione avanzata",
     "advancedDesc": "Controllo totale: reverse proxy, sincronizzazione calendario, e-mail, single sign-on e backup.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Ogni notte viene conservato un backup locale.",
     "backupReminder": "Dopo la configurazione, salva il file .env generato: contiene le tue uniche chiavi di cifratura.",
     "switchAdvanced": "Servono più opzioni? Passa alla configurazione avanzata",
-    "start": "Configura e avvia Yuvomi"
+    "start": "Configura e avvia Juju"
   },
   "email": {
     "title": "E-mail e reimpostazione password",

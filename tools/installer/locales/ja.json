@@ -1,5 +1,5 @@
 {
-  "title": "Yuvomi セットアップ",
+  "title": "Juju セットアップ",
   "common": {
     "continue": "続ける",
     "back": "戻る",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "基本設定",
-    "subtitle": "Yuvomi にどのようにアクセスしますか？",
+    "subtitle": "Juju にどのようにアクセスしますか？",
     "existing": "既存の設定が検出されました — 保存前に現在の .env ファイルがバックアップされます。",
     "hostLabel": "ドメインまたは IP アドレス",
-    "hostHint": "ブラウザで Yuvomi を開くために使用するアドレスです。",
+    "hostHint": "ブラウザで Juju を開くために使用するアドレスです。",
     "portLabel": "ポート",
     "tzLabel": "タイムゾーン",
     "errHost": "ホスト名が無効です。英字、数字、ハイフン、ピリオドのみを使用してください。",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "カレンダー同期",
-    "subtitle": "Yuvomi を Google カレンダーまたは Apple iCloud に接続します。どちらも任意です — 設定するには展開してください。",
+    "subtitle": "Juju を Google カレンダーまたは Apple iCloud に接続します。どちらも任意です — 設定するには展開してください。",
     "google": "Google カレンダー",
     "googleHint": "{{link}} で OAuth 認証情報を作成します。リダイレクト URI: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -99,7 +99,7 @@
     "documentGoogleDrive": "Google Drive 文書"
   },
   "docker": {
-    "title": "Yuvomi を起動しています",
+    "title": "Juju を起動しています",
     "subtitle": "イメージを取得し、Docker コンテナを起動しています。",
     "elapsed": "{{n}} 秒経過",
     "running": "コンテナは正常に稼働しています",
@@ -118,7 +118,7 @@
   },
   "admin": {
     "title": "管理者アカウントを作成",
-    "subtitle": "最初のログインを設定します。このアカウントは Yuvomi への完全なアクセス権を持ちます。",
+    "subtitle": "最初のログインを設定します。このアカウントは Juju への完全なアクセス権を持ちます。",
     "userLabel": "ユーザー名",
     "userHint": "3〜64 文字：英字、数字、. - _",
     "nameLabel": "表示名",
@@ -134,9 +134,9 @@
     "errCreate": "管理者アカウントの作成に失敗しました。"
   },
   "done": {
-    "title": "Yuvomi の準備が整いました！",
+    "title": "Juju の準備が整いました！",
     "subtitle": "ファミリープランナーが稼働し、管理者アカウントの設定が完了しました。",
-    "open": "Yuvomi を開く →",
+    "open": "Juju を開く →",
     "backupReminder": "今すぐ .env ファイルをバックアップするのを忘れずに — キーが含まれています。",
     "download": ".env ファイルをダウンロード",
     "savedTo": "{{path}} に保存しました"
@@ -145,7 +145,7 @@
     "tag": "詳細設定 · 任意",
     "title": "詳細設定",
     "subtitle": "リバースプロキシ、シングルサインオン、自動バックアップ。すべて任意です — スキップしても問題ありません。",
-    "proxyLabel": "Yuvomi はどのように公開されますか？",
+    "proxyLabel": "Juju はどのように公開されますか？",
     "proxyBehindHttps": "HTTPS 付きのリバースプロキシの背後（Caddy、nginx、Traefik）",
     "proxyDirect": "localhost / HTTP による直接アクセス",
     "proxyHint": "直接アクセスでは secure 限定の Cookie を無効にし、HTTPS なしでもログインできるようにします。",
@@ -210,11 +210,11 @@
     "oidcTrustEmailHint": "プロバイダーが email_verified を送らず、かつ信頼できる場合のみ有効にしてください。"
   },
   "welcome": {
-    "title": "Yuvomi へようこそ",
+    "title": "Juju へようこそ",
     "subtitle": "プライベートな家族プランナーを立ち上げましょう。セットアップ方法を選んでください。",
     "simpleTitle": "簡単セットアップ",
     "simpleBadge": "おすすめ",
-    "simpleDesc": "技術的な詳細はこちらで対応します。自宅で Yuvomi を使うのに最適です。",
+    "simpleDesc": "技術的な詳細はこちらで対応します。自宅で Juju を使うのに最適です。",
     "simpleTime": "約2分",
     "advancedTitle": "詳細セットアップ",
     "advancedDesc": "完全な制御：リバースプロキシ、カレンダー同期、メール、シングルサインオン、バックアップ。",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "毎晩ローカルバックアップを保持します。",
     "backupReminder": "セットアップ後、生成された .env ファイルをバックアップしてください。唯一の暗号化キーが含まれています。",
     "switchAdvanced": "もっとオプションが必要ですか？詳細セットアップに切り替える",
-    "start": "Yuvomi をセットアップして起動"
+    "start": "Juju をセットアップして起動"
   },
   "email": {
     "title": "メールとパスワードリセット",

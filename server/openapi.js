@@ -6,9 +6,9 @@ function buildOpenApiSpec(req, appVersion) {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Yuvomi API',
+      title: 'Juju API',
       version: appVersion,
-      description: 'OpenAPI documentation for the Yuvomi family organizer backend.',
+      description: 'OpenAPI documentation for the Juju family organizer backend.',
     },
     servers: [{ url: '/', description: 'Current origin' }],
     tags: apiTags,

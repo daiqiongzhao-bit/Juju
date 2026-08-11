@@ -1,7 +1,7 @@
 /**
  * Test: ausgehender Google-Sync für Löschungen, Änderungen und Umzüge (#593)
  * Zweck: Der Outbound-Zweig kannte nur `events.insert` für neue lokale Termine.
- *        Wer einen bereits gespiegelten Termin in Yuvomi löschte, bearbeitete oder
+ *        Wer einen bereits gespiegelten Termin in Juju löschte, bearbeitete oder
  *        in einen anderen Kalender legte, änderte damit nichts mehr in Google (die
  *        Inbound-Richtung funktionierte). Diese Suite deckt alle nachgerüsteten
  *        Richtungen ab:
@@ -761,7 +761,7 @@ test('Altzeilen ohne calendar_ref_id werden von einem cancelled weiterhin gelös
 //
 // Der Abruf läuft mit singleEvents:false. Eine Serie kommt damit als EIN Master
 // mit ihrer Wiederholungsregel, ihre Abweichungen als eigene Items, die auf den
-// Master zeigen. Yuvomi expandiert die Serie lokal - so wie bei CalDAV und ICS.
+// Master zeigen. Juju expandiert die Serie lokal - so wie bei CalDAV und ICS.
 
 function seriesMaster(id, extra = {}) {
   return {

@@ -1,5 +1,5 @@
 ---
-name: Yuvomi
+name: Juju
 description: First-Party-Familienplaner in Apples Liquid-Glass-Sprache, WCAG AA als Invariante
 colors:
   accent-indigo: "#4F4DC9"
@@ -166,7 +166,7 @@ components:
     size: "64px"
 ---
 
-# Design System: Yuvomi
+# Design System: Juju
 
 <!-- Neu aufgezeichnet 2026-08-06 aus dem GEBAUTEN Stand des HIG-Redesigns nach
      Fundament + Rest-Rollout Runde 1-3 und zwei Finish-Review-Durchlaeufen
@@ -180,7 +180,7 @@ Stand bis 2026-08-08 als HTML-Kommentar am Body-Anfang von `public/index.html`
 und wurde damit an jeden Browser ausgeliefert. Er gehoert hierher, wo die
 uebrigen Designentscheidungen stehen.
 
-**THESIS:** Yuvomi wird zur First-Party-App: der private Familien-Kommandostand
+**THESIS:** Juju wird zur First-Party-App: der private Familien-Kommandostand
 in Apples eigener Sprache. Verweigert wird der Kategorie-Standard (freundlicher
 Pastell-Organizer) UND das bisherige Violett-Glas-Hybrid - stattdessen
 Plattform-Kanon in voller Treue.
@@ -209,7 +209,7 @@ Runde-3-Liste.
 
 **Creative North Star: "Die First-Party-App"**
 
-Yuvomi fuehlt sich an, als waere die App mit dem Geraet ausgeliefert worden: der private
+Juju fuehlt sich an, als waere die App mit dem Geraet ausgeliefert worden: der private
 Familien-Kommandostand in Apples eigener Sprache. Der Kanon ist die Apple Human Interface
 Guidelines in der Liquid-Glass-Designphilosophie, in voller Treue; die Messlatte sind
 Apple-Systemapps und Fantastical. Verweigert wird der Kategorie-Standard (freundlicher
@@ -532,7 +532,7 @@ Backdrop und seinen Aktionen. Inhalte - Karten, Listen, Widgets, Text - sind opa
 Blur-Stufen kanonisch 2/6/10/20/32px (`--blur-2xs..lg`).
 
 **Der Modulkopf traegt KEIN Glas, und das ist eine begruendete Abweichung vom Kanon, keine
-Auslassung.** Die belegte Liquid-Glass-Linie fuehrt Navigationsleisten transparent; Yuvomi
+Auslassung.** Die belegte Liquid-Glass-Linie fuehrt Navigationsleisten transparent; Juju
 stellt den Kopf nahtlos und opak auf den Seitengrund (`--color-bg`). Zwei Gruende, beide
 gemessen: die kollabierende Large-Title-Leiste lebt davon - Glas zeigte am Scroll-Anfang
 eine Flaeche, wo gerade keine sein soll, und haette die gewonnene Ruhe wieder aufgehoben -

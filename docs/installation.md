@@ -1,11 +1,11 @@
 ## Quick Install
 
-Three ways to get Yuvomi running from scratch:
+Three ways to get Juju running from scratch:
 
 ### Option A — Web Installer (recommended, all platforms)
 
 ```bash
-git clone https://github.com/daiqiongzhao-bit/Juju.git && cd yuvomi
+git clone https://github.com/daiqiongzhao-bit/Juju.git && cd Juju
 node tools/installer/install-server.js
 # Open http://localhost:8090
 ```
@@ -15,7 +15,7 @@ Requires Node.js 18+ on the host. The browser-based wizard is fully localized (2
 ### Option B — CLI Installer (Linux / macOS)
 
 ```bash
-git clone https://github.com/daiqiongzhao-bit/Juju.git && cd yuvomi
+git clone https://github.com/daiqiongzhao-bit/Juju.git && cd Juju
 bash install.sh
 ```
 
@@ -26,7 +26,7 @@ Running it again on an existing installation is safe, in two ways:
 - **Security keys are never regenerated.** `SESSION_SECRET` and `DB_ENCRYPTION_KEY` already present in your `.env` are kept, so the database stays readable. Remove a key from `.env` if you deliberately want a new one.
 - **Settings the script does not ask about are carried over.** Anything you added by hand or through the web installer — `EMAIL_SMTP_*`, `OIDC_*`, `WEBDAV_BACKUP_*`, `VAPID_SUBJECT`, `LOG_LEVEL` and the rest — is copied from the previous `.env` into the new one, and the script reports how many entries it kept. Only the values the dialog itself asks about are replaced by your answers. The previous file is still backed up to `.env.bak-<timestamp>` first.
 
-> **Base URL.** The script asks for the absolute origin your household will open (default `http://<host>:<port>`) and writes it as `BASE_URL`. Behind a reverse proxy, enter the public address there — for example `https://yuvomi.example.com`. Without it the server sends no password-reset or invitation emails at all, because it deliberately does not trust the request's `Host` header.
+> **Base URL.** The script asks for the absolute origin your household will open (default `http://<host>:<port>`) and writes it as `BASE_URL`. Behind a reverse proxy, enter the public address there — for example `https://juju.example.com`. Without it the server sends no password-reset or invitation emails at all, because it deliberately does not trust the request's `Host` header.
 
 Force a specific language with `--lang` (one of `de en es fr it sv el ru tr zh ja ar hi pt uk pl nl cs vi hu ko id fa fil`):
 
@@ -67,7 +67,7 @@ the browser. Headless deployments can instead create it from the container conso
 
 # Installation Guide
 
-Complete setup instructions for Yuvomi - from Docker installation to your first login.
+Complete setup instructions for Juju - from Docker installation to your first login.
 
 ## Table of Contents
 
@@ -86,7 +86,7 @@ Complete setup instructions for Yuvomi - from Docker installation to your first 
 
 ## Architecture Overview
 
-Yuvomi is a self-hosted family planner that runs as a single Docker container. The Express.js backend serves both the API and the static frontend files. Application data is stored in a SQLCipher-encrypted SQLite database inside a host-mounted data folder, and automated database backups are written to a separate host-mounted backup folder. Optionally, newly uploaded document files can be stored on a mounted host folder or on a WebDAV server instead of inside SQLite.
+Juju is a self-hosted family planner that runs as a single Docker container. The Express.js backend serves both the API and the static frontend files. Application data is stored in a SQLCipher-encrypted SQLite database inside a host-mounted data folder, and automated database backups are written to a separate host-mounted backup folder. Optionally, newly uploaded document files can be stored on a mounted host folder or on a WebDAV server instead of inside SQLite.
 
 ```
 Browser ──HTTP──▶ Docker Container (Express.js :3000) ──▶ SQLite/SQLCipher (/data/yuvomi.db)
@@ -95,7 +95,7 @@ With HTTPS (recommended for network access):
 Browser ──HTTPS──▶ Nginx (Reverse Proxy) ──HTTP──▶ Docker Container (Express.js :3000) ──▶ SQLite/SQLCipher
 ```
 
-For local-only access, the Docker container is all you need. If you want to access Yuvomi from other devices on your network or the internet, add Nginx as a reverse proxy with SSL.
+For local-only access, the Docker container is all you need. If you want to access Juju from other devices on your network or the internet, add Nginx as a reverse proxy with SSL.
 
 ---
 
@@ -121,7 +121,7 @@ docker compose version     # Docker Compose version v2.x.x
 ### Podman (alternative to Docker, RHEL / Fedora / CentOS Stream)
 
 RHEL-based distributions ship **Podman** (often rootless) and **SELinux** instead of
-Docker. Yuvomi supports Podman out of the box: both installers auto-detect it, and a
+Docker. Juju supports Podman out of the box: both installers auto-detect it, and a
 dedicated `podman-compose.yml` adds the SELinux `:Z` volume relabel. Install Podman and
 either the `podman compose` subcommand (Podman 4.1+) or the `podman-compose` package:
 
@@ -154,7 +154,7 @@ git --version              # git version 2.x.x
 
 ## Step-by-Step Installation
 
-There are six ways to get Yuvomi running. **Option A** (web installer) is recommended for most users — it walks you through every step in your browser. **Option B** (pre-built image) is a quick manual alternative. **Option C** (build from source) is for contributors or custom builds. **Options D–F** install directly from a NAS/home-server app store with no terminal required: **Option D** (TrueNAS SCALE), **Option E** (Umbrel), and **Option F** (Unraid).
+There are six ways to get Juju running. **Option A** (web installer) is recommended for most users — it walks you through every step in your browser. **Option B** (pre-built image) is a quick manual alternative. **Option C** (build from source) is for contributors or custom builds. **Options D–F** install directly from a NAS/home-server app store with no terminal required: **Option D** (TrueNAS SCALE), **Option E** (Umbrel), and **Option F** (Unraid).
 
 ---
 
@@ -166,7 +166,7 @@ Requires Node.js 18+ and Docker on the host.
 
 ```bash
 git clone https://github.com/daiqiongzhao-bit/Juju.git
-cd yuvomi
+cd Juju
 ```
 
 #### 2. Start the Installer
@@ -249,7 +249,7 @@ Continue with [Step 4 — Verify](#4-verify-the-container-is-running).
 
 ```bash
 git clone https://github.com/daiqiongzhao-bit/Juju.git
-cd yuvomi
+cd Juju
 ```
 
 #### 2. Configure Environment Variables
@@ -282,8 +282,8 @@ docker compose logs -f
 You should see output like:
 
 ```
-yuvomi  | [Yuvomi] Server running on port 3000 | Version 2.0.1
-yuvomi  | [Yuvomi] Environment: production
+yuvomi  | [Juju] Server running on port 3000 | Version 2.0.1
+yuvomi  | [Juju] Environment: production
 yuvomi  | [Sync] Auto-sync active every 15 minutes.
 ```
 
@@ -291,13 +291,13 @@ Press `Ctrl+C` to stop following the logs (the container keeps running).
 
 ### 5. Create the First Admin Account
 
-On the first visit, Yuvomi detects that no account exists yet and guides you through
+On the first visit, Juju detects that no account exists yet and guides you through
 creating your admin account directly in the browser (see step 6). The form asks for:
 - **Username** (3–64 characters; letters, numbers, dots, hyphens, underscores)
 - **Display name** (e.g. "Jane Doe")
 - **Password** (minimum 8 characters, with a confirmation field)
 
-After you submit, Yuvomi creates the admin, signs you in automatically, and the setup
+After you submit, Juju creates the admin, signs you in automatically, and the setup
 form is no longer reachable.
 
 **Headless alternative (CLI):** if you prefer not to use the browser — or are scripting
@@ -307,7 +307,7 @@ a provisioning step — create the admin from the container console instead:
 docker compose exec yuvomi node setup.js
 ```
 
-### 6. Open Yuvomi
+### 6. Open Juju
 
 Open your browser and navigate to:
 
@@ -321,11 +321,11 @@ Log in with the admin credentials you just created. You can add family members f
 
 ### Option D — TrueNAS SCALE (Community Apps Catalog)
 
-No terminal required. Yuvomi is available directly in the TrueNAS SCALE Community Apps Catalog.
+No terminal required. Juju is available directly in the TrueNAS SCALE Community Apps Catalog.
 
 #### 1. Open the Apps Catalog
 
-In your TrueNAS SCALE web UI, go to **Apps → Discover Apps** and search for **Yuvomi**.
+In your TrueNAS SCALE web UI, go to **Apps → Discover Apps** and search for **Juju**.
 
 #### 2. Configure and Install
 
@@ -345,19 +345,19 @@ Once the app status shows **Running**, click **WebUI** in the Apps overview. The
 
 ### Option E — Umbrel (App Store)
 
-No terminal required. Yuvomi is available in the Umbrel App Store — everything runs on, and stays on, your Umbrel.
+No terminal required. Juju is available in the Umbrel App Store — everything runs on, and stays on, your Umbrel.
 
 #### 1. Open the App Store
 
-In your Umbrel dashboard, open the **App Store** and search for **Yuvomi**.
+In your Umbrel dashboard, open the **App Store** and search for **Juju**.
 
 #### 2. Install with One Click
 
 Click **Install**. Umbrel pulls the image and starts the container for you — there are no configuration files to edit.
 
-#### 3. Open Yuvomi
+#### 3. Open Juju
 
-Launch Yuvomi from your Umbrel home screen. The first visit guides you through creating your admin account in the browser.
+Launch Juju from your Umbrel home screen. The first visit guides you through creating your admin account in the browser.
 
 > **Finish setup right away.** When Umbrel's reverse-proxy authentication is disabled, the unauthenticated first-run setup endpoint is reachable on your LAN until you create the admin account. Complete the first-run setup immediately after installing.
 
@@ -365,11 +365,11 @@ Launch Yuvomi from your Umbrel home screen. The first visit guides you through c
 
 ### Option F — Unraid (Community Apps)
 
-No terminal required. Yuvomi ships as an Unraid Community Applications template.
+No terminal required. Juju ships as an Unraid Community Applications template.
 
 #### 1. Open Community Applications
 
-In Unraid, open the **Apps** tab (the Community Applications plugin) and search for **Yuvomi**.
+In Unraid, open the **Apps** tab (the Community Applications plugin) and search for **Juju**.
 
 #### 2. Configure the Template
 
@@ -381,7 +381,7 @@ Click **Install**. In the template, set:
 
 #### 3. Apply and Open
 
-Click **Apply**. Once the container is running, click the Yuvomi icon → **WebUI**. The first visit guides you through creating your admin account in the browser.
+Click **Apply**. Once the container is running, click the Juju icon → **WebUI**. The first visit guides you through creating your admin account in the browser.
 
 ---
 
@@ -396,7 +396,7 @@ All configuration happens in the `.env` file. The container reads these values o
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `PORT` | Port the Express server listens on **inside the container** (rarely changed) | `3000` | No |
-| `OIKOS_HTTP_PORT` | Host port that the compose file maps to the container's port 3000. Change this to expose Yuvomi on a different host port; the app inside the container always listens on 3000. | `3000` | No |
+| `OIKOS_HTTP_PORT` | Host port that the compose file maps to the container's port 3000. Change this to expose Juju on a different host port; the app inside the container always listens on 3000. | `3000` | No |
 | `OIKOS_HTTP_BIND` | Host bind address for the published port (`podman-compose.yml` only). Set to `127.0.0.1` for rootless Podman behind a reverse proxy on the same host. | `0.0.0.0` | No |
 | `TZ` | Container timezone (e.g. `Europe/Berlin`). Affects timestamps, the automated-backup schedule, and serves as the household zone wherever a time carries none of its own: events pushed to Google Calendar when the target calendar reports no zone, and the due times of CalDAV reminders synced into Tasks. | `UTC` | No |
 | `NODE_ENV` | Runtime environment | `production` | No |
@@ -428,7 +428,7 @@ see [HTTPS / Reverse Proxy](#https--reverse-proxy-nginx)). Each device opts in u
 Settings → Personal → Notifications.
 
 Admins can also add household Gotify or ntfy channels on the same settings page. These channels
-are configured in the UI and do not require environment variables. The Yuvomi backend container or
+are configured in the UI and do not require environment variables. The Juju backend container or
 host must be able to reach the configured Gotify/ntfy base URL. HTTPS is recommended; HTTP is
 accepted for trusted internal networks such as a private LAN or container network.
 
@@ -450,20 +450,20 @@ Apple applies extra restrictions that do not exist on Android or desktop browser
 
 - **iOS/iPadOS 16.4 or newer** is required.
 - **The app must be installed to the Home Screen.** iOS delivers Web Push only to installed
-  home-screen web apps, never to a Safari tab. Open Yuvomi in Safari, then Share ->
+  home-screen web apps, never to a Safari tab. Open Juju in Safari, then Share ->
   "Add to Home Screen".
 - **Enable the toggle from inside the home-screen app.** The push subscription belongs to that
   installation, so a toggle enabled in a Safari tab does not carry over.
 - **The certificate must be one iOS trusts.** A self-signed certificate or a private CA without an
   installed profile stops the service worker from registering, which silently disables push. A
   plain `http://` LAN address does not work either.
-- **Check iOS Settings -> Notifications -> Yuvomi**: "Allow Notifications" must be on, and a Focus
+- **Check iOS Settings -> Notifications -> Juju**: "Allow Notifications" must be on, and a Focus
   mode must not be filtering the app.
 - **The server needs outbound access to `web.push.apple.com`.** In LAN-only or egress-filtered
   deployments the send fails server-side.
 - **The VAPID subject must be routable.** Apple validates the contact URI in the signed token and
   answers `403 BadJwtToken` when it cannot be reached, so push fails on iOS while Android continues
-  to work. Yuvomi derives a usable value from the SMTP sender address or `BASE_URL`; set
+  to work. Juju derives a usable value from the SMTP sender address or `BASE_URL`; set
   [`VAPID_SUBJECT`](#web-push-optional) explicitly if neither is configured.
 
 If a test notification does not arrive, the server log is the authoritative source. Successful
@@ -492,10 +492,10 @@ makes exactly that field read-only in the settings UI; empty values fall back to
 | `EMAIL_SMTP_USER` | SMTP auth username. | - | No |
 | `EMAIL_SMTP_PASS` | SMTP auth password. | - | No |
 | `EMAIL_FROM_ADDRESS` | Sender email address. | - | No |
-| `EMAIL_FROM_NAME` | Sender display name. | `Yuvomi` | No |
+| `EMAIL_FROM_NAME` | Sender display name. | `Juju` | No |
 | `BASE_URL` | Absolute origin used to build password-reset links, invitation links in emails, and calendar export-feed URLs, e.g. `https://yuvomi.example.com`. **Required for password-reset and invitation emails to be sent** — the request `Host` header is never trusted as a fallback, to prevent reset-link poisoning. The invite link shown in the admin UI works without it (it is built from the browser's origin); the export feed falls back to the request's protocol/host when unset. | - | No* |
 
-\* Not required to start Yuvomi. Without it (or without SMTP configured) the self-service reset
+\* Not required to start Juju. Without it (or without SMTP configured) the self-service reset
 cannot deliver a mail, so the login page hides the "Forgot password" link entirely rather than
 offering a dead end — an admin can still reset a member's password directly under
 Settings → Administration → Family.
@@ -559,7 +559,7 @@ environment:
 
 Admins can configure **Settings → Sync → Document storage** as the global destination for all
 new document files, including calendar attachments. Existing local documents are not migrated.
-Uploads fail closed: if WebDAV cannot accept the file, Yuvomi rejects the upload instead of silently
+Uploads fail closed: if WebDAV cannot accept the file, Juju rejects the upload instead of silently
 storing it in SQLite. Disabling WebDAV changes only future uploads; existing WebDAV documents remain
 readable and deletable.
 
@@ -597,7 +597,7 @@ PUT/GET/DELETE roundtrip in the target folder.
 Google Drive is a separate Documents OAuth connection, even when it reuses the same Cloud Console
 client ID and secret as Google Calendar. Enable the **Google Drive API**, add the exact redirect URI
 `https://<YOUR-DOMAIN>/api/v1/documents/storage/google-drive/callback`, and configure the variables
-below. Yuvomi requests only `https://www.googleapis.com/auth/drive.file`; it cannot browse arbitrary
+below. Juju requests only `https://www.googleapis.com/auth/drive.file`; it cannot browse arbitrary
 Drive files and never creates public permissions.
 
 | Variable | Description | Default | Required |
@@ -608,7 +608,7 @@ Drive files and never creates public permissions.
 
 After deployment, open **Settings → Sync → Document storage**, connect Google Drive, test the
 connection, then explicitly select Google Drive as the upload destination. Connecting does not
-activate it. New files are placed in the visible private `Yuvomi/Documents` folder; the opaque Drive
+activate it. New files are placed in the visible private `Juju/Documents` folder; the opaque Drive
 file ID is stored in SQLite. The environment-managed local-folder backend still takes precedence.
 
 Drive access and refresh tokens use Drive-specific database records and never the Calendar token
@@ -618,7 +618,7 @@ the candidate account and an existing Drive-backed file before replacing working
 Disconnect is blocked while Drive is selected or Drive-backed rows exist, and it removes only local
 Drive token state without revoking shared Google credentials.
 
-> **Access and backup boundary:** Yuvomi visibility settings only control access through Yuvomi.
+> **Access and backup boundary:** Juju visibility settings only control access through Juju.
 > Anyone with access to the connected Google Drive folder can view all files stored there. SQLite backups contain
 > metadata and Drive file IDs, not binaries. Back up or export the Drive folder separately and restore
 > it with the matching database.
@@ -664,11 +664,11 @@ it in controlled environments.
 | `GOOGLE_REDIRECT_URI` | OAuth callback URL | `https://<YOUR-DOMAIN>/api/v1/calendar/google/callback` | No |
 
 After connecting, enable the calendars to sync under **Settings → Sync**. The sync runs both ways:
-events created, edited, deleted, or moved to another calendar in Yuvomi are applied in Google as
+events created, edited, deleted, or moved to another calendar in Juju are applied in Google as
 well, and changes made in Google flow back. Outbound changes are attempted immediately and retried
 by the next sync run (`SYNC_INTERVAL_MINUTES`) if Google is unreachable. A calendar is only written
 to when the connected account has write access to it, and the **read-only mode** checkbox stops
-Yuvomi from changing anything in Google while still importing normally.
+Juju from changing anything in Google while still importing normally.
 
 Recurring appointments are imported as one series with its repeat rule, and cancelled or moved
 occurrences are carried over individually. Upgrading to v1.56.0 makes the first sync run read every
@@ -694,9 +694,9 @@ colour is kept as a separate entry instead.
 | `SYNC_INTERVAL_MINUTES` | Sync interval in minutes for calendars and contacts | `15` | No |
 
 CalDAV and iCloud sync both ways: events created, edited, deleted, or moved to another calendar in
-Yuvomi are applied on the server as well, and changes made there flow back. An outbound change is
+Juju are applied on the server as well, and changes made there flow back. An outbound change is
 attempted right when you save and retried by the next sync run if the server cannot be reached.
-Editing preserves everything the server holds that Yuvomi does not — attendees, alarms, categories
+Editing preserves everything the server holds that Juju does not — attendees, alarms, categories
 and exceptions of a recurring series stay untouched. Events that were already synced before the
 upgrade to v1.52.0 need one sync run before edits and deletions can reach them.
 
@@ -714,7 +714,7 @@ Enable single sign-on via any OpenID Connect provider (Authentik, Keycloak, Goog
 
 When all four OIDC variables are set, a **"Sign in with SSO"** button appears on the login page. The flow uses Authorization Code + PKCE (S256) with a nonce. On first login, the user is matched by their OIDC `sub`. If no match exists, an existing local account is linked automatically **only when the provider reports a verified email (`email_verified: true`) and exactly one local account holds that email address**; otherwise a new account is provisioned. Unverified or ambiguous emails never take over an existing account. If your provider omits the `email_verified` claim, set `OIDC_TRUST_EMAIL_WITHOUT_VERIFIED_CLAIM=true` to enable linking.
 
-**Username of a newly provisioned account.** The name is taken from the first claim that yields something usable: `preferred_username`, then the non-standard `username` claim (Synology DSM SSO sends the plain account name there, where `sub` still carries the directory part), then `sub`. The email address is deliberately not a candidate: a household often shares one address across several members, so it identifies nobody, and its domain part only makes the name unwieldy. Whichever claim wins is reduced to the format every username in Yuvomi follows (`a-z A-Z 0-9 . _ -`, 3 to 64 characters), with accents transliterated and anything else turned into a hyphen. Admins can rename the account afterwards under **Settings → Administration → Family**; sign-in keeps working either way, because the identity hangs on `sub`, not on the name.
+**Username of a newly provisioned account.** The name is taken from the first claim that yields something usable: `preferred_username`, then the non-standard `username` claim (Synology DSM SSO sends the plain account name there, where `sub` still carries the directory part), then `sub`. The email address is deliberately not a candidate: a household often shares one address across several members, so it identifies nobody, and its domain part only makes the name unwieldy. Whichever claim wins is reduced to the format every username in Juju follows (`a-z A-Z 0-9 . _ -`, 3 to 64 characters), with accents transliterated and anything else turned into a hyphen. Admins can rename the account afterwards under **Settings → Administration → Family**; sign-in keeps working either way, because the identity hangs on `sub`, not on the name.
 
 ### Subscription Currency Conversion (Optional)
 
@@ -741,7 +741,7 @@ Built-in cron-based database backup (default: 2 AM daily, keep last 7 copies). S
 | `BACKUP_KEEP` | Number of most-recent backup files to retain | `7` | No |
 | `BACKUP_UPLOAD_LIMIT` | Maximum size of a backup file uploaded for restore through the admin UI (Express body-limit syntax). Raise it when restoring a database larger than the default. | `100mb` | No |
 
-**WebDAV backup target (optional):** After each local backup, Yuvomi can automatically upload the file to any WebDAV-compatible server (Nextcloud, ownCloud, Hetzner Storage Box, Infomaniak kDrive, etc.). Configure in **Settings → Administration → Backup and restore → WebDAV Backup Target**, or via environment variables (env vars take precedence over the UI):
+**WebDAV backup target (optional):** After each local backup, Juju can automatically upload the file to any WebDAV-compatible server (Nextcloud, ownCloud, Hetzner Storage Box, Infomaniak kDrive, etc.). Configure in **Settings → Administration → Backup and restore → WebDAV Backup Target**, or via environment variables (env vars take precedence over the UI):
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
@@ -756,9 +756,9 @@ Built-in cron-based database backup (default: 2 AM daily, keep last 7 copies). S
 
 ## HTTPS / Reverse Proxy (Nginx)
 
-> **Optional for local access, required for network/internet access.** If you only access Yuvomi on the same machine (localhost), you can skip this section.
+> **Optional for local access, required for network/internet access.** If you only access Juju on the same machine (localhost), you can skip this section.
 
-When exposing Yuvomi to your local network or the internet, you need HTTPS for security. Nginx acts as a reverse proxy that handles SSL termination and forwards requests to the Docker container.
+When exposing Juju to your local network or the internet, you need HTTPS for security. Nginx acts as a reverse proxy that handles SSL termination and forwards requests to the Docker container.
 
 ### Install Nginx
 
@@ -770,7 +770,7 @@ sudo apt install nginx
 
 ### Configure Nginx
 
-Yuvomi ships with an example configuration. Copy it and replace `deine-domain.de` with
+Juju ships with an example configuration. Copy it and replace `deine-domain.de` with
 your actual domain — but do **not** enable the site yet: its HTTPS block references a
 certificate that does not exist until the next step, and Nginx refuses to load an
 `ssl` listener without one.
@@ -818,7 +818,7 @@ Verify auto-renewal is active:
 sudo certbot renew --dry-run
 ```
 
-### Update Yuvomi for HTTPS
+### Update Juju for HTTPS
 
 `docker-compose.yml` reads `SESSION_SECURE` from your `.env` (`${SESSION_SECURE:-false}`), so you no longer need to edit the Compose file. When running behind an HTTPS reverse proxy, set these in `.env`:
 
@@ -852,8 +852,8 @@ Set `SESSION_SECURE=true` and `TRUST_PROXY=1` in `.env` as above, then reload Ca
 
 ## Podman & systemd Autostart (rootless)
 
-On RHEL-based systems you can run Yuvomi as a rootless systemd service via Podman
-[Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html). Yuvomi
+On RHEL-based systems you can run Juju as a rootless systemd service via Podman
+[Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html). Juju
 ships a ready-made unit at `tools/quadlet/oikos.container`.
 
 ```bash
@@ -882,7 +882,7 @@ in `/etc/containers/systemd/` and use `systemctl` without `--user`.
 
 ## Updates
 
-> **One-time step when upgrading past the container rename (Oikos → Yuvomi):** the Docker/Podman
+> **One-time step when upgrading past the container rename (Oikos → Juju):** the Docker/Podman
 > service and container were renamed from `oikos` to `yuvomi`. Your data is safe - the database
 > volume is unchanged and the app migrates an existing `oikos.db` to `yuvomi.db` automatically on
 > first start. But the old `oikos` container lingers as an orphan and keeps holding host port 3000,
@@ -910,7 +910,7 @@ No rebuild needed. The database volume persists across updates.
 ### Option C — Build from Source
 
 ```bash
-cd yuvomi
+cd Juju
 git pull
 docker compose up -d --build
 ```
@@ -985,7 +985,7 @@ For a local CLI restore outside Docker, set the same environment variables used 
 DB_PATH=/path/to/yuvomi.db node --import dotenv/config scripts/restore-backup.js ./yuvomi-backup-20260401.db
 ```
 
-The restore helper validates that the file is an Yuvomi database before replacing the active database. It also keeps a pre-restore copy next to the database file for emergency rollback.
+The restore helper validates that the file is an Juju database before replacing the active database. It also keeps a pre-restore copy next to the database file for emergency rollback.
 
 ### Automated Backups
 
@@ -1202,7 +1202,7 @@ can read. Over CalDAV, iCloud still serves the task collections that existed *be
 usually none, sometimes a single orphaned list that the Reminders app itself no longer shows. So an
 iCloud account whose calendars sync perfectly can still offer no usable reminder list, and no
 setting on either side changes that. The reminders page states this on every iCloud
-account. If you want your Apple tasks in Yuvomi, keep them in a CalDAV-backed list (Nextcloud,
+account. If you want your Apple tasks in Juju, keep them in a CalDAV-backed list (Nextcloud,
 Radicale, Baikal) and subscribe to it from the Reminders app's "Other" account rather than iCloud.
 
 </details>

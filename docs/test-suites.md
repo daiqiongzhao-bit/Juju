@@ -9,7 +9,7 @@ Neue Suite - drei Schritte, alle drei Pflicht: (1) `test/test-[module].js` anleg
 ```bash
 npm test             # Alle Suiten (Node >=22)
 npm run test:db
-npm run test:rename-migration   # Oikos→Yuvomi Identifier-Migration: seamless rename invariants
+npm run test:rename-migration   # Oikos→Juju Identifier-Migration: seamless rename invariants
 npm run test:schema-reconcile   # Schema-Selbstheilung gegen Migrations-Drift (#538): reconcileCriticalSchema ergänzt fehlende Spalten, obwohl die Migration als angewendet vermerkt ist
 npm run test:db-encryption      # DB_ENCRYPTION_KEY wirkt wirklich: Datei-Header verschlüsselt, Bestands-DB wird migriert, falscher Key bricht den Start ab
 npm run test:db-isolation       # Test-Isolation: keine Suite lädt server/db.js ohne wirksames DB_PATH (init() beim Import würde sonst eine echte yuvomi.db im Repo-Root anlegen); prüft auch die Reihenfolge, da eine Zuweisung nach einem statischen Import zu spät kommt
@@ -126,16 +126,16 @@ npm run test:caldav-reminders   # VTODO-Inbound: Feld-Abbildung, Prune-Leerguard
 npm run test:caldav-todo-outbound   # Rückrichtung VTODO (#617): Patcher lässt Alarme/Kategorien stehen, Erledigt = STATUS+COMPLETED+PERCENT-COMPLETE (und weg beim Wiederöffnen), bandtreue Priorität/Status halten urgent und in_progress, DUE-Roundtrip zonenrichtig, Inbound überschreibt keine wartende Bearbeitung und legt Gelöschtes nicht neu an, ein gelöschtes Konto entkoppelt seine Spiegelzeilen statt sie unlöschbar zu machen (v123)
 npm run test:caldav-event-target
 npm run test:google-multi   # multiple Google calendars + per-event sync target
-npm run test:google-outbound   # Löschen + Ändern + Umziehen Yuvomi → Google (#593): Tombstones, Dirty-Marker, events.move, 404/410, Retry-Limit, Inbound-Konfliktschutz; dazu Serien als Master (EXDATE aus Absagen/Verschiebungen, Altbestand-Zusammenführung nur beim Full-Resync)
+npm run test:google-outbound   # Löschen + Ändern + Umziehen Juju → Google (#593): Tombstones, Dirty-Marker, events.move, 404/410, Retry-Limit, Inbound-Konfliktschutz; dazu Serien als Master (EXDATE aus Absagen/Verschiebungen, Altbestand-Zusammenführung nur beim Full-Resync)
 npm run test:calendar-outbound-migration   # Migrationen v103-v106 gegen befüllte Bestands-DB: additiv, kein Rebuild, Marker starten neutral
-npm run test:caldav-outbound   # Löschen + Ändern + Umziehen Yuvomi → CalDAV/Apple (#593): ICS-Patcher (Teilnehmer/Alarme/Overrides bleiben), Objekt-URL-Auflösung, Umzug = create+delete, Sofortversuch ohne Kalenderabruf
+npm run test:caldav-outbound   # Löschen + Ändern + Umziehen Juju → CalDAV/Apple (#593): ICS-Patcher (Teilnehmer/Alarme/Overrides bleiben), Objekt-URL-Auflösung, Umzug = create+delete, Sofortversuch ohne Kalenderabruf
 npm run test:google-calendar   # Google: Datumskonvertierung, Farbauflösung (#427/#219), unveränderte Events werden beim Full-Resync nicht neu geschrieben
 npm run test:housekeeping
 npm run test:housekeeping-routes   # Housekeeping-Routen: Worker-Anlage (Admin-Gate), Check-in/out-Lifecycle + Doppelbuchungs-Guard, Pay/Delete, Decay-CRUD, Supply-Requests, Maintenance-Log; dazu die Besuchs-Artefakte: Fallback-Titel folgen der Datensprache (ohne gesetzte Sprache bleibt Englisch), ein verschobener Besuch wird für den Provider-Push vorgemerkt und ein gelöschter räumt die Kopie beim Provider mit ab - beides nur bei gespiegelten Terminen
 npm run test:documents          # Dokument-Preview: CSP-Header je MIME-Typ
 npm run test:documents-ux       # Dokumente-UX-Verträge: Leerzustände, Kategorie-Facetten, Upload-Modal, Auswahlmodus, Popover-Menü
 npm run test:document-storage   # Dokument-Storage-Migration und Invarianten
-npm run test:google-drive-storage   # Google Drive als Dokument-Ablage: eigenes Credential-Paar (fail-closed bei halber Konfiguration), OAuth-Callback legt Yuvomi/Documents an und wählt nie Drive als Kalender
+npm run test:google-drive-storage   # Google Drive als Dokument-Ablage: eigenes Credential-Paar (fail-closed bei halber Konfiguration), OAuth-Callback legt Juju/Documents an und wählt nie Drive als Kalender
 npm run test:document-folders   # Dokument-Ordner-Routen: umbenennen/löschen (PUT/DELETE) + ON DELETE SET NULL (#453)
 npm run test:task-documents     # Task↔Dokument-Verknüpfungen (#503): GET/PUT /tasks/:id/documents, Sichtbarkeit, Replace-Set, document_count, CASCADE
 npm run test:task-tags          # Aufgaben-Tags (#586): v114-Rebuild lässt Indizes/Suchtrigger intakt, Tags bleiben von der Kategorie getrennt, /tags und meta/options zeigen nur Sichtbares (#474), Serien erben ihre Tags, Umbenennen/Zusammenführen/Löschen und Bulk-Vergabe fassen nur Sichtbares an, die globale Suche findet Tags und gibt sie beim Entfernen wieder her (v117-Trigger auf den Tag-Tabellen), Einkaufsposten teilen die Achse ohne ihre Kategorie zu berühren, Unteraufgaben liefern ihre Tags mit

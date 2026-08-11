@@ -1,5 +1,5 @@
 {
-  "title": "Yuvomi Beállítási varázsló",
+  "title": "Juju Beállítási varázsló",
   "common": {
     "continue": "Folytatás",
     "back": "Vissza",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Alapbeállítások",
-    "subtitle": "Hogyan fogja elérni a Yuvomi-t?",
+    "subtitle": "Hogyan fogja elérni a Juju-t?",
     "existing": "Már létezik konfiguráció — a jelenlegi .env fájl biztonsági mentésre kerül a mentés előtt.",
     "hostLabel": "Domain vagy IP cím",
-    "hostHint": "Az a cím, amellyel megnyitja a Yuvomi-t a böngészőjében.",
+    "hostHint": "Az a cím, amellyel megnyitja a Juju-t a böngészőjében.",
     "portLabel": "Port",
     "tzLabel": "Időzóna",
     "errHost": "Érvénytelen hosztnév. Csak betűk, számok, kötőjelek és pontok használhatók.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Naptár szinkronizálás",
-    "subtitle": "Csatlakoztassa a Yuvomi-t a Google Naptárhoz vagy az Apple iCloudhoz. Mindkettő opcionális — bővítse a konfigurációhoz.",
+    "subtitle": "Csatlakoztassa a Juju-t a Google Naptárhoz vagy az Apple iCloudhoz. Mindkettő opcionális — bővítse a konfigurációhoz.",
     "google": "Google Naptár",
     "googleHint": "Hozzon létre OAuth hitelesítő adatokat itt: {{link}}. Átirányítási URI: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -99,7 +99,7 @@
     "documentGoogleDrive": "Google Drive-dokumentumok"
   },
   "docker": {
-    "title": "Yuvomi indítása",
+    "title": "Juju indítása",
     "subtitle": "A kép letöltése és a Docker konténer indítása.",
     "elapsed": "{{n}}s eltelt",
     "running": "A konténer egészséges és fut",
@@ -118,7 +118,7 @@
   },
   "admin": {
     "title": "Adminisztrátor fiók létrehozása",
-    "subtitle": "Állítsa be az első bejelentkezést. Ez a fiók teljes hozzáféréssel rendelkezik a Yuvomihoz.",
+    "subtitle": "Állítsa be az első bejelentkezést. Ez a fiók teljes hozzáféréssel rendelkezik a Jujuhoz.",
     "userLabel": "Felhasználónév",
     "userHint": "3-64 karakter: betűk, számok, . - _",
     "nameLabel": "Megjelenítendő név",
@@ -134,9 +134,9 @@
     "errCreate": "Nem sikerült létrehozni az adminisztrátor fiókot."
   },
   "done": {
-    "title": "Yuvomi készen áll!",
+    "title": "Juju készen áll!",
     "subtitle": "A családi tervező fut, és az adminisztrátor fiók be van állítva.",
-    "open": "Yuvomi megnyitása →",
+    "open": "Juju megnyitása →",
     "backupReminder": "Ne feledd most menteni a .env fájlt — ez tartalmazza a kulcsaidat.",
     "download": ".env fájl letöltése",
     "savedTo": "Elmentve ide: {{path}}"
@@ -145,7 +145,7 @@
     "tag": "Speciális · opcionális",
     "title": "Speciális beállítások",
     "subtitle": "Reverse proxy, egyetlen bejelentkezés és automatikus biztonsági mentések. Mind opcionális — kihagyása biztonságos.",
-    "proxyLabel": "Hogyan van kitéve a Yuvomi?",
+    "proxyLabel": "Hogyan van kitéve a Juju?",
     "proxyBehindHttps": "Reverse proxy mögött HTTPS-sel (Caddy, nginx, Traefik)",
     "proxyDirect": "Közvetlen hozzáférés localhost / HTTP-n keresztül",
     "proxyHint": "A közvetlen hozzáférés letiltja a csak biztonságos sütiket, így a bejelentkezés HTTPS nélkül is működik.",
@@ -210,11 +210,11 @@
     "oidcTrustEmailHint": "Csak akkor kapcsold be, ha a szolgáltatód nem küld email_verified értéket, és megbízol benne."
   },
   "welcome": {
-    "title": "Üdvözöl a Yuvomi",
+    "title": "Üdvözöl a Juju",
     "subtitle": "Indítsuk el a privát családi tervezőt. Válaszd ki, hogyan szeretnéd beállítani.",
     "simpleTitle": "Egyszerű telepítés",
     "simpleBadge": "Ajánlott",
-    "simpleDesc": "A technikai részleteket elintézzük helyetted. Ideális a Yuvomi otthoni használatához.",
+    "simpleDesc": "A technikai részleteket elintézzük helyetted. Ideális a Juju otthoni használatához.",
     "simpleTime": "Körülbelül 2 perc",
     "advancedTitle": "Speciális telepítés",
     "advancedDesc": "Teljes irányítás: reverse proxy, naptárszinkron, e-mail, egyszeri bejelentkezés és biztonsági mentések.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Minden éjjel megőrzünk egy helyi biztonsági mentést.",
     "backupReminder": "A telepítés után mentsd el a létrehozott .env fájlt — ez tartalmazza az egyetlen titkosítási kulcsaidat.",
     "switchAdvanced": "Több beállítás kell? Válts speciális telepítésre",
-    "start": "Yuvomi beállítása és indítása"
+    "start": "Juju beállítása és indítása"
   },
   "email": {
     "title": "E-mail és jelszó-visszaállítás",

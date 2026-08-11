@@ -76,7 +76,7 @@ test('sendMail builds transport with ssl→secure:true and from header', async (
   const db = makeDb();
   setCfg(db, {
     email_smtp_host: 'smtp.test', email_smtp_port: '465', email_smtp_secure: 'ssl',
-    email_smtp_user: 'u', email_smtp_pass: 'p', email_from_address: 'box@test', email_from_name: 'Yuvomi',
+    email_smtp_user: 'u', email_smtp_pass: 'p', email_from_address: 'box@test', email_from_name: 'Juju',
   });
   const nm = makeNodemailerMock();
   const svc = createEmailService({ db, nodemailer: nm, env: {} });
@@ -84,7 +84,7 @@ test('sendMail builds transport with ssl→secure:true and from header', async (
   assert.equal(nm.created[0].secure, true);
   assert.equal(nm.created[0].port, 465);
   assert.deepEqual(nm.created[0].auth, { user: 'u', pass: 'p' });
-  assert.equal(nm.sent[0].from, '"Yuvomi" <box@test>');
+  assert.equal(nm.sent[0].from, '"Juju" <box@test>');
   assert.equal(nm.sent[0].to, 'x@test');
 });
 

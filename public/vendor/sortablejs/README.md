@@ -3,7 +3,7 @@
 - **Version:** 1.15.7
 - **Source:** `modular/sortable.esm.js` from the [`sortablejs`](https://github.com/SortableJS/Sortable) npm package (MIT License), tarball `sortablejs-1.15.7.tgz` from the npm registry.
 - **Build:** the upstream ESM module was minified locally with `npx terser --module --compress --mangle --comments false`, no bundler and no runtime CDN involved. The attribution header stays in `sortable.esm.min.js`.
-- **Plugins included:** upstream mounts `AutoScrollPlugin` and the remove/revert-on-spill plugins by default inside `sortable.esm.js` - no extra plugin files needed for Yuvomi's use (single-column reorderable lists).
+- **Plugins included:** upstream mounts `AutoScrollPlugin` and the remove/revert-on-spill plugins by default inside `sortable.esm.js` - no extra plugin files needed for Juju's use (single-column reorderable lists).
 - **License:** MIT, full text in `LICENSE`.
 
 ## Usage

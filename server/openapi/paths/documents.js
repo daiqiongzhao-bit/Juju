@@ -105,7 +105,7 @@ export function documentsPaths() {
         tag: 'Documents',
         admin: true,
         stateChanging: true,
-        description: 'Runs a temporary create, read, verify and delete roundtrip in the private Yuvomi/Documents folder.',
+        description: 'Runs a temporary create, read, verify and delete roundtrip in the private Juju/Documents folder.',
         responses: {
           200: {
             description: 'Connection roundtrip succeeded',
@@ -123,7 +123,7 @@ export function documentsPaths() {
         tag: 'Documents',
         admin: true,
         stateChanging: true,
-        description: 'Deletes only Yuvomi\'s local Drive token state. It does not revoke shared Google credentials. Disconnection is blocked while Drive is selected or Drive-backed documents exist.',
+        description: 'Deletes only Juju\'s local Drive token state. It does not revoke shared Google credentials. Disconnection is blocked while Drive is selected or Drive-backed documents exist.',
         responses: {
           200: {
             description: 'Google Drive disconnected',

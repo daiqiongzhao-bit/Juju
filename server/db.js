@@ -33,7 +33,7 @@ const DB_KEY = process.env.DB_ENCRYPTION_KEY;
 // Pfad-Auflösung (Legacy-Migration oikos.db → yuvomi.db)
 // --------------------------------------------------------
 //
-// Yuvomi hieß früher „Oikos". Die DB-Datei lag standardmäßig unter `oikos.db`
+// Juju hieß früher „Oikos". Die DB-Datei lag standardmäßig unter `oikos.db`
 // (bzw. `/data/oikos.db` in allen ausgelieferten Docker-Templates). Damit
 // Bestands-Nutzer beim Update NICHTS von Hand ändern müssen, leiten wir den
 // effektiven Pfad ab:
@@ -3908,7 +3908,7 @@ const MIGRATIONS = [
       -- Gegenstück zu v103 für Änderungen: ein bereits nach Google gespiegelter
       -- Termin wurde nach dem ersten Push nie wieder ausgehend angefasst, weil der
       -- Outbound-Zweig nur external_source='local' selektiert. Titel-, Zeit- oder
-      -- Farbänderungen blieben damit in Yuvomi hängen.
+      -- Farbänderungen blieben damit in Juju hängen.
       --
       -- outbound_dirty ist bewusst NICHT user_modified: das Flag bedeutet
       -- dauerhaft "lokal angefasst, Farbe nicht überschreiben" und würde als
@@ -4115,7 +4115,7 @@ const MIGRATIONS = [
       -- Der Google-Abruf stellt von singleEvents:true auf false um: eine Serie
       -- kommt künftig als EIN Master mit ihrer Wiederholungsregel statt als
       -- hunderte Einzelvorkommen, so wie CalDAV und ICS sie liefern und wie
-      -- Yuvomi Serien lokal führt.
+      -- Juju Serien lokal führt.
       --
       -- Der gespeicherte syncToken gehört zu den alten Abrufparametern. Google
       -- beantwortet ihn nach der Umstellung mit 410 GONE, was der Sync zwar
@@ -4347,7 +4347,7 @@ const MIGRATIONS = [
       -- Kategorie: eine Aufgabe liegt in genau einer Kategorie (einer Schublade),
       -- trägt aber beliebig viele Tags (Etiketten). CATEGORIES auf category
       -- abzubilden hieße, alle Werte ab dem zweiten zu verlieren und beim Push
-      -- die Tags zu löschen, die der Server kennt und Yuvomi nie gesehen hat.
+      -- die Tags zu löschen, die der Server kennt und Juju nie gesehen hat.
       --
       -- Freitext statt verwalteter Liste: die Werte kommen von fremden Servern,
       -- eine Registry würde sich bei jedem Sync mit Fremdwerten füllen und in
@@ -5111,7 +5111,7 @@ function validateBackupFile(sourcePath) {
       WHERE type = 'table' AND name = 'schema_migrations'
     `).get();
     if (!row) {
-      throw new Error('Backup file is not a valid Yuvomi database.');
+      throw new Error('Backup file is not a valid Juju database.');
     }
     return candidate.prepare('SELECT MAX(version) AS version FROM schema_migrations').get()?.version ?? 0;
   } finally {

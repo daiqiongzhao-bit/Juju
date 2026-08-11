@@ -311,7 +311,7 @@ export async function openPage(harness, { device = 'mobile', theme = 'light', lo
     ({ t, l }) => {
       localStorage.setItem('yuvomi-locale', l);
       localStorage.setItem('yuvomi-onboarded', '1');
-      localStorage.setItem('yuvomi-install-dismissed', String(Date.now()));
+      localStorage.setItem('juju-install-dismissed', String(Date.now()));
       localStorage.setItem('yuvomi-theme', t);
     },
     { t: theme, l: locale },
@@ -359,7 +359,7 @@ export async function settle(page) {
   // ausloest („Execution context was destroyed"). Das ist kein Messfehler,
   // sondern ein Rennen - der naechste Aufruf misst dieselbe Seite.
   try {
-    await page.evaluate(() => document.querySelector('yuvomi-install-prompt')?.remove());
+    await page.evaluate(() => document.querySelector('juju-install-prompt')?.remove());
   } catch {
     await wait(500);
   }

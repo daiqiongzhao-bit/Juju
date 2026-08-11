@@ -151,7 +151,7 @@ function buildICS(event) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Yuvomi//Familienplaner//DE',
+    'PRODID:-//Juju//Familienplaner//DE',
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${now}`,

@@ -1046,7 +1046,7 @@ describe('CalDAV: eine Aufgabenliste bleibt kein Terminziel (#617)', () => {
   });
 
   it('laesst die dort bereits gespiegelten Termine liegen', async () => {
-    // Abschalten heisst nicht wegwerfen: was Yuvomi frueher in die Aufgabenliste
+    // Abschalten heisst nicht wegwerfen: was Juju frueher in die Aufgabenliste
     // geschrieben hat, liegt weiter im Kalender des Nutzers.
     const d = buildDb();
     _setTestDatabase(d);

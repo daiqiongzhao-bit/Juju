@@ -43,7 +43,7 @@ export const MODULES = {
   tasks: {
     table: 'tasks',
     // Felder, die zum Server gespiegelt werden. Alles andere (Kategorie,
-    // Zuweisung, Punkte, Sichtbarkeit, Unteraufgaben) ist Yuvomi-intern und
+    // Zuweisung, Punkte, Sichtbarkeit, Unteraufgaben) ist Juju-intern und
     // kennt in VTODO keine Entsprechung, löst also keinen Push aus.
     //
     // `tags_key` ist kein Spaltenname: Tags liegen in task_tags, der
@@ -69,7 +69,7 @@ function moduleDef(module) {
 }
 
 // --------------------------------------------------------
-// Feld-Abbildung Yuvomi → VTODO
+// Feld-Abbildung Juju → VTODO
 // --------------------------------------------------------
 
 /** RFC-5545-Zeitstempel in UTC, wie ihn COMPLETED und DTSTAMP verlangen. */
@@ -78,7 +78,7 @@ function utcStamp(date = new Date()) {
 }
 
 /**
- * Yuvomi-Priorität → RFC-5545-PRIORITY. Gegenstück zu mapVtodoPriority.
+ * Juju-Priorität → RFC-5545-PRIORITY. Gegenstück zu mapVtodoPriority.
  *
  * Vier lokale Stufen treffen auf drei Bänder (1-4 hoch, 5 mittel, 6-9 niedrig),
  * deshalb teilen sich `urgent` und `high` das obere Band. Damit `urgent` den
@@ -427,7 +427,7 @@ export async function processPendingDeletions(client, accountId, module, objectI
 /**
  * Schiebt lokal bearbeitete Spiegel-Einträge zum Server. Geändert wird das
  * Originalobjekt, nicht ein neu gebautes: sonst verlöre die Aufgabe auf dem
- * Server alles, was Yuvomi nicht kennt (Alarme, Unterlisten, Beziehungen).
+ * Server alles, was Juju nicht kennt (Alarme, Unterlisten, Beziehungen).
  * CATEGORIES gehört seit #586 nicht mehr dazu - die Tag-Liste ist vollständig
  * gespiegelt und wird deshalb bewusst verwaltet.
  *

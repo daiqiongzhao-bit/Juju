@@ -178,7 +178,7 @@ test('GET /database: lädt eine valide SQLite-Backup-Datei herunter', async () =
   assert.equal(r.status, 200);
   assert.ok(r.buf.length > 0, 'Body nicht leer');
   assert.equal(r.buf.subarray(0, 16).toString('latin1').startsWith('SQLite format 3'), true);
-  // Muss eine echte Yuvomi-DB sein (schema_migrations vorhanden) → für den späteren
+  // Muss eine echte Juju-DB sein (schema_migrations vorhanden) → für den späteren
   // Restore-Roundtrip wiederverwendbar.
   assert.ok(r.buf.length < 4 * 1024 * 1024, 'Schema-Backup liegt unter dem 4mb-Limit');
 });

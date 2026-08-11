@@ -1,4 +1,4 @@
-# Yuvomi CLI-Installer — Русский (ru)
+# Juju CLI-Installer — Русский (ru)
 # Auto-generiert (Schlüssel identisch zu allen Locales). en = Fallback, de = Referenz.
 # Wird von install.sh gesourct; setzt die englische Basis pro Schlüssel außer Kraft.
 # Punkt-Schlüssel → Variablen mit Unterstrich (MSG_<bereich>_<name>).
@@ -80,7 +80,7 @@ MSG_admin_password="Пароль (минимум 8 символов):"
 MSG_admin_confirm="Подтвердите пароль:"
 MSG_admin_mismatch="Пароли не совпадают, попробуйте снова."
 MSG_admin_created="Учётная запись администратора создана!"
-MSG_admin_ready="  Yuvomi готов!"
+MSG_admin_ready="  Juju готов!"
 MSG_admin_open="  Открыть: %s"
 MSG_admin_exists="Учётная запись администратора уже существует."
 MSG_admin_failed="Не удалось создать администратора (HTTP %s): %s"

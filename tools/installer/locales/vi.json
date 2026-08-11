@@ -1,5 +1,5 @@
 {
-  "title": "Cài đặt Yuvomi",
+  "title": "Cài đặt Juju",
   "common": {
     "continue": "Tiếp tục",
     "back": "Quay lại",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Cấu hình cơ bản",
-    "subtitle": "Bạn sẽ truy cập Yuvomi như thế nào?",
+    "subtitle": "Bạn sẽ truy cập Juju như thế nào?",
     "existing": "Đã phát hiện cấu hình hiện có — tệp .env hiện tại của bạn sẽ được sao lưu trước khi lưu.",
     "hostLabel": "Tên miền hoặc địa chỉ IP",
-    "hostHint": "Địa chỉ bạn sẽ dùng để mở Yuvomi trong trình duyệt.",
+    "hostHint": "Địa chỉ bạn sẽ dùng để mở Juju trong trình duyệt.",
     "portLabel": "Cổng",
     "tzLabel": "Múi giờ",
     "errHost": "Tên máy chủ không hợp lệ. Chỉ dùng chữ cái, số, dấu gạch ngang và dấu chấm.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Đồng bộ lịch",
-    "subtitle": "Kết nối Yuvomi với Google Calendar hoặc Apple iCloud. Cả hai đều tùy chọn — mở rộng để cấu hình.",
+    "subtitle": "Kết nối Juju với Google Calendar hoặc Apple iCloud. Cả hai đều tùy chọn — mở rộng để cấu hình.",
     "google": "Google Calendar",
     "googleHint": "Tạo thông tin xác thực OAuth tại {{link}}. URI chuyển hướng: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -99,7 +99,7 @@
     "documentGoogleDrive": "Tài liệu Google Drive"
   },
   "docker": {
-    "title": "Đang khởi động Yuvomi",
+    "title": "Đang khởi động Juju",
     "subtitle": "Đang tải image và khởi động container Docker.",
     "elapsed": "Đã qua {{n}}s",
     "running": "Container hoạt động bình thường",
@@ -118,7 +118,7 @@
   },
   "admin": {
     "title": "Tạo tài khoản Admin",
-    "subtitle": "Thiết lập lần đăng nhập đầu tiên. Tài khoản này có toàn quyền truy cập vào Yuvomi.",
+    "subtitle": "Thiết lập lần đăng nhập đầu tiên. Tài khoản này có toàn quyền truy cập vào Juju.",
     "userLabel": "Tên người dùng",
     "userHint": "3-64 ký tự: chữ cái, số, . - _",
     "nameLabel": "Tên hiển thị",
@@ -134,9 +134,9 @@
     "errCreate": "Không thể tạo tài khoản admin."
   },
   "done": {
-    "title": "Yuvomi đã sẵn sàng!",
+    "title": "Juju đã sẵn sàng!",
     "subtitle": "Trình lên kế hoạch gia đình của bạn đang chạy và tài khoản admin đã được thiết lập.",
-    "open": "Mở Yuvomi →",
+    "open": "Mở Juju →",
     "backupReminder": "Nhớ sao lưu tệp .env của bạn ngay bây giờ — nó chứa các khóa của bạn.",
     "download": "Tải xuống tệp .env",
     "savedTo": "Đã lưu vào {{path}}"
@@ -145,7 +145,7 @@
     "tag": "Nâng cao · tùy chọn",
     "title": "Cài đặt nâng cao",
     "subtitle": "Reverse proxy, đăng nhập một lần và sao lưu tự động. Tất cả đều tùy chọn — bỏ qua là an toàn.",
-    "proxyLabel": "Yuvomi được hiển thị như thế nào?",
+    "proxyLabel": "Juju được hiển thị như thế nào?",
     "proxyBehindHttps": "Sau reverse proxy với HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Truy cập trực tiếp qua localhost / HTTP",
     "proxyHint": "Truy cập trực tiếp tắt cookie chỉ dành cho HTTPS để đăng nhập hoạt động mà không cần HTTPS.",
@@ -210,11 +210,11 @@
     "oidcTrustEmailHint": "Chỉ bật nếu nhà cung cấp không gửi email_verified và bạn tin tưởng họ."
   },
   "welcome": {
-    "title": "Chào mừng đến với Yuvomi",
+    "title": "Chào mừng đến với Juju",
     "subtitle": "Hãy khởi chạy trình lập kế hoạch gia đình riêng tư của bạn. Chọn cách thiết lập.",
     "simpleTitle": "Thiết lập đơn giản",
     "simpleBadge": "Khuyến nghị",
-    "simpleDesc": "Chúng tôi lo các chi tiết kỹ thuật cho bạn. Lý tưởng để chạy Yuvomi tại nhà.",
+    "simpleDesc": "Chúng tôi lo các chi tiết kỹ thuật cho bạn. Lý tưởng để chạy Juju tại nhà.",
     "simpleTime": "Khoảng 2 phút",
     "advancedTitle": "Thiết lập nâng cao",
     "advancedDesc": "Toàn quyền kiểm soát: reverse proxy, đồng bộ lịch, email, đăng nhập một lần và sao lưu.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Mỗi đêm giữ lại một bản sao lưu cục bộ.",
     "backupReminder": "Sau khi thiết lập, hãy sao lưu tệp .env đã tạo — nó chứa các khóa mã hóa duy nhất của bạn.",
     "switchAdvanced": "Cần thêm tùy chọn? Chuyển sang thiết lập nâng cao",
-    "start": "Thiết lập & khởi động Yuvomi"
+    "start": "Thiết lập & khởi động Juju"
   },
   "email": {
     "title": "Email & đặt lại mật khẩu",

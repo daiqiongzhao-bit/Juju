@@ -1,4 +1,4 @@
-name: Yuvomi
+name: Juju
 website_url: https://github.com/daiqiongzhao-bit/Juju/
 source_code_url: https://github.com/daiqiongzhao-bit/Juju
 description: Family organizer with shared calendar, tasks, shopping and meal planning, budget tracking, notes and contacts. Syncs with CalDAV/CardDAV and Google Calendar, installable as a PWA with offline support (alternative to Cozi).

@@ -12,9 +12,9 @@ import { ntfyProvider } from './notification-providers/ntfy.js';
 import { syncAllBirthdayReminders } from './birthdays.js';
 
 const log = createLogger('Notifications');
-const APP_NAME = 'Yuvomi';
+const APP_NAME = 'Juju';
 // Greift nur, wenn die verknuepfte Entitaet inzwischen geloescht wurde: nie den
-// App-Namen als Body wiederholen, sonst besteht die Notification nur aus "Yuvomi" (#581).
+// App-Namen als Body wiederholen, sonst besteht die Notification nur aus "Juju" (#581).
 const FALLBACK_BODY = 'Reminder';
 const RETRY_DELAY_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 3;

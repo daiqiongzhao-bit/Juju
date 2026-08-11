@@ -1,6 +1,6 @@
 /**
  * Modul: ntfy Notification Provider
- * Zweck: Yuvomi Reminder-Payloads an ntfy Topics senden.
+ * Zweck: Juju Reminder-Payloads an ntfy Topics senden.
  */
 
 function httpError(status) {

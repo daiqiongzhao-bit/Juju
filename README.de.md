@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="docs/logo.svg" alt="Yuvomi" width="92" />
+  <img src="docs/logo.svg" alt="Juju" width="92" />
 
-  <h1>Yuvomi</h1>
+  <h1>Juju</h1>
 
   <p><strong>Ein privates Zuhause für alles, was deine Familie am Laufen hält.</strong></p>
 
@@ -11,10 +11,10 @@
   </p>
 
   <p>
-    <a href="https://github.com/daiqiongzhao-bit/Juju/releases"><img src="https://img.shields.io/github/v/release/daiqiongzhao-bit/yuvomi?style=flat-square&color=4F4DC9&label=release" alt="Neuestes Release"></a>
-    <a href="https://github.com/daiqiongzhao-bit/Juju/stargazers"><img src="https://img.shields.io/github/stars/daiqiongzhao-bit/yuvomi?style=flat-square&color=4F4DC9&label=stars" alt="GitHub-Sterne"></a>
+    <a href="https://github.com/daiqiongzhao-bit/Juju/releases"><img src="https://img.shields.io/github/v/release/daiqiongzhao-bit/juju?style=flat-square&color=4F4DC9&label=release" alt="Neuestes Release"></a>
+    <a href="https://github.com/daiqiongzhao-bit/Juju/stargazers"><img src="https://img.shields.io/github/stars/daiqiongzhao-bit/juju?style=flat-square&color=4F4DC9&label=stars" alt="GitHub-Sterne"></a>
     <img src="https://img.shields.io/badge/PWA-installable-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="PWA">
-    <a href="https://github.com/daiqiongzhao-bit/Juju/pkgs/container/yuvomi"><img src="https://img.shields.io/badge/ghcr.io-yuvomi-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker-Image"></a>
+    <a href="https://github.com/daiqiongzhao-bit/Juju/pkgs/container/juju"><img src="https://img.shields.io/badge/ghcr.io-juju-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker-Image"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT-Lizenz"></a>
   </p>
 
@@ -37,14 +37,14 @@
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/de/dashboard-dark-web.png">
           <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/de/dashboard-light-web.png">
-          <img src="docs/screenshots/de/dashboard-light-web.png" alt="Yuvomi-Dashboard - Aufgaben, Kalendertermine, Mahlzeiten und Einkauf auf einen Blick" width="680">
+          <img src="docs/screenshots/de/dashboard-light-web.png" alt="Juju-Dashboard - Aufgaben, Kalendertermine, Mahlzeiten und Einkauf auf einen Blick" width="680">
         </picture>
       </td>
       <td width="28%" align="center" valign="middle">
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/de/dashboard-dark-mobile.png">
           <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/de/dashboard-light-mobile.png">
-          <img src="docs/screenshots/de/dashboard-light-mobile.png" alt="Yuvomi auf dem Smartphone" width="148">
+          <img src="docs/screenshots/de/dashboard-light-mobile.png" alt="Juju auf dem Smartphone" width="148">
         </picture>
         <br>
         <sub>Mobile PWA</sub>
@@ -74,11 +74,11 @@
 
 <br>
 
-Yuvomi ersetzt einen Stapel Cloud-Abos durch einen privaten Ort, der deinem Haushalt gehört, nicht einem Anbieter. Es läuft als Docker- oder Podman-Container auf jedem Home-Server oder NAS, inklusive rootless Podman auf SELinux-aktivierten RHEL-, Fedora- und CentOS-Stream-Systemen. Eine ausgefeilte, mobile-first PWA lässt es sich auf jedem Gerät nativ anfühlen. Jedes Modul ist eigenständig - nutze, was passt, lass weg, was nicht passt.
+Juju ersetzt einen Stapel Cloud-Abos durch einen privaten Ort, der deinem Haushalt gehört, nicht einem Anbieter. Es läuft als Docker- oder Podman-Container auf jedem Home-Server oder NAS, inklusive rootless Podman auf SELinux-aktivierten RHEL-, Fedora- und CentOS-Stream-Systemen. Eine ausgefeilte, mobile-first PWA lässt es sich auf jedem Gerät nativ anfühlen. Jedes Modul ist eigenständig - nutze, was passt, lass weg, was nicht passt.
 
 <div align="center">
   <sub>
-    <a href="#warum-yuvomi">Warum Yuvomi</a> &nbsp;·&nbsp;
+    <a href="#warum-juju">Warum Juju</a> &nbsp;·&nbsp;
     <a href="#screenshots">Screenshots</a> &nbsp;·&nbsp;
     <a href="#module">Module</a> &nbsp;·&nbsp;
     <a href="#überall-installieren">Installieren</a> &nbsp;·&nbsp;
@@ -90,13 +90,13 @@ Yuvomi ersetzt einen Stapel Cloud-Abos durch einen privaten Ort, der deinem Haus
 
 ---
 
-## Warum Yuvomi
+## Warum Juju
 
-Die meisten Familien kleben ihren Alltag aus einem Dutzend Bezahl-Apps zusammen, jede mit eigenem Konto, eigenem Abo und einer eigenen Kopie deiner Daten auf fremden Servern. Yuvomi bringt das alles an einen Ort, der dir gehört.
+Die meisten Familien kleben ihren Alltag aus einem Dutzend Bezahl-Apps zusammen, jede mit eigenem Konto, eigenem Abo und einer eigenen Kopie deiner Daten auf fremden Servern. Juju bringt das alles an einen Ort, der dir gehört.
 
 ### Eine private App statt einem Dutzend Abos
 
-| Statt zu jonglieren mit… | gibt dir Yuvomi |
+| Statt zu jonglieren mit… | gibt dir Juju |
 |---|---|
 | einer To-do- &amp; Aufgaben-App | **Aufgaben** - Kanban, Fristen, Wiederholungen, Mehrfachzuweisung |
 | einem Abo für den geteilten Kalender | **Kalender** - Sync, Abos, Sichtbarkeit je Termin |
@@ -303,7 +303,7 @@ Siebzehn eigenständige Module teilen sich eine ruhige, konsistente Oberfläche.
 
 > **Gesundheit ist kein Medizinprodukt.** Keine diagnostischen Aussagen. Gesundheitsdaten sind sensibel; aktiviere die Datenbankverschlüsselung (`DB_ENCRYPTION_KEY`, SQLCipher).
 
-> **Externer Dokumentenspeicher braucht ein eigenes Backup.** Datenbank-Backups enthalten Metadaten und Verweise, nicht die Binärdateien in einem lokalen Ordner, auf WebDAV oder in Google Drive. Sichere das gewählte Ziel separat. Yuvomis Sichtbarkeitseinstellungen steuern nur den Zugriff über Yuvomi. Alle Personen mit Zugriff auf den verbundenen Google-Drive-Ordner `Yuvomi/Documents` können sämtliche dort gespeicherten Dateien sehen. WebDAV-Ziele aus der Admin-Oberfläche müssen zu öffentlichen Adressen auflösen; für ein vertrauenswürdiges LAN- oder Loopback-Ziel setze `DOCUMENT_STORAGE_WEBDAV_URL` über die Deployment-Umgebung oder `DOCUMENT_STORAGE_WEBDAV_ALLOW_PRIVATE_NETWORK=true`, um private Ziele auch aus der UI zuzulassen.
+> **Externer Dokumentenspeicher braucht ein eigenes Backup.** Datenbank-Backups enthalten Metadaten und Verweise, nicht die Binärdateien in einem lokalen Ordner, auf WebDAV oder in Google Drive. Sichere das gewählte Ziel separat. Jujus Sichtbarkeitseinstellungen steuern nur den Zugriff über Juju. Alle Personen mit Zugriff auf den verbundenen Google-Drive-Ordner `Juju/Documents` können sämtliche dort gespeicherten Dateien sehen. WebDAV-Ziele aus der Admin-Oberfläche müssen zu öffentlichen Adressen auflösen; für ein vertrauenswürdiges LAN- oder Loopback-Ziel setze `DOCUMENT_STORAGE_WEBDAV_URL` über die Deployment-Umgebung oder `DOCUMENT_STORAGE_WEBDAV_ALLOW_PRIVATE_NETWORK=true`, um private Ziele auch aus der UI zuzulassen.
 
 > **Interne Ziele (LAN / private IP) sind standardmäßig blockiert.** Der SSRF-Schutz weist private, Loopback-, Link-local- und interne-DNS-URLs für ICS-Kalenderabos und WebDAV-Dokumentenspeicher ab. Um eine intern auflösende URL zu nutzen, setze das passende Opt-in in deiner Deployment-Umgebung: `ICS_SUBSCRIPTION_ALLOW_PRIVATE_NETWORK=true` für Kalender-Feeds, `DOCUMENT_STORAGE_WEBDAV_ALLOW_PRIVATE_NETWORK=true` für den Dokumentenspeicher. Siehe die [Installationsanleitung](docs/installation.md#environment-variables).
 
@@ -318,7 +318,7 @@ Siebzehn eigenständige Module teilen sich eine ruhige, konsistente Oberfläche.
 Ein lokalisierter Setup-Assistent, in 24 Sprachen, der im Browser läuft. Erkennt Docker oder Podman automatisch, konfiguriert HTTPS, SSO und geplante Backups, startet dann den Container und legt dein Admin-Konto an.
 
 ```bash
-git clone https://github.com/daiqiongzhao-bit/Juju.git && cd yuvomi
+git clone https://github.com/daiqiongzhao-bit/Juju.git && cd Juju
 node tools/installer/install-server.js
 ```
 
@@ -338,7 +338,7 @@ docker compose up -d
 **Aus dem Quellcode bauen:**
 
 ```bash
-git clone https://github.com/daiqiongzhao-bit/Juju.git && cd yuvomi
+git clone https://github.com/daiqiongzhao-bit/Juju.git && cd Juju
 cp .env.example .env
 docker compose up -d --build
 ```
@@ -352,24 +352,24 @@ docker compose up -d --build
 <table>
   <tr>
     <td><b>TrueNAS SCALE</b></td>
-    <td>Apps → Discover Apps → nach <b>Yuvomi</b> suchen → Install</td>
+    <td>Apps → Discover Apps → nach <b>Juju</b> suchen → Install</td>
     <td>Kein Terminal nötig. Community-Apps-Katalog. Versions-Updates via Renovate.</td>
   </tr>
   <tr>
     <td><b>Umbrel</b></td>
-    <td>App Store → nach <b>Yuvomi</b> suchen → Install</td>
+    <td>App Store → nach <b>Juju</b> suchen → Install</td>
     <td>Ein-Klick-Installation. Alles bleibt auf deinem Umbrel.</td>
   </tr>
   <tr>
     <td><b>Unraid</b></td>
-    <td>Apps → nach <b>Yuvomi</b> suchen → Apply</td>
+    <td>Apps → nach <b>Juju</b> suchen → Apply</td>
     <td>Community-Applications-Template. <code>SESSION_SECRET</code> bei der Installation setzen.</td>
   </tr>
 </table>
 
 > **Neu bei Docker oder Podman?** Der **[Installations-Leitfaden](docs/installation.md)** deckt Engine-Setup, HTTPS/Reverse-Proxy, Backups und Troubleshooting Schritt für Schritt ab.
 
-> **Einige Katalog-Slugs tragen noch den alten Namen `oikos`** (z. B. Unraid `oikos-…`). TrueNAS ist vollständig zu `community/yuvomi` umbenannt - der alte Eintrag bleibt als *Oikos (Deprecated)* für Bestandsinstallationen eingefroren. Die App zeigt und installiert sich überall als **Yuvomi**; wo der technische Slug `oikos` bleibt, sichert das bestehenden Installationen (Datenbankpfade und Containernamen) ein nahtloses Update. Suche nach **Yuvomi**; taucht ein Store einen Eintrag noch als *oikos* auf, ist es dieselbe App.
+> **Einige Katalog-Slugs tragen noch den alten Namen `oikos`** (z. B. Unraid `oikos-…`). TrueNAS ist vollständig zu `community/yuvomi` umbenannt - der alte Eintrag bleibt als *Oikos (Deprecated)* für Bestandsinstallationen eingefroren. Die App zeigt und installiert sich überall als **Juju**; wo der technische Slug `oikos` bleibt, sichert das bestehenden Installationen (Datenbankpfade und Containernamen) ein nahtloses Update. Suche nach **Juju**; taucht ein Store einen Eintrag noch als *oikos* auf, ist es dieselbe App.
 
 ---
 
@@ -384,7 +384,7 @@ Wenn du eine App auf einem NAS installieren oder einen einzelnen Befehl ausführ
 <details>
 <summary><b>Funktioniert es auf meinem Smartphone?</b></summary>
 <br>
-Yuvomi ist eine mobile-first PWA. Auf den Homescreen installiert fühlt sie sich nativ an, mit optimierten Touch-Zielen und einer persistenten unteren Leiste. Sie funktioniert auch offline, mit Lesezugriff auf zuletzt gesehene Kalender-, Aufgaben-, Einkaufs-, Kontakt- und Dashboard-Daten.
+Juju ist eine mobile-first PWA. Auf den Homescreen installiert fühlt sie sich nativ an, mit optimierten Touch-Zielen und einer persistenten unteren Leiste. Sie funktioniert auch offline, mit Lesezugriff auf zuletzt gesehene Kalender-, Aufgaben-, Einkaufs-, Kontakt- und Dashboard-Daten.
 </details>
 
 <details>
@@ -408,7 +408,7 @@ Ja. Jedes Haushaltsmitglied ist ein vollwertiger Nutzer mit eigenem Profil, eige
 <details>
 <summary><b>Was kostet es?</b></summary>
 <br>
-Nichts. Yuvomi ist kostenlos und MIT-lizenziert. Du stellst den Server; es gibt kein Abo, kein Upselling und keine Bezahlstufe.
+Nichts. Juju ist kostenlos und MIT-lizenziert. Du stellst den Server; es gibt kein Abo, kein Upselling und keine Bezahlstufe.
 </details>
 
 ---
@@ -440,14 +440,14 @@ Nichts. Yuvomi ist kostenlos und MIT-lizenziert. Du stellst den Server; es gibt 
 
 [Installation](docs/installation.md) &nbsp;·&nbsp; [Spec &amp; Datenmodell](docs/SPEC.md) &nbsp;·&nbsp; [Module](MODULES.md) &nbsp;·&nbsp; [Mitwirken](CONTRIBUTING.md) &nbsp;·&nbsp; [Sicherheit](SECURITY.md) &nbsp;·&nbsp; [Datenschutz für Selbsthoster](docs/PRIVACY-FOR-SELFHOSTERS.md) &nbsp;·&nbsp; [Changelog](CHANGELOG.md) &nbsp;·&nbsp; [Backlog](BACKLOG.md)
 
-Wenn du Yuvomi in einem DSGVO-Kontext selbst hostest (EU/EWR, Verarbeitung fremder Daten), lies [docs/PRIVACY-FOR-SELFHOSTERS.md](docs/PRIVACY-FOR-SELFHOSTERS.md) vor dem Produktivbetrieb: Es behandelt Drittland-Bewertungen für jeden externen Dienst (Wetter, CalDAV/CardDAV, OIDC, WebDAV-Backup und Dokumentenspeicher), Hinweise zu Auftragsverarbeitungsverträgen, Empfehlungen zur Log-Aufbewahrung und eine Vorlage für das Verzeichnis von Verarbeitungstätigkeiten.
+Wenn du Juju in einem DSGVO-Kontext selbst hostest (EU/EWR, Verarbeitung fremder Daten), lies [docs/PRIVACY-FOR-SELFHOSTERS.md](docs/PRIVACY-FOR-SELFHOSTERS.md) vor dem Produktivbetrieb: Es behandelt Drittland-Bewertungen für jeden externen Dienst (Wetter, CalDAV/CardDAV, OIDC, WebDAV-Backup und Dokumentenspeicher), Hinweise zu Auftragsverarbeitungsverträgen, Empfehlungen zur Log-Aufbewahrung und eine Vorlage für das Verzeichnis von Verarbeitungstätigkeiten.
 
 <details>
 <summary>Kommst du von <b>Oikos</b>? Das Projekt wurde umbenannt - an der App ändert sich nichts.</summary>
 
 <br>
 
-Yuvomi wurde von **Oikos** umbenannt, um einen Markenkonflikt mit einem unabhängigen Produkt zu vermeiden. Gleicher Code, gleiche Daten, gleicher Maintainer.
+Juju wurde von **Oikos** umbenannt, um einen Markenkonflikt mit einem unabhängigen Produkt zu vermeiden. Gleicher Code, gleiche Daten, gleicher Maintainer.
 
 - Alte Links (`github.com/daiqiongzhao-bit/Juju`) leiten automatisch hierher weiter.
 - Das Docker-Image liegt jetzt unter `ghcr.io/daiqiongzhao-bit/Juju`; das alte `ghcr.io/daiqiongzhao-bit/Juju` funktioniert weiterhin, du kannst also in Ruhe umstellen.

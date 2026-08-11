@@ -10,7 +10,7 @@ services:
     volumes:
       - ${DATA_DIR:-./data}:/data
       - ${BACKUP_DIR:-./backups}:/backups
-      # Drop Yuvomi modules into ./modules, or set MODULES_DIR=/path/to/modules.
+      # Drop Juju modules into ./modules, or set MODULES_DIR=/path/to/modules.
       - ${MODULES_DIR:-./modules}:/app/modules
       # Optional local documents folder. BOTH ends come from the .env: the app
       # writes to DOCUMENT_STORAGE_LOCAL_PATH, so mounting at a fixed /documents

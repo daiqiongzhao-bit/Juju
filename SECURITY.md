@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Yuvomi, please report it responsibly. **Do not open a public issue.**
+If you discover a security vulnerability in Juju, please report it responsibly. **Do not open a public issue.**
 
 Instead, use [GitHub Private Vulnerability Reporting](https://github.com/daiqiongzhao-bit/Juju/security/advisories/new) to submit your report. This creates a private advisory visible only to you and the maintainers.
 
@@ -17,7 +17,7 @@ You should typically receive an acknowledgment within a few days (this is a solo
 
 ## Scope
 
-Yuvomi is designed for self-hosted deployment on a private network behind a reverse proxy with SSL. The security model assumes:
+Juju is designed for self-hosted deployment on a private network behind a reverse proxy with SSL. The security model assumes:
 
 - The server is not directly exposed to the public internet without Nginx + TLS
 - The admin controls all user accounts (no public registration)
@@ -50,12 +50,12 @@ Vulnerabilities that require physical access to the host or root on the server a
 
 ## Authorization Model
 
-Yuvomi uses a flat family authorization model:
+Juju uses a flat family authorization model:
 
 - **Admin** can create, edit, and delete all user accounts and all shared data.
 - **Member** can read and write all shared data (tasks, shopping lists, meals, calendar events, notes, contacts, budget entries) but cannot manage user accounts.
 
-There is no per-user data isolation - all family members see and can edit all data. This is intentional: Yuvomi is a shared family planner, not a multi-tenant application.
+There is no per-user data isolation - all family members see and can edit all data. This is intentional: Juju is a shared family planner, not a multi-tenant application.
 
 ## Supported Versions
 

@@ -9,21 +9,21 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="robots" content="index, follow">
   <meta name="color-scheme" content="light dark">
-  <title>Yuvomi - The Self-Hosted Family Planner</title>
+  <title>Juju - The Self-Hosted Family Planner</title>
   <meta name="description" content="A privacy-first, self-hosted family planner. Tasks, shopping, meals, calendar sync, budget - one private home for everything your household runs on. No cloud, no subscriptions.">
   <meta name="theme-color" content="#FBFBFD" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0A0A0C" media="(prefers-color-scheme: dark)">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Yuvomi - The Self-Hosted Family Planner">
+  <meta property="og:title" content="Juju - The Self-Hosted Family Planner">
   <meta property="og:description" content="Tasks, shopping, meals, calendar, budget - all self-hosted, no cloud dependency.">
   <meta property="og:image" content="https://github.com/daiqiongzhao-bit/Juju/og-image.png">
   <meta property="og:url" content="https://github.com/daiqiongzhao-bit/Juju/">
-  <meta property="og:site_name" content="Yuvomi">
+  <meta property="og:site_name" content="Juju">
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="de_DE">
-  <meta property="og:image:alt" content="Yuvomi - the self-hosted family planner, shown on desktop and mobile">
+  <meta property="og:image:alt" content="Juju - the self-hosted family planner, shown on desktop and mobile">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Yuvomi - The Self-Hosted Family Planner">
+  <meta name="twitter:title" content="Juju - The Self-Hosted Family Planner">
   <meta name="twitter:description" content="Tasks, shopping, meals, calendar, budget - all self-hosted, no cloud dependency.">
   <meta name="twitter:image" content="https://github.com/daiqiongzhao-bit/Juju/twitter-image.png">
   <link rel="canonical" href="https://github.com/daiqiongzhao-bit/Juju/">
@@ -546,7 +546,7 @@
        duplicate the in-hero Install button above the fold. No-JS keeps it visible. */
     /* visibility, not just opacity: pointer-events keeps the mouse out but an
        opacity-0 link is still in the tab order, so keyboard users hit an
-       invisible "Install Yuvomi" while the hero was still on screen. .to-top on
+       invisible "Install Juju" while the hero was still on screen. .to-top on
        the legal pages already does it this way. */
     html.js .mobile-cta { opacity: 0; visibility: hidden; pointer-events: none;
       transition: opacity .3s var(--ease-out), visibility .3s var(--ease-out); }
@@ -663,9 +663,9 @@
 <header class="site-bar">
 <nav class="topbar" data-t-aria="nav_main" aria-label="Main">
   <div class="wrap">
-    <a href="#top" class="nav-logo" aria-label="Yuvomi">
-      <svg viewBox="0 0 160 160" fill="none" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#6c3aed"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(#g)"/><g fill="white" fill-opacity="0.82"><circle cx="64" cy="72" r="27"/><circle cx="100" cy="78" r="25"/><circle cx="80" cy="106" r="24"/></g></svg>
-      Yuvomi
+    <a href="#top" class="nav-logo" aria-label="Juju">
+      <svg viewBox="0 0 160 160" fill="none" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#6c3aed"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(#g)"/><g fill="white" fill-opacity="0.82"><path d="M104 46 L104 100 Q104 120 82 122 Q54 124 48 102" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+      Juju
     </a>
     <div class="nav-right">
       <button class="nav-btn" id="langBtn" type="button" aria-label="Switch language"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg><span id="langLbl">DE</span></button>
@@ -678,11 +678,11 @@
 
 <!-- Sticky thumb-zone Install CTA (phones only). No aria-label: it carried a
      hardcoded English one that overrode the translated visible text, so a
-     German reader's screen reader announced "Install Yuvomi" over "Yuvomi
+     German reader's screen reader announced "Install Juju" over "Juju
      installieren". The span is the accessible name. -->
 <a href="install.html" class="mobile-cta">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-  <span data-t="hero_install">Install Yuvomi</span>
+  <span data-t="hero_install">Install Juju</span>
 </a>
 </header>
 
@@ -703,7 +703,7 @@
            the homelab criteria are one scroll away, in the grid that owns them. -->
       <p class="hero-sub" data-t="hero_sub">One private home for everything that keeps your family running. Seventeen modules on a server you own, and nothing leaves it until you say so.</p>
       <div class="hero-actions">
-        <a href="install.html" class="btn btn-primary"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-t="hero_install">Install Yuvomi</span></a>
+        <a href="install.html" class="btn btn-primary"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-t="hero_install">Install Juju</span></a>
         <a href="#screens" class="btn btn-secondary"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span data-t="hero_demo">See it in action</span></a>
       </div>
       <div class="hero-tags">
@@ -723,12 +723,12 @@
              right theme and locale, and that first download is thrown away. The
              inline script below runs while the parser is still here, so exactly
              one file is ever fetched. noscript keeps it visible without JS. -->
-        <img class="sc" data-light="screenshots/dashboard-light-web.png" data-dark="screenshots/dashboard-dark-web.png" alt="Yuvomi dashboard showing today's tasks, calendar, meals and shopping at a glance" data-alt-t="alt_hero" width="900" height="675" loading="eager" decoding="async" id="heroShot">
+        <img class="sc" data-light="screenshots/dashboard-light-web.png" data-dark="screenshots/dashboard-dark-web.png" alt="Juju dashboard showing today's tasks, calendar, meals and shopping at a glance" data-alt-t="alt_hero" width="900" height="675" loading="eager" decoding="async" id="heroShot">
         <script>document.getElementById('heroShot')&&(function(i){try{var t=localStorage.getItem('yuvomi-theme')||localStorage.getItem('oikos-theme'),d=t==='dark'||(!t&&matchMedia('(prefers-color-scheme:dark)').matches),l=localStorage.getItem('yuvomi-lang')||localStorage.getItem('oikos-lang')||((navigator.language||'en').toLowerCase().indexOf('de')===0?'de':'en'),b=i.dataset[d?'dark':'light'],p=l!=='en'?b.replace('screenshots/','screenshots/'+l+'/'):b;i.onerror=function(){i.onerror=null;i.srcset='';i.src=b;};i.srcset=p.replace(/\.png$/,'@1x.webp')+' 1x, '+p.replace(/\.png$/,'.webp')+' 2x';i.src=p.replace(/\.png$/,'.webp');}catch(e){i.src=i.dataset.light;}})(document.getElementById('heroShot'));</script>
-        <noscript><img class="sc" src="screenshots/dashboard-light-web.png" alt="Yuvomi dashboard showing today's tasks, calendar, meals and shopping at a glance" width="900" height="675"></noscript>
+        <noscript><img class="sc" src="screenshots/dashboard-light-web.png" alt="Juju dashboard showing today's tasks, calendar, meals and shopping at a glance" width="900" height="675"></noscript>
       </div>
       <div class="hero-float">
-        <img class="sc" data-light="screenshots/tasks-light-mobile.png" data-dark="screenshots/tasks-dark-mobile.png" src="screenshots/tasks-light-mobile.png" alt="Yuvomi tasks on mobile" data-alt-t="alt_hero_m" loading="lazy" width="440" height="956">
+        <img class="sc" data-light="screenshots/tasks-light-mobile.png" data-dark="screenshots/tasks-dark-mobile.png" src="screenshots/tasks-light-mobile.png" alt="Juju tasks on mobile" data-alt-t="alt_hero_m" loading="lazy" width="440" height="956">
       </div>
     </div>
   </div>
@@ -772,7 +772,7 @@
           <p data-t="gal_dash_c"><b>Everything due today, in one place.</b> Tasks, the calendar, tonight’s dinner and the shopping list, without opening a single other app.</p>
         </figcaption>
         <div class="gal-frame">
-          <img class="sc" data-light="screenshots/dashboard-light-web.png" data-light-m="screenshots/dashboard-light-mobile.png" data-dark-m="screenshots/dashboard-dark-mobile.png" data-sizes="(max-width: 860px) 300px, (min-width: 1248px) 1152px, 92vw" data-dark="screenshots/dashboard-dark-web.png" src="screenshots/dashboard-light-web.png" alt="Yuvomi dashboard showing today's tasks, calendar, meals and shopping at a glance" data-alt-t="alt_hero" loading="lazy" decoding="async" width="900" height="675">
+          <img class="sc" data-light="screenshots/dashboard-light-web.png" data-light-m="screenshots/dashboard-light-mobile.png" data-dark-m="screenshots/dashboard-dark-mobile.png" data-sizes="(max-width: 860px) 300px, (min-width: 1248px) 1152px, 92vw" data-dark="screenshots/dashboard-dark-web.png" src="screenshots/dashboard-light-web.png" alt="Juju dashboard showing today's tasks, calendar, meals and shopping at a glance" data-alt-t="alt_hero" loading="lazy" decoding="async" width="900" height="675">
         </div>
       </figure>
       <figure class="gal-item reveal" style="--m: var(--m-calendar)">
@@ -1068,7 +1068,7 @@
          column with `margin: 0 auto` inert and `max-width: 68ch` never binding -
          63 words of centred text at 22 characters a line, wearing a border-top
          that read as a card divider. -->
-    <p class="mod-scope reveal" data-t="more_scope">Not a photo library, a password manager or a media server: Yuvomi replaces the apps a household runs on, not your whole server. What you already run can stay. Calendars and contacts sync both ways over CalDAV and CardDAV, documents can live on WebDAV or Google Drive, and API tokens plus the MCP endpoint let the rest of your setup talk to it.</p>
+    <p class="mod-scope reveal" data-t="more_scope">Not a photo library, a password manager or a media server: Juju replaces the apps a household runs on, not your whole server. What you already run can stay. Calendars and contacts sync both ways over CalDAV and CardDAV, documents can live on WebDAV or Google Drive, and API tokens plus the MCP endpoint let the rest of your setup talk to it.</p>
   </div>
 </section>
 
@@ -1204,7 +1204,7 @@ openssl rand -hex 32
     <div class="setup-steps">
       <div class="setup-step reveal"><div class="num">1</div><h3 data-t="setup_1_t">Pick your path</h3><p data-t="setup_1_d">Two files and a handful of commands for Docker or Podman, a guided browser wizard if you would rather be walked through it, or one click from your NAS app store.</p></div>
       <div class="setup-step reveal d1"><div class="num">2</div><h3 data-t="setup_2_t">Set up your account</h3><p data-t="setup_2_d">Create an admin account and choose your preferences. Takes about two minutes.</p></div>
-      <div class="setup-step reveal d2"><div class="num">3</div><h3 data-t="setup_3_t">Invite your family</h3><p data-t="setup_3_d">Send each member an invite link, set roles, and start using Yuvomi together.</p></div>
+      <div class="setup-step reveal d2"><div class="num">3</div><h3 data-t="setup_3_t">Invite your family</h3><p data-t="setup_3_d">Send each member an invite link, set roles, and start using Juju together.</p></div>
     </div>
     <div class="reveal" style="text-align:center">
       <a href="install.html" class="setup-link" data-t="setup_link">Step-by-step installation guide <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
@@ -1232,7 +1232,7 @@ openssl rand -hex 32
   <div class="wrap">
     <div class="foot-grid">
       <div class="foot-brand">
-        <a href="#top" class="nav-logo"><svg viewBox="0 0 160 160" fill="none" aria-hidden="true"><defs><linearGradient id="gf" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#6c3aed"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(#gf)"/><g fill="white" fill-opacity="0.82"><circle cx="64" cy="72" r="27"/><circle cx="100" cy="78" r="25"/><circle cx="80" cy="106" r="24"/></g></svg>Yuvomi</a>
+        <a href="#top" class="nav-logo"><svg viewBox="0 0 160 160" fill="none" aria-hidden="true"><defs><linearGradient id="gf" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#6c3aed"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(#gf)"/><g fill="white" fill-opacity="0.82"><path d="M104 46 L104 100 Q104 120 82 122 Q54 124 48 102" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/></g></svg>Juju</a>
         <p data-t="footer_heart">Built with care for families who value privacy and simplicity.</p>
       </div>
       <nav class="foot-cols" data-t-aria="foot_nav" aria-label="Footer">
@@ -1272,7 +1272,7 @@ openssl rand -hex 32
   var T = {
     en: {
       skip_link:'Skip to content',
-      more_scope:'Not a photo library, a password manager or a media server: Yuvomi replaces the apps a household runs on, not your whole server. What you already run can stay. Calendars and contacts sync both ways over CalDAV and CardDAV, documents can live on WebDAV or Google Drive, and API tokens plus the MCP endpoint let the rest of your setup talk to it.',
+      more_scope:'Not a photo library, a password manager or a media server: Juju replaces the apps a household runs on, not your whole server. What you already run can stay. Calendars and contacts sync both ways over CalDAV and CardDAV, documents can live on WebDAV or Google Drive, and API tokens plus the MCP endpoint let the rest of your setup talk to it.',
       m_pantry_t:'Pantry', m_pantry_d:'What is actually in the house: amount, storage location and best-before date, with expiry and low-stock filters, and a two-way handover with the shopping list.',
       m_family_t:'Family', m_family_d:'Member profiles with roles, photos and contact details, kept in sync with Contacts and Birthdays.',
       m_api_t:'API tokens', m_api_d:'Bearer and X-API-Key tokens against a documented OpenAPI 3.0 spec, plus an MCP endpoint at <code>/mcp</code> that lets a client like Claude Desktop drive the API in plain language.',
@@ -1285,9 +1285,9 @@ openssl rand -hex 32
       ho_2_d:'Any task can carry a point value. Finishing it credits whoever it was assigned to, and those points buy real rewards from a catalog you control.',
       ho_3_a:'A receipt gets filed', ho_3_b:'It hangs on the transaction',
       ho_3_d:'Attach it to the budget entry from the documents you already keep, or upload it on the spot. Filed once, findable from both sides.',
-      alt_hero:"Yuvomi dashboard showing today's tasks, calendar, meals and shopping at a glance",
+      alt_hero:"Juju dashboard showing today's tasks, calendar, meals and shopping at a glance",
       alt_f_health:"Health - menstrual cycle ring with period and fertile-window predictions",
-      alt_hero_m:"Yuvomi tasks on mobile",
+      alt_hero_m:"Juju tasks on mobile",
       alt_f_health_m:"Health vitals on mobile",
       alt_f_meals:"Meal planner",
       alt_f_tasks:"Tasks board",
@@ -1321,7 +1321,7 @@ openssl rand -hex 32
       tb_writes_k:'Writes', tb_writes_v:'Four volumes you own: data, backups, modules, documents.',
       tb_out_k:'Outbound', tb_out_v:'Nothing until you configure it. Weather, calendar sync and WebDAV backup are all off until you fill in credentials.',
       tb_data_k:'Your data', tb_data_v:'One SQLite file at', tb_data_v2:'Copying it is the whole export.',
-      hero_install:'Install Yuvomi', hero_demo:'See it in action', tag_nocloud:'No cloud required',
+      hero_install:'Install Juju', hero_demo:'See it in action', tag_nocloud:'No cloud required',
       chip_tasks:'Tasks done', chip_shop:'Shared list',
       gal_eyebrow:'See it first', gal_title:'This is the whole thing, <em>on one screen.</em>',
       gal_desc:'No demo account, no sales call. The screens your family opens every day, at the size you will actually use them. The rest are further down.',
@@ -1374,7 +1374,7 @@ openssl rand -hex 32
       quick_note:'Then open <code>http://localhost:3000</code>. The first visit walks you through creating your admin account. Prefer a guided setup? The <a href="install.html">step-by-step installer</a> handles HTTPS, SSO and backups for you.', setup_title:'Up and running in minutes',
       setup_1_t:'Pick your path', setup_1_d:'Two files and a handful of commands for Docker or Podman, a guided browser wizard if you would rather be walked through it, or one click from your NAS app store.',
       setup_2_t:'Set up your account', setup_2_d:'Create an admin account and choose your preferences. Takes about two minutes.',
-      setup_3_t:'Invite your family', setup_3_d:'Send each member an invite link, set roles, and start using Yuvomi together.',
+      setup_3_t:'Invite your family', setup_3_d:'Send each member an invite link, set roles, and start using Juju together.',
       setup_link:'Step-by-step installation guide',
       cta_title:"Take back control of your <em>family's data.</em>", cta_desc:'You install it once and it is yours after that. No account with us, no subscription, and nothing of ours between your family and its data.',
       cta_install:'Get started', cta_gh:'View on GitHub',
@@ -1386,7 +1386,7 @@ openssl rand -hex 32
     },
     de: {
       skip_link:'Zum Inhalt springen',
-      more_scope:'Keine Fotobibliothek, kein Passwort-Manager, kein Media-Server: Yuvomi ersetzt die Apps, mit denen ein Haushalt läuft, nicht euren ganzen Server. Was ihr schon betreibt, darf bleiben. Kalender und Kontakte synchronisieren in beide Richtungen über CalDAV und CardDAV, Dokumente können auf WebDAV oder Google Drive liegen, und über API-Tokens samt MCP-Endpunkt spricht der Rest eurer Einrichtung mit Yuvomi.',
+      more_scope:'Keine Fotobibliothek, kein Passwort-Manager, kein Media-Server: Juju ersetzt die Apps, mit denen ein Haushalt läuft, nicht euren ganzen Server. Was ihr schon betreibt, darf bleiben. Kalender und Kontakte synchronisieren in beide Richtungen über CalDAV und CardDAV, Dokumente können auf WebDAV oder Google Drive liegen, und über API-Tokens samt MCP-Endpunkt spricht der Rest eurer Einrichtung mit Juju.',
       m_pantry_t:'Vorrat', m_pantry_d:'Was tatsächlich im Haus ist: Menge, Lagerort und Mindesthaltbarkeit, mit Filtern für Ablauf und knappe Bestände, und einer Übergabe in beide Richtungen mit der Einkaufsliste.',
       m_family_t:'Familie', m_family_d:'Mitgliederprofile mit Rollen, Fotos und Kontaktdaten, synchron mit Kontakten und Geburtstagen.',
       m_api_t:'API-Tokens', m_api_d:'Bearer- und X-API-Key-Tokens gegen eine dokumentierte OpenAPI-3.0-Spezifikation, dazu ein MCP-Endpunkt unter <code>/mcp</code>, über den ein Client wie Claude Desktop die API in natürlicher Sprache bedient.',
@@ -1399,9 +1399,9 @@ openssl rand -hex 32
       ho_2_d:'Jede Aufgabe kann Punkte tragen. Wer sie erledigt, bekommt sie gutgeschrieben, und die Punkte lassen sich gegen echte Belohnungen aus einem Katalog eintauschen, den ihr bestimmt.',
       ho_3_a:'Ein Beleg wird abgelegt', ho_3_b:'Er hängt an der Buchung',
       ho_3_d:'Hängt ihn aus euren vorhandenen Dokumenten an den Budget-Eintrag oder ladet ihn direkt hoch. Einmal ablegen, von beiden Seiten auffindbar.',
-      alt_hero:"Yuvomi-Übersicht: Aufgaben, Kalender, Mahlzeiten und Einkauf des Tages auf einen Blick",
+      alt_hero:"Juju-Übersicht: Aufgaben, Kalender, Mahlzeiten und Einkauf des Tages auf einen Blick",
       alt_f_health:"Gesundheit: Zyklusring mit Vorhersage von Periode und fruchtbarem Fenster",
-      alt_hero_m:"Yuvomi-Aufgaben auf dem Handy",
+      alt_hero_m:"Juju-Aufgaben auf dem Handy",
       alt_f_health_m:"Gesundheitswerte auf dem Handy",
       alt_f_meals:"Mahlzeitenplaner",
       alt_f_tasks:"Aufgaben-Board",
@@ -1435,7 +1435,7 @@ openssl rand -hex 32
       tb_writes_k:'Legt an', tb_writes_v:'Vier Volumes, die euch gehören: Daten, Backups, Module, Dokumente.',
       tb_out_k:'Nach außen', tb_out_v:'Nichts, solange ihr nichts einrichtet. Wetter, Kalender-Sync und WebDAV-Backup bleiben aus, bis ihr Zugangsdaten eintragt.',
       tb_data_k:'Eure Daten', tb_data_v:'Eine einzige SQLite-Datei unter', tb_data_v2:'Kopieren ist der ganze Export.',
-      hero_install:'Yuvomi installieren', hero_demo:'App ansehen', tag_nocloud:'Keine Cloud nötig',
+      hero_install:'Juju installieren', hero_demo:'App ansehen', tag_nocloud:'Keine Cloud nötig',
       chip_tasks:'Erledigt', chip_shop:'Geteilte Liste',
       gal_eyebrow:'Erst sehen', gal_title:'Das ist alles, <em>auf einem Bildschirm.</em>',
       gal_desc:'Kein Demo-Konto, kein Verkaufsgespräch. Die Bildschirme, die eure Familie täglich öffnet, in der Größe, in der ihr sie wirklich nutzt. Der Rest kommt weiter unten.',
@@ -1640,7 +1640,7 @@ openssl rand -hex 32
     var lb = document.getElementById('langBtn');
     lb.setAttribute('aria-label', lang === 'en' ? 'Auf Deutsch umschalten' : 'Switch to English');
     lb.setAttribute('title', lang === 'en' ? 'Auf Deutsch umschalten' : 'Switch to English');
-    document.title = lang === 'en' ? 'Yuvomi - The Self-Hosted Family Planner' : 'Yuvomi - Der selbstgehostete Familienplaner';
+    document.title = lang === 'en' ? 'Juju - The Self-Hosted Family Planner' : 'Juju - Der selbstgehostete Familienplaner';
     var rel = document.getElementById('foot-released');
     if (rel) { var rp = (rel.getAttribute('data-released') || '').split('-'); if (rp[0]) { rel.textContent = new Date(+rp[0], (+rp[1] || 1) - 1, +rp[2] || 1).toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' }); } }
     /* Alt text is content, not chrome: it stayed English on a de-labelled page,

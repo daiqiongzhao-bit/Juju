@@ -1,20 +1,20 @@
 groups:
-  - name: Yuvomi Configuration
-    description: Configure Yuvomi
+  - name: Juju Configuration
+    description: Configure Juju
   - name: User and Group Configuration
-    description: Configure User and Group for Yuvomi
+    description: Configure User and Group for Juju
   - name: Network Configuration
-    description: Configure Network for Yuvomi
+    description: Configure Network for Juju
   - name: Storage Configuration
-    description: Configure Storage for Yuvomi
+    description: Configure Storage for Juju
   - name: Labels Configuration
-    description: Configure Labels for Yuvomi
+    description: Configure Labels for Juju
   - name: Resources Configuration
-    description: Configure Resources for Yuvomi
+    description: Configure Resources for Juju
 
 questions:
   - variable: TZ
-    group: Yuvomi Configuration
+    group: Juju Configuration
     label: Timezone
     schema:
       type: string
@@ -25,7 +25,7 @@ questions:
 
   - variable: yuvomi
     label: ""
-    group: Yuvomi Configuration
+    group: Juju Configuration
     schema:
       type: dict
       attrs:
@@ -81,7 +81,7 @@ questions:
       attrs:
         - variable: user
           label: User ID
-          description: The user id that Yuvomi files will be owned by.
+          description: The user id that Juju files will be owned by.
           schema:
             type: int
             min: 568
@@ -89,7 +89,7 @@ questions:
             required: true
         - variable: group
           label: Group ID
-          description: The group id that Yuvomi files will be owned by.
+          description: The group id that Juju files will be owned by.
           schema:
             type: int
             min: 568
@@ -609,14 +609,14 @@ questions:
             attrs:
               - variable: cpus
                 label: CPUs
-                description: CPUs limit for Yuvomi.
+                description: CPUs limit for Juju.
                 schema:
                   type: int
                   default: 2
                   required: true
               - variable: memory
                 label: Memory (in MB)
-                description: Memory limit for Yuvomi.
+                description: Memory limit for Juju.
                 schema:
                   type: int
                   default: 4096

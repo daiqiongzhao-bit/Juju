@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title data-i18n="title">Yuvomi Setup</title>
+  <title data-i18n="title">Juju Setup</title>
   <!-- Fallback-Tokens VOR dem tokens.css-Link: lädt tokens.css (inkl. Dark-Mode-
        Media-Query), gewinnen dessen spätere :root-Regeln per Cascade. Fehlt
        tokens.css (falscher OIKOS_INSTALLER_ROOT, Packaging-/Volume-Fehler), bleibt
@@ -96,7 +96,7 @@
     }
 
     /* Marken-Anker über der Karte: Zeichen plus Wortmarke, dasselbe Motiv wie
-       .login-hero__mark in der App. Der Wizard trug bisher kein Yuvomi-Zeichen. */
+       .login-hero__mark in der App. Der Wizard trug bisher kein Juju-Zeichen. */
     .brand { text-align: center; margin-bottom: 22px; }
     .brand__mark {
       display: inline-flex; align-items: center; justify-content: center;
@@ -297,7 +297,7 @@
     .done-wrap   { text-align: center; padding: 20px 0 8px; }
     /* Der Abschluss trug ein 🎉-Systemsemoji: der einzige Bildinhalt der ganzen
        Reise, auf jedem Betriebssystem anders gerendert und gegen PRODUCT.md:22
-       („kein Konfetti"). Jetzt trägt ihn das Yuvomi-Zeichen in einem Erfolgsring. */
+       („kein Konfetti"). Jetzt trägt ihn das Juju-Zeichen in einem Erfolgsring. */
     .done-mark {
       display: inline-grid; place-items: center; width: 72px; height: 72px;
       margin-bottom: 16px; border-radius: var(--radius-full);
@@ -441,22 +441,20 @@
     <span class="brand__mark" aria-hidden="true">
       <svg viewBox="0 0 160 160" fill="currentColor">
         <g fill-opacity="0.82">
-          <circle cx="64" cy="72" r="27"/>
-          <circle cx="100" cy="78" r="25"/>
-          <circle cx="80" cy="106" r="24"/>
+          <path d="M104 46 L104 100 Q104 120 82 122 Q54 124 48 102" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
         </g>
       </svg>
     </span>
-    <div class="brand__word">Yuvomi</div>
+    <div class="brand__word">Juju</div>
   </div>
 
   <main class="card">
-    <h1 class="vh" data-i18n="title">Yuvomi Setup</h1>
+    <h1 class="vh" data-i18n="title">Juju Setup</h1>
 
     <!-- Step: Welcome / mode selection -->
     <div class="step" id="step-welcome">
       <div class="card-head">
-        <h2 tabindex="-1" data-i18n="welcome.title">Welcome to Yuvomi</h2>
+        <h2 tabindex="-1" data-i18n="welcome.title">Welcome to Juju</h2>
         <p data-i18n="welcome.subtitle">Let's get your private family planner running. Choose how you'd like to set it up.</p>
       </div>
       <div class="card-body">
@@ -474,7 +472,7 @@
                 <div class="mode-card__badge" data-i18n="welcome.simpleBadge">Recommended</div>
               </div>
             </div>
-            <div class="mode-card__desc" data-i18n="welcome.simpleDesc">We handle the technical details for you. Perfect for running Yuvomi at home.</div>
+            <div class="mode-card__desc" data-i18n="welcome.simpleDesc">We handle the technical details for you. Perfect for running Juju at home.</div>
             <div class="mode-card__meta">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
               <span data-i18n="welcome.simpleTime">About 2 minutes</span>
@@ -535,7 +533,7 @@
       </div>
       <div class="card-foot">
         <button class="btn btn-ghost" data-back data-i18n="common.back">Back</button>
-        <button class="btn btn-primary" id="simple-next" data-i18n="simple.start">Set up &amp; start Yuvomi</button>
+        <button class="btn btn-primary" id="simple-next" data-i18n="simple.start">Set up &amp; start Juju</button>
       </div>
     </div>
 
@@ -544,7 +542,7 @@
       <div class="card-head">
         <div class="step-tag"></div>
         <h2 tabindex="-1" data-i18n="config.title">Basic Configuration</h2>
-        <p data-i18n="config.subtitle">How will you access Yuvomi?</p>
+        <p data-i18n="config.subtitle">How will you access Juju?</p>
       </div>
       <div class="card-body">
         <div class="info-banner" id="cfg-existing" style="display:none" data-i18n="config.existing">
@@ -556,7 +554,7 @@
         <div class="field">
           <label for="cfg-host" data-i18n="config.hostLabel">Domain or IP address</label>
           <input type="text" id="cfg-host" value="localhost" placeholder="localhost or 192.168.1.x">
-          <div class="hint" data-i18n="config.hostHint">The address you'll use to open Yuvomi in your browser.</div>
+          <div class="hint" data-i18n="config.hostHint">The address you'll use to open Juju in your browser.</div>
         </div>
         <div class="field">
           <label for="cfg-port" data-i18n="config.portLabel">Port</label>
@@ -675,7 +673,7 @@
       <div class="card-head">
         <div class="step-tag"></div>
         <h2 tabindex="-1" data-i18n="calendar.title">Calendar Sync</h2>
-        <p data-i18n="calendar.subtitle">Connect Yuvomi to Google Calendar or Apple iCloud. Both optional - expand to configure.</p>
+        <p data-i18n="calendar.subtitle">Connect Juju to Google Calendar or Apple iCloud. Both optional - expand to configure.</p>
       </div>
       <div class="card-body">
         <div class="toggle-card">
@@ -775,12 +773,12 @@
           </div>
           <div class="field">
             <label for="email-from" data-i18n="email.fromLabel">Sender address</label>
-            <input type="email" id="email-from" placeholder="yuvomi@example.com">
+            <input type="email" id="email-from" placeholder="juju@example.com">
             <div class="hint" data-i18n="email.fromHint">The “from” address recipients will see. Many providers require it to match your username.</div>
           </div>
           <div class="field">
             <label for="email-from-name"><span data-i18n="email.fromNameLabel">Sender name</span> <span class="opt" data-i18n="calendar.appleUrlOpt">(optional)</span></label>
-            <input type="text" id="email-from-name" placeholder="Yuvomi">
+            <input type="text" id="email-from-name" placeholder="Juju">
           </div>
         </div>
         <div class="error-banner" id="email-err" role="alert"></div>
@@ -801,7 +799,7 @@
       <div class="card-body">
         <div class="group-label" data-i18n="advanced.sectionNetwork">Networking</div>
         <div class="field field-emphasis">
-          <label for="adv-proxy" data-i18n="advanced.proxyLabel">How is Yuvomi exposed?</label>
+          <label for="adv-proxy" data-i18n="advanced.proxyLabel">How is Juju exposed?</label>
           <select id="adv-proxy">
             <option value="proxy" data-i18n="advanced.proxyBehindHttps">Behind a reverse proxy with HTTPS (Caddy, nginx, Traefik)</option>
             <option value="direct" data-i18n="advanced.proxyDirect">Direct access over localhost / HTTP</option>
@@ -1059,7 +1057,7 @@
     <div class="step" id="step-docker">
       <div class="card-head">
         <div class="step-tag"></div>
-        <h2 tabindex="-1" data-i18n="docker.title">Starting Yuvomi</h2>
+        <h2 tabindex="-1" data-i18n="docker.title">Starting Juju</h2>
         <p data-i18n="docker.subtitle">Pulling the image and starting the Docker container.</p>
       </div>
       <div class="card-body">
@@ -1093,7 +1091,7 @@
       <div class="card-head">
         <div class="step-tag"></div>
         <h2 tabindex="-1" data-i18n="admin.title">Create Admin Account</h2>
-        <p data-i18n="admin.subtitle">Set up your first login. This account has full access to Yuvomi.</p>
+        <p data-i18n="admin.subtitle">Set up your first login. This account has full access to Juju.</p>
       </div>
       <div class="card-body">
         <div class="field">
@@ -1134,13 +1132,11 @@
           <div class="done-mark" aria-hidden="true">
             <svg viewBox="0 0 160 160" fill="currentColor">
               <g fill-opacity="0.82">
-                <circle cx="64" cy="72" r="27"/>
-                <circle cx="100" cy="78" r="25"/>
-                <circle cx="80" cy="106" r="24"/>
+                <path d="M104 46 L104 100 Q104 120 82 122 Q54 124 48 102" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
               </g>
             </svg>
           </div>
-          <h2 tabindex="-1" data-i18n="done.title">Yuvomi is ready!</h2>
+          <h2 tabindex="-1" data-i18n="done.title">Juju is ready!</h2>
           <p data-i18n="done.subtitle">Your family planner is running and your admin account is set up.</p>
           <div class="warn-banner" role="note" style="text-align:start">
             <span class="warn-icon" aria-hidden="true">&#x26A0;</span>
@@ -1152,7 +1148,7 @@
               <span data-i18n="done.download">Download .env file</span>
             </button>
             <div class="hint" id="done-path" style="display:none; margin:0; font-family:var(--font-mono); word-break:break-all"></div>
-            <a id="done-link" class="open-link" href="#" target="_blank" rel="noopener" data-i18n="done.open">Open Yuvomi &#x2192;</a>
+            <a id="done-link" class="open-link" href="#" target="_blank" rel="noopener" data-i18n="done.open">Open Juju &#x2192;</a>
           </div>
         </div>
       </div>

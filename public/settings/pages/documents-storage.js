@@ -450,7 +450,7 @@ function buildGoogleDriveProvider(data, reload) {
   provider.appendChild(
     createInfoList([
       { label: t("settings.documentStorageGoogleDriveAccount"), value: drive.account_email || "–" },
-      { label: t("settings.documentStorageGoogleDriveFolder"), value: drive.folder_name || "Yuvomi/Documents" },
+      { label: t("settings.documentStorageGoogleDriveFolder"), value: drive.folder_name || "Juju/Documents" },
       { label: t("settings.documentStorageGoogleDriveCount"), value: String(Number(drive.document_count ?? 0)) },
       {
         label: t("settings.documentStorageLastTest"),

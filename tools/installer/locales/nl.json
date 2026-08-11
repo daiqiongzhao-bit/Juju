@@ -1,5 +1,5 @@
 {
-  "title": "Yuvomi instellen",
+  "title": "Juju instellen",
   "common": {
     "continue": "Doorgaan",
     "back": "Terug",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Basisconfiguratie",
-    "subtitle": "Hoe wil je Yuvomi bereiken?",
+    "subtitle": "Hoe wil je Juju bereiken?",
     "existing": "Bestaande configuratie gevonden — je huidige .env-bestand wordt voor het opslaan geback-upt.",
     "hostLabel": "Domein of IP-adres",
-    "hostHint": "Het adres waarmee je Yuvomi in de browser opent.",
+    "hostHint": "Het adres waarmee je Juju in de browser opent.",
     "portLabel": "Poort",
     "tzLabel": "Tijdzone",
     "errHost": "Ongeldige hostnaam. Gebruik alleen letters, cijfers, koppeltekens en punten.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Kalendersynchronisatie",
-    "subtitle": "Verbind Yuvomi met Google Agenda of Apple iCloud. Beide optioneel — uitklappen om te configureren.",
+    "subtitle": "Verbind Juju met Google Agenda of Apple iCloud. Beide optioneel — uitklappen om te configureren.",
     "google": "Google Agenda",
     "googleHint": "Maak OAuth-inloggegevens aan op {{link}}. Redirect-URI: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -73,7 +73,7 @@
     "tag": "Geavanceerd · optioneel",
     "title": "Geavanceerde instellingen",
     "subtitle": "Reverse proxy, single sign-on en automatische back-ups. Alles optioneel — overslaan is veilig.",
-    "proxyLabel": "Hoe wordt Yuvomi aangeboden?",
+    "proxyLabel": "Hoe wordt Juju aangeboden?",
     "proxyBehindHttps": "Achter een reverse proxy met HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Directe toegang via localhost / HTTP",
     "proxyHint": "Directe toegang schakelt Secure-only cookies uit zodat inloggen zonder HTTPS werkt.",
@@ -167,7 +167,7 @@
     "documentGoogleDrive": "Google Drive-documenten"
   },
   "docker": {
-    "title": "Yuvomi wordt gestart",
+    "title": "Juju wordt gestart",
     "subtitle": "Het image wordt geladen en de Docker-container wordt gestart.",
     "elapsed": "{{n}} s verstreken",
     "running": "Container is gezond en actief",
@@ -186,7 +186,7 @@
   },
   "admin": {
     "title": "Beheerdersaccount aanmaken",
-    "subtitle": "Stel je eerste login in. Dit account heeft volledige toegang tot Yuvomi.",
+    "subtitle": "Stel je eerste login in. Dit account heeft volledige toegang tot Juju.",
     "userLabel": "Gebruikersnaam",
     "userHint": "3-64 tekens: letters, cijfers, . - _",
     "nameLabel": "Weergavenaam",
@@ -202,19 +202,19 @@
     "errCreate": "Beheerdersaccount kon niet worden aangemaakt."
   },
   "done": {
-    "title": "Yuvomi is klaar!",
+    "title": "Juju is klaar!",
     "subtitle": "Je gezinsplanner werkt en je beheerdersaccount is ingesteld.",
-    "open": "Yuvomi openen →",
+    "open": "Juju openen →",
     "backupReminder": "Vergeet niet je .env-bestand nu te back-uppen — het bevat je sleutels.",
     "download": ".env-bestand downloaden",
     "savedTo": "Opgeslagen in {{path}}"
   },
   "welcome": {
-    "title": "Welkom bij Yuvomi",
+    "title": "Welkom bij Juju",
     "subtitle": "Laten we je privé-gezinsplanner starten. Kies hoe je hem wilt instellen.",
     "simpleTitle": "Eenvoudige installatie",
     "simpleBadge": "Aanbevolen",
-    "simpleDesc": "Wij regelen de technische details voor je. Ideaal om Yuvomi thuis te draaien.",
+    "simpleDesc": "Wij regelen de technische details voor je. Ideaal om Juju thuis te draaien.",
     "simpleTime": "Ongeveer 2 minuten",
     "advancedTitle": "Geavanceerde installatie",
     "advancedDesc": "Volledige controle: reverse proxy, agenda-synchronisatie, e-mail, single sign-on en back-ups.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Elke nacht wordt een lokale back-up bewaard.",
     "backupReminder": "Maak na de installatie een back-up van het gegenereerde .env-bestand — het bevat je enige versleutelingssleutels.",
     "switchAdvanced": "Meer opties nodig? Ga naar de geavanceerde installatie",
-    "start": "Yuvomi instellen & starten"
+    "start": "Juju instellen & starten"
   },
   "email": {
     "title": "E-mail & wachtwoordherstel",

@@ -15,7 +15,7 @@ const RELEASES_URL = 'https://api.github.com/repos/daiqiongzhao-bit/Juju/release
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const REQUEST_HEADERS = {
   Accept: 'application/vnd.github+json',
-  'User-Agent': 'Yuvomi/1.0 (+https://github.com/daiqiongzhao-bit/Juju)',
+  'User-Agent': 'Juju/1.0 (+https://github.com/daiqiongzhao-bit/Juju)',
   'X-GitHub-Api-Version': '2022-11-28',
 };
 

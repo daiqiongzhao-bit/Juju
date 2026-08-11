@@ -1,5 +1,5 @@
 /**
- * Screenshot Script - Yuvomi
+ * Screenshot Script - Juju
  * Fully automated: seeds demo data (in the target locale), starts a server and
  * captures every module and sub-tab in light + dark mode for two device profiles:
  *   - web:    iPad Pro 13"         → 2752 × 2064 px  (viewport 1376×1032, DSF 2.0)
@@ -121,7 +121,7 @@ function initFlags(arg) {
   try {
     localStorage.setItem('yuvomi-locale', arg.locale);
     localStorage.setItem('yuvomi-onboarded', '1');
-    localStorage.setItem('yuvomi-install-dismissed', String(Date.now()));
+    localStorage.setItem('juju-install-dismissed', String(Date.now()));
     localStorage.setItem('yuvomi-theme', arg.theme);
   } catch {}
   window.addEventListener('beforeinstallprompt', (e) => e.preventDefault());
@@ -149,7 +149,7 @@ function initFlags(arg) {
 
 async function dismissOverlays(page) {
   await page.evaluate(() => {
-    document.querySelectorAll('.onboarding-overlay, yuvomi-install-prompt').forEach((el) => el.remove());
+    document.querySelectorAll('.onboarding-overlay, juju-install-prompt').forEach((el) => el.remove());
   });
   // `[data-action="close-modal"]` statt einer Klasse: modal.js verdrahtet das
   // Schliessen ueber genau dieses Attribut (modal.js:610) und meint damit das
@@ -167,7 +167,7 @@ async function applyAppState(page, theme, locale) {
   await page.evaluate((a) => {
     localStorage.setItem('yuvomi-locale', a.locale);
     localStorage.setItem('yuvomi-onboarded', '1');
-    localStorage.setItem('yuvomi-install-dismissed', String(Date.now()));
+    localStorage.setItem('juju-install-dismissed', String(Date.now()));
     localStorage.setItem('yuvomi-theme', a.theme);
     document.documentElement.setAttribute('data-theme', a.theme);
   }, { theme, locale });

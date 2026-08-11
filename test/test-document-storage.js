@@ -329,7 +329,7 @@ function configureFakeDriveStorage() {
     refresh_token: 'refresh',
     account_id: 'account',
     folder_id: 'drive-folder',
-    folder_name: 'Yuvomi/Documents',
+    folder_name: 'Juju/Documents',
   })) statement.run(`document_storage_google_drive_${key}`, value);
 
   const mediaReads = [];
@@ -2192,7 +2192,7 @@ test('document storage config status masks passwords and reports effective env c
       connected: false,
       account_email: null,
       account_name: null,
-      folder_name: 'Yuvomi/Documents',
+      folder_name: 'Juju/Documents',
       document_count: 0,
       last_test: null,
       last_error: null,

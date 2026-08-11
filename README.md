@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="docs/logo.svg" alt="Yuvomi" width="92" />
+  <img src="docs/logo.svg" alt="Juju" width="92" />
 
-  <h1>Yuvomi</h1>
+  <h1>Juju</h1>
 
   <p><strong>One private home for everything your family runs on.</strong></p>
 
@@ -11,10 +11,10 @@
   </p>
 
   <p>
-    <a href="https://github.com/daiqiongzhao-bit/Juju/releases"><img src="https://img.shields.io/github/v/release/daiqiongzhao-bit/yuvomi?style=flat-square&color=4F4DC9&label=release" alt="Latest Release"></a>
-    <a href="https://github.com/daiqiongzhao-bit/Juju/stargazers"><img src="https://img.shields.io/github/stars/daiqiongzhao-bit/yuvomi?style=flat-square&color=4F4DC9&label=stars" alt="GitHub Stars"></a>
+    <a href="https://github.com/daiqiongzhao-bit/Juju/releases"><img src="https://img.shields.io/github/v/release/daiqiongzhao-bit/Juju?style=flat-square&color=4F4DC9&label=release" alt="Latest Release"></a>
+    <a href="https://github.com/daiqiongzhao-bit/Juju/stargazers"><img src="https://img.shields.io/github/stars/daiqiongzhao-bit/Juju?style=flat-square&color=4F4DC9&label=stars" alt="GitHub Stars"></a>
     <img src="https://img.shields.io/badge/PWA-installable-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="PWA">
-    <a href="https://github.com/daiqiongzhao-bit/Juju/pkgs/container/yuvomi"><img src="https://img.shields.io/badge/ghcr.io-yuvomi-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Image"></a>
+    <a href="https://github.com/daiqiongzhao-bit/Juju/pkgs/container/juju"><img src="https://img.shields.io/badge/ghcr.io-juju-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Image"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License"></a>
   </p>
 
@@ -37,14 +37,14 @@
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark-web.png">
           <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/dashboard-light-web.png">
-          <img src="docs/screenshots/dashboard-light-web.png" alt="Yuvomi dashboard - tasks, calendar events, meals and shopping at a glance" width="680">
+          <img src="docs/screenshots/dashboard-light-web.png" alt="Juju dashboard - tasks, calendar events, meals and shopping at a glance" width="680">
         </picture>
       </td>
       <td width="28%" align="center" valign="middle">
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark-mobile.png">
           <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/dashboard-light-mobile.png">
-          <img src="docs/screenshots/dashboard-light-mobile.png" alt="Yuvomi on mobile" width="148">
+          <img src="docs/screenshots/dashboard-light-mobile.png" alt="Juju on mobile" width="148">
         </picture>
         <br>
         <sub>Mobile PWA</sub>
@@ -74,11 +74,11 @@
 
 <br>
 
-Yuvomi replaces a pile of cloud subscriptions with one private place that belongs to your household, not a vendor. It runs as a Docker or Podman container on any home server or NAS, including rootless Podman on SELinux-enabled RHEL, Fedora and CentOS Stream. A polished, mobile-first PWA makes it feel native on every device. Every module is independent, so you use what fits and skip what doesn't.
+Juju replaces a pile of cloud subscriptions with one private place that belongs to your household, not a vendor. It runs as a Docker or Podman container on any home server or NAS, including rootless Podman on SELinux-enabled RHEL, Fedora and CentOS Stream. A polished, mobile-first PWA makes it feel native on every device. Every module is independent, so you use what fits and skip what doesn't.
 
 <div align="center">
   <sub>
-    <a href="#why-yuvomi">Why Yuvomi</a> &nbsp;·&nbsp;
+    <a href="#why-juju">Why Juju</a> &nbsp;·&nbsp;
     <a href="#screenshots">Screenshots</a> &nbsp;·&nbsp;
     <a href="#modules">Modules</a> &nbsp;·&nbsp;
     <a href="#install-anywhere">Install</a> &nbsp;·&nbsp;
@@ -90,13 +90,13 @@ Yuvomi replaces a pile of cloud subscriptions with one private place that belong
 
 ---
 
-## Why Yuvomi
+## Why Juju
 
-Most families glue their life together from a dozen paid apps, each with its own account, its own subscription, and its own copy of your data on someone else's server. Yuvomi brings that into one place you own.
+Most families glue their life together from a dozen paid apps, each with its own account, its own subscription, and its own copy of your data on someone else's server. Juju brings that into one place you own.
 
 ### One private app instead of a dozen subscriptions
 
-| Instead of juggling… | Yuvomi gives you |
+| Instead of juggling… | Juju gives you |
 |---|---|
 | a to-do &amp; task app | **Tasks** - Kanban, deadlines, recurring, multi-assignment |
 | a shared calendar subscription | **Calendar** - sync, subscriptions, per-event visibility |
@@ -303,7 +303,7 @@ Seventeen independent modules share one calm, consistent interface. Turn on what
 
 > **Health is not a medical device.** No diagnostic claims are made. Health data is sensitive, so enable database encryption (`DB_ENCRYPTION_KEY`, SQLCipher).
 
-> **External document storage needs its own backup.** Database backups hold document metadata and links, not binaries stored in a local folder, on WebDAV, or in Google Drive; back up the selected target separately. Yuvomi visibility settings only control access through Yuvomi. Anyone with access to the connected `Yuvomi/Documents` Google Drive folder can view all files stored there. Admin-UI WebDAV targets must resolve to public addresses; for a trusted LAN or loopback target, set `DOCUMENT_STORAGE_WEBDAV_URL` via the deployment environment, or `DOCUMENT_STORAGE_WEBDAV_ALLOW_PRIVATE_NETWORK=true` to allow private targets from the UI too.
+> **External document storage needs its own backup.** Database backups hold document metadata and links, not binaries stored in a local folder, on WebDAV, or in Google Drive; back up the selected target separately. Juju visibility settings only control access through Juju. Anyone with access to the connected `Juju/Documents` Google Drive folder can view all files stored there. Admin-UI WebDAV targets must resolve to public addresses; for a trusted LAN or loopback target, set `DOCUMENT_STORAGE_WEBDAV_URL` via the deployment environment, or `DOCUMENT_STORAGE_WEBDAV_ALLOW_PRIVATE_NETWORK=true` to allow private targets from the UI too.
 
 > **Internal (LAN / private IP) targets are blocked by default.** SSRF protection rejects private, loopback, link-local, and internal-DNS URLs for ICS calendar subscriptions and WebDAV document storage. To use an internally-resolving URL, set the matching opt-in in your deployment environment: `ICS_SUBSCRIPTION_ALLOW_PRIVATE_NETWORK=true` for calendar feeds, `DOCUMENT_STORAGE_WEBDAV_ALLOW_PRIVATE_NETWORK=true` for document storage. See the [Installation Guide](docs/installation.md#environment-variables).
 
@@ -318,7 +318,7 @@ Seventeen independent modules share one calm, consistent interface. Turn on what
 A localized setup wizard, in 24 languages, that runs in your browser. It auto-detects Docker or Podman, configures HTTPS, SSO and scheduled backups, then starts the container and creates your admin account.
 
 ```bash
-git clone https://github.com/daiqiongzhao-bit/Juju.git && cd yuvomi
+git clone https://github.com/daiqiongzhao-bit/Juju.git && cd Juju
 node tools/installer/install-server.js
 ```
 
@@ -338,7 +338,7 @@ docker compose up -d
 **Build from source:**
 
 ```bash
-git clone https://github.com/daiqiongzhao-bit/Juju.git && cd yuvomi
+git clone https://github.com/daiqiongzhao-bit/Juju.git && cd Juju
 cp .env.example .env
 docker compose up -d --build
 ```
@@ -352,24 +352,24 @@ Open `http://localhost:3000`. The first visit walks you through creating your ad
 <table>
   <tr>
     <td><b>TrueNAS SCALE</b></td>
-    <td>Apps → Discover Apps → search <b>Yuvomi</b> → Install</td>
+    <td>Apps → Discover Apps → search <b>Juju</b> → Install</td>
     <td>No terminal required. Community Apps Catalog. Version updates via Renovate.</td>
   </tr>
   <tr>
     <td><b>Umbrel</b></td>
-    <td>App Store → search <b>Yuvomi</b> → Install</td>
+    <td>App Store → search <b>Juju</b> → Install</td>
     <td>One-click install. Everything stays on your Umbrel.</td>
   </tr>
   <tr>
     <td><b>Unraid</b></td>
-    <td>Apps → search <b>Yuvomi</b> → Apply</td>
+    <td>Apps → search <b>Juju</b> → Apply</td>
     <td>Community Applications template. Set <code>SESSION_SECRET</code> during install.</td>
   </tr>
 </table>
 
 > **New to Docker or Podman?** The **[Installation Guide](docs/installation.md)** covers engine setup, HTTPS/reverse proxy, backups, and troubleshooting step by step.
 
-> **Some catalog slugs still carry the legacy name `oikos`** (e.g. Unraid `oikos-…`). TrueNAS has been fully renamed to `community/yuvomi` - the old entry remains frozen as *Oikos (Deprecated)* for existing installations. The app shows and installs as **Yuvomi** everywhere; where the technical slug stays `oikos`, it is kept so existing installations (database paths and container names) upgrade seamlessly. Search for **Yuvomi**; if a store still surfaces an entry as *oikos*, it is the same app.
+> **Some catalog slugs still carry the legacy name `oikos`** (e.g. Unraid `oikos-…`). TrueNAS has been fully renamed to `community/yuvomi` - the old entry remains frozen as *Oikos (Deprecated)* for existing installations. The app shows and installs as **Juju** everywhere; where the technical slug stays `oikos`, it is kept so existing installations (database paths and container names) upgrade seamlessly. Search for **Juju**; if a store still surfaces an entry as *oikos*, it is the same app.
 
 ---
 
@@ -384,7 +384,7 @@ If you can install an app on a NAS or run one command, yes. The web installer sp
 <details>
 <summary><b>Does it work on my phone?</b></summary>
 <br>
-Yuvomi is a mobile-first PWA. Install it to your home screen and it feels native, with tuned touch targets and a persistent bottom bar. It also works offline, with read-only access to your last-seen calendar, tasks, shopping, contacts and dashboard.
+Juju is a mobile-first PWA. Install it to your home screen and it feels native, with tuned touch targets and a persistent bottom bar. It also works offline, with read-only access to your last-seen calendar, tasks, shopping, contacts and dashboard.
 </details>
 
 <details>
@@ -408,7 +408,7 @@ Yes. Every household member is a full user with their own profile, role and avat
 <details>
 <summary><b>What does it cost?</b></summary>
 <br>
-Nothing. Yuvomi is free and MIT-licensed. You provide the server; there is no subscription, no upsell, and no paid tier.
+Nothing. Juju is free and MIT-licensed. You provide the server; there is no subscription, no upsell, and no paid tier.
 </details>
 
 ---
@@ -421,7 +421,7 @@ Nothing. Yuvomi is free and MIT-licensed. You provide the server; there is no su
 - **SSO / OpenID Connect** - optional single sign-on via any OIDC provider (Authentik, Keycloak, Google, Microsoft Entra), configured with four env vars using the Authorization Code + PKCE flow.
 - **Invite links** - admins invite new members with a link instead of setting a password for them; the invited person chooses their own, and the link expires after 7 days. Mail delivery is optional, the link works without SMTP.
 - **Self-service password reset** - optional SMTP email lets users reset a forgotten password themselves via a time-limited link, with anti-enumeration by design.
-- **Multilingual** - 24 languages with automatic locale detection (de, en, es, fr, it, sv, el, ru, tr, zh, ja, ar, hi, pt, uk, pl, nl, cs, vi, hu, ko, id, fa, fil). A separate household setting decides the language of entries Yuvomi creates itself, so an exported calendar and the API speak your household's language instead of English.
+- **Multilingual** - 24 languages with automatic locale detection (de, en, es, fr, it, sv, el, ru, tr, zh, ja, ar, hi, pt, uk, pl, nl, cs, vi, hu, ko, id, fa, fil). A separate household setting decides the language of entries Juju creates itself, so an exported calendar and the API speak your household's language instead of English.
 
 <p>
   <img src="https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white" alt="Express">
@@ -440,14 +440,14 @@ Nothing. Yuvomi is free and MIT-licensed. You provide the server; there is no su
 
 [Installation](docs/installation.md) &nbsp;·&nbsp; [Spec &amp; data model](docs/SPEC.md) &nbsp;·&nbsp; [Third-party modules](MODULES.md) &nbsp;·&nbsp; [Contributing](CONTRIBUTING.md) &nbsp;·&nbsp; [Security](SECURITY.md) &nbsp;·&nbsp; [Privacy for self-hosters](docs/PRIVACY-FOR-SELFHOSTERS.md) &nbsp;·&nbsp; [Changelog](CHANGELOG.md) &nbsp;·&nbsp; [Backlog](BACKLOG.md)
 
-If you self-host Yuvomi in a GDPR context (EU/EEA, processing other people's data), read [docs/PRIVACY-FOR-SELFHOSTERS.md](docs/PRIVACY-FOR-SELFHOSTERS.md) before going live. It covers third-country assessments for every external service (weather, CalDAV/CardDAV, OIDC, WebDAV backup and document storage), data-processing-agreement notes, log-retention guidance, and a records-of-processing template.
+If you self-host Juju in a GDPR context (EU/EEA, processing other people's data), read [docs/PRIVACY-FOR-SELFHOSTERS.md](docs/PRIVACY-FOR-SELFHOSTERS.md) before going live. It covers third-country assessments for every external service (weather, CalDAV/CardDAV, OIDC, WebDAV backup and document storage), data-processing-agreement notes, log-retention guidance, and a records-of-processing template.
 
 <details>
 <summary>Coming from <b>Oikos</b>? This project was renamed, and nothing about the app changes.</summary>
 
 <br>
 
-Yuvomi was renamed from **Oikos** to avoid a trademark conflict with an unrelated product. Same code, same data, same maintainer.
+Juju was renamed from **Oikos** to avoid a trademark conflict with an unrelated product. Same code, same data, same maintainer.
 
 - Old links (`github.com/daiqiongzhao-bit/Juju`) redirect here automatically.
 - The Docker image moved to `ghcr.io/daiqiongzhao-bit/Juju`; the old `ghcr.io/daiqiongzhao-bit/Juju` keeps working, so update at your convenience.

@@ -248,11 +248,11 @@ test('partial Drive-specific credentials fail closed in status and routes', asyn
   }
 });
 
-test('callback validates the account, creates and reuses Yuvomi/Documents, and never selects Drive', async () => {
+test('callback validates the account, creates and reuses Juju/Documents, and never selects Drive', async () => {
   const first = await driveStorage.handleCallback('code');
   assert.equal(first.connected, true);
   assert.equal(first.account_email, 'a@example.test');
-  assert.equal(first.folder_name, 'Yuvomi/Documents');
+  assert.equal(first.folder_name, 'Juju/Documents');
   assert.equal(fake.state.foldersCreated, 2);
   assert.equal(cfg('document_storage_selected_backend'), null);
   assert.equal(cfg('google_access_token'), 'calendar-access');

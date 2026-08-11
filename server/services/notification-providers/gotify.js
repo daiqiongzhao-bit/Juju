@@ -1,6 +1,6 @@
 /**
  * Modul: Gotify Notification Provider
- * Zweck: Yuvomi Reminder-Payloads an Gotify senden.
+ * Zweck: Juju Reminder-Payloads an Gotify senden.
  */
 
 function httpError(status) {

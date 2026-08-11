@@ -45,7 +45,7 @@
   margin-bottom: var(--space-8);
 }
 
-/* Marken-Anker: App-Tile mit dem Yuvomi-Zeichen (drei transluzente Kreise).
+/* Marken-Anker: App-Tile mit dem Juju-Zeichen (drei transluzente Kreise).
  * Selbstbewusst (gefülltes Tile, weicher Schatten) und warm – „Würde ohne Kälte". */
 .auth-hero__mark {
   display: inline-flex;

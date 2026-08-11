@@ -1,4 +1,4 @@
-# Podman-Compose-Manifest für Yuvomi (RHEL/Fedora/CentOS Stream, rootless + SELinux).
+# Podman-Compose-Manifest für Juju (RHEL/Fedora/CentOS Stream, rootless + SELinux).
 # Nutzbar mit `podman compose -f podman-compose.yml up -d` (Podman 4.1+) oder
 # `podman-compose -f podman-compose.yml up -d`. Der Web-/CLI-Installer wählt das
 # Manifest automatisch, wenn nur Podman vorhanden ist.
@@ -23,7 +23,7 @@ services:
       # ausschließlich von diesem Container genutzt werden (hier der Fall).
       - ${DATA_DIR:-./data}:/data:Z
       - ${BACKUP_DIR:-./backups}:/backups:Z
-      # Drop Yuvomi modules into ./modules, or set MODULES_DIR=/path/to/modules.
+      # Drop Juju modules into ./modules, or set MODULES_DIR=/path/to/modules.
       - ${MODULES_DIR:-./modules}:/app/modules:Z
       # Optional local documents folder. BOTH ends come from the .env: the app
       # writes to DOCUMENT_STORAGE_LOCAL_PATH, so mounting at a fixed /documents

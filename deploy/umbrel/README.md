@@ -1,4 +1,4 @@
-# Yuvomi - Umbrel App Store source
+# Juju - Umbrel App Store source
 
 `umbrel-app.yml` und `docker-compose.yml` in diesem Ordner sind ein **wortgleicher
 Spiegel** des veröffentlichten Pakets in
@@ -7,7 +7,7 @@ Wortgleich ist Absicht: nur so zeigt ein `diff` gegen Upstream, was auseinanderl
 Prozesswissen und Begründungen stehen deshalb hier, nicht als Kommentar in den
 gespiegelten Dateien.
 
-Die Ersteinreichung `getumbrel/umbrel-apps#5732` ist **gemergt** - Yuvomi ist im
+Die Ersteinreichung `getumbrel/umbrel-apps#5732` ist **gemergt** - Juju ist im
 offiziellen App Store. Die Bilder liegen separat in
 [`umbrel-apps-gallery`](https://github.com/getumbrel/umbrel-apps-gallery/tree/master/yuvomi)
 (`yuvomi/1.webp` … `5.webp` + `icon.svg`).
@@ -31,7 +31,7 @@ durch die WebP-Quellen ersetzt.
 Zwei Wege, und sie laufen parallel:
 
 - **Umbrel selbst.** Ein Maintainer pflegt den Eintrag direkt auf `master`, ohne PR
-  und meist innerhalb eines Tages nach einem Yuvomi-Release (zuletzt v1.77.0 am
+  und meist innerhalb eines Tages nach einem Juju-Release (zuletzt v1.77.0 am
   2026-08-04). Der ältere Merker „Umbrel hat keinen Auto-Update-Bot, wir ersetzen
   ihn" beschreibt die Lage nicht mehr.
 - **Unser Workflow.** `.github/workflows/umbrel-publish.yml` läuft auf
@@ -49,7 +49,7 @@ Der Workflow ist damit eher Absicherung als Notwendigkeit. Manueller Fallback:
 - **`app_proxy`** ist Pflicht. `APP_PORT: 3000` ist der Port im Container, das
   Manifest-Feld `port:` ist **8180** (extern; der Linter lehnt Kollisionen ab).
   `PROXY_AUTH_ADD` steht im veröffentlichten Paket **nicht** - Umbrels Proxy-Auth
-  ist also aktiv. Der frühere Hinweis, Yuvomis eigenes Login führe zu doppelter
+  ist also aktiv. Der frühere Hinweis, Jujus eigenes Login führe zu doppelter
   Anmeldung, gilt für den ausgelieferten Stand nicht mehr; entsprechend ist auch
   der unauthentifizierte Erstlauf-Endpunkt (`POST /api/v1/auth/setup`) nicht mehr
   offen im LAN erreichbar.
@@ -62,7 +62,7 @@ Der Workflow ist damit eher Absicherung als Notwendigkeit. Manueller Fallback:
 - **`backupIgnore`** hält zwei Dinge aus Umbrels Backup heraus:
   `data/app/yuvomi.db.plaintext-backup*` (die Kopie, die die einmalige
   Verschlüsselungs-Migration unverschlüsselt zurücklässt) und `data/backups/*.db`
-  (Yuvomis eigene Dumps, die sonst doppelt gesichert würden).
+  (Jujus eigene Dumps, die sonst doppelt gesichert würden).
 - **Volumes** liegen unter `${APP_DATA_DIR}/data/app` → `/data` und
   `${APP_DATA_DIR}/data/backups` → `/backups`. Achtung: **nicht** `${APP_DATA_DIR}/data`
   direkt - die Pfade wurden nach der Ersteinreichung umgebaut. Eine Änderung daran
@@ -83,7 +83,7 @@ Aus `.claude/skills/umbrel-update-app/` in `getumbrel/umbrel-apps`:
   sonst sehen Bestandsinstallationen kein Update. Umgekehrt gilt: `version` nicht
   allein hochziehen.
 - `id` niemals ändern - das ist Identität und Datenpfad.
-- Vor dem PR `npm run lint:apps -- yuvomi --check-images` laufen lassen und den
+- Vor dem PR `npm run lint:apps -- juju --check-images` laufen lassen und den
   echten Update-Pfad testen, nicht nur eine Neuinstallation.
 
 ## Lokal testen
@@ -97,14 +97,14 @@ docker run -it --rm --name umbrel --pid=host -p 80:80 \
   --stop-timeout 60 docker.io/dockurr/umbrel
 ```
 
-Dann <http://localhost> öffnen, Onboarding abschließen und Yuvomi über einen
+Dann <http://localhost> öffnen, Onboarding abschließen und Juju über einen
 temporären Community App Store einspielen:
 
 1. Öffentliches Wegwerf-Repo mit diesem Aufbau anlegen:
    ```
-   umbrel-app-store.yml       # id: yuvomi-test, name: Yuvomi Test
-   yuvomi/umbrel-app.yml      # Kopie des Manifests aus diesem Ordner
-   yuvomi/docker-compose.yml  # Kopie der Compose aus diesem Ordner
+   umbrel-app-store.yml       # id: juju-test, name: Juju Test
+   juju/umbrel-app.yml      # Kopie des Manifests aus diesem Ordner
+   juju/docker-compose.yml  # Kopie der Compose aus diesem Ordner
    ```
 2. In umbrelOS → App Store → „Community App Stores" die Repo-URL hinzufügen.
 3. Installieren, ersten Account anlegen, App **neu starten** und prüfen, dass

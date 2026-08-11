@@ -13,7 +13,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-const REPO = 'daiqiongzhao-bit/yuvomi';
+const REPO = 'daiqiongzhao-bit/Juju';
 const DOCS = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'docs');
 const HTML_FILES = [resolve(DOCS, 'index.html'), resolve(DOCS, 'install.html')];
 
@@ -51,7 +51,7 @@ const patterns = (stars) => [
 
 async function main() {
   const res = await fetch(`https://api.github.com/repos/${REPO}`, {
-    headers: { 'User-Agent': 'yuvomi-build-script' },
+    headers: { 'User-Agent': 'juju-build-script' },
   });
   if (!res.ok) {
     throw new Error(`GitHub API ${res.status}: ${await res.text()}`);

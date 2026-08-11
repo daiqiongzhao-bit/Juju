@@ -165,7 +165,7 @@ test('gotify provider maps reminder payload to Gotify request', async () => {
       config: { baseUrl: 'https://gotify.example.test', priority: 5 },
       secrets: { appToken: 'secret-token' },
     },
-    payload: { title: 'Yuvomi', body: 'Müll rausbringen', url: '/reminders' },
+    payload: { title: 'Juju', body: 'Müll rausbringen', url: '/reminders' },
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return { ok: true, status: 200, json: async () => ({ id: 7 }) };
@@ -174,7 +174,7 @@ test('gotify provider maps reminder payload to Gotify request', async () => {
   assert.equal(result.ok, true);
   assert.equal(calls[0].url, 'https://gotify.example.test/message?token=secret-token');
   assert.equal(calls[0].options.method, 'POST');
-  assert.equal(calls[0].options.body.get('title'), 'Yuvomi');
+  assert.equal(calls[0].options.body.get('title'), 'Juju');
   assert.equal(calls[0].options.body.get('message'), 'Müll rausbringen');
   assert.equal(calls[0].options.body.get('priority'), '5');
   assert.match(calls[0].options.body.get('extras'), /client::notification/);
@@ -188,7 +188,7 @@ test('ntfy provider maps reminder payload with bearer auth', async () => {
       config: { baseUrl: 'https://ntfy.example.test', topic: 'family-reminders', priority: 'default', authType: 'token' },
       secrets: { token: 'token-value' },
     },
-    payload: { title: 'Yuvomi', body: 'Müll rausbringen', url: '/reminders' },
+    payload: { title: 'Juju', body: 'Müll rausbringen', url: '/reminders' },
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return { ok: true, status: 200, text: async () => 'ok' };
@@ -196,7 +196,7 @@ test('ntfy provider maps reminder payload with bearer auth', async () => {
   });
   assert.equal(calls[0].url, 'https://ntfy.example.test/family-reminders');
   assert.equal(calls[0].options.method, 'POST');
-  assert.equal(calls[0].options.headers.Title, 'Yuvomi');
+  assert.equal(calls[0].options.headers.Title, 'Juju');
   assert.equal(calls[0].options.headers.Priority, 'default');
   assert.equal(calls[0].options.headers.Click, '/reminders');
   assert.equal(calls[0].options.headers.Authorization, 'Bearer token-value');
@@ -210,7 +210,7 @@ test('providers throw sanitized HTTP errors', async () => {
       config: { baseUrl: 'https://gotify.example.test', priority: 5 },
       secrets: { appToken: 'secret-token' },
     },
-    payload: { title: 'Yuvomi', body: 'Body', url: '/reminders' },
+    payload: { title: 'Juju', body: 'Body', url: '/reminders' },
     fetchImpl: async () => ({ ok: false, status: 403 }),
   }), (err) => {
     assert.match(err.message, /authentication/i);
@@ -266,7 +266,7 @@ test('subscription reminders carry name, amount and renewal date as body (#581)'
   await processDueNotifications({ database: db, channelStore: store, pushService, providers, now: new Date() });
   assert.equal(payloads.length, 1);
   assert.equal(payloads[0].body, 'Netflix - 12.99 EUR - 2026-06-22');
-  assert.equal(payloads[0].title, 'Yuvomi');
+  assert.equal(payloads[0].title, 'Juju');
 });
 
 test('subscription reminders degrade to the bare name when amount or date are missing (#581)', async () => {
@@ -430,7 +430,7 @@ test('admin notification routes manage channels and test sends', async () => {
   const testSend = await call(makeApp(), 'POST', `/notifications/channels/${created.json.data.id}/test`, {});
   assert.equal(testSend.status, 200);
   assert.equal(sent.length, 1);
-  assert.match(sent[0].body, /Yuvomi/);
+  assert.match(sent[0].body, /Juju/);
 
   const deleted = await call(makeApp(), 'DELETE', `/notifications/channels/${created.json.data.id}`);
   assert.equal(deleted.status, 200);

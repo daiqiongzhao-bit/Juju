@@ -1,5 +1,5 @@
 {
-  "title": "Yuvomi einrichten",
+  "title": "Juju einrichten",
   "common": {
     "continue": "Weiter",
     "back": "Zurück",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Grundkonfiguration",
-    "subtitle": "Wie möchtest du auf Yuvomi zugreifen?",
+    "subtitle": "Wie möchtest du auf Juju zugreifen?",
     "existing": "Bestehende Konfiguration erkannt - deine aktuelle .env-Datei wird vor dem Speichern gesichert.",
     "hostLabel": "Domain oder IP-Adresse",
-    "hostHint": "Die Adresse, über die du Yuvomi im Browser öffnest.",
+    "hostHint": "Die Adresse, über die du Juju im Browser öffnest.",
     "portLabel": "Port",
     "tzLabel": "Zeitzone",
     "errHost": "Ungültiger Hostname. Verwende nur Buchstaben, Ziffern, Bindestriche und Punkte.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Kalender-Synchronisation",
-    "subtitle": "Verbinde Yuvomi mit Google Kalender oder Apple iCloud. Beides optional - zum Konfigurieren ausklappen.",
+    "subtitle": "Verbinde Juju mit Google Kalender oder Apple iCloud. Beides optional - zum Konfigurieren ausklappen.",
     "google": "Google Kalender",
     "googleHint": "Erstelle OAuth-Anmeldedaten unter {{link}}. Redirect-URI: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -73,7 +73,7 @@
     "tag": "Erweitert · optional",
     "title": "Erweiterte Einstellungen",
     "subtitle": "Reverse-Proxy, Single Sign-On und automatische Backups. Alles optional - Überspringen ist unbedenklich.",
-    "proxyLabel": "Wie wird Yuvomi bereitgestellt?",
+    "proxyLabel": "Wie wird Juju bereitgestellt?",
     "proxyBehindHttps": "Hinter einem Reverse-Proxy mit HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Direkter Zugriff über localhost / HTTP",
     "proxyHint": "Im Zweifel „Reverse-Proxy“: erzwingt sichere Cookies. „Direkt“ nur für lokalen HTTP-Zugriff ohne HTTPS.",
@@ -167,7 +167,7 @@
     "documentGoogleDrive": "Google-Drive-Dokumente"
   },
   "docker": {
-    "title": "Yuvomi wird gestartet",
+    "title": "Juju wird gestartet",
     "subtitle": "Das Image wird geladen und der Docker-Container gestartet.",
     "elapsed": "{{n}} s vergangen",
     "running": "Container ist gesund und läuft",
@@ -186,7 +186,7 @@
   },
   "admin": {
     "title": "Admin-Konto erstellen",
-    "subtitle": "Richte deinen ersten Login ein. Dieses Konto hat vollen Zugriff auf Yuvomi.",
+    "subtitle": "Richte deinen ersten Login ein. Dieses Konto hat vollen Zugriff auf Juju.",
     "userLabel": "Benutzername",
     "userHint": "3-64 Zeichen: Buchstaben, Zahlen, . - _",
     "nameLabel": "Anzeigename",
@@ -202,19 +202,19 @@
     "errCreate": "Admin-Konto konnte nicht erstellt werden."
   },
   "done": {
-    "title": "Yuvomi ist bereit!",
+    "title": "Juju ist bereit!",
     "subtitle": "Dein Familienplaner läuft und dein Admin-Konto ist eingerichtet.",
-    "open": "Yuvomi öffnen →",
+    "open": "Juju öffnen →",
     "backupReminder": "Denk daran, deine .env-Datei jetzt zu sichern - sie enthält deine Schlüssel.",
     "download": ".env-Datei herunterladen",
     "savedTo": "Gespeichert unter {{path}}"
   },
   "welcome": {
-    "title": "Willkommen bei Yuvomi",
+    "title": "Willkommen bei Juju",
     "subtitle": "Bring deinen privaten Familienplaner zum Laufen. Wähle, wie du ihn einrichten möchtest.",
     "simpleTitle": "Einfache Einrichtung",
     "simpleBadge": "Empfohlen",
-    "simpleDesc": "Wir übernehmen die technischen Details für dich. Ideal, um Yuvomi zu Hause zu betreiben.",
+    "simpleDesc": "Wir übernehmen die technischen Details für dich. Ideal, um Juju zu Hause zu betreiben.",
     "simpleTime": "Etwa 2 Minuten",
     "advancedTitle": "Erweiterte Einrichtung",
     "advancedDesc": "Volle Kontrolle: Reverse-Proxy, Kalender-Sync, E-Mail, Single Sign-On und Backups.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Jede Nacht wird ein lokales Backup aufbewahrt.",
     "backupReminder": "Sichere nach der Einrichtung die erzeugte .env-Datei - sie enthält deine einzigen Verschlüsselungsschlüssel.",
     "switchAdvanced": "Mehr Optionen nötig? Zur erweiterten Einrichtung wechseln",
-    "start": "Yuvomi einrichten & starten"
+    "start": "Juju einrichten & starten"
   },
   "email": {
     "title": "E-Mail & Passwort-Reset",

@@ -1,5 +1,5 @@
 {
-  "title": "Konfiguracja Yuvomi",
+  "title": "Konfiguracja Juju",
   "common": {
     "continue": "Dalej",
     "back": "Wstecz",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Konfiguracja podstawowa",
-    "subtitle": "Jak będziesz uzyskiwać dostęp do Yuvomi?",
+    "subtitle": "Jak będziesz uzyskiwać dostęp do Juju?",
     "existing": "Wykryto istniejącą konfigurację — przed zapisaniem zostanie utworzona kopia zapasowa bieżącego pliku .env.",
     "hostLabel": "Domena lub adres IP",
-    "hostHint": "Adres, którego użyjesz, aby otworzyć Yuvomi w przeglądarce.",
+    "hostHint": "Adres, którego użyjesz, aby otworzyć Juju w przeglądarce.",
     "portLabel": "Port",
     "tzLabel": "Strefa czasowa",
     "errHost": "Nieprawidłowa nazwa hosta. Używaj tylko liter, cyfr, myślników i kropek.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Synchronizacja kalendarza",
-    "subtitle": "Połącz Yuvomi z Kalendarzem Google lub Apple iCloud. Oba są opcjonalne — rozwiń, aby skonfigurować.",
+    "subtitle": "Połącz Juju z Kalendarzem Google lub Apple iCloud. Oba są opcjonalne — rozwiń, aby skonfigurować.",
     "google": "Kalendarz Google",
     "googleHint": "Utwórz dane uwierzytelniające OAuth na {{link}}. URI przekierowania: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -99,7 +99,7 @@
     "documentGoogleDrive": "Dokumenty Google Drive"
   },
   "docker": {
-    "title": "Uruchamianie Yuvomi",
+    "title": "Uruchamianie Juju",
     "subtitle": "Pobieranie obrazu i uruchamianie kontenera Docker.",
     "elapsed": "upłynęło {{n}} s",
     "running": "Kontener jest sprawny i działa",
@@ -118,7 +118,7 @@
   },
   "admin": {
     "title": "Utwórz konto administratora",
-    "subtitle": "Skonfiguruj swoje pierwsze logowanie. To konto ma pełny dostęp do Yuvomi.",
+    "subtitle": "Skonfiguruj swoje pierwsze logowanie. To konto ma pełny dostęp do Juju.",
     "userLabel": "Nazwa użytkownika",
     "userHint": "3-64 znaki: litery, cyfry, . - _",
     "nameLabel": "Wyświetlana nazwa",
@@ -134,9 +134,9 @@
     "errCreate": "Nie udało się utworzyć konta administratora."
   },
   "done": {
-    "title": "Yuvomi jest gotowy!",
+    "title": "Juju jest gotowy!",
     "subtitle": "Twój planer rodzinny działa, a konto administratora jest skonfigurowane.",
-    "open": "Otwórz Yuvomi →",
+    "open": "Otwórz Juju →",
     "backupReminder": "Pamiętaj, aby teraz utworzyć kopię pliku .env — zawiera on Twoje klucze.",
     "download": "Pobierz plik .env",
     "savedTo": "Zapisano w {{path}}"
@@ -145,7 +145,7 @@
     "tag": "Zaawansowane · opcjonalne",
     "title": "Ustawienia zaawansowane",
     "subtitle": "Reverse proxy, logowanie jednokrotne i automatyczne kopie zapasowe. Wszystko opcjonalne — pominięcie jest bezpieczne.",
-    "proxyLabel": "Jak udostępniany jest Yuvomi?",
+    "proxyLabel": "Jak udostępniany jest Juju?",
     "proxyBehindHttps": "Za reverse proxy z HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Bezpośredni dostęp przez localhost / HTTP",
     "proxyHint": "Dostęp bezpośredni wyłącza pliki cookie tylko-bezpieczne, aby logowanie działało bez HTTPS.",
@@ -210,11 +210,11 @@
     "oidcTrustEmailHint": "Włącz tylko wtedy, gdy dostawca nie wysyła email_verified, a Ty mu ufasz."
   },
   "welcome": {
-    "title": "Witamy w Yuvomi",
+    "title": "Witamy w Juju",
     "subtitle": "Uruchommy Twój prywatny planer rodzinny. Wybierz sposób konfiguracji.",
     "simpleTitle": "Prosta konfiguracja",
     "simpleBadge": "Zalecane",
-    "simpleDesc": "Zajmiemy się szczegółami technicznymi za Ciebie. Idealne do korzystania z Yuvomi w domu.",
+    "simpleDesc": "Zajmiemy się szczegółami technicznymi za Ciebie. Idealne do korzystania z Juju w domu.",
     "simpleTime": "Około 2 minut",
     "advancedTitle": "Konfiguracja zaawansowana",
     "advancedDesc": "Pełna kontrola: reverse proxy, synchronizacja kalendarza, e-mail, logowanie jednokrotne i kopie zapasowe.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Co noc przechowywana jest lokalna kopia zapasowa.",
     "backupReminder": "Po konfiguracji utwórz kopię wygenerowanego pliku .env — zawiera on Twoje jedyne klucze szyfrowania.",
     "switchAdvanced": "Potrzebujesz więcej opcji? Przejdź do konfiguracji zaawansowanej",
-    "start": "Skonfiguruj i uruchom Yuvomi"
+    "start": "Skonfiguruj i uruchom Juju"
   },
   "email": {
     "title": "E-mail i resetowanie hasła",

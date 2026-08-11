@@ -1,5 +1,5 @@
 {
-  "title": "Nastavení Yuvomi",
+  "title": "Nastavení Juju",
   "common": {
     "continue": "Pokračovat",
     "back": "Zpět",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Základní konfigurace",
-    "subtitle": "Jak chceš přistupovat k Yuvomi?",
+    "subtitle": "Jak chceš přistupovat k Juju?",
     "existing": "Nalezena stávající konfigurace – před uložením bude záloha tvého souboru .env.",
     "hostLabel": "Doména nebo IP adresa",
-    "hostHint": "Adresa, na které otevřeš Yuvomi v prohlížeči.",
+    "hostHint": "Adresa, na které otevřeš Juju v prohlížeči.",
     "portLabel": "Port",
     "tzLabel": "Časové pásmo",
     "errHost": "Neplatný název hostitele. Používej jen písmena, číslice, pomlčky a tečky.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Synchronizace kalendáře",
-    "subtitle": "Propoj Yuvomi s Kalendářem Google nebo Apple iCloud. Obojí je volitelné – rozbal pro konfiguraci.",
+    "subtitle": "Propoj Juju s Kalendářem Google nebo Apple iCloud. Obojí je volitelné – rozbal pro konfiguraci.",
     "google": "Kalendář Google",
     "googleHint": "Vytvoř OAuth přihlašovací údaje na {{link}}. Přesměrovací URI: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -73,7 +73,7 @@
     "tag": "Pokročilé · volitelné",
     "title": "Pokročilá nastavení",
     "subtitle": "Reverzní proxy, jednotné přihlášení a automatické zálohy. Vše volitelné – přeskočení je bezpečné.",
-    "proxyLabel": "Jak je Yuvomi zpřístupněn?",
+    "proxyLabel": "Jak je Juju zpřístupněn?",
     "proxyBehindHttps": "Za reverzní proxy s HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Přímý přístup přes localhost / HTTP",
     "proxyHint": "Přímý přístup zakáže cookies pouze pro HTTPS, aby přihlášení fungovalo bez HTTPS.",
@@ -167,7 +167,7 @@
     "documentGoogleDrive": "Dokumenty Google Drive"
   },
   "docker": {
-    "title": "Spouštění Yuvomi",
+    "title": "Spouštění Juju",
     "subtitle": "Obraz se načítá a kontejner Docker se spouští.",
     "elapsed": "{{n}} s uplynulo",
     "running": "Kontejner je v pořádku a spuštěn",
@@ -186,7 +186,7 @@
   },
   "admin": {
     "title": "Vytvoření účtu správce",
-    "subtitle": "Nastav své první přihlášení. Tento účet má úplný přístup k Yuvomi.",
+    "subtitle": "Nastav své první přihlášení. Tento účet má úplný přístup k Juju.",
     "userLabel": "Uživatelské jméno",
     "userHint": "3-64 znaků: písmena, číslice, . - _",
     "nameLabel": "Zobrazované jméno",
@@ -202,19 +202,19 @@
     "errCreate": "Nepodařilo se vytvořit účet správce."
   },
   "done": {
-    "title": "Yuvomi je připraven!",
+    "title": "Juju je připraven!",
     "subtitle": "Tvůj rodinný plánovač běží a účet správce je nastaven.",
-    "open": "Otevřít Yuvomi →",
+    "open": "Otevřít Juju →",
     "backupReminder": "Nezapomeňte nyní zálohovat soubor .env — obsahuje vaše klíče.",
     "download": "Stáhnout soubor .env",
     "savedTo": "Uloženo do {{path}}"
   },
   "welcome": {
-    "title": "Vítejte v Yuvomi",
+    "title": "Vítejte v Juju",
     "subtitle": "Pojďme spustit váš soukromý rodinný plánovač. Vyberte, jak jej chcete nastavit.",
     "simpleTitle": "Jednoduché nastavení",
     "simpleBadge": "Doporučeno",
-    "simpleDesc": "Technické detaily vyřešíme za vás. Ideální pro provoz Yuvomi doma.",
+    "simpleDesc": "Technické detaily vyřešíme za vás. Ideální pro provoz Juju doma.",
     "simpleTime": "Přibližně 2 minuty",
     "advancedTitle": "Pokročilé nastavení",
     "advancedDesc": "Plná kontrola: reverzní proxy, synchronizace kalendáře, e-mail, jednotné přihlášení a zálohy.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Každou noc se uchová místní záloha.",
     "backupReminder": "Po nastavení zálohujte vygenerovaný soubor .env — obsahuje vaše jediné šifrovací klíče.",
     "switchAdvanced": "Potřebujete více možností? Přepněte na pokročilé nastavení",
-    "start": "Nastavit a spustit Yuvomi"
+    "start": "Nastavit a spustit Juju"
   },
   "email": {
     "title": "E-mail a obnovení hesla",

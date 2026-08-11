@@ -574,7 +574,7 @@ async function sync() {
     do {
       // singleEvents:false liefert eine Serie als EINEN Master mit ihrer RRULE
       // statt als hunderte Einzelvorkommen - so, wie CalDAV und ICS sie schon
-      // immer liefern, und wie Yuvomi Serien lokal führt und expandiert (#593).
+      // immer liefern, und wie Juju Serien lokal führt und expandiert (#593).
       // showDeleted:true ist dabei Pflicht: ein einzeln abgesagtes Vorkommen ist
       // nur als cancelled-Instanz erkennbar, aus der das EXDATE entsteht.
       const listParams = { calendarId, singleEvents: false, showDeleted: true, pageToken };
@@ -661,7 +661,7 @@ async function sync() {
 
 // Google Calendar uses exclusive end dates for all-day events (RFC 5545).
 // A 2-day event Jan 1–2 is stored as end.date = "2026-01-03" (exclusive).
-// Subtract 1 day to convert to Yuvomi-style inclusive end date.
+// Subtract 1 day to convert to Juju-style inclusive end date.
 function googleAllDayEndToInclusive(dateStr) {
   if (!dateStr) return null;
   const d = new Date(dateStr + 'T00:00:00Z');
@@ -669,7 +669,7 @@ function googleAllDayEndToInclusive(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 
-// Yuvomi stores inclusive end dates. Add 1 day when sending to Google (exclusive).
+// Juju stores inclusive end dates. Add 1 day when sending to Google (exclusive).
 function localAllDayEndToExclusive(dateStr) {
   if (!dateStr) return null;
   const d = new Date(dateStr + 'T00:00:00Z');
@@ -988,7 +988,7 @@ function retireLegacyInstances(masterExternalId, seen) {
   }
 }
 
-// Yuvomi speichert getimte Events als "YYYY-MM-DDTHH:MM" (ohne Sekunden,
+// Juju speichert getimte Events als "YYYY-MM-DDTHH:MM" (ohne Sekunden,
 // siehe validate.js). Die Google Calendar API verlangt RFC 3339 mit
 // Sekunden, sonst "Bad Request" bzw. bei Wiederholungen "Invalid
 // recurrence rule" (Issue #217). Sekunden ergänzen, falls sie fehlen.
@@ -1044,12 +1044,12 @@ function localEventToGoogle(event, colorMap = {}, timeZone = serverTimeZone()) {
     gEvent.start = { date: startDate };
     gEvent.end   = { date: localAllDayEndToExclusive(endDate) };
   } else {
-    // Yuvomi speichert getimte Events als naive Wanduhrzeit ohne Zone. Ohne
+    // Juju speichert getimte Events als naive Wanduhrzeit ohne Zone. Ohne
     // timeZone lehnt Google Serien ab ("recurring events: field is required"),
     // mit einer festen Zone landet das Event bei allen Nutzern außerhalb dieser
     // Zone verschoben (Issue #572: Australien = +7,5 h gegenüber Europe/Berlin).
     // Die Zone des Zielkalenders ist die, in der Google die Zeit anzeigt - damit
-    // steht in Google dieselbe Uhrzeit wie in Yuvomi.
+    // steht in Google dieselbe Uhrzeit wie in Juju.
     const startDt = toRfc3339(event.start_datetime);
     const endDt   = toRfc3339(event.end_datetime) || startDt;
     gEvent.start = { dateTime: startDt, timeZone };

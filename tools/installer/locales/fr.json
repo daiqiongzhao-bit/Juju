@@ -1,5 +1,5 @@
 {
-  "title": "Configuration d'Yuvomi",
+  "title": "Configuration d'Juju",
   "common": {
     "continue": "Continuer",
     "back": "Retour",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Configuration de base",
-    "subtitle": "Comment accéderez-vous à Yuvomi ?",
+    "subtitle": "Comment accéderez-vous à Juju ?",
     "existing": "Configuration existante détectée — une sauvegarde de votre fichier .env actuel sera créée avant l'enregistrement.",
     "hostLabel": "Domaine ou adresse IP",
-    "hostHint": "L'adresse que vous utiliserez pour ouvrir Yuvomi dans votre navigateur.",
+    "hostHint": "L'adresse que vous utiliserez pour ouvrir Juju dans votre navigateur.",
     "portLabel": "Port",
     "tzLabel": "Fuseau horaire",
     "errHost": "Nom d'hôte non valide. Utilisez uniquement des lettres, des chiffres, des tirets et des points.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Synchronisation du calendrier",
-    "subtitle": "Connectez Yuvomi à Google Agenda ou Apple iCloud. Les deux sont facultatifs — dépliez pour configurer.",
+    "subtitle": "Connectez Juju à Google Agenda ou Apple iCloud. Les deux sont facultatifs — dépliez pour configurer.",
     "google": "Google Agenda",
     "googleHint": "Créez des identifiants OAuth sur {{link}}. URI de redirection : {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -99,7 +99,7 @@
     "documentGoogleDrive": "Documents Google Drive"
   },
   "docker": {
-    "title": "Démarrage d'Yuvomi",
+    "title": "Démarrage d'Juju",
     "subtitle": "Téléchargement de l'image et démarrage du conteneur Docker.",
     "elapsed": "{{n}} s écoulées",
     "running": "Le conteneur est sain et en cours d'exécution",
@@ -118,7 +118,7 @@
   },
   "admin": {
     "title": "Créer un compte administrateur",
-    "subtitle": "Configurez votre première connexion. Ce compte a un accès complet à Yuvomi.",
+    "subtitle": "Configurez votre première connexion. Ce compte a un accès complet à Juju.",
     "userLabel": "Nom d'utilisateur",
     "userHint": "3-64 caractères : lettres, chiffres, . - _",
     "nameLabel": "Nom affiché",
@@ -134,9 +134,9 @@
     "errCreate": "Échec de la création du compte administrateur."
   },
   "done": {
-    "title": "Yuvomi est prêt !",
+    "title": "Juju est prêt !",
     "subtitle": "Votre organiseur familial est en marche et votre compte administrateur est configuré.",
-    "open": "Ouvrir Yuvomi →",
+    "open": "Ouvrir Juju →",
     "backupReminder": "Pensez à sauvegarder votre fichier .env maintenant : il contient vos clés.",
     "download": "Télécharger le fichier .env",
     "savedTo": "Enregistré dans {{path}}"
@@ -145,7 +145,7 @@
     "tag": "Avancé · facultatif",
     "title": "Paramètres avancés",
     "subtitle": "Proxy inverse, authentification unique et sauvegardes automatiques. Tout est facultatif — vous pouvez ignorer cette étape.",
-    "proxyLabel": "Comment Yuvomi est-il exposé ?",
+    "proxyLabel": "Comment Juju est-il exposé ?",
     "proxyBehindHttps": "Derrière un proxy inverse avec HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Accès direct via localhost / HTTP",
     "proxyHint": "L'accès direct désactive les cookies sécurisés uniquement afin que la connexion fonctionne sans HTTPS.",
@@ -210,11 +210,11 @@
     "oidcTrustEmailHint": "À activer uniquement si votre fournisseur n’envoie pas email_verified et que vous lui faites confiance."
   },
   "welcome": {
-    "title": "Bienvenue sur Yuvomi",
+    "title": "Bienvenue sur Juju",
     "subtitle": "Lançons votre organiseur familial privé. Choisissez comment le configurer.",
     "simpleTitle": "Installation simple",
     "simpleBadge": "Recommandée",
-    "simpleDesc": "Nous gérons les détails techniques pour vous. Idéal pour utiliser Yuvomi à la maison.",
+    "simpleDesc": "Nous gérons les détails techniques pour vous. Idéal pour utiliser Juju à la maison.",
     "simpleTime": "Environ 2 minutes",
     "advancedTitle": "Installation avancée",
     "advancedDesc": "Contrôle total : proxy inverse, synchronisation du calendrier, e-mail, authentification unique et sauvegardes.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "Une sauvegarde locale est conservée chaque nuit.",
     "backupReminder": "Après l’installation, sauvegardez le fichier .env généré : il contient vos seules clés de chiffrement.",
     "switchAdvanced": "Besoin de plus d’options ? Passez à l’installation avancée",
-    "start": "Configurer et démarrer Yuvomi"
+    "start": "Configurer et démarrer Juju"
   },
   "email": {
     "title": "E-mail et réinitialisation du mot de passe",

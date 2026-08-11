@@ -1,4 +1,4 @@
-# Yuvomi CLI-Installer — Čeština (cs)
+# Juju CLI-Installer — Čeština (cs)
 # Auto-generiert (Schlüssel identisch zu allen Locales). en = Fallback, de = Referenz.
 # Wird von install.sh gesourct; setzt die englische Basis pro Schlüssel außer Kraft.
 # Tečka-klíče → proměnné s podtržítkem (MSG_<oblast>_<název>).
@@ -80,7 +80,7 @@ MSG_admin_password="Heslo (min. 8 znaků):"
 MSG_admin_confirm="Potvrdit heslo:"
 MSG_admin_mismatch="Hesla se neshodují, zkus to znovu."
 MSG_admin_created="Účet správce vytvořen!"
-MSG_admin_ready="  Yuvomi je připraven!"
+MSG_admin_ready="  Juju je připraven!"
 MSG_admin_open="  Otevřít: %s"
 MSG_admin_exists="Účet správce již existuje."
 MSG_admin_failed="Vytvoření správce selhalo (HTTP %s): %s"

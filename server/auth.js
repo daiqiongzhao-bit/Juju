@@ -750,7 +750,7 @@ export function buildResetRoutes(targetRouter, {
           const link = `${origin}/reset-password?token=${token}`;
           await emailService.sendMail({
             to,
-            subject: 'Reset your Yuvomi password',
+            subject: 'Reset your Juju password',
             text: `Open this link to choose a new password (valid for 1 hour): ${link}`,
             html: `<p>Open this link to choose a new password (valid for 1 hour):</p>`
               + `<p><a href="${link}">${link}</a></p>`,
@@ -878,7 +878,7 @@ export function buildInviteRoutes(targetRouter, {
           try {
             await emailService.sendMail({
               to: email,
-              subject: 'You have been invited to Yuvomi',
+              subject: 'You have been invited to Juju',
               text: `Open this link to set up your account (valid for 7 days): ${link}`,
               html: '<p>Open this link to set up your account (valid for 7 days):</p>'
                 + `<p><a href="${link}">${link}</a></p>`,

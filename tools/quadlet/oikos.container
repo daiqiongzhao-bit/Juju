@@ -1,4 +1,4 @@
-# Yuvomi als systemd-Dienst über Podman Quadlet (rootless, Podman 5.x).
+# Juju als systemd-Dienst über Podman Quadlet (rootless, Podman 5.x).
 #
 # ── Setup (rootless, empfohlen) ────────────────────────────────────────────────
 #   1. Datenverzeichnisse anlegen:
@@ -21,7 +21,7 @@
 # Pfade ersetzen und `systemctl` (ohne --user) verwenden.
 
 [Unit]
-Description=Yuvomi family planner
+Description=Juju family planner
 After=network-online.target
 Wants=network-online.target
 

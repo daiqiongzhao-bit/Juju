@@ -9,7 +9,7 @@ import { t } from '/i18n.js';
 import { esc } from '/utils/html.js';
 
 const VERSION_URL = '/api/v1/version';
-const DEFAULT_APP_NAME = 'Yuvomi';
+const DEFAULT_APP_NAME = 'Juju';
 const APP_NAME_STORAGE_KEY = 'yuvomi-app-name';
 
 function getStoredAppName() {
@@ -42,12 +42,8 @@ export async function render(container) {
     <main class="auth-page" id="main-content">
       <div class="auth-hero">
         <span class="auth-hero__mark" aria-hidden="true">
-          <svg viewBox="0 0 160 160" fill="currentColor">
-            <g fill-opacity="0.82">
-              <circle cx="64" cy="72" r="27" />
-              <circle cx="100" cy="78" r="25" />
-              <circle cx="80" cy="106" r="24" />
-            </g>
+          <svg viewBox="0 0 160 160" fill="none">
+            <path d="M104 46 L104 100 Q104 120 82 122 Q54 124 48 102" fill="none" stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </span>
         <h1 class="auth-hero__title">${esc(storedAppName)}</h1>

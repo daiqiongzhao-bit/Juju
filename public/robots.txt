@@ -1,4 +1,4 @@
-# Yuvomi Familienplaner - self-hosted, private
+# Juju Familienplaner - self-hosted, private
 # Keine öffentlichen Inhalte zum Indexieren
 
 User-agent: *

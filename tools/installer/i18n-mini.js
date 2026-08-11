@@ -1,5 +1,5 @@
 /**
- * i18n-mini — schlanke Internationalisierung für den Yuvomi-Installer.
+ * i18n-mini — schlanke Internationalisierung für den Juju-Installer.
  * Spiegelt die Locale-Auflösung der App (public/i18n.js:26-34) wider, ohne
  * deren Abhängigkeiten. Keine externen Libs, reine Fetch-/DOM-/Intl-APIs.
  *
@@ -9,7 +9,7 @@
 export const SUPPORTED_LOCALES = ['de', 'en', 'es', 'fr', 'it', 'sv', 'el', 'ru', 'tr', 'zh', 'ja', 'ar', 'hi', 'pt', 'uk', 'pl', 'nl', 'cs', 'vi', 'hu', 'ko', 'id', 'fa', 'fil'];
 const FALLBACK_LOCALE = 'en';
 const RTL_LOCALES = ['ar', 'fa'];
-const STORAGE_KEY = 'yuvomi-installer-locale';
+const STORAGE_KEY = 'juju-installer-locale';
 
 let translations = {};
 let fallbackTranslations = {};

@@ -35,7 +35,7 @@ export const MAX_OUTBOUND_ATTEMPTS = 5;
 export const OUTBOUND_SOURCES = ['google', 'caldav', 'apple'];
 
 // Felder, die zum Provider gespiegelt werden. Alles andere (Zuweisung, Sichtbarkeit,
-// Icon, Anhang) ist Yuvomi-intern und löst keinen Push aus.
+// Icon, Anhang) ist Juju-intern und löst keinen Push aus.
 export const MIRRORED_FIELDS = [
   'title', 'description', 'location', 'color',
   'all_day', 'start_datetime', 'end_datetime', 'recurrence_rule',
@@ -290,7 +290,7 @@ function calendarExternalId(event, database = null) {
     ).get(event.calendar_ref_id, event.external_source);
     if (row?.external_id) return row.external_id;
   }
-  // Termine, die Yuvomi selbst hochgeladen hat, tragen kein calendar_ref_id -
+  // Termine, die Juju selbst hochgeladen hat, tragen kein calendar_ref_id -
   // dort steht das ursprünglich gewählte Ziel noch in den target_*-Feldern.
   if (event.external_source === 'google') return event.target_google_calendar_id || null;
   if (event.external_source === 'caldav') return event.target_caldav_calendar_url || null;

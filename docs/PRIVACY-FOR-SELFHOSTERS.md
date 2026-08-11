@@ -1,12 +1,12 @@
-# Datenschutz-Hinweise für Selfhoster (Yuvomi)
+# Datenschutz-Hinweise für Selfhoster (Juju)
 
 > **Stand: 05.08.2026** - Diese Hinweise sind eine technisch orientierte
 > Hilfestellung für Betreiber. Prüfe die Aktualität von Angemessenheitsbeschlüssen
 > und DPF-Listungen selbst (siehe Abschnitt „Quellen").
 
-> Dieses Dokument richtet sich an **Betreiber, die Yuvomi in einer Umgebung
+> Dieses Dokument richtet sich an **Betreiber, die Juju in einer Umgebung
 > einsetzen, die unter die DSGVO fällt** — also typischerweise an einen
-> Wohnsitz, ein Unternehmen oder eine Organisation in der EU/EWR. Wenn du Yuvomi
+> Wohnsitz, ein Unternehmen oder eine Organisation in der EU/EWR. Wenn du Juju
 > ausschließlich für dich selbst und deine Familie betreibst, ohne Daten Dritter
 > zu verarbeiten, prüfe vorrangig den Abschnitt
 > [„Haushaltsausnahme"](#4-haushaltsausnahme-art-2-abs-2-lit-c-dsgvo).
@@ -20,7 +20,7 @@
 ## Inhalt
 
 1. [Wer ist Verantwortlicher?](#1-wer-ist-verantwortlicher)
-2. [Externe Dienste, die Yuvomi kontaktiert](#2-externe-dienste-die-yuvomi-kontaktiert)
+2. [Externe Dienste, die Juju kontaktiert](#2-externe-dienste-die-yuvomi-kontaktiert)
    - 2.1 [Open-Meteo (Wetter-Standard)](#21-open-meteo-wetter-standard)
    - 2.2 [OpenWeatherMap (Wetter-Optional)](#22-openweathermap-wetter-optional)
    - 2.3 [CalDAV/CardDAV-Sync](#23-caldavcarddav-sync)
@@ -46,7 +46,7 @@
 ## 1. Wer ist Verantwortlicher?
 
 Sobald die Haushaltsausnahme (Abschnitt 4) **nicht** greift, bist **du als
-Betreiber** der Yuvomi-Instanz Verantwortlicher i. S. v. Art. 4 Nr. 7 DSGVO. Das
+Betreiber** der Juju-Instanz Verantwortlicher i. S. v. Art. 4 Nr. 7 DSGVO. Das
 bedeutet u. a.:
 
 - Du brauchst eine **Rechtsgrundlage** für jede Verarbeitung (typischerweise
@@ -72,7 +72,7 @@ bedeutet u. a.:
 
 ---
 
-## 2. Externe Dienste, die Yuvomi kontaktiert
+## 2. Externe Dienste, die Juju kontaktiert
 
 Die folgende Tabelle dokumentiert, **welche Komponenten der App vom Backend aus
 welche externen Endpunkte kontaktieren** und welche Pflichten für dich als
@@ -102,7 +102,7 @@ Betreiber daraus resultieren.
 
 - **Betreiber:** Open-Meteo (Bruno Ledergerber), Schweiz.
 - **Was wird übertragen:** Geo-Koordinaten oder Ortsname (je nach
-  Benutzer-Einstellung) sowie die IP-Adresse deines Yuvomi-Servers (nicht die
+  Benutzer-Einstellung) sowie die IP-Adresse deines Juju-Servers (nicht die
   IP des Endgeräts — die Anfrage geht vom Backend aus).
 - **Rechtsgrundlage:** Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung — Wetter
   ist eine angeforderte Funktion).
@@ -145,7 +145,7 @@ Betreiber daraus resultieren.
   `server/routes/cardav.js`.
 - **Wer ist Empfänger?** Der **vom Nutzer konfigurierte** CalDAV-/CardDAV-
   Server (z. B. Nextcloud, Apple iCloud, Mailbox.org, Google, eigener Radicale).
-  Yuvomi selbst leitet nichts weiter.
+  Juju selbst leitet nichts weiter.
 - **Drittland-Bewertung — abhängig vom Anbieter:**
   | Anbieter | Standort | Bewertung |
   |---|---|---|
@@ -155,7 +155,7 @@ Betreiber daraus resultieren.
   | Google Workspace | USA (Google LLC) | DPF-zertifiziert; AVV + DPF-Status prüfen |
   | Mailbox-Provider Drittland (sonstige) | Einzelfall | individuelle TIA |
 - **AVV:** ja, bei kommerziellen Anbietern.
-- **Google-Kalender-Sync läuft nicht über CalDAV:** Yuvomi synchronisiert Google
+- **Google-Kalender-Sync läuft nicht über CalDAV:** Juju synchronisiert Google
   über die **Google-Calendar-REST-API** mit eigenem OAuth-Flow
   (`server/services/google-calendar.js`, Endpunkt `www.googleapis.com`).
   Übertragen werden Termindaten der freigegebenen Kalender in beide Richtungen
@@ -164,7 +164,7 @@ Betreiber daraus resultieren.
   AVV-Bewertung wie in der Tabelle oben für Google (USA/DPF-Status prüfen,
   Google-AVV/DPA abschließen) — analog zu Abschnitt 2.7.
 - **Empfehlung:** Trage die konkret eingerichteten Sync-Endpoints in dein
-  Verarbeitungsverzeichnis (Abschnitt 5) ein — Yuvomi kennt sie nicht zentral,
+  Verarbeitungsverzeichnis (Abschnitt 5) ein — Juju kennt sie nicht zentral,
   jeder Nutzer kann andere konfigurieren.
 
 ### 2.4 OIDC-Provider (Single Sign-On)
@@ -201,7 +201,7 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
   `server/routes/backup.js` und `server/services/backup-scheduler.js`.
 - **Aktiv nur, wenn:** du WebDAV-Backups in deinen Backup-Einstellungen
   konfigurierst.
-- **Was wird übertragen:** Backup-Archive deiner Yuvomi-Instanz mit allen
+- **Was wird übertragen:** Backup-Archive deiner Juju-Instanz mit allen
   SQLite-Nutzdaten — Kontakte, Termine, Notizen sowie Dokument-Metadaten und
   lokal gespeicherte Dokumentdateien. Dateien aus dem separaten
   WebDAV-Dokumentspeicher sind nicht enthalten. Das Backup ist
@@ -216,7 +216,7 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
   | pCloud (CH) | CH/USA | Angemessenheit CH; Region wählen, AVV abschließen |
 - **AVV:** **immer** erforderlich, sobald Personendaten Dritter im Backup
   enthalten sind (also außerhalb der Haushaltsausnahme).
-- **Empfehlung:** Verschlüssele Backups **vor** der Übertragung (Yuvomi bietet
+- **Empfehlung:** Verschlüssele Backups **vor** der Übertragung (Juju bietet
   Backup-Verschlüsselung in den Einstellungen — aktivieren). Damit wird der
   WebDAV-Provider zum reinen Speicheranbieter ohne Klartextzugriff. Halte
   die Verschlüsselungs-Passphrase getrennt vom Backup-Speicherort.
@@ -230,7 +230,7 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
   setzt.
 - **Was wird übertragen:** neu hochgeladene Dokumentdateien einschließlich
   neuer Kalenderanhänge, außerdem Basic-Auth-Zugangsdaten und die IP-Adresse
-  des Yuvomi-Servers. Dateinamen werden nicht als Objektpfad übernommen; die
+  des Juju-Servers. Dateinamen werden nicht als Objektpfad übernommen; die
   Dateien können dennoch unmittelbar personenbezogene oder besonders
   schützenswerte Inhalte enthalten.
 - **Drittland und AVV:** Es gelten dieselben providerabhängigen Bewertungen
@@ -249,17 +249,17 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
   Dokumentenspeicher-Einstellungen. Aktiv erst nach OAuth-Verbindung **und**
   ausdrücklicher Auswahl als Upload-Ziel.
 - **Was wird übertragen:** neue Dokumentdateien und Kalenderanhänge, generierte
-  Dateinamen, Server-IP sowie OAuth-Zugriffs-/Refresh-Token. Yuvomi liest zusätzlich
+  Dateinamen, Server-IP sowie OAuth-Zugriffs-/Refresh-Token. Juju liest zusätzlich
   die Google-Kontoidentität (Permission-ID, E-Mail, Anzeigename) zur sicheren
   Wiederverbindung. Es wird ausschließlich der Scope `drive.file` angefordert.
 - **Empfänger und Drittland:** Google LLC/Google Ireland; Verarbeitung kann in den
   USA stattfinden. Prüfe aktuellen DPF-Status, schließe den Google-AVV/DPA ab und
   dokumentiere bei Bedarf SCCs und TIA. Für besonders sensible Dokumente ist ein
   EU-gehosteter WebDAV- oder lokaler Speicher die datensparsamere Alternative.
-- **Zugriffsgrenze:** Yuvomis Sichtbarkeitseinstellungen steuern nur den Zugriff
-  über Yuvomi. Alle Personen mit Zugriff auf den verbundenen Google-Drive-Ordner
-  `Yuvomi/Documents` können sämtliche dort gespeicherten Dateien sehen. Teile diesen Ordner nicht unnötig.
-- **Löschung und Aufbewahrung:** Das Löschen eines Drive-Dokuments in Yuvomi löscht
+- **Zugriffsgrenze:** Jujus Sichtbarkeitseinstellungen steuern nur den Zugriff
+  über Juju. Alle Personen mit Zugriff auf den verbundenen Google-Drive-Ordner
+  `Juju/Documents` können sämtliche dort gespeicherten Dateien sehen. Teile diesen Ordner nicht unnötig.
+- **Löschung und Aufbewahrung:** Das Löschen eines Drive-Dokuments in Juju löscht
   die zugehörige Drive-Datei; ein bereits fehlendes Objekt gilt als gelöscht.
   Trennen entfernt nur lokale Token und widerruft keine gemeinsam genutzten
   Google-Credentials. Google-Papierkorb-, Audit- und Backup-Fristen sind separat zu
@@ -292,12 +292,12 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
 - **Code-Stellen:** `server/index.js` (Mount `/mcp`, nur mit
   Authentifizierung), `server/mcp/server.js`, `server/mcp/protocol.js`,
   `server/mcp/tools.js`; Token-Verwaltung `server/scopes.js`.
-- **Was ist das?** Yuvomi stellt einen **MCP-Endpoint** bereit, über den ein
+- **Was ist das?** Juju stellt einen **MCP-Endpoint** bereit, über den ein
   **von dir angebundener** KI-/Agent-Client (MCP-Client) per API-Token auf
   Instanzdaten zugreifen und Tools ausführen kann. Der Endpoint ist
   **provider-neutral** - er funktioniert mit einem **lokal gehosteten LLM**
   (z. B. Ollama, LM Studio, llama.cpp) genauso wie mit einem Cloud-Client
-  (z. B. Claude Desktop). Yuvomi selbst ruft **keinen** KI-Anbieter auf; der
+  (z. B. Claude Desktop). Juju selbst ruft **keinen** KI-Anbieter auf; der
   Client verbindet sich mit dem Endpoint und zieht die Daten.
 - **Aktiv nur, wenn:** du in den Einstellungen ein **API-Token** erstellst und in
   einem MCP-Client hinterlegst. Ohne angebundenen Client verlässt kein Datum die
@@ -335,7 +335,7 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
   (RFC 8291) **Ende-zu-Ende zwischen Server und Browser verschlüsselt** — der
   Push-Dienst kann sie nicht lesen. Er sieht aber **Metadaten**: den
   Geräte-Endpoint, Zeitpunkt, Häufigkeit und Größe der Nachrichten, die IP
-  deines Yuvomi-Servers und die `VAPID_SUBJECT`-Kontaktangabe.
+  deines Juju-Servers und die `VAPID_SUBJECT`-Kontaktangabe.
 - **Besonderheit Gesundheitsdaten:** Erinnerungen des Medikamenten-Moduls
   tragen den Medikamentennamen im (verschlüsselten) Inhalt. Aus den Metadaten
   allein ist das nicht erkennbar; wer auch das Metadaten-Muster vermeiden
@@ -360,7 +360,7 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
   Einstellungen → Administration → E-Mail).
 - **Was wird übertragen:** Empfänger-Adresse, Betreff/Inhalt der jeweiligen
   Mail (Reset-Link mit Token, Einladungs-Link, Abo-Erinnerung), Absenderdaten
-  und die IP deines Yuvomi-Servers — an den von dir konfigurierten SMTP-Server.
+  und die IP deines Juju-Servers — an den von dir konfigurierten SMTP-Server.
 - **Drittland/AVV:** abhängig vom Mail-Provider — für EU-Provider
   (Mailbox.org, Posteo, eigener mailcow) unkritisch; bei US-Providern gelten
   dieselben DPF-/SCC-Überlegungen wie in Abschnitt 2.4. AVV bei kommerziellen
@@ -374,8 +374,8 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
   Änderungsverlauf öffnet bzw. die App nach einer neueren Version sieht
   (Versions-Hinweis an der Navigation); die Antwort wird serverseitig
   **30 Minuten gecacht**, sodass GitHub nicht bei jedem Klick kontaktiert wird.
-- **Was wird übertragen:** ausschließlich die IP deines Yuvomi-Servers und der
-  User-Agent `Yuvomi/1.0` — keine Nutzerdaten, keine Instanz-Kennung, keine
+- **Was wird übertragen:** ausschließlich die IP deines Juju-Servers und der
+  User-Agent `Juju/1.0` — keine Nutzerdaten, keine Instanz-Kennung, keine
   installierte Version. Anfragen gehen vom Backend aus, nie vom Browser.
 - **Drittland:** GitHub Inc./Microsoft, USA — DPF-zertifiziert (Status prüfen).
 - **AVV:** nein (keine Verarbeitung personenbezogener Nutzerdaten im Auftrag);
@@ -414,7 +414,7 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
 - **Aktiv nur, wenn:** ein Nutzer einen ICS-Feed abonniert.
 - **Was wird übertragen:** Der Server **ruft** die konfigurierte Feed-URL
   regelmäßig **ab** (Intervall `SYNC_INTERVAL_MINUTES`). Zum Feed-Betreiber
-  fließen dabei nur die IP deines Yuvomi-Servers und die Feed-URL selbst —
+  fließen dabei nur die IP deines Juju-Servers und die Feed-URL selbst —
   die allerdings bei vielen Anbietern ein **privates Zugriffs-Token im Pfad**
   trägt. Kalenderdaten fließen ausschließlich herein, nie hinaus.
 - **Drittland/AVV:** abhängig vom Feed-Anbieter; für reine Abrufe ohne
@@ -425,7 +425,7 @@ Konfiguration so, dass du auf einen EU-Provider umstellen könntest.
 
 ## 3. Logging und Speicherbegrenzung (Art. 5 Abs. 1 lit. e DSGVO)
 
-Yuvomi verwendet einen **eigenen, dependency-freien Logger**
+Juju verwendet einen **eigenen, dependency-freien Logger**
 (`server/logger.js`): strukturierte JSON-Ausgabe nach `stdout` in der
 Produktion, lesbar in der Entwicklung, gesteuert über die Umgebungsvariable
 `LOG_LEVEL` (Default `info`). Es kommt **kein** externer Logging-Dienst zum
@@ -492,7 +492,7 @@ immer" liegenbleiben.
 > „durch natürliche Personen zur Ausübung **ausschließlich persönlicher oder
 > familiärer Tätigkeiten**".
 
-Wenn du Yuvomi **nur für dich selbst** oder **mit Familienmitgliedern unter
+Wenn du Juju **nur für dich selbst** oder **mit Familienmitgliedern unter
 einem Dach** betreibst (klassischer „Haushalts-Kalender, Einkaufsliste,
 Geburtstage in der Familie") und **keine Daten Dritter** verarbeitest, greift
 diese Ausnahme. Dann brauchst du keine Datenschutzerklärung, kein VVT und
@@ -503,7 +503,7 @@ keinen AVV.
 - Du speicherst Kontakte von Personen **außerhalb** deiner Familie (Freunde,
   Kollegen) und nutzt diese in einer Weise, die über reine private
   Kommunikation hinausgeht.
-- Du nutzt Yuvomi für **berufliche/geschäftliche Zwecke** (z. B. Steuerberater,
+- Du nutzt Juju für **berufliche/geschäftliche Zwecke** (z. B. Steuerberater,
   Selbstständiger, Verein).
 - Du gibst Zugang zur Instanz an Personen **außerhalb deines Haushalts**
   (Babysitter, Pflegekraft, Putzhilfe — sobald deren Daten dort liegen).

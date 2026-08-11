@@ -2,20 +2,20 @@
 // Gezieltes Ändern einzelner Properties in einem bestehenden iCalendar-Objekt (#593).
 //
 // CalDAV kennt kein PATCH: eine Änderung ist immer ein PUT des kompletten
-// Kalenderobjekts. Würde Yuvomi das Objekt aus seinen eigenen Feldern neu bauen,
-// verlöre ein importierter Termin auf dem Server alles, was Yuvomi nicht kennt -
+// Kalenderobjekts. Würde Juju das Objekt aus seinen eigenen Feldern neu bauen,
+// verlöre ein importierter Termin auf dem Server alles, was Juju nicht kennt -
 // Teilnehmer, Erinnerungen, Kategorien, Organisator, Anhänge. Deshalb wird das
 // Original bearbeitet statt ersetzt: nur die gespiegelten Properties werden
 // getauscht, jede andere Zeile bleibt Zeichen für Zeichen stehen.
 // --------------------------------------------------------
 
-// Properties, die Yuvomi verwaltet und daher ersetzen darf - je Komponente.
+// Properties, die Juju verwaltet und daher ersetzen darf - je Komponente.
 const MANAGED_VEVENT = new Set(['SUMMARY', 'DESCRIPTION', 'LOCATION', 'DTSTART', 'DTEND', 'RRULE']);
 // VTODO (#617): STATUS, COMPLETED und PERCENT-COMPLETE gehören zusammen - Clients
 // lesen den Erledigt-Zustand mal am einen, mal am anderen ab.
 //
 // CATEGORIES kam mit den Tags dazu (#586). Verwaltet werden darf es erst,
-// seit Yuvomi die vollständige Liste hält: solange nur ein einzelner Wert
+// seit Juju die vollständige Liste hält: solange nur ein einzelner Wert
 // gespiegelt worden wäre, hätte jeder Push die übrigen Tags des Servers
 // gelöscht.
 const MANAGED_VTODO = new Set([

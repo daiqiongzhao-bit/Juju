@@ -1,16 +1,16 @@
 <?xml version="1.0"?>
 <!-- Unraid Community Applications REPOSITORY profile. Not an app template
-     (that is templates/yuvomi.xml): CA reads this file from the repo root to
+     (that is templates/juju.xml): CA reads this file from the repo root to
      render the repository entry (description, icon, link) in its store.
      Referenced by the CA registration of this GitHub repository. -->
 <CommunityApplications>
   <!-- Repository overview shown in Community Apps. Markdown supported. -->
   <Profile>
-**Yuvomi** — the self-hosted family planner PWA.
+**Juju** — the self-hosted family planner PWA.
 
 A private, offline-capable web app that keeps your household organized — tasks, groceries, meals, recipes, pantry stock, calendar, documents, budget, housekeeping, notes, contacts, birthdays and more — in one place, without cloud accounts or subscriptions.
 
-This repository ships the official Docker template for Yuvomi. The image is published to GitHub Container Registry at `ghcr.io/daiqiongzhao-bit/Juju`.
+This repository ships the official Docker template for Juju. The image is published to GitHub Container Registry at `ghcr.io/daiqiongzhao-bit/Juju`.
 
 **Support:** open an issue at https://github.com/daiqiongzhao-bit/Juju/issues
   </Profile>

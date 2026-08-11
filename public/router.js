@@ -41,7 +41,7 @@ import {
 //
 // WARUM DER TITEL HIER STEHT UND NICHT IN EINER ZWEITEN LISTE: er stand einmal
 // daneben, in einer Map in routeTitle(). Die Liste wuchs, die Map nicht, und
-// /forgot-password, /reset-password und /join lieferten „Yuvomi · Yuvomi" -
+// /forgot-password, /reset-password und /join lieferten „Juju · Juju" -
 // WCAG 2.4.2 ist Level A, und es traf ausgerechnet die drei Wege, über die ein
 // neues Familienmitglied hereinkommt (Audit 2026-08-08, P1-2). Eine Route ohne
 // Titel soll auffallen, nicht still auf den App-Namen fallen; der Guard in
@@ -419,7 +419,7 @@ const NAV_SECTION_LABEL_KEYS = Object.freeze({
   [NAV_SECTION.customModules]: 'nav.sectionCustomModules',
 });
 
-const DEFAULT_APP_NAME = 'Yuvomi';
+const DEFAULT_APP_NAME = 'Juju';
 const APP_NAME_STORAGE_KEY = 'yuvomi-app-name';
 const APP_VERSION_STORAGE_KEY = 'yuvomi-app-version';
 
@@ -1327,16 +1327,16 @@ function renderAppShell(container) {
   bgRect.setAttribute('width', '160'); bgRect.setAttribute('height', '160');
   bgRect.setAttribute('rx', '36'); bgRect.setAttribute('fill', `url(#${gradId})`);
   logoSvg.appendChild(bgRect);
-  // Drei transluzente, ineinander übergehende Kreise (Familie); kein Sheen in der Sidebar
-  const marks = document.createElementNS(SVG_NS, 'g');
-  marks.setAttribute('fill', 'white');
-  marks.setAttribute('fill-opacity', '0.82');
-  for (const [cx, cy, r] of [[64, 72, 27], [100, 78, 25], [80, 106, 24]]) {
-    const c = document.createElementNS(SVG_NS, 'circle');
-    c.setAttribute('cx', String(cx)); c.setAttribute('cy', String(cy)); c.setAttribute('r', String(r));
-    marks.appendChild(c);
-  }
-  logoSvg.appendChild(marks);
+  // Brand mark: a bold "J" monogram (white stroke) on the gradient tile
+  const markPath = document.createElementNS(SVG_NS, 'path');
+  markPath.setAttribute('d', 'M104 46 L104 100 Q104 120 82 122 Q54 124 48 102');
+  markPath.setAttribute('fill', 'none');
+  markPath.setAttribute('stroke', 'white');
+  markPath.setAttribute('stroke-width', '22');
+  markPath.setAttribute('stroke-linecap', 'round');
+  markPath.setAttribute('stroke-linejoin', 'round');
+  markPath.setAttribute('stroke-opacity', '0.9');
+  logoSvg.appendChild(markPath);
   logomark.appendChild(logoSvg);
   sidebarLogo.appendChild(logomark);
 
@@ -3395,14 +3395,14 @@ function friendlyError(err) {
 window.addEventListener('error', (e) => {
   // Ressource-Ladefehler (z.B. fehlgeschlagenes Bild): ignorieren
   if (e.target && e.target !== window) return;
-  console.error('[Yuvomi] Unbehandelter Fehler:', e.error ?? e.message);
+  console.error('[Juju] Unbehandelter Fehler:', e.error ?? e.message);
   showToast(t('common.unexpectedError'), 'danger');
 });
 
 window.addEventListener('unhandledrejection', (e) => {
   // Auth-Fehler werden bereits von auth:expired behandelt
   if (e.reason?.status === 401) return;
-  console.error('[Yuvomi] Unbehandeltes Promise-Rejection:', e.reason);
+  console.error('[Juju] Unbehandeltes Promise-Rejection:', e.reason);
   showToast(friendlyError(e.reason), 'danger');
   e.preventDefault(); // Konsolenfehler unterdrücken (bereits geloggt)
 });

@@ -1,8 +1,7 @@
 /**
- * Icon Generator for Yuvomi PWA
- * Generates icons from docs/logo.svg
- * Sizes: 192px and 512px, both "any" and "maskable" variants
- * Maskable icons: full-bleed background, logo content stays within 80% safe zone
+ * Icon Generator for Juju PWA
+ * Generates icons from the brand mark (a bold "J" monogram on the violet
+ * gradient). Sizes: 192px and 512px, both "any" and "maskable" variants.
  *
  * Usage: node scripts/generate-icons.js
  * Dependencies: sharp (devDependency)
@@ -18,18 +17,10 @@ const ICONS_DIR = join(__dirname, '..', 'public', 'icons');
 
 mkdirSync(ICONS_DIR, { recursive: true });
 
-/**
- * Drei transluzente, ineinander übergehende Kreise (Familie).
- * Überlappungen verdichten sich zu helleren Linsen -> weicher Blend.
- * Liegen innerhalb der maskable-Safe-Zone (Ø 80 %).
- */
-const CIRCLES = `<g fill="#fff" fill-opacity="0.82">
-    <circle cx="64" cy="72" r="27"/>
-    <circle cx="100" cy="78" r="25"/>
-    <circle cx="80" cy="106" r="24"/>
-  </g>`;
+/** Brand mark: a bold "J" monogram (white stroke) on the violet gradient tile. */
+const MARK_PATH = 'M104 46 L104 100 Q104 120 82 122 Q54 124 48 102';
 
-/** Gemeinsame Gradient-Defs: Marken-Violett + dezenter Top-Sheen (Glas-Charakter) */
+/** Common gradient defs: brand violet + subtle top sheen (glass character). */
 const DEFS = `<defs>
     <linearGradient id="bg" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#8b5cf6"/>
@@ -41,23 +32,25 @@ const DEFS = `<defs>
     </linearGradient>
   </defs>`;
 
+const MARK = `<path d="${MARK_PATH}" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>`;
+
 /** Logo SVG (any): rounded corners, gradient background + sheen */
 function createLogoSvg(size) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 160 160" fill="none">
   ${DEFS}
   <rect width="160" height="160" rx="36" fill="url(#bg)"/>
   <rect width="160" height="160" rx="36" fill="url(#sheen)"/>
-  ${CIRCLES}
+  ${MARK}
 </svg>`;
 }
 
-/** Maskable logo SVG: full-bleed background (no rx), logo within safe zone */
+/** Maskable logo SVG: full-bleed background (no rx), mark within safe zone */
 function createMaskableLogoSvg(size) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 160 160" fill="none">
   ${DEFS}
   <rect width="160" height="160" fill="url(#bg)"/>
   <rect width="160" height="160" fill="url(#sheen)"/>
-  ${CIRCLES}
+  <g transform="translate(8,8) scale(0.9)">${MARK}</g>
 </svg>`;
 }
 
@@ -66,7 +59,7 @@ function createAppleTouchSvg() {
   return createLogoSvg(180);
 }
 
-/** Favicon (32x32): simplified - just gradient background with house */
+/** Favicon (32x32): simplified - gradient background with the "J" mark */
 function createFaviconSvg() {
   return createLogoSvg(32);
 }

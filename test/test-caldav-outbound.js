@@ -1,7 +1,7 @@
 /**
  * Test: ausgehender CalDAV/Apple-Sync für Löschungen, Änderungen und Umzüge (#593)
  * Zweck: Wie zuvor bei Google kannte der CalDAV- und der Apple-Outbound nur das
- *        Anlegen. Ein bereits synchronisierter Termin liess sich in Yuvomi löschen
+ *        Anlegen. Ein bereits synchronisierter Termin liess sich in Juju löschen
  *        oder bearbeiten, ohne dass davon je etwas auf dem Server ankam.
  *
  *        CalDAV unterscheidet sich dabei grundlegend von Google:
@@ -156,7 +156,7 @@ test('der Patch tauscht nur die verwalteten Properties aus', () => {
   assert.doesNotMatch(out, /SUMMARY:Alter Titel/);
 });
 
-test('alles, was Yuvomi nicht kennt, überlebt den Patch', () => {
+test('alles, was Juju nicht kennt, überlebt den Patch', () => {
   const out = patchICSEvent(serverObject('b@t'), 'b@t', { SUMMARY: 'Neu' });
 
   assert.match(out, /ATTENDEE;CN=Maria:mailto:maria@example.com/, 'Teilnehmer');

@@ -1,6 +1,6 @@
 # Support
 
-Yuvomi is a solo-maintained open-source project. Pick the channel that fits:
+Juju is a solo-maintained open-source project. Pick the channel that fits:
 
 - **Questions & ideas** — [GitHub Discussions](https://github.com/daiqiongzhao-bit/Juju/discussions).
   Feature ideas go to the [Ideas category](https://github.com/daiqiongzhao-bit/Juju/discussions/new?category=ideas);

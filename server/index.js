@@ -68,12 +68,12 @@ import { moduleForPath, requiredAccess, tokenAllows } from './scopes.js';
 
 const log     = createLogger('Server');
 const logSync = createLogger('Sync');
-const logYuvomi = createLogger('Yuvomi');
+const logJuju = createLogger('Juju');
 
 const { version: APP_VERSION } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf-8')
 );
-const DEFAULT_APP_NAME = 'Yuvomi';
+const DEFAULT_APP_NAME = 'Juju';
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -518,8 +518,8 @@ async function runSync() {
 // Server starten
 // --------------------------------------------------------
 app.listen(PORT, () => {
-  logYuvomi.info(`Server running on port ${PORT} | Version ${APP_VERSION}`);
-  logYuvomi.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  logJuju.info(`Server running on port ${PORT} | Version ${APP_VERSION}`);
+  logJuju.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
   // Erster Sync nach 10 Sekunden (warten bis DB vollständig initialisiert)
   setTimeout(() => {

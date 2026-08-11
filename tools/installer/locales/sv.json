@@ -1,5 +1,5 @@
 {
-  "title": "Yuvomi-installation",
+  "title": "Juju-installation",
   "common": {
     "continue": "Fortsätt",
     "back": "Tillbaka",
@@ -14,10 +14,10 @@
   },
   "config": {
     "title": "Grundkonfiguration",
-    "subtitle": "Hur kommer du att nå Yuvomi?",
+    "subtitle": "Hur kommer du att nå Juju?",
     "existing": "Befintlig konfiguration upptäckt — en säkerhetskopia av din nuvarande .env-fil skapas innan den sparas.",
     "hostLabel": "Domän eller IP-adress",
-    "hostHint": "Adressen du använder för att öppna Yuvomi i webbläsaren.",
+    "hostHint": "Adressen du använder för att öppna Juju i webbläsaren.",
     "portLabel": "Port",
     "tzLabel": "Tidszon",
     "errHost": "Ogiltigt värdnamn. Använd endast bokstäver, siffror, bindestreck och punkter.",
@@ -53,7 +53,7 @@
   },
   "calendar": {
     "title": "Kalendersynkronisering",
-    "subtitle": "Anslut Yuvomi till Google Kalender eller Apple iCloud. Båda är valfria — expandera för att konfigurera.",
+    "subtitle": "Anslut Juju till Google Kalender eller Apple iCloud. Båda är valfria — expandera för att konfigurera.",
     "google": "Google Kalender",
     "googleHint": "Skapa OAuth-uppgifter på {{link}}. Omdirigerings-URI: {{redirect}}",
     "googleLink": "console.cloud.google.com",
@@ -99,7 +99,7 @@
     "documentGoogleDrive": "Google Drive-dokument"
   },
   "docker": {
-    "title": "Startar Yuvomi",
+    "title": "Startar Juju",
     "subtitle": "Hämtar avbildningen och startar Docker-containern.",
     "elapsed": "{{n}} s förflutna",
     "running": "Containern är frisk och körs",
@@ -118,7 +118,7 @@
   },
   "admin": {
     "title": "Skapa administratörskonto",
-    "subtitle": "Konfigurera din första inloggning. Detta konto har full åtkomst till Yuvomi.",
+    "subtitle": "Konfigurera din första inloggning. Detta konto har full åtkomst till Juju.",
     "userLabel": "Användarnamn",
     "userHint": "3-64 tecken: bokstäver, siffror, . - _",
     "nameLabel": "Visningsnamn",
@@ -134,9 +134,9 @@
     "errCreate": "Det gick inte att skapa administratörskontot."
   },
   "done": {
-    "title": "Yuvomi är klart!",
+    "title": "Juju är klart!",
     "subtitle": "Din familjeplanerare körs och ditt administratörskonto är konfigurerat.",
-    "open": "Öppna Yuvomi →",
+    "open": "Öppna Juju →",
     "backupReminder": "Kom ihåg att säkerhetskopiera din .env-fil nu — den innehåller dina nycklar.",
     "download": "Ladda ner .env-filen",
     "savedTo": "Sparad i {{path}}"
@@ -145,7 +145,7 @@
     "tag": "Avancerat · valfritt",
     "title": "Avancerade inställningar",
     "subtitle": "Omvänd proxy, enkel inloggning och automatiska säkerhetskopior. Allt valfritt — det är säkert att hoppa över.",
-    "proxyLabel": "Hur exponeras Yuvomi?",
+    "proxyLabel": "Hur exponeras Juju?",
     "proxyBehindHttps": "Bakom en omvänd proxy med HTTPS (Caddy, nginx, Traefik)",
     "proxyDirect": "Direkt åtkomst via localhost / HTTP",
     "proxyHint": "Direkt åtkomst inaktiverar cookies som endast är säkra så att inloggning fungerar utan HTTPS.",
@@ -210,11 +210,11 @@
     "oidcTrustEmailHint": "Aktivera bara om din leverantör inte skickar email_verified och du litar på den."
   },
   "welcome": {
-    "title": "Välkommen till Yuvomi",
+    "title": "Välkommen till Juju",
     "subtitle": "Nu sätter vi igång din privata familjeplanerare. Välj hur du vill konfigurera den.",
     "simpleTitle": "Enkel installation",
     "simpleBadge": "Rekommenderas",
-    "simpleDesc": "Vi sköter de tekniska detaljerna åt dig. Perfekt för att köra Yuvomi hemma.",
+    "simpleDesc": "Vi sköter de tekniska detaljerna åt dig. Perfekt för att köra Juju hemma.",
     "simpleTime": "Ungefär 2 minuter",
     "advancedTitle": "Avancerad installation",
     "advancedDesc": "Full kontroll: omvänd proxy, kalendersynk, e-post, enkel inloggning och säkerhetskopior.",
@@ -231,7 +231,7 @@
     "itemBackupsDesc": "En lokal säkerhetskopia sparas varje natt.",
     "backupReminder": "Säkerhetskopiera den genererade .env-filen efter installationen — den innehåller dina enda krypteringsnycklar.",
     "switchAdvanced": "Behöver du fler alternativ? Byt till avancerad installation",
-    "start": "Konfigurera & starta Yuvomi"
+    "start": "Konfigurera & starta Juju"
   },
   "email": {
     "title": "E-post & lösenordsåterställning",

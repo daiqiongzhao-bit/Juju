@@ -1,4 +1,4 @@
-# Yuvomi - Standalone Docker Compose for Portainer / remote deployment
+# Juju - Standalone Docker Compose for Portainer / remote deployment
 # Pulls the pre-built image from GitHub Container Registry.
 # No git clone required.
 #
@@ -38,7 +38,7 @@ services:
       # Scheduled and manual backups. Without this volume the files would only
       # live inside the container layer and vanish on the next image update.
       - oikos_backups:/backups
-      # Drop-in folder for additional Yuvomi modules. The image creates
+      # Drop-in folder for additional Juju modules. The image creates
       # /app/modules, so without this volume anything dropped in there lives in
       # the container layer and is gone on the next image update.
       - oikos_modules:/app/modules

@@ -1,6 +1,6 @@
 name: Umbrel Catalog Publish
 
-# Opens/updates a PR to getumbrel/umbrel-apps bumping Yuvomi to the released
+# Opens/updates a PR to getumbrel/umbrel-apps bumping Juju to the released
 # version with a freshly resolved, digest-pinned image. Umbrel has NO auto-bump
 # bot (unlike TrueNAS), so this is what keeps the store entry current.
 #
@@ -8,7 +8,7 @@ name: Umbrel Catalog Publish
 #   - Secret UMBREL_FORK_TOKEN: a classic PAT with `repo` scope (push to the
 #     <owner>/umbrel-apps fork + open a cross-repo PR to getumbrel/umbrel-apps).
 #   - The fork <owner>/umbrel-apps must exist (created during the initial submission).
-#   - Only acts once Yuvomi is already in upstream master (after the initial
+#   - Only acts once Juju is already in upstream master (after the initial
 #     submission PR is merged); before that it skips to avoid re-submitting.
 #
 # It edits the maintainers' upstream files IN PLACE (version, releaseNotes,
@@ -125,10 +125,10 @@ jobs:
           git fetch --depth 1 upstream master
           git checkout -B "$BRANCH" upstream/master
 
-          # Guard: only update once Yuvomi is already in upstream master. Before the
+          # Guard: only update once Juju is already in upstream master. Before the
           # initial submission is merged there is nothing to edit — skip.
           if [ ! -f yuvomi/umbrel-app.yml ]; then
-            echo "::notice::Yuvomi is not yet in upstream master (initial submission still pending). Skipping auto-update."
+            echo "::notice::Juju is not yet in upstream master (initial submission still pending). Skipping auto-update."
             exit 0
           fi
 
@@ -222,7 +222,7 @@ jobs:
 
           gh pr create --repo "$UPSTREAM" --base master --head "$OWNER:$BRANCH" \
             --title "yuvomi: update to v$VERSION" \
-            --body "Automated update of Yuvomi to v$VERSION (multi-arch image pinned by digest). Source: https://github.com/$OWNER/yuvomi/releases/tag/v$VERSION" \
+            --body "Automated update of Juju to v$VERSION (multi-arch image pinned by digest). Source: https://github.com/$OWNER/yuvomi/releases/tag/v$VERSION" \
           || {
             # A PR that appeared between the lookup and here is not a failure either:
             # the update sits on the branch, so the PR carries it regardless.

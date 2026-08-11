@@ -35,7 +35,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
   'image/vnd.microsoft.icon',
 ]);
 const REQUEST_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (compatible; Yuvomi/1.0; +https://github.com/daiqiongzhao-bit/Juju)',
+  'User-Agent': 'Mozilla/5.0 (compatible; Juju/1.0; +https://github.com/daiqiongzhao-bit/Juju)',
   Accept: 'text/html,application/xhtml+xml,image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5',
 };
 

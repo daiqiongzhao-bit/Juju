@@ -30,7 +30,7 @@ const DEFAULT_MAX_REDIRECTS = 5;
 // Dekompression (siehe decodeBody) rohe/korrupte Bytes liefern. Aufrufer, die einen
 // dieser Header selbst (case-insensitiv) setzen, überschreiben den Default.
 const DEFAULT_HEADERS = {
-  'User-Agent': 'Yuvomi (+https://github.com/daiqiongzhao-bit/Juju)',
+  'User-Agent': 'Juju (+https://github.com/daiqiongzhao-bit/Juju)',
   Accept: '*/*',
   'Accept-Encoding': 'gzip, deflate, br',
 };

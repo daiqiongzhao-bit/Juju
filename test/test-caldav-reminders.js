@@ -31,7 +31,7 @@ describe('VTODO field mapping', () => {
 
   it('rechnet einen UTC-Instant in die Wanduhrzeit des Haushalts um', () => {
     // Der Parser liefert UTC, die Aufgabe zeigt eine reine Wanduhrzeit an: ohne
-    // Umrechnung stand eine um 16:30 fällige Aufgabe in Yuvomi um 14:30 (#617).
+    // Umrechnung stand eine um 16:30 fällige Aufgabe in Juju um 14:30 (#617).
     // TZ=Europe/Berlin ist im npm-Skript gesetzt, im Juli also UTC+2.
     assert.deepStrictEqual(splitDue('2026-07-01T14:30:00Z'), { date: '2026-07-01', time: '16:30' });
     // Über Mitternacht wandert auch das Datum mit.
@@ -457,7 +457,7 @@ describe('Aufgabenlisten erscheinen ohne Knopfdruck (#617)', () => {
   });
 });
 
-// #671: Unteraufgaben aus Apple Reminders/Nextcloud landeten in Yuvomi als
+// #671: Unteraufgaben aus Apple Reminders/Nextcloud landeten in Juju als
 // eigenständige Aufgaben nebeneinander, weil der Parser RELATED-TO gar nicht
 // las. Der Melder sah zehn flache Einträge statt zweier Listen mit Kindern.
 describe('VTODO-Hierarchie über RELATED-TO (#671)', () => {
@@ -557,7 +557,7 @@ describe('applyTaskRelations (#671)', () => {
   });
 
   it('hebt ein Enkelkind auf den obersten Vorfahren, statt es fallen zu lassen', () => {
-    // Yuvomi kennt eine Ebene, CalDAV beliebig viele. Flach unter dem Kopf ist
+    // Juju kennt eine Ebene, CalDAV beliebig viele. Flach unter dem Kopf ist
     // immer noch eine Hierarchie; gar keine wäre der gemeldete Zustand.
     const map = seed([
       ['a', 'Oben', null, []],
@@ -589,7 +589,7 @@ describe('applyTaskRelations (#671)', () => {
   });
 
   it('löst eine entfernte Beziehung wieder auf', () => {
-    // Wer auf dem Server aus der Unterliste gezogen wird, muss auch in Yuvomi
+    // Wer auf dem Server aus der Unterliste gezogen wird, muss auch in Juju
     // wieder oben stehen - sonst bleibt er für immer ein Kind.
     const map = seed([
       ['aos-4', 'AOS 4', null, []],

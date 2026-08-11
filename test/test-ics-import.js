@@ -236,7 +236,7 @@ test('POST /import: 400 on invalid color', async () => {
 const REPRO_ICS = [
   'BEGIN:VCALENDAR',
   'VERSION:2.0',
-  'PRODID:-//Yuvomi COUNT reproduction//EN',
+  'PRODID:-//Juju COUNT reproduction//EN',
   'BEGIN:VEVENT',
   'DTSTART;TZID=Europe/Vienna:20240930T170000',
   'DTEND;TZID=Europe/Vienna:20240930T180000',

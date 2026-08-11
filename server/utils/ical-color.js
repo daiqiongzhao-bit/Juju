@@ -1,7 +1,7 @@
 /**
  * Modul: iCalendar-Farb-Auflöser
  * Zweck: Die iCalendar-COLOR-Property (RFC 7986) trägt keinen Hex-Wert, sondern
- *        einen CSS3-Farbnamen ("cornflowerblue", "tomato"). Yuvomi speichert
+ *        einen CSS3-Farbnamen ("cornflowerblue", "tomato"). Juju speichert
  *        Event-Farben dagegen als `#RRGGBB`. Diese Funktion normalisiert beide
  *        Schreibweisen auf ein Hex-Tripel, damit CalDAV-/Apple-/ICS-Events ihre
  *        eigene Farbe behalten können, statt pauschal die Kalenderfarbe zu erben.
