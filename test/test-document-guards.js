@@ -388,7 +388,7 @@ async function collectTextSamples(page) {
     while (el) {
       el = walker.nextNode();
       if (!el) break;
-      if (el.closest('[aria-hidden="true"], .sr-only, yuvomi-install-prompt')) continue;
+      if (el.closest('[aria-hidden="true"], .sr-only, juju-install-prompt')) continue;
       if (el.matches(':disabled') || el.closest(':disabled, [aria-disabled="true"]')) continue;
       const text = [...el.childNodes]
         .filter((n) => n.nodeType === Node.TEXT_NODE)
@@ -729,7 +729,7 @@ async function measureTargets(page, min) {
     for (const el of document.querySelectorAll(SEL)) {
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') continue;
-      if (el.closest('.sr-only, [aria-hidden="true"], yuvomi-install-prompt')) continue;
+      if (el.closest('.sr-only, [aria-hidden="true"], juju-install-prompt')) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) continue;
       els.push(el);
@@ -2534,7 +2534,7 @@ async function collectIconSamples(page) {
     for (const icon of document.querySelectorAll('svg')) {
       // Dekoratives und Deaktiviertes nimmt der Standard aus.
       if (icon.closest('[aria-hidden="true"] > *') && !icon.closest('button, a[href], [role="button"]')) continue;
-      if (icon.closest(':disabled, [aria-disabled="true"], .sr-only, yuvomi-install-prompt')) continue;
+      if (icon.closest(':disabled, [aria-disabled="true"], .sr-only, juju-install-prompt')) continue;
       const cs = getComputedStyle(icon);
       if (cs.visibility === 'hidden' || cs.display === 'none' || parseFloat(cs.opacity) < 0.5) continue;
       const r = icon.getBoundingClientRect();

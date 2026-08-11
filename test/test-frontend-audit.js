@@ -196,7 +196,7 @@ function assertRuleUsesToken(css, selector, property, token, file) {
 
 test('audited frontend files do not assign innerHTML', () => {
   const files = [
-    '../public/components/yuvomi-install-prompt.js',
+    '../public/components/juju-install-prompt.js',
     '../public/components/category-manager.js',
     '../public/pages/notes.js',
     '../public/pages/meals.js',
@@ -387,7 +387,7 @@ test('runtime locale changes keep language and writing direction synchronized', 
 
 test('install prompt waits for initial translations before rendering text', () => {
   const i18n = read('../public/i18n.js');
-  const prompt = read('../public/components/yuvomi-install-prompt.js');
+  const prompt = read('../public/components/juju-install-prompt.js');
 
   assert.match(i18n, /export function whenI18nReady/);
   assert.match(prompt, /import \{ t,\s*whenI18nReady \} from '\/i18n\.js';/);
@@ -575,7 +575,7 @@ test('jede Shadow-DOM-Komponente bringt ihren eigenen reduced-motion-Block mit',
 });
 
 test('das Install-Banner faellt nicht in die abgeloeste Welt zurueck', () => {
-  const source = read('../public/components/yuvomi-install-prompt.js');
+  const source = read('../public/components/juju-install-prompt.js');
 
   // Acht Token-Fallbacks stammten aus der Vor-Redesign-Palette (#5b2fd4 Violett,
   // #e8e7e2 warmes Beige, ...). Alle acht Token existieren heute, die Fallbacks

@@ -295,9 +295,9 @@
  * Formulare …), dem More-Sheet und dem Such-Overlay — statt deren Inhalt zu
  * überlagern. Deklarativ via :has() (im Projekt etabliert: auth.css,
  * user-multi-select.css); reaktiv beim Ein-/Ausblenden, ohne JS-Hooks. */
-html:has(.modal-overlay) yuvomi-install-prompt,
-html:has(.more-sheet[aria-hidden="false"]) yuvomi-install-prompt,
-html:has(.search-overlay--visible) yuvomi-install-prompt {
+html:has(.modal-overlay) juju-install-prompt,
+html:has(.more-sheet[aria-hidden="false"]) juju-install-prompt,
+html:has(.search-overlay--visible) juju-install-prompt {
   display: none;
 }
 

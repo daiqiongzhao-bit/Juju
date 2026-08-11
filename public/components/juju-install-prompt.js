@@ -408,13 +408,13 @@ class JujuInstallPrompt extends HTMLElement {
   async _onInstallClick() {
     try {
       const result = await promptPwaInstall();
-      console.log('[yuvomi-install-prompt] Ergebnis:', result.outcome);
+      console.log('[juju-install-prompt] Ergebnis:', result.outcome);
 
       if (result.outcome === 'accepted') {
         this._remove();
       }
     } catch (err) {
-      console.error('[yuvomi-install-prompt] Fehler:', err);
+      console.error('[juju-install-prompt] Fehler:', err);
     }
     this._deferredPrompt = null;
   }
@@ -460,4 +460,4 @@ class JujuInstallPrompt extends HTMLElement {
   }
 }
 
-customElements.define('yuvomi-install-prompt', JujuInstallPrompt);
+customElements.define('juju-install-prompt', JujuInstallPrompt);

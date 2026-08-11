@@ -78,7 +78,7 @@ const APP_SHELL = [
   '/styles/recipes.css',
   '/styles/pantry.css',
   '/styles/detail-view.css',
-  '/components/yuvomi-install-prompt.js',
+  '/components/juju-install-prompt.js',
   // Geteilte Module. Sie werden von Shell UND Seitenmodulen importiert und
   // müssen deshalb zusammen mit der Shell erneuert werden: der Browser bindet
   // ein einmal geladenes Modul für die Lebensdauer des Dokuments, ein neues
