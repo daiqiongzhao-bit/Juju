@@ -30,13 +30,6 @@ function setAppBranding(appName) {
 export async function render(container) {
   const storedAppName = getStoredAppName();
 
-  // SSO-Kapabilität VOR dem ersten Paint ermitteln, damit der SSO-Block nicht
-  // nachträglich einspringt und das zentrierte Formular verschiebt (Layout-Shift).
-  // Gebändigt per Timeout, sodass ein langsamer/nicht erreichbarer Server das
-  // Passwort-Login nie blockiert – dann wird ohne SSO gerendert.
-  const oidc = await fetchOidcConfig();
-  const ssoEnabled = oidc?.enabled === true;
-
   container.replaceChildren();
   container.insertAdjacentHTML('beforeend', `
     <main class="auth-page" id="main-content">
@@ -149,10 +142,6 @@ export async function render(container) {
             <button type="submit" class="btn btn--primary auth-form__submit" id="auth-btn">
               <span class="auth-btn__label">${esc(t('login.loginButton'))}</span>
             </button>
-            ${ssoEnabled ? `
-            <div class="auth-divider">${esc(t('login.orDivider'))}</div>
-            <a href="/api/v1/auth/oidc/start" class="btn btn--secondary auth-form__submit">${esc(t('login.loginWithSso'))}</a>
-            ` : ''}
             <p class="auth-form__forgot" hidden>
               <a href="/forgot-password" data-link>${esc(t('login.forgotPassword'))}</a>
             </p>
@@ -170,12 +159,6 @@ export async function render(container) {
 
   container.querySelectorAll('a[data-link]').forEach((a) =>
     a.addEventListener('click', (e) => { e.preventDefault(); window.yuvomi.navigate(a.getAttribute('href')); }));
-
-  // OIDC-Fehlermeldung aus URL-Parameter anzeigen (z.B. ?error=oidc_failed nach gescheitertem Callback)
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('error')?.startsWith('oidc_')) {
-    showError(errorEl, t('login.ssoError'));
-  }
 
   // K3: Passwort-Sichtbarkeits-Toggle
   const passwordInput = form.querySelector('#password');
@@ -333,21 +316,3 @@ function showError(el, message) {
   el.hidden = false;
 }
 
-/**
- * Holt die OIDC/SSO-Kapabilität, bevor das Formular gerendert wird, damit der
- * SSO-Block bereits beim ersten Paint an Ort und Stelle ist (kein Layout-Shift).
- * Per AbortController-Timeout gebändigt: schlägt der Request fehl oder hängt er,
- * wird ohne SSO gerendert – das Passwort-Login darf nie am OIDC-Endpunkt hängen.
- * @param {number} timeoutMs
- * @returns {Promise<{enabled?: boolean}|null>}
- */
-function fetchOidcConfig(timeoutMs = 2000) {
-  return new Promise((resolve) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => { controller.abort(); resolve(null); }, timeoutMs);
-    fetch('/api/v1/auth/oidc/config', { cache: 'no-store', signal: controller.signal })
-      .then((r) => r.json())
-      .then((data) => { clearTimeout(timer); resolve(data); })
-      .catch(() => { clearTimeout(timer); resolve(null); });
-  });
-}
