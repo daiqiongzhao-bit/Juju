@@ -17,18 +17,19 @@ const ICONS_DIR = join(__dirname, '..', 'public', 'icons');
 
 mkdirSync(ICONS_DIR, { recursive: true });
 
-/** Brand mark: a bold "J" monogram (white stroke) on the violet gradient tile. */
-const MARK_PATH = 'M104 46 L104 100 Q104 120 82 122 Q54 124 48 102';
+/** Brand mark: a bold "J" monogram (white stroke) on the violet→indigo gradient tile. */
+const MARK_PATH = 'M104 46 L104 100 Q104 122 82 124 Q58 126 50 104';
 
-/** Common gradient defs: brand violet + subtle top sheen (glass character). */
+/** Common gradient defs: brand violet→indigo ramp + subtle top sheen (glass character). */
 const DEFS = `<defs>
     <linearGradient id="bg" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#8b5cf6"/>
-      <stop offset="100%" stop-color="#6c3aed"/>
+      <stop offset="0%" stop-color="#A78BFA"/>
+      <stop offset="46%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#6D28D9"/>
     </linearGradient>
     <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="160" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
-      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.24"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
   </defs>`;
 

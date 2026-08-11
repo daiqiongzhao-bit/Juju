@@ -1,6 +1,6 @@
 {
   "name": "juju",
-  "version": "2.0.1",
+  "version": "0.0.1",
   "description": "Self-hosted family planner - calendar, tasks, shopping, meal planning, budget and more. Private, open-source, no subscription.",
   "main": "server/index.js",
   "type": "module",

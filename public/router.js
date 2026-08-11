@@ -1329,7 +1329,7 @@ function renderAppShell(container) {
   logoSvg.appendChild(bgRect);
   // Brand mark: a bold "J" monogram (white stroke) on the gradient tile
   const markPath = document.createElementNS(SVG_NS, 'path');
-  markPath.setAttribute('d', 'M104 46 L104 100 Q104 120 82 122 Q54 124 48 102');
+  markPath.setAttribute('d', 'M104 46 L104 100 Q104 122 82 124 Q58 126 50 104');
   markPath.setAttribute('fill', 'none');
   markPath.setAttribute('stroke', 'white');
   markPath.setAttribute('stroke-width', '22');

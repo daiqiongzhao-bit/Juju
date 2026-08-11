@@ -238,7 +238,7 @@ body::after {
   <div class="brand">
     <div class="mark">
       <svg viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <g fill="white" fill-opacity="0.82"><path d="M104 46 L104 100 Q104 120 82 122 Q54 124 48 102" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <g fill="white" fill-opacity="0.82"><path d="M104 46 L104 100 Q104 122 82 124 Q58 126 50 104" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/><path d="M126 21 C126 27.3 128.7 30 135 30 C128.7 30 126 32.7 126 39 C126 32.7 123.3 30 117 30 C123.3 30 126 27.3 126 21 Z" fill="#ffffff"/></g>
         
       </svg>
     </div>

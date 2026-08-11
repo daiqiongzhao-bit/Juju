@@ -24,6 +24,9 @@
 }
 
 .auth-page {
+  --juju-g1: #A78BFA;
+  --juju-g2: #8B5CF6;
+  --juju-g3: #6D28D9;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -31,12 +34,13 @@
   min-height: 100dvh;
   width: 100%;
   padding: var(--space-4);
-  /* Der Seitengrund, ohne Verlauf. Hier stand bis Runde 3 ein radialer
-   * Akzent-Hauch mit der Begründung der abgelösten Welt („Akzent-Scarcity-Regel
-   * ≤10 %") - der letzte chromatische Verlauf der App, und ausgerechnet auf der
-   * einzigen Seite, die ein abgemeldeter Nutzer je sieht. Die Marke trägt hier
-   * das Tile, nicht die Bühne. */
-  background: var(--color-bg);
+  /* Markengetönte Bühne hinter der Glas-Karte: zwei weiche violette Aurora-
+   * Tupfer auf dem System-Grund. Die Marke trägt weiterhin das Tile, aber die
+   * Bühne ist nicht mehr starr-flach – ein ruhiger, Premium-Kontrast. */
+  background:
+    radial-gradient(120% 120% at 12% 8%, color-mix(in srgb, var(--juju-g1) 24%, transparent) 0%, transparent 55%),
+    radial-gradient(120% 120% at 92% 96%, color-mix(in srgb, var(--juju-g3) 20%, transparent) 0%, transparent 50%),
+    var(--color-bg);
 }
 
 /* Hero-Bereich über dem Login-Formular */
@@ -272,3 +276,165 @@
 @media (prefers-reduced-motion: reduce) {
   .auth-spinner { animation: none; opacity: 0.6; }
 }
+
+/* ============================================================
+ * Split-Layout (nur Login): links Marken-Panel, rechts Glas-Karte.
+ * setup/join/forgot/reset nutzen .auth-page OHNE .auth-aside und
+ * fallen damit auf das zentrierte Einzel-Spalten-Layout zurück.
+ * ============================================================ */
+.auth-page:has(.auth-aside) {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0;
+  min-height: 100dvh;
+  background:
+    radial-gradient(90% 90% at 16% 10%, color-mix(in srgb, var(--juju-g1) 20%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 120% at 90% 100%, color-mix(in srgb, var(--juju-g3) 14%, transparent) 0%, transparent 55%),
+    var(--color-bg);
+}
+
+/* Marken-Panel links: voller Violett-Verlauf + weiche Orb-Dekoration */
+.auth-aside {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: clamp(var(--space-8), 5vw, 72px);
+  color: #fff;
+  overflow: hidden;
+  background: linear-gradient(152deg, var(--juju-g1) 0%, var(--juju-g2) 48%, var(--juju-g3) 100%);
+}
+
+.auth-aside::before,
+.auth-aside::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  pointer-events: none;
+}
+.auth-aside::before { width: 340px; height: 340px; top: -130px; right: -100px; }
+.auth-aside::after  { width: 280px; height: 280px; bottom: -120px; left: -80px; background: rgba(255, 255, 255, 0.12); }
+
+.auth-aside__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  position: relative;
+  z-index: 1;
+}
+
+.auth-aside__mark {
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(43, 21, 91, 0.38);
+  overflow: hidden;
+}
+
+.auth-aside__logo {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.auth-brand__name {
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-bold, 700);
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.auth-aside__copy {
+  position: relative;
+  z-index: 1;
+  max-width: 30ch;
+}
+
+.auth-aside__tagline {
+  margin: 0;
+  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  line-height: 1.4;
+  font-weight: var(--font-weight-semibold, 600);
+  color: rgba(255, 255, 255, 0.96);
+  text-wrap: balance;
+}
+
+.auth-aside__foot {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* Rechte Spalte: Formular auf der getönten Bühne */
+.auth-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: clamp(var(--space-6), 4vw, 56px);
+}
+
+/* Premium-Glas-Karte: weicher Schatten + feine Kante */
+.auth-card {
+  box-shadow:
+    var(--shadow-lg),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--color-border-subtle);
+}
+
+/* Mobile: Panel wird zum kompakten Kopf-Banner, Karte darunter */
+@media (max-width: 900px) {
+  .auth-page:has(.auth-aside) {
+    grid-template-columns: 1fr;
+  }
+  .auth-aside {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-4);
+  }
+  .auth-aside__copy,
+  .auth-aside__foot { display: none; }
+  .auth-aside::before,
+  .auth-aside::after { display: none; }
+}
+
+/* Dark Mode: Bühne-Tupfer dezent zurücknehmen, damit es nicht glimmt */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .auth-page {
+    background:
+      radial-gradient(120% 120% at 12% 8%, color-mix(in srgb, var(--juju-g1) 15%, transparent) 0%, transparent 55%),
+      radial-gradient(120% 120% at 92% 96%, color-mix(in srgb, var(--juju-g3) 12%, transparent) 0%, transparent 50%),
+      var(--color-bg);
+  }
+  :root:not([data-theme="light"]) .auth-page:has(.auth-aside) {
+    background:
+      radial-gradient(90% 90% at 16% 10%, color-mix(in srgb, var(--juju-g1) 14%, transparent) 0%, transparent 60%),
+      radial-gradient(90% 120% at 90% 100%, color-mix(in srgb, var(--juju-g3) 10%, transparent) 0%, transparent 55%),
+      var(--color-bg);
+  }
+}
+
+[data-theme="dark"] .auth-page {
+  background:
+    radial-gradient(120% 120% at 12% 8%, color-mix(in srgb, var(--juju-g1) 15%, transparent) 0%, transparent 55%),
+    radial-gradient(120% 120% at 92% 96%, color-mix(in srgb, var(--juju-g3) 12%, transparent) 0%, transparent 50%),
+    var(--color-bg);
+}
+
+[data-theme="dark"] .auth-page:has(.auth-aside) {
+  background:
+    radial-gradient(90% 90% at 16% 10%, color-mix(in srgb, var(--juju-g1) 14%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 120% at 90% 100%, color-mix(in srgb, var(--juju-g3) 10%, transparent) 0%, transparent 55%),
+    var(--color-bg);
+}
+

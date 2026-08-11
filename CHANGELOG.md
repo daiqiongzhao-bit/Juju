@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-08-11
+
+Rebranded to **Juju** and refreshed the logo and login experience; product version reset.
+
+### Added
+- Refined Juju "J" logo (violet→indigo gradient with a spark accent) across the app, PWA icons and docs.
+- Branded split-layout login with an aurora background and dark-mode support.
+
+### Changed
+- Product version reset to `0.0.1`.
+
 ## [2.0.1] - 2026-08-10
 
 ### Changed
