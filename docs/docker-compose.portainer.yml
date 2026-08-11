@@ -1,0 +1,161 @@
+# Yuvomi - Standalone Docker Compose for Portainer / remote deployment
+# Pulls the pre-built image from GitHub Container Registry.
+# No git clone required.
+#
+# Usage:
+#   1. Copy this file and the .env section below to your server
+#   2. Create a .env file next to this compose file (see below)
+#   3. docker compose -f docker-compose.portainer.yml up -d
+#   4. docker compose -f docker-compose.portainer.yml exec yuvomi node setup.js
+#   5. Open http://<your-host>:3000
+#
+# Required .env variables:
+#   SESSION_SECRET=<random-string-min-32-chars>
+#   DB_ENCRYPTION_KEY=<random-string-min-32-chars>
+#
+# Generate secrets:
+#   openssl rand -hex 32
+#
+# Strongly recommended:
+#   BASE_URL=https://yuvomi.example.com   # without it, password reset mails
+#                                         # are never sent
+#
+# Every variable below is optional and falls back to the default shown.
+# The full list with descriptions lives in .env.example.
+
+services:
+  yuvomi:
+    image: ghcr.io/daiqiongzhao-bit/Juju:latest
+    container_name: yuvomi
+    restart: unless-stopped
+    ports:
+      # Host port from the .env; the app inside the container always stays on 3000.
+      - "${OIKOS_HTTP_PORT:-3000}:3000"
+    volumes:
+      # Named volume keeps its legacy slug so existing Portainer stacks upgrade
+      # in place instead of orphaning their data on rename.
+      - oikos_data:/data
+      # Scheduled and manual backups. Without this volume the files would only
+      # live inside the container layer and vanish on the next image update.
+      - oikos_backups:/backups
+      # Drop-in folder for additional Yuvomi modules. The image creates
+      # /app/modules, so without this volume anything dropped in there lives in
+      # the container layer and is gone on the next image update.
+      - oikos_modules:/app/modules
+      # Optional: mount a host folder for storing uploaded documents locally.
+      # Both ends come from the .env so the host folder and the path the app
+      # writes to cannot drift apart.
+      # - ${DOCUMENT_STORAGE_LOCAL_DIR:-./documents}:${DOCUMENT_STORAGE_LOCAL_PATH:-/documents}
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_PATH=/data/yuvomi.db
+      - BACKUP_DIR=/backups
+      - SESSION_SECRET=${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY:?Set DB_ENCRYPTION_KEY in .env}
+      # Set to true when behind a reverse proxy with HTTPS (Caddy, nginx, Traefik)
+      - SESSION_SECURE=${SESSION_SECURE:-false}
+      # Trust proxy hops (default: 1 for Docker+reverse-proxy setups)
+      # Set to 'loopback' if running without a reverse proxy
+      - TRUST_PROXY=${TRUST_PROXY:-1}
+      # Absolute origin, e.g. https://yuvomi.example.com. REQUIRED for password
+      # reset mails: the links are only sent when this is set, because the
+      # request Host header is deliberately not trusted (reset poisoning).
+      - BASE_URL=${BASE_URL:-}
+      # Household timezone. Applies wherever a time carries no zone of its own.
+      - TZ=${TZ:-UTC}
+      # Weather (optional) - Open-Meteo (recommended, free, no API key)
+      - WEATHER_LAT=${WEATHER_LAT:-}
+      - WEATHER_LON=${WEATHER_LON:-}
+      - WEATHER_CITY=${WEATHER_CITY:-}
+      - WEATHER_UNITS=${WEATHER_UNITS:-metric}
+      # Weather (optional) - OpenWeatherMap (legacy; only if you already use it)
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-}
+      - OPENWEATHER_CITY=${OPENWEATHER_CITY:-Berlin}
+      - OPENWEATHER_UNITS=${OPENWEATHER_UNITS:-metric}
+      - OPENWEATHER_LANG=${OPENWEATHER_LANG:-de}
+      # Email / SMTP (optional). Without a host, "forgot password" stays off.
+      # Can also be configured later under Settings > Administration; a value
+      # set here always wins and the field is then LOCKED in the UI.
+      #
+      # That is why none of these may carry a non-empty default: a default of
+      # 587/starttls would lock the port and encryption fields for every
+      # Portainer user, including those who never touch SMTP here - anyone on a
+      # provider using 465/SSL could then no longer set it in the UI at all.
+      # The server applies its own defaults (587, starttls) when these are empty.
+      - EMAIL_SMTP_HOST=${EMAIL_SMTP_HOST:-}
+      - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-}
+      - EMAIL_SMTP_SECURE=${EMAIL_SMTP_SECURE:-}
+      - EMAIL_SMTP_USER=${EMAIL_SMTP_USER:-}
+      - EMAIL_SMTP_PASS=${EMAIL_SMTP_PASS:-}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-}
+      # Web push contact address, sent to the push services. The VAPID keys
+      # themselves are generated on first use. Must be routable: Apple rejects
+      # localhost and .local with 403.
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
+      # Single sign-on (optional). OIDC only activates when all four are set.
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-}
+      # Some IdPs (Authentik in its default setup among them) send no
+      # email_verified claim; without this switch they refuse to link accounts.
+      - OIDC_TRUST_EMAIL_WITHOUT_VERIFIED_CLAIM=${OIDC_TRUST_EMAIL_WITHOUT_VERIFIED_CLAIM:-false}
+      # Scheduled local backups into the /backups volume above.
+      - BACKUP_ENABLED=${BACKUP_ENABLED:-true}
+      - "BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}"
+      - BACKUP_KEEP=${BACKUP_KEEP:-7}
+      # Additional off-box backup target via WebDAV (Nextcloud and friends).
+      - WEBDAV_BACKUP_ENABLED=${WEBDAV_BACKUP_ENABLED:-}
+      - WEBDAV_BACKUP_URL=${WEBDAV_BACKUP_URL:-}
+      - WEBDAV_BACKUP_USERNAME=${WEBDAV_BACKUP_USERNAME:-}
+      - WEBDAV_BACKUP_PASSWORD=${WEBDAV_BACKUP_PASSWORD:-}
+      - WEBDAV_BACKUP_PATH=${WEBDAV_BACKUP_PATH:-}
+      - WEBDAV_BACKUP_KEEP=${WEBDAV_BACKUP_KEEP:-}
+      # Currency rates for subscriptions (optional, free tier available)
+      - FIXER_API_KEY=${FIXER_API_KEY:-}
+      # Google Calendar (optional)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
+      - GOOGLE_DRIVE_CLIENT_ID=${GOOGLE_DRIVE_CLIENT_ID:-}
+      - GOOGLE_DRIVE_CLIENT_SECRET=${GOOGLE_DRIVE_CLIENT_SECRET:-}
+      - GOOGLE_DRIVE_REDIRECT_URI=${GOOGLE_DRIVE_REDIRECT_URI:-}
+      # Apple Calendar CalDAV (optional)
+      - APPLE_CALDAV_URL=${APPLE_CALDAV_URL:-https://caldav.icloud.com}
+      - APPLE_USERNAME=${APPLE_USERNAME:-}
+      - APPLE_APP_SPECIFIC_PASSWORD=${APPLE_APP_SPECIFIC_PASSWORD:-}
+      # Local document storage (optional): set to true to store uploaded documents on the mounted /documents folder.
+      - DOCUMENT_STORAGE_LOCAL_ENABLED=${DOCUMENT_STORAGE_LOCAL_ENABLED:-false}
+      - DOCUMENT_STORAGE_LOCAL_PATH=${DOCUMENT_STORAGE_LOCAL_PATH:-/documents}
+      # WebDAV document storage (optional)
+      - DOCUMENT_STORAGE_WEBDAV_ENABLED=${DOCUMENT_STORAGE_WEBDAV_ENABLED:-}
+      - DOCUMENT_STORAGE_WEBDAV_URL=${DOCUMENT_STORAGE_WEBDAV_URL:-}
+      - DOCUMENT_STORAGE_WEBDAV_USERNAME=${DOCUMENT_STORAGE_WEBDAV_USERNAME:-}
+      - DOCUMENT_STORAGE_WEBDAV_PASSWORD=${DOCUMENT_STORAGE_WEBDAV_PASSWORD:-}
+      - DOCUMENT_STORAGE_WEBDAV_PATH=${DOCUMENT_STORAGE_WEBDAV_PATH:-}
+      # Set true only for a WebDAV target on a private/local network (e.g. a
+      # Nextcloud in the same Docker network). Lifts the SSRF protection.
+      - DOCUMENT_STORAGE_WEBDAV_ALLOW_PRIVATE_NETWORK=${DOCUMENT_STORAGE_WEBDAV_ALLOW_PRIVATE_NETWORK:-false}
+      # Sync interval in minutes
+      - SYNC_INTERVAL_MINUTES=${SYNC_INTERVAL_MINUTES:-15}
+      # Set true only for ICS calendar feeds on a private/local network.
+      - ICS_SUBSCRIPTION_ALLOW_PRIVATE_NETWORK=${ICS_SUBSCRIPTION_ALLOW_PRIVATE_NETWORK:-false}
+      # Rate limiting
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
+      - RATE_LIMIT_MAX_ATTEMPTS=${RATE_LIMIT_MAX_ATTEMPTS:-5}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  oikos_data:
+    driver: local
+  oikos_backups:
+    driver: local
+  oikos_modules:
+    driver: local

@@ -1,0 +1,63 @@
+# Yuvomi als systemd-Dienst über Podman Quadlet (rootless, Podman 5.x).
+#
+# ── Setup (rootless, empfohlen) ────────────────────────────────────────────────
+#   1. Datenverzeichnisse anlegen:
+#        mkdir -p ~/.local/share/oikos/{data,backups,modules,documents} ~/.config/oikos
+#   2. Generierte .env ablegen (z. B. aus dem Web-/CLI-Installer):
+#        cp /pfad/zu/oikos/.env ~/.config/oikos/.env
+#   3. Diese Unit installieren:
+#        mkdir -p ~/.config/containers/systemd
+#        cp tools/quadlet/oikos.container ~/.config/containers/systemd/
+#   4. Generieren & starten:
+#        systemctl --user daemon-reload
+#        systemctl --user start oikos
+#   5. Autostart beim Boot (auch ohne aktive Sitzung):
+#        loginctl enable-linger "$USER"
+#
+# Quadlet macht KEINE ${VAR:-default}-Shell-Interpolation. Pfade hier sind fest
+# bzw. nutzen den systemd-Specifier %h (Home-Verzeichnis). Bei Bedarf anpassen.
+#
+# Rootful-Variante: Unit nach /etc/containers/systemd/ legen, %h durch feste
+# Pfade ersetzen und `systemctl` (ohne --user) verwenden.
+
+[Unit]
+Description=Yuvomi family planner
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/daiqiongzhao-bit/Juju:latest
+ContainerName=oikos
+
+# Lädt SESSION_SECRET, DB_ENCRYPTION_KEY, TZ, WEATHER_* (Open-Meteo), OPENWEATHER_* (Legacy), OIDC_* … aus der .env.
+EnvironmentFile=%h/.config/oikos/.env
+
+# Laufzeit-Defaults (entsprechen docker-compose.yml).
+Environment=NODE_ENV=production
+Environment=DB_PATH=/data/yuvomi.db
+Environment=BACKUP_DIR=/backups
+
+# Veröffentlichter Port. Rootless hinter Reverse-Proxy stattdessen:
+#   PublishPort=127.0.0.1:3000:3000
+PublishPort=3000:3000
+
+# `:Z` = privates SELinux-Relabel pro Container (Enforcing-tauglich).
+Volume=%h/.local/share/oikos/data:/data:Z
+Volume=%h/.local/share/oikos/backups:/backups:Z
+Volume=%h/.local/share/oikos/modules:/app/modules:Z
+# Optionaler lokaler Dokumentspeicher (nur genutzt, wenn DOCUMENT_STORAGE_LOCAL_ENABLED=true in der .env).
+Volume=%h/.local/share/oikos/documents:/documents:Z
+
+# Healthcheck identisch zum Compose-Manifest.
+HealthCmd=node -e "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1))"
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=10s
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

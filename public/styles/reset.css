@@ -1,0 +1,112 @@
+/**
+ * Modul: CSS Reset
+ * Zweck: Browser-Defaults normalisieren, Box-Sizing, Touch-Verhalten
+ * Abhängigkeiten: tokens.css
+ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: var(--line-height-base);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+}
+
+body {
+  height: 100dvh;
+  overflow: hidden;
+  background-color: var(--color-bg);
+}
+
+img, svg, video {
+  display: block;
+  max-width: 100%;
+}
+
+/* `color: inherit` ist hier die WICHTIGSTE Zeile, und sie hat gefehlt: `a` und
+ * `input, textarea, select` erben ihre Farbe direkt darunter, `button` als
+ * einziges der vier tat es nicht. Ohne sie nimmt ein Button die UA-Farbe
+ * `buttontext`, also Schwarz - in BEIDEN Themes. Im Light faellt das nicht auf,
+ * im Dark stand ein schwarzes Icon auf #0A0A0C: 1.06:1 (gemessen an
+ * #cal-prev/#cal-next, #budget-prev/#budget-next, #rail-toggle).
+ *
+ * Sichtbar wurde es nur an Knöpfen OHNE Variantenklasse: `.btn--primary`,
+ * `--secondary` und `--ghost` setzen alle eine Farbe, `.btn--icon` allein nicht.
+ * Deshalb ist der Ort hier und nicht bei `.btn` - der Reset hat `font`, `border`
+ * und `background` zurückgesetzt und `color` bei genau dem Element vergessen,
+ * das es am nötigsten hat. `inherit` statt eines festen Tokens, weil ein Button
+ * auf farbigem Grund die Farbe seiner Flaeche braucht, nicht die des Bodys.
+ * Guard: Sonde 14 in test-document-guards.js. */
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul, ol {
+  list-style: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+/* Fokus-Styles (Accessibility)
+ *
+ * Die einzige Basisregel. Sie liest die Tokens aus tokens.css §7b; wer den Ring
+ * anders will, überschreibt dort `--focus-ring-color`, statt hier eine zweite
+ * Spezifikation danebenzustellen - genau so entstanden die sechs, die es vorher
+ * gab (Critique P1, 2026-07-30). */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-xs);
+}
+
+/* Reduzierte Bewegung (Barrierefreiheit) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Versteckte, aber zugängliche Elemente */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

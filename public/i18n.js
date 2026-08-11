@@ -1,0 +1,468 @@
+/**
+ * i18n - Internationalisierung / Übersetzungsmodul
+ * Bietet t(), initI18n(), setLocale(), getLocale(), getSupportedLocales(),
+ * formatDate(), formatTime() für die gesamte App.
+ * Dependencies: none (vanilla JS, Fetch API, Intl API)
+ */
+
+const SUPPORTED_LOCALES = ['de', 'en', 'es', 'fr', 'it', 'sv', 'el', 'ru', 'tr', 'zh', 'ja', 'ar', 'hi', 'pt', 'uk', 'pl', 'nl', 'cs', 'vi', 'hu', 'ko', 'id', 'fa', 'fil'];
+const RTL_LOCALES = new Set(['ar', 'fa']);
+const DEFAULT_LOCALE = 'de';
+const STORAGE_KEY = 'yuvomi-locale';
+const DATE_FORMAT_KEY = 'yuvomi-date-format';
+const TIME_FORMAT_KEY = 'yuvomi-time-format';
+const NUMBER_LOCALE_KEY = 'yuvomi-number-locale';
+const DEFAULT_DATE_FORMAT = 'dmy';
+const DEFAULT_TIME_FORMAT = '24h';
+const VALID_TIME_FORMATS = ['24h', '12h'];
+
+let currentLocale = DEFAULT_LOCALE;
+let translations = {};
+let fallbackTranslations = {};
+let i18nReady = false;
+let resolveI18nReady;
+const i18nReadyPromise = new Promise((resolve) => {
+  resolveI18nReady = resolve;
+});
+
+function applyDocumentLocale(locale) {
+  document.documentElement.lang = locale;
+  document.documentElement.dir = RTL_LOCALES.has(locale) ? 'rtl' : 'ltr';
+}
+
+/** Resolve locale: manual override > navigator.language > English > default */
+function resolveLocale() {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored && SUPPORTED_LOCALES.includes(stored)) return stored;
+
+  const browserLocales = navigator.languages || [navigator.language];
+  for (const tag of browserLocales) {
+    const base = tag.split('-')[0].toLowerCase();
+    if (SUPPORTED_LOCALES.includes(base)) return base;
+  }
+  return 'en';
+}
+
+/** Lade eine Locale-JSON-Datei */
+async function loadLocale(locale) {
+  const resp = await fetch(`/locales/${locale}.json`);
+  if (!resp.ok) throw new Error(`Failed to load locale: ${locale}`);
+  return resp.json();
+}
+
+/** Initialisierung - einmal beim App-Start aufrufen */
+export async function initI18n() {
+  currentLocale = resolveLocale();
+  fallbackTranslations = await loadLocale(DEFAULT_LOCALE);
+  if (currentLocale !== DEFAULT_LOCALE) {
+    try {
+      translations = await loadLocale(currentLocale);
+    } catch {
+      translations = fallbackTranslations;
+      currentLocale = DEFAULT_LOCALE;
+    }
+  } else {
+    translations = fallbackTranslations;
+  }
+  applyDocumentLocale(currentLocale);
+  i18nReady = true;
+  resolveI18nReady();
+  window.dispatchEvent(new CustomEvent('i18n-ready', { detail: { locale: currentLocale } }));
+}
+
+/** Warten bis die erste Locale geladen wurde */
+export function whenI18nReady() {
+  return i18nReady ? Promise.resolve() : i18nReadyPromise;
+}
+
+/** Sprache wechseln - löst 'locale-changed' Event aus */
+export async function setLocale(locale) {
+  if (!SUPPORTED_LOCALES.includes(locale)) return;
+  localStorage.setItem(STORAGE_KEY, locale);
+  currentLocale = locale;
+  _numberFormatCache.clear();
+  const loaded = locale === DEFAULT_LOCALE
+    ? fallbackTranslations
+    : await loadLocale(locale);
+  if (currentLocale !== locale) return;
+  translations = loaded;
+  applyDocumentLocale(locale);
+  window.dispatchEvent(new CustomEvent('locale-changed', { detail: { locale } }));
+}
+
+/** Hilfsfunktion: Dot-Notation in verschachteltem Objekt auflösen */
+function resolve(obj, key) {
+  return key.split('.').reduce((o, k) => (o != null ? o[k] : undefined), obj);
+}
+
+const pluralRulesCache = new Map();
+
+function pluralCategory(locale, count) {
+  let rules = pluralRulesCache.get(locale);
+  if (!rules) {
+    try {
+      rules = new Intl.PluralRules(locale);
+    } catch {
+      rules = new Intl.PluralRules('en');
+    }
+    pluralRulesCache.set(locale, rules);
+  }
+  return rules.select(count);
+}
+
+/**
+ * Liefert den Schlüssel, der für diese Anzahl gilt. Sprachen unterscheiden sich
+ * in der Zahl der Formen (Deutsch 2, Polnisch 4, Japanisch 1), deshalb kommen
+ * die Kategorien aus Intl.PluralRules und nicht aus einer `count === 1`-Abfrage.
+ * Fehlt die Variante, greift `_other` und danach der nackte Schlüssel - so
+ * bleiben Locales ohne Pluralvarianten unverändert nutzbar.
+ */
+function resolvePluralKey(key, count) {
+  const category = pluralCategory(currentLocale, count);
+  for (const candidate of [`${key}_${category}`, `${key}_other`, key]) {
+    const hit = resolve(translations, candidate) ?? resolve(fallbackTranslations, candidate);
+    if (hit != null) return hit;
+  }
+  return key;
+}
+
+/**
+ * Übersetzungsfunktion mit Platzhalter-Unterstützung {{variable}}.
+ * Ein numerischer `count`-Parameter wählt zusätzlich die passende Pluralform
+ * (`key_one`, `key_few`, … ), sofern die Locale sie definiert.
+ *
+ * Die Ersetzung läuft in einem Durchgang über ein Regex mit Callback, nicht in
+ * einer Schleife aus replaceAll(string, string). Zwei Gründe, beide an echten
+ * Nutzereingaben nachvollziehbar:
+ *
+ *   - Ein String als Ersatz interpretiert `$&`, `` $` ``, `$'` und `$$` als
+ *     Rückverweise. Ein Kontakt namens "A $& B" wurde als "A {{name}} B"
+ *     angezeigt, und `` $` `` zog den Text vor dem Treffer in den Namen hinein
+ *     ("X $` Y" → "X Geburtstag:  Y").
+ *   - Nacheinander ersetzt, durchsucht jeder weitere Platzhalter den bereits
+ *     eingesetzten Wert erneut: ein Name "{{date}}" verwandelte sich beim
+ *     date-Durchgang in das Datum.
+ *
+ * Unbekannte Platzhalter bleiben stehen, statt zu verschwinden - ein fehlender
+ * Parameter soll im Ergebnis sichtbar sein und nicht still weggekürzt werden.
+ */
+export function t(key, params = {}) {
+  const str = typeof params.count === 'number'
+    ? resolvePluralKey(key, params.count)
+    : resolve(translations, key) ?? resolve(fallbackTranslations, key) ?? key;
+  return str.replace(/\{\{(\w+)\}\}/g, (placeholder, name) => (
+    Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : placeholder
+  ));
+}
+
+function isDateOnlyString(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+const VALID_DATE_FORMATS = ['mdy', 'dmy', 'ymd', 'mdy_dot', 'dmy_dot', 'dmy_slash', 'ymd_dot', 'ymd_slash'];
+
+function getDateFormatPreference() {
+  const stored = localStorage.getItem(DATE_FORMAT_KEY);
+  return VALID_DATE_FORMATS.includes(stored) ? stored : DEFAULT_DATE_FORMAT;
+}
+
+export function getDateFormat() {
+  return getDateFormatPreference();
+}
+
+function getTimeFormatPreference() {
+  const stored = localStorage.getItem(TIME_FORMAT_KEY);
+  return VALID_TIME_FORMATS.includes(stored) ? stored : DEFAULT_TIME_FORMAT;
+}
+
+export function getTimeFormat() {
+  return getTimeFormatPreference();
+}
+
+/**
+ * Nachgestelltes Zeitwort der Locale („Uhr", „ч."). Gilt nur für die
+ * 24-Stunden-Schreibweise - „3:00 PM Uhr" mischt zwei Systeme und liest sich
+ * falsch, deshalb liefert der Helfer im 12-Stunden-Format einen leeren String.
+ * Aufrufer hängen ihn mit `${time} ${timeSuffix()}`.trimEnd() an.
+ */
+export function timeSuffix() {
+  return getTimeFormatPreference() === '12h' ? '' : t('calendar.timeSuffix');
+}
+
+function formatDateParts(date, useUtc = false) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const year = useUtc ? d.getUTCFullYear() : d.getFullYear();
+  const month = String((useUtc ? d.getUTCMonth() : d.getMonth()) + 1).padStart(2, '0');
+  const day = String(useUtc ? d.getUTCDate() : d.getDate()).padStart(2, '0');
+  switch (getDateFormatPreference()) {
+    case 'dmy': return `${day}.${month}.${year}`;
+    case 'mdy_dot': return `${month}.${day}.${year}`;
+    case 'dmy_dot': return `${day}.${month}.${year}`;
+    case 'dmy_slash': return `${day}/${month}/${year}`;
+    case 'ymd': return `${year}-${month}-${day}`;
+    case 'ymd_dot': return `${year}.${month}.${day}`;
+    case 'ymd_slash': return `${year}/${month}/${day}`;
+    default: return `${month}/${day}/${year}`;
+  }
+}
+
+/** Aktuelle Locale abfragen */
+export function getLocale() {
+  return currentLocale;
+}
+
+/**
+ * Locale für Zahlen-/Währungsformatierung (Intl.NumberFormat).
+ * Nutzt die gespeicherte Region (voller BCP-47-Tag, z. B. "de-CH" für Schweizer
+ * Gruppierung 123'456.78), damit Zahlenformate unabhängig von der UI-Sprache
+ * der Region folgen. Fällt auf die UI-Sprache zurück, wenn keine Region gesetzt
+ * ist. Siehe numberLocaleFor() in settings/region-presets.js für die Ableitung.
+ */
+export function getFormatLocale() {
+  let stored = null;
+  try {
+    stored = localStorage.getItem(NUMBER_LOCALE_KEY);
+  } catch {
+    stored = null;
+  }
+  return stored && /^[a-z]{2,3}-[A-Z]{2}$/.test(stored) ? stored : currentLocale;
+}
+
+// Gecachte Intl.NumberFormat-Instanzen je (Format-Locale × Options). Die
+// Konstruktion eines NumberFormat ist teuer; ohne Cache baut jede formatierte
+// Zahl auf einer Budget-/Dashboard-Seite einen neuen Formatter. Der Schlüssel
+// enthält getFormatLocale(), sodass ein Sprach-/Regionswechsel automatisch einen
+// neuen Formatter erzeugt; zusätzlich leert 'locale-changed' den Cache.
+const _numberFormatCache = new Map();
+
+/**
+ * Liefert einen gecachten Intl.NumberFormat für die aktuelle Format-Locale
+ * (region-abhängig via getFormatLocale). Ersetzt `new Intl.NumberFormat(
+ * getFormatLocale(), options)` an den Aufrufstellen, damit Formatter nicht pro
+ * Wert neu gebaut werden.
+ */
+export function getNumberFormat(options = {}) {
+  const locale = getFormatLocale();
+  const key = `${locale}\u0000${JSON.stringify(options)}`;
+  let fmt = _numberFormatCache.get(key);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat(locale, options);
+    _numberFormatCache.set(key, fmt);
+  }
+  return fmt;
+}
+
+/** Liste der unterstützten Locales */
+export function getSupportedLocales() {
+  return [...SUPPORTED_LOCALES];
+}
+
+/** Datum locale-aware formatieren */
+export function formatDate(date) {
+  if (date == null) return '';
+  if (isDateOnlyString(date)) {
+    return formatDateParts(new Date(`${date}T00:00:00Z`), true);
+  }
+  return formatDateParts(date);
+}
+
+/**
+ * Kompaktes Datum ohne Jahr (z. B. Spaltenköpfe im Wochenboard, Audit F-04):
+ * folgt der Datumsformat-Präferenz in Reihenfolge und Trennzeichen, lässt nur
+ * das Jahr weg — der umgebende Kontext (Wochen-Label) trägt es bereits.
+ */
+export function formatDayMonth(date) {
+  if (date == null) return '';
+  const useUtc = isDateOnlyString(date);
+  const d = useUtc ? new Date(`${date}T00:00:00Z`) : (date instanceof Date ? date : new Date(date));
+  if (isNaN(d.getTime())) return '';
+  const month = String((useUtc ? d.getUTCMonth() : d.getMonth()) + 1).padStart(2, '0');
+  const day = String(useUtc ? d.getUTCDate() : d.getDate()).padStart(2, '0');
+  switch (getDateFormatPreference()) {
+    case 'dmy': return `${day}.${month}.`;
+    case 'mdy_dot': return `${month}.${day}.`;
+    case 'dmy_dot': return `${day}.${month}.`;
+    case 'dmy_slash': return `${day}/${month}`;
+    case 'ymd': return `${month}-${day}`;
+    case 'ymd_dot': return `${month}.${day}.`;
+    case 'ymd_slash': return `${month}/${day}`;
+    default: return `${month}/${day}`;
+  }
+}
+
+export function dateInputPlaceholder() {
+  switch (getDateFormatPreference()) {
+    case 'dmy': return 'DD.MM.YYYY';
+    case 'mdy_dot': return 'MM.DD.YYYY';
+    case 'dmy_dot': return 'DD.MM.YYYY';
+    case 'dmy_slash': return 'DD/MM/YYYY';
+    case 'ymd': return 'YYYY-MM-DD';
+    case 'ymd_dot': return 'YYYY.MM.DD';
+    case 'ymd_slash': return 'YYYY/MM/DD';
+    default: return 'MM/DD/YYYY';
+  }
+}
+
+export function formatDateInput(date) {
+  if (!date) return '';
+  return formatDate(date);
+}
+
+export function parseDateInput(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return isValidDateParts(isoMatch[1], isoMatch[2], isoMatch[3]) ? raw : '';
+
+  if (/^\d{8}$/.test(raw)) {
+    const pref = getDateFormatPreference();
+    let year, month, day;
+    if (pref.startsWith('ymd')) {
+      year = raw.slice(0, 4); month = raw.slice(4, 6); day = raw.slice(6, 8);
+    } else if (pref.startsWith('dmy')) {
+      day = raw.slice(0, 2); month = raw.slice(2, 4); year = raw.slice(4, 8);
+    } else {
+      month = raw.slice(0, 2); day = raw.slice(2, 4); year = raw.slice(4, 8);
+    }
+    if (!isValidDateParts(year, month, day)) return '';
+    return `${year}-${month}-${day}`;
+  }
+
+  const ymdSeparatorMatch = raw.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);
+  if (ymdSeparatorMatch && getDateFormatPreference().startsWith('ymd')) {
+    const [, year, month, day] = ymdSeparatorMatch;
+    if (!isValidDateParts(year, month, day)) return '';
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  const slashMatch = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (!slashMatch) return '';
+
+  const [, first, second, year] = slashMatch;
+  const [month, day] = getDateFormatPreference().startsWith('dmy')
+    ? [second, first]
+    : [first, second];
+
+  if (!isValidDateParts(year, month, day)) return '';
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+export function isDateInputValid(value) {
+  const raw = String(value || '').trim();
+  return !raw || !!parseDateInput(raw);
+}
+
+function isValidDateParts(year, month, day) {
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return false;
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+/** Uhrzeit locale-aware formatieren */
+export function formatTime(date) {
+  if (date == null) return '';
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  if (getTimeFormatPreference() === '12h') {
+    const hour = d.getHours();
+    const minute = String(d.getMinutes()).padStart(2, '0');
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minute} ${hour >= 12 ? 'PM' : 'AM'}`;
+  }
+  return new Intl.DateTimeFormat(currentLocale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+}
+
+function toTimeParts(value) {
+  if (value == null || value === '') return null;
+
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    return { hour: value.getHours(), minute: value.getMinutes() };
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  if (/^\d{1,2}$/.test(raw)) {
+    const hour = Number(raw);
+    return (hour >= 0 && hour <= 23) ? { hour, minute: 0 } : null;
+  }
+
+  // Getrennte Schreibweisen: ':', '.', ',' oder 'h' als Trennzeichen zwischen
+  // Stunde und Minute. Erleichtert die Eingabe auf Tastaturen, auf denen der
+  // Doppelpunkt umständlich ist (z. B. 09.30 oder 9h30 → 09:30).
+  const sepMatch = raw.match(/^(\d{1,2})[:.,hH](\d{2})$/);
+  if (sepMatch) {
+    const hour = Number(sepMatch[1]);
+    const minute = Number(sepMatch[2]);
+    if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+      return { hour, minute };
+    }
+    return null;
+  }
+
+  // Kompakte Schreibweise ohne Trennzeichen: HMM oder HHMM (3–4 Ziffern).
+  // Die letzten zwei Ziffern sind die Minuten, der Rest die Stunde
+  // (930 → 09:30, 0930 → 09:30, 1345 → 13:45). Vierstellige Werte kollidieren
+  // nicht mit dem 1–2-stelligen Stunden-Fall darüber.
+  if (/^\d{3,4}$/.test(raw)) {
+    const hour = Number(raw.slice(0, -2));
+    const minute = Number(raw.slice(-2));
+    if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+      return { hour, minute };
+    }
+    return null;
+  }
+
+  const ampmMatch = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*([ap]m)$/i);
+  if (ampmMatch) {
+    let hour = Number(ampmMatch[1]);
+    const minute = Number(ampmMatch[2] ?? 0);
+    const meridiem = ampmMatch[3].toLowerCase();
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || minute < 0 || minute >= 60) return null;
+    if (hour < 1 || hour > 12) return null;
+    if (meridiem === 'pm' && hour !== 12) hour += 12;
+    if (meridiem === 'am' && hour === 12) hour = 0;
+    return { hour, minute };
+  }
+
+  return null;
+}
+
+export function formatTimeInput(value) {
+  const parts = toTimeParts(value);
+  if (!parts) return '';
+  const hour = String(parts.hour).padStart(2, '0');
+  const minute = String(parts.minute).padStart(2, '0');
+  if (getTimeFormatPreference() === '12h') {
+    const isPm = parts.hour >= 12;
+    const displayHour = parts.hour % 12 || 12;
+    return `${displayHour}:${minute} ${isPm ? 'PM' : 'AM'}`;
+  }
+  return `${hour}:${minute}`;
+}
+
+export function parseTimeInput(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const parts = toTimeParts(raw);
+  if (!parts) return '';
+  return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
+}
+
+export function isTimeInputValid(value) {
+  return !String(value || '').trim() || !!parseTimeInput(value);
+}
+
+export function timeInputPlaceholder() {
+  return getTimeFormatPreference() === '12h' ? 'h:mm AM/PM' : 'HH:MM';
+}

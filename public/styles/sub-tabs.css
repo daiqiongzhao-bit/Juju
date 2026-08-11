@@ -1,0 +1,214 @@
+/* Sub-Tabs Bar — shared pill-style segment control
+ * Used by kitchen modules, settings, and any future sub-module navigation.
+ * Height: --sub-tabs-height (default from tokens.css); override per context.
+ */
+
+.sub-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-block: var(--space-2);
+  /* Full-bleed-Rail wie .page-toolbar (Issue #577): Hintergrund, Akzentstreifen
+   * und Trennlinie laufen bis zur Shell-Kante, der Tab-Inhalt sitzt in der
+   * zentrierten Content-Spalte und fluchtet mit dem Seiten-Body darunter.
+   * Das gilt für die Leiste ALS EIGENE RAIL: kitchen-tabs.js hängt sie als
+   * GESCHWISTER des Modul-Roots in den Router-Wrapper, womit das `100%` die
+   * volle Shell-Breite trifft. Liegt sie dagegen IM Modulkopf (health-tabs.js),
+   * gibt sie das Rail-Verhalten ab - siehe die Trägerregel unten. (Settings
+   * nutzt eine andere Tab-Mechanik, utils/tablist.js, und rendert keine
+   * .sub-tabs-bar.) */
+  padding-inline: var(--page-inline-pad);
+  height: var(--sub-tabs-height);
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background-color: var(--color-bg);
+  border-bottom: 1px solid var(--color-border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex-shrink: 0;
+}
+
+.sub-tabs-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* TRÄGERREGEL: eine Sub-Tab-Leiste IM Modulkopf ist keine eigene Rail mehr,
+ * sondern dessen Bar-Zeile.
+ *
+ * Derselbe Satz wie beim Well (Session 5): der Träger entscheidet, nicht das
+ * Bauteil. Sticky-Position, Seitengrund, Trennlinie, Höhe und die Fluchtlinie
+ * gehören dem Kopf; trüge die Leiste sie ein zweites Mal, stünden zwei
+ * Trennlinien untereinander, das Padding läge doppelt und die Leiste klebte
+ * gegen den Kopf, in dem sie liegt.
+ *
+ * Was BLEIBT, ist die Bauart der Leiste: `overflow-x: auto` samt
+ * Scroll-Affordanz. Genau darauf setzt die Shell-Regel „Tab-Leiste im
+ * Modulkopf" (layout.css) auf, die jeder `[role="tablist"]` im Kopf eine eigene
+ * Zeile gibt.
+ *
+ * Nutzer: health-tabs.js. Die Küchen-Leiste bleibt eine eigene Rail - sie
+ * wechselt das MODUL und steht deshalb über dem Kopf, nicht in ihm. */
+.page-toolbar > .sub-tabs-bar {
+  position: static;
+  z-index: auto;
+  height: auto;
+  padding: 0;
+  background-color: transparent;
+  border-bottom: none;
+}
+
+/* Optionaler Modul-Titel links der Tabs (Canonical Page Head).
+ * Größe/Weight aus der u-toolbar-title-Rolle (typography.css). */
+.sub-tabs-bar__title {
+  flex-shrink: 0;
+  margin-right: var(--space-2);
+  color: var(--color-text-primary);
+}
+
+/* Ein Selektor für zwei Elementtypen: die Küchen-Leiste rendert `<a href>`
+ * (Zielorte), die Gesundheits-Leiste `<button role="tab">` (Sichten) - siehe
+ * den Kopf von utils/sub-tabs.js. Die Pille sieht in beiden Fällen gleich aus;
+ * `text-decoration` und `font` sind die einzigen Stellen, an denen die
+ * Browser-Defaults auseinanderlaufen. */
+.sub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-3);
+  height: var(--target-base);
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sub-tab:active {
+  transform: scale(0.96);
+  transition-duration: 0.06s;
+}
+
+/* Aktiv: Modul-Akzent GEFÜLLT + --color-ink-on-vivid - die eine
+ * Segment-Sprache der Shell (dieselbe wie .group-toggle__btn--active in
+ * tasks.css und .cal-toolbar__view-btn--active im Kalender, DESIGN.md
+ * „Segmented Controls").
+ *
+ * Vorher: 14 %-Tönung mit Ink-Label. Die Begründung dafür war, dass
+ * Modul-Akzent als TEXT auf Hell nur ~3.5:1 erreicht - das gilt weiter und
+ * ist genau der Grund, warum der Akzent hier zur FLÄCHE wird: alle
+ * Modul-Tints sind gegen Weiß auf >=5:1 vertieft, weiße Tinte darauf erbt
+ * denselben Wert. */
+.sub-tab--active {
+  background-color: var(--active-module-accent, var(--color-accent));
+  color: var(--color-ink-on-vivid);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sub-tab__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.sub-tab__label {
+  /* --line-height-tight statt 1: bei `font-size: 14px` ergab `line-height: 1`
+   * eine 14px hohe Zeilenbox für Glyphen, die 16px brauchen - gemessen
+   * `scrollHeight 16 > clientHeight 14` auf JEDEM Viewport. Mobil kommt in
+   * kitchen-tabs.css ein `overflow: hidden` dazu, das die 2px dann wirklich
+   * abschneidet: die Unterlänge im „p" von „Rezepte" verlor ihre Spitze
+   * (Critique 2026-07-30). Die Pillenhöhe steuert --target-base, nicht die
+   * Zeilenhöhe, der Kopf wächst dadurch nicht. */
+  line-height: var(--line-height-tight);
+}
+
+/* Zustandszahl im Tab.
+ *
+ * Nutzer: die Küchen-Leiste („Einkaufen 12", „Vorrat 8", „Mahlzeiten 10"). Sie
+ * macht aus vier Schubladen eine Pipeline, in der der nächste Schritt sichtbar ist -
+ * vorher lebte der Kreislauf nur in den vier Leerzustands-Hinweisen und verschwand
+ * mit dem ersten Datensatz (Critique 2026-07-30, P1).
+ *
+ * DIESELBE GRAMMATIK WIE `.list-tab__count` in der Einkaufsliste: getönte
+ * currentColor-Pille, tabellarische Ziffern. Der Zähler erbt damit die Farbe seines
+ * Tabs und braucht keine eigene Kontrastrechnung. Auf dem AKTIVEN Tab kehrt er
+ * sich um (Regel weiter unten): dort ist der Grund der Vollton-Akzent. */
+.sub-tab__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-4);
+  margin-inline-start: var(--space-px);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  background-color: color-mix(in srgb, currentColor 15%, transparent);
+  /* --color-text-primary, NICHT currentColor.
+   *
+   * Die Tönung hebt den GRUND an, der Text blieb aber die Tab-Tinte: auf einem
+   * inaktiven Tab ergab das rgb(108,107,103) auf rgb(224,223,220) = **4.02:1** bei
+   * 12px/600, unter der AA-Schwelle von 4.5 (Critique 2026-07-30). Auf dem aktiven
+   * Tab ist currentColor ohnehin schon Ink, dort ändert sich nichts. Eine Zahl, die
+   * zum Handeln auffordert, gehört ohnehin nicht in die zurückgenommene Tinte. */
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  /* Ohne sie springt die Leiste bei jeder Änderung seitlich. */
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-height-tight);
+}
+
+/* `display: inline-flex` schlägt das UA-`[hidden] { display: none }` bei gleicher
+ * Spezifität - der aktive Tab trug dadurch ein 16 × 0px breites totes Innenmaß
+ * (Tab „Mahlzeiten" 137.9px aktiv gegen 143.3px mit Badge, gemessen). Fünfte
+ * Fundstelle derselben Falle in diesem Repo; die geteilte Durchsetzungsliste in
+ * layout.css greift hier nicht, weil sie nur App-Shell-Komponenten führt. */
+.sub-tab__badge[hidden] {
+  display: none;
+}
+
+/* Auf dem aktiven Tab kehrt der Zähler sich um: Tinte als Fläche, Akzent als
+ * Ziffer (Apple-Muster für Badges auf gefüllten Segmenten). Die 15 %-Tönung von
+ * oben würde hier eine leicht aufgehellte Akzentfläche ergeben, auf der
+ * --color-text-primary (dunkles Ink) auf einem satten Modul-Tint stünde - der
+ * einzige Ort, an dem der Fill-Umbau die alte Badge-Rechnung gekippt hätte.
+ * Umgekehrt erbt die Ziffer exakt den verifizierten Akzent-auf-Weiß-Wert
+ * (>=5:1 über alle 17 Tints). */
+.sub-tab--active .sub-tab__badge {
+  background-color: var(--color-ink-on-vivid);
+  color: var(--active-module-accent, var(--color-accent));
+}
+
+/* Der Vorrats-Warnzähler bleibt sein eigenes Signal - auch auf dem aktiven Tab. */
+.sub-tab--active .sub-tab__badge--warning {
+  background-color: var(--color-warning);
+  color: var(--color-ink-on-vivid);
+}
+
+/* Der einzige Ton-Ausschlag: der Vorrat ist das einzige Küchen-Signal mit einer
+ * Frist (abgelaufen / fast leer). Volltonfläche statt currentColor-Tönung, damit er
+ * sich auch auf dem INAKTIVEN Tab von den neutralen Zählern abhebt - dort steht
+ * currentColor auf --color-text-secondary und eine 15%-Tönung davon ist kein
+ * Signal. */
+.sub-tab__badge--warning {
+  background-color: var(--color-warning);
+  color: var(--color-ink-on-vivid);
+}
+
+/* Vertical divider between tab groups */
+.sub-tabs-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  flex-shrink: 0;
+  margin: 0 var(--space-1);
+}

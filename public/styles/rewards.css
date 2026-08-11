@@ -1,0 +1,496 @@
+/*
+ * Modul: Belohnungen (Rewards)
+ * Akzent: Rosé-Kupfer (--module-rewards). Ruhig, würdevoll — kein Game-Look.
+ * .rw-* Klassen sind global (eindeutiges Präfix), damit sie auch in Modals
+ * (die außerhalb von .rewards-page im Body rendern) greifen.
+ */
+
+.rewards-page {
+  --module-accent: var(--module-rewards);
+  /* FAB-Freiraum wie im Budget: Listenende bleibt über dem FAB lesbar. */
+  /* Full-bleed-Root (Issue #577): Content-Spalte über --page-inline-pad auf den
+   * direkten Kindern, damit das Chrome des Kopfes bis zur Shell-Kante läuft. */
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Toolbar: Titel links, Tab-Reihe bleibt rechtsbündig. Schrumpfen, Scrollen und
+ * die eigene Zeile in der kompakten Grössenklasse kommen aus der Shell-Regel
+ * „Tab-Leiste im Modulkopf" (layout.css). */
+.rewards-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.rewards-content__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  /* Horizontaler Innenabstand: Punktwerte klebten sonst an der
+   * Viewport-Kante; unten FAB-Freiraum statt fixem space-12 (Audit A2-15).
+   * --page-inline-pad hält ihn auf der gemeinsamen Fluchtlinie (Issue #577). */
+  padding-inline: var(--page-inline-pad);
+  padding-top: var(--space-6);
+}
+
+/* --------------------------------------------------------
+   Sektionen
+   -------------------------------------------------------- */
+.rw-section { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.rw-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rw-section__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.rw-section__title i { width: 18px; height: 18px; color: var(--module-accent); }
+
+.rw-toolbar-row { display: flex; gap: var(--space-2); }
+
+/* --------------------------------------------------------
+   Avatare
+   -------------------------------------------------------- */
+.rw-avatar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  /* Platzhalterfläche, solange ein Avatarbild lädt. */
+  background: var(--color-surface-3);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  /* KEINE Textfarbe hier. Sie stand als `--color-text-on-accent` (weiß) über
+     dieser grauen Platzhalterfläche und ergab 1,19:1 - sie kam nur deshalb nie
+     an, weil beide Varianten sie überschreiben: die Bildvariante hat gar keinen
+     Text, die Initialenvariante setzt ihre Farbe inline aus
+     `getReadableTextColor(Nutzerfarbe)` (rewards.js:98, Regel 3: auf einer
+     Nutzerfarbe wählt der Text seinen Ton). Eine zugesagte Farbe, die nie gilt,
+     ist eine Zusage, die beim ersten neuen Markup bricht. */
+}
+.rw-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.rw-avatar--initials { background: var(--rw-avatar-bg, var(--module-accent)); }
+
+/* --------------------------------------------------------
+   Übersicht: Punktestände (gleichwertige Zeilenliste, bewusst flach)
+   -------------------------------------------------------- */
+/* EIN Träger, Zeilen per Haarlinie (Zeilenlisten-Regel, tokens.css) - vorher
+ * trug jede Punktestandszeile ihre eigene Karte. */
+.rw-standings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.rw-standing {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+.rw-standing + .rw-standing {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* Fokussierbarer Öffner (Tastatur/Screenreader) für das Mitglieds-Detail. */
+.rw-standing__id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-1);
+  margin: calc(var(--space-1) * -1);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.rw-standing__id:hover .rw-standing__name { color: var(--module-accent); }
+.rw-standing__id:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+.rw-standing__rank {
+  flex: 0 0 auto;
+  min-width: 18px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.rw-standing__idtext { min-width: 0; display: flex; flex-direction: column; }
+.rw-standing__name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 140ms ease;
+}
+.rw-standing__points { font-size: var(--text-sm); color: var(--color-text-secondary); }
+.rw-standing__points strong {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--module-accent);
+  font-variant-numeric: tabular-nums;
+}
+.rw-standing__points strong.rw-countup--active { color: color-mix(in srgb, var(--module-accent) var(--tint-ink), var(--color-text-primary)); }
+.rw-standing__progress { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.rw-standing__actions { display: flex; justify-content: flex-end; }
+
+/* --------------------------------------------------------
+   Eltern-Ersteinrichtung
+   -------------------------------------------------------- */
+.rw-setup {
+  padding: var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+}
+.rw-setup-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  counter-reset: rwstep;
+}
+.rw-setup-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+.rw-setup-step__mark { width: 20px; height: 20px; color: var(--color-text-tertiary); flex: 0 0 auto; }
+.rw-setup-step--done .rw-setup-step__mark { color: var(--module-tasks); }
+.rw-setup-step__label { flex: 1 1 auto; color: var(--color-text-primary); }
+.rw-setup-step--done .rw-setup-step__label { color: var(--color-text-secondary); text-decoration: line-through; }
+.rw-setup-step__go {
+  flex: 0 0 auto;
+  min-height: var(--target-sm);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--module-accent);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--module-accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.rw-setup-step__go:hover { background: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent); }
+
+/* Fortschritt zur nächsten Prämie */
+.rw-progress { display: flex; flex-direction: column; gap: var(--space-2); }
+.rw-progress__track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-3);
+  overflow: hidden;
+}
+.rw-progress__fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--module-accent) 78%, white),
+    var(--module-accent));
+  /* scaleX statt width animieren — projektweite Konvention (budget/dashboard/tasks-Bars),
+   * vom frontend-audit erzwungen; --rw-progress (0–1) wird inline gesetzt. */
+  transform-origin: left center;
+  transform: scaleX(var(--rw-progress, 0));
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.rw-progress__label { margin: 0; font-size: var(--text-xs); color: var(--color-text-secondary); }
+.rw-progress__label--muted { color: var(--color-text-tertiary); }
+
+/* --------------------------------------------------------
+   Offene Anfragen
+   -------------------------------------------------------- */
+/* Randlose Karte wie jede andere: die getönte Fläche MIT getönter Kante war
+ * dasselbe Muster, das Runde 1 in der Haushaltshilfe entfernt hat. Die Tönung
+ * bleibt als Dringlichkeitssignal, die Kante geht - sie sagte nichts, was die
+ * Fläche nicht schon sagt. */
+.rw-pending-panel {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-lg);
+  /* 16 %, nicht 8: gemessen hebt sich die Toenung erst dort in BEIDEN Themes
+   * wahrnehmbar von der Karte ab (1.25:1 light / 1.29:1 dark gegen 1.12:1 bei
+   * 8 %, wo das Signal im Dark verschwand). Es ist zugleich das eine
+   * Toenungsrezept dieser Welt - dasselbe wie Notizkarte und Icon-Kachel. */
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface));
+  box-shadow: var(--shadow-sm);
+}
+.rw-pending-list { list-style: none; margin: 0; padding: 0; }
+.rw-pending {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+.rw-pending + .rw-pending { border-top: 1px solid var(--color-border-subtle); }
+.rw-pending__text { flex: 1 1 auto; min-width: 0; }
+.rw-pending__title { margin: 0; font-weight: 600; color: var(--color-text-primary); }
+.rw-pending__meta { margin: var(--space-1) 0 0; font-size: var(--text-xs); color: var(--color-text-secondary); }
+.rw-pending__actions { display: flex; gap: var(--space-2); flex: 0 0 auto; }
+
+/* --------------------------------------------------------
+   Prämien-Katalog
+   -------------------------------------------------------- */
+.rw-reward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+.rw-reward-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+.rw-reward-card--inactive { opacity: 0.62; }
+.rw-reward-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface-2));
+  font-size: var(--text-2xl);
+}
+.rw-reward-card__icon i { width: 22px; height: 22px; color: var(--module-accent); }
+.rw-reward-card__body { flex: 1 1 auto; }
+.rw-reward-card__name { margin: 0; font-weight: 600; color: var(--color-text-primary); }
+.rw-reward-card__desc { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary); }
+.rw-reward-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+.rw-reward-card__actions { display: flex; align-items: center; gap: var(--space-2); }
+.rw-reward-card__short { font-size: var(--text-xs); color: var(--color-text-tertiary); }
+
+.rw-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--module-accent);
+}
+.rw-cost i { width: 15px; height: 15px; }
+
+.rw-tag {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-3);
+  color: var(--color-text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* --------------------------------------------------------
+   Verlauf (Ledger)
+   -------------------------------------------------------- */
+.rw-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.rw-chip {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.rw-chip:hover { border-color: var(--color-border-strong); }
+.rw-chip--active {
+  background: var(--module-accent);
+  border-color: var(--module-accent);
+  color: var(--color-ink-on-vivid);
+}
+
+/* Verlaufsliste: EIN Träger (Zeilenlisten-Regel, tokens.css). Der Träger endet
+ * mit der Liste, deshalb trennt der +-Kombinator statt border-bottom je Zeile. */
+.rw-ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.rw-ledger-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+.rw-ledger-row + .rw-ledger-row {
+  border-top: 1px solid var(--color-border-subtle);
+}
+/* Der Träger entscheidet (tokens.css): im Modal ist der Grund schon
+ * --color-surface, eine zweite weisse Karte darauf wäre unsichtbar. Die
+ * Kurzfassung der Liste bleibt deshalb trägerlos, nur mit Haarlinien. */
+.rw-ledger--compact {
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.rw-ledger-row--compact { padding: var(--space-2) 0; }
+.rw-ledger-row__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+}
+.rw-ledger-row__icon i { width: 17px; height: 17px; }
+.rw-ledger-row__icon--earn  { background: color-mix(in srgb, var(--module-tasks) var(--tint-surface), transparent); color: var(--module-tasks); }
+.rw-ledger-row__icon--bonus { background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent); color: var(--module-accent); }
+.rw-ledger-row__icon--redeem { background: color-mix(in srgb, var(--module-budget) var(--tint-surface), transparent); color: var(--module-budget); }
+.rw-ledger-row__text { flex: 1 1 auto; min-width: 0; }
+.rw-ledger-row__reason { margin: 0; font-weight: 500; color: var(--color-text-primary); }
+.rw-ledger-row__meta { margin: var(--space-1) 0 0; font-size: var(--text-xs); color: var(--color-text-secondary); }
+.rw-delta { flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rw-delta--pos { color: var(--module-tasks); }
+.rw-delta--neg { color: var(--color-text-secondary); }
+
+/* --------------------------------------------------------
+   Leerzustände
+   -------------------------------------------------------- */
+/* Leerzustände nutzen die geteilte .empty-state-Grammatik (layout.css) — keine
+ * modul-eigene Variante mehr. */
+
+/* --------------------------------------------------------
+   Modal-Bausteine
+   -------------------------------------------------------- */
+.rw-modal-intro { margin: 0 0 var(--space-4); color: var(--color-text-secondary); font-size: var(--text-sm); }
+.rw-hint { margin: var(--space-1) 0 0; font-size: var(--text-xs); color: var(--color-text-tertiary); }
+.rw-emoji-input { text-align: center; font-size: var(--text-xl); }
+
+.rw-redeem-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+.rw-redeem-summary__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+.rw-redeem-summary__row--total {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+}
+.rw-redeem-summary__row--neg strong { color: var(--color-danger); }
+
+.rw-participant-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+/* Im Modal, also trägerlos (Träger-Regel) - nur die Haarlinie trennt. */
+.rw-participant {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+.rw-participant + .rw-participant {
+  border-top: 1px solid var(--color-border-subtle);
+}
+.rw-participant__name { flex: 1 1 auto; font-weight: 500; color: var(--color-text-primary); }
+
+.rw-detail-head { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4); }
+.rw-detail-points { margin: 0; color: var(--color-text-secondary); }
+.rw-detail-points strong { font-size: var(--text-2xl); color: var(--module-accent); }
+.rw-detail-hint { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary); }
+
+/* Toggle-Switch */
+.rw-switch { display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; }
+.rw-switch input { accent-color: var(--module-accent); width: 18px; height: 18px; }
+.rw-switch--compact { margin-left: auto; }
+
+/* Kleine Button-Variante (global additiv, für dichte Aktionsreihen) */
+.btn--sm {
+  min-height: var(--target-sm);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  gap: var(--space-1);
+}
+.btn--sm i { width: 15px; height: 15px; }
+
+/* Touch-Geräte: dichte Aktionsreihen brauchen 44-pt-Trefferflächen. */
+@media (pointer: coarse) {
+  .btn--sm,
+  .rw-setup-step__go { min-height: var(--target-base); }
+  .rw-pending__actions { gap: var(--space-3); }
+}
+
+/* Der Kopf trug hier `flex-direction: column`, die Leiste ihr eigenes
+ * Scroll-Rezept und ihre Tabs ein `flex: 1 1 0`. Alle drei sind mit der
+ * Shell-Regel entfallen (layout.css, „Tab-Leiste im Modulkopf"). Das
+ * Schrumpfenlassen der Tabs war eine MODUL-Lösung für ein SHELL-Problem: sie
+ * hat Belohnungen zufällig vor dem Überlauf bewahrt, der die Haushaltshilfe mit
+ * derselben Bauart traf. */
+
+@media (max-width: 640px) {
+  .rewards-content__inner { gap: var(--space-6); padding-top: var(--space-4); }
+  .rw-reward-grid { grid-template-columns: 1fr; }
+  /* Schmaler Viewport ⇒ mit hoher Wahrscheinlichkeit Touch: 44-pt-Ziele. */
+  .btn--sm,
+  .rw-setup-step__go { min-height: var(--target-base); }
+  .rw-standing {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+  .rw-standing__actions { justify-content: stretch; }
+  .rw-standing__actions .btn { flex: 1 1 auto; }
+  .rw-pending { flex-wrap: wrap; }
+  .rw-pending__actions { flex-shrink: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rw-progress__fill, .rw-chip, .rw-standing__name { transition: none; }
+}

@@ -1,0 +1,314 @@
+/* --------------------------------------------------------
+ * Beleg-Feld (Dokumente anhängen) - /components/document-attach.js
+ *
+ * Global geladen, nicht seitenweise: Der Router lädt nur ein Page-CSS je Seite,
+ * ein Modul-CSS trüge das Feld also nicht in ein anderes Modul. Genau daran
+ * hing, dass .document-dropzone dreimal nebeneinander existierte.
+ *
+ * Farbe kommt aus --module-accent: das Feld nimmt den Ton des Moduls an, in
+ * dessen Formular es steht.
+ * -------------------------------------------------------- */
+
+.doc-attach__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.doc-attach__chips:empty {
+  display: none;
+}
+
+.doc-attach__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--module-accent) var(--tint-hint), var(--color-border-subtle));
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface));
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+}
+
+.doc-attach__chip svg {
+  width: 14px;
+  height: 14px;
+  color: var(--module-accent);
+  flex-shrink: 0;
+}
+
+/* Noch nicht hochgeladen: gestrichelt, damit der Unterschied zwischen „liegt im
+ * Dokumente-Modul" und „geht erst beim Speichern raus" sichtbar ist. */
+.doc-attach__chip--pending {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--module-accent) var(--tint-wash), var(--color-surface));
+}
+
+.doc-attach__chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+/* Der Name verlinkt die Vorschau, trägt aber die Chip-Farbe: ein blauer
+ * Standard-Link risse den Chip optisch auseinander. */
+a.doc-attach__chip-name {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--module-accent) var(--tint-hint), transparent);
+  text-underline-offset: 2px;
+}
+
+a.doc-attach__chip-name:hover {
+  text-decoration-color: var(--module-accent);
+}
+
+a.doc-attach__chip-name:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.doc-attach__chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--target-sm);
+  height: var(--target-sm);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.doc-attach__chip-remove:hover {
+  background: color-mix(in srgb, var(--module-accent) var(--tint-raised), transparent);
+  color: var(--color-text-primary);
+}
+
+.doc-attach__chip-remove:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.doc-attach__empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.doc-attach__empty svg {
+  width: 16px;
+  height: 16px;
+}
+
+.doc-attach__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.doc-attach__action {
+  gap: var(--space-2);
+}
+
+.doc-attach__action svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* --------------------------------------------------------
+ * Auswahl-Overlay für vorhandene Dokumente
+ *
+ * Liegt im Modal-Panel statt in einem zweiten Modal - das geteilte Modal ist
+ * nicht verschachtelbar. Spiegelt bewusst die Maße von .budget-inline-modal,
+ * damit beide Overlays im selben Formular gleich wirken.
+ * -------------------------------------------------------- */
+
+.doc-attach-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--color-overlay-glass);
+}
+
+.doc-attach-picker__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(100%, 460px);
+  max-height: min(80vh, 560px);
+  padding: var(--space-4);
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-glass-card);
+  background-color: var(--glass-bg-card);
+  box-shadow: var(--glass-shadow-lg);
+}
+
+.doc-attach-picker__header,
+.doc-attach-picker__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.doc-attach-picker__footer {
+  justify-content: flex-end;
+}
+
+.doc-attach-picker__list {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.doc-attach-picker__status {
+  margin: auto;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.doc-attach-picker__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--target-md);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.doc-attach-picker__item:hover {
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+}
+
+.doc-attach-picker__item:focus-within {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.doc-attach-picker__item-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.doc-attach-picker__item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+}
+
+.doc-attach-picker__item-meta {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
+
+/* --------------------------------------------------------
+ * Ablegefläche für eine Datei (.document-dropzone)
+ *
+ * EINE Definition. Sie stand zweimal - in documents.css und in calendar.css -
+ * und die beiden Fassungen waren auseinandergelaufen: verschiedener Radius,
+ * verschiedene Icon-Kachel, verschiedener Dateiname, und nur eine von beiden
+ * hatte einen Fokusring. Dasselbe Markup, zwei Optiken.
+ *
+ * Maßgeblich ist die Dokumente-Fassung (Radius --radius-lg wie jede große
+ * Fläche, Fokusring, Dateiname als getönte Pille) mit EINER Korrektur: ihre
+ * Icon-Kachel stand auf --color-surface-elevated plus Schatten, also als Karte
+ * in einer Karte. Sie trägt jetzt das Tönungsrezept (16 % Modulfarbe), das für
+ * getönte Flächen app-weit gilt.
+ * -------------------------------------------------------- */
+
+.document-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 148px;
+  padding: var(--space-5);
+  border: 1.5px dashed color-mix(in srgb, var(--module-accent) var(--tint-hint), var(--color-border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-wash), var(--color-surface));
+  color: var(--color-text-secondary);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.document-dropzone:hover,
+.document-dropzone--active {
+  border-color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), var(--color-surface));
+}
+
+/* Der Datei-Input liegt sr-only (1x1px, geclippt) im Label und ist trotzdem
+ * tab-fokussierbar. Ohne diese Regel verschwand der Fokus beim Durchtabben
+ * spurlos - der Ring muss auf der sichtbaren Dropzone erscheinen. */
+.document-dropzone:focus-within {
+  border-color: var(--module-accent);
+  border-style: solid;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.document-dropzone--active {
+  transform: translateY(-1px);
+}
+
+/* Getönte Icon-Kachel nach dem einen Tönungsrezept: 16 % Modulfarbe auf der
+ * Fläche. Erst das trägt in BEIDEN Themes sichtbar. */
+.document-dropzone__icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+}
+
+.document-dropzone__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.document-dropzone__title {
+  color: var(--color-text-primary);
+}
+
+.document-dropzone__hint,
+.document-dropzone__file {
+  max-width: 100%;
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.document-dropzone__file {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+  font-weight: var(--font-weight-semibold);
+}

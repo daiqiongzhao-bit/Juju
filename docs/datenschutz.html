@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Security headers via meta (GitHub Pages allows no custom HTTP headers).
+       Note: X-Frame-Options / CSP frame-ancestors only take effect as HTTP headers, not via meta. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Datenschutzerklärung - Yuvomi</title>
+  <meta name="description" content="Datenschutzerklärung nach Art. 13 DSGVO für github.com/daiqiongzhao-bit/Juju.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#FBFBFD" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0A0A0C" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://github.com/daiqiongzhao-bit/Juju/datenschutz.html">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Yuvomi">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:title" content="Datenschutzerklärung - Yuvomi">
+  <meta property="og:description" content="Datenschutzerklärung für die Website github.com/daiqiongzhao-bit/Juju. Betrifft nicht eure selbstgehostete Instanz.">
+  <meta property="og:url" content="https://github.com/daiqiongzhao-bit/Juju/datenschutz.html">
+  <meta property="og:image" content="https://github.com/daiqiongzhao-bit/Juju/og-image.png">
+  <meta property="og:image:alt" content="Yuvomi - der selbstgehostete Familienplaner">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Datenschutzerklärung - Yuvomi">
+  <meta name="twitter:description" content="Datenschutzerklärung für die Website github.com/daiqiongzhao-bit/Juju. Betrifft nicht eure selbstgehostete Instanz.">
+  <meta name="twitter:image" content="https://github.com/daiqiongzhao-bit/Juju/twitter-image.png">
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+
+  <!-- Geteiltes Token-System der vier Seiten. Frueher stand es hier viermal,
+       und dieser Rechtstext hielt eine abgespeckte Teilmenge, die von der
+       Startseite, auf die er verlinkt, unbemerkt abweichen konnte. -->
+  <link rel="stylesheet" href="assets/site.css">
+  <style>
+    /* Seiteneigenes Mass: ein Rechtstext ist eine Spalte, keine Landing-Page. */
+    :root { --maxw: 820px; }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--ff);
+      font-size: 16px;
+      line-height: 1.65;
+      color: var(--text-1);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; width: 100%; }
+
+    header.top {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 18px 0;
+    }
+    header.top .wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text-1);
+      text-decoration: none;
+    }
+    .nav-logo svg { width: 28px; height: 28px; }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      color: var(--text-2);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--border);
+      transition: all .18s ease;
+    }
+    .back-link:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    main { flex: 1; padding: 48px 0 64px; }
+
+    h1 {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 8px;
+      color: var(--text-1);
+    }
+    .subtitle {
+      color: var(--text-3);
+      font-size: 15px;
+      margin-bottom: 40px;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 36px 0 12px;
+      color: var(--text-1);
+    }
+    h2:first-of-type { margin-top: 0; }
+    h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin: 20px 0 8px;
+      color: var(--text-2);
+    }
+
+    p { margin-bottom: 12px; color: var(--text-1); }
+    ul { margin: 0 0 12px 22px; }
+    li { margin-bottom: 4px; }
+    address { font-style: normal; }
+    code { font-family: var(--ff-mono); font-size: 13px; background: var(--bg-alt); padding: 1px 5px; border-radius: 4px; }
+
+    a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; word-break: break-word; }
+    a:hover { color: var(--accent-hover); }
+
+    .legal-disclaimer {
+      background: var(--bg-alt);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--r-md);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: var(--text-2);
+    }
+    .legal-disclaimer strong { color: var(--text-1); }
+    .en-summary {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-3);
+      margin-bottom: 40px;
+    }
+    .en-summary strong { color: var(--text-2); }
+
+    .info-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 4px 24px;
+      margin: 12px 0 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .info-block p:first-child { margin-top: 14px; }
+    .info-block p:last-child { margin-bottom: 14px; }
+
+    table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 14px; }
+    th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+    th { background: var(--bg-alt); font-weight: 600; color: var(--text-2); }
+    /* Wide tables scroll inside their own box on phones instead of forcing page
+       overflow. The box does the scrolling, not the table: `display: block` on a
+       <table> strips its table role in the accessibility tree, so the phone
+       layout used to hand screen-reader users four unrelated cell runs. */
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    @media (max-width: 600px) {
+      .table-scroll table { white-space: nowrap; }
+    }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+    .small { font-size: 13px; color: var(--text-3); }
+
+    footer.bot {
+      border-top: 1px solid var(--border);
+      background: var(--bg-alt);
+      padding: 24px 0;
+      margin-top: auto;
+    }
+    footer.bot .wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-3);
+    }
+    footer.bot a { color: var(--text-2); text-decoration: none; }
+    footer.bot a:hover { color: var(--accent); }
+    footer.bot nav { display: flex; gap: 14px; flex-wrap: wrap; }
+    footer.bot nav a { padding: 6px 2px; min-height: 44px; display: inline-flex; align-items: center; }
+
+    /* In-page table of contents (navigation aid; legal text unchanged) */
+    main h2 { scroll-margin-top: 24px; }
+    .toc { margin: 28px 0 10px; padding: 20px 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+    .toc-title { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin: 0 0 12px; }
+    .toc-list { margin: 0; padding-left: 1.5em; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0 24px; }
+    .toc-list li { margin: 0; }
+    /* 44px targets. These are a list of links, not links inside a sentence, so
+       the inline exception to SC 2.5.8 does not cover them - they measured 18px.
+       The row gap goes to 0 because the padding now does that work. */
+    .toc-list a { color: var(--text-2); font-size: 0.9rem; line-height: 1.5; text-decoration: none;
+      display: inline-flex; align-items: center; min-height: 44px; padding: 2px 0; }
+    .toc-list a:hover { color: var(--accent); text-decoration: underline; }
+    @media (max-width: 560px) { .toc-list { grid-template-columns: 1fr; } }
+  
+    /* These two pages relied on the UA default focus ring; match the other pages. */
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+    /* Skip link: index and install put 26 focusable nodes between the top of the
+       page and the content, so keyboard users need a way past the nav. */
+    .skip-link { position: absolute; left: -9999px; top: 0; z-index: 200; }
+    .skip-link:focus { left: 8px; top: 8px; padding: 12px 18px; display: inline-flex; align-items: center; min-height: 44px;
+      background: var(--surface); color: var(--text-1);
+      border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-md); font-weight: 600; }
+  
+    /* 14 dense legal sections with a table of contents at the very top and no way
+       back to it on a phone. Appears only once you are past the first screen. */
+    .to-top { position: fixed; right: 16px; bottom: 16px; z-index: 90;
+      display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px;
+      background: var(--surface); color: var(--text-1); border: 1px solid var(--border);
+      border-radius: var(--r-full); box-shadow: var(--shadow-md); font-size: 0.85rem; font-weight: 600;
+      opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .2s, transform .2s, visibility .2s; }
+    .to-top.show { opacity: 1; visibility: visible; transform: none; }
+    .to-top:hover { text-decoration: none; border-color: var(--border-strong); }
+    .to-top svg { width: 15px; height: 15px; }
+  
+    /* These two pages had no reduced-motion guard at all. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .to-top { transition: none; }
+    }
+
+    /* Print. A privacy notice is the page on this site most likely to end up on
+       paper or in a PDF, and it printed with the floating "Nach oben" pill over
+       the text and every external reference as bare underlined words. */
+    @media print {
+      html { scroll-behavior: auto; }
+      body { background: #fff; color: #000; }
+      .skip-link, .to-top, .back-link { display: none !important; }
+      header.top, .info-block, .toc { background: transparent; }
+      .info-block, .toc, table, tr { break-inside: avoid; }
+      h2 { break-after: avoid; }
+      a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; word-break: break-all; }
+    }
+  </style>
+  <script>
+    /* Honor the theme the visitor picked on the main pages (no toggle here). */
+    (function(){
+      try {
+        var t = localStorage.getItem('yuvomi-theme') || localStorage.getItem('oikos-theme');
+        if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Zum Inhalt springen</a>
+
+<header class="top">
+  <div class="wrap">
+    <a href="index.html" class="nav-logo">
+      <svg viewBox="0 0 160 160" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="gf" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#8b5cf6"/>
+            <stop offset="100%" stop-color="#6c3aed"/>
+          </linearGradient>
+        </defs>
+        <rect width="160" height="160" rx="36" fill="url(#gf)"/>
+        <g fill="white" fill-opacity="0.82"><circle cx="64" cy="72" r="27"/><circle cx="100" cy="78" r="25"/><circle cx="80" cy="106" r="24"/></g>
+        
+      </svg>
+      Yuvomi
+    </a>
+    <a href="index.html" class="back-link">&larr; Zur Startseite</a>
+  </div>
+</header>
+
+<main id="main-content" tabindex="-1">
+  <div class="wrap">
+
+    <h1>Datenschutzerklärung</h1>
+    <p class="subtitle">Informationen nach Art. 13 DSGVO · Stand: 09.06.2026</p>
+
+    <div class="legal-disclaimer">
+      <strong>Hinweis:</strong> Diese Datenschutzerklärung gilt für die Website unter
+      <code>github.com/daiqiongzhao-bit/Juju</code>. Sie betrifft <strong>nicht</strong> die selbstgehostete
+      Yuvomi-Anwendung, die auf Ihrem eigenen Server läuft - dafür ist der jeweilige Betreiber
+      verantwortlich (siehe Hinweise für Selfhoster im Projekt-Repository).
+    </div>
+
+    <p lang="en" class="en-summary">
+      <strong>In English:</strong> This is the German-language privacy policy for the <code>github.com/daiqiongzhao-bit/Juju</code>
+      website. In brief: the site is served as static files via GitHub Pages, sets no tracking cookies, runs no
+      analytics, and makes no third-party requests from your browser. It stores only your chosen language and colour
+      theme locally (localStorage). The self-hosted Yuvomi app runs on your own server and is not covered here.
+    </p>
+
+    <nav class="toc" aria-label="Inhaltsverzeichnis">
+      <p class="toc-title">Inhalt</p>
+      <ol class="toc-list">
+        <li><a href="#ds-1">Verantwortlicher im Sinne der DSGVO</a></li>
+        <li><a href="#ds-2">Datenschutzbeauftragter</a></li>
+        <li><a href="#ds-3">Allgemeines zur Datenverarbeitung</a></li>
+        <li><a href="#ds-4">Hosting über GitHub Pages (Drittland-Transfer USA)</a></li>
+        <li><a href="#ds-5">Speicherung im lokalen Browser-Speicher (LocalStorage)</a></li>
+        <li><a href="#ds-6">Keine Cookies, kein Tracking, keine Analyse-Tools, keine externen Requests</a></li>
+        <li><a href="#ds-7">Kontaktaufnahme per E-Mail</a></li>
+        <li><a href="#ds-8">Empfänger personenbezogener Daten</a></li>
+        <li><a href="#ds-9">Speicherdauer</a></li>
+        <li><a href="#ds-10">Ihre Rechte als betroffene Person</a></li>
+        <li><a href="#ds-11">Beschwerderecht bei einer Aufsichtsbehörde</a></li>
+        <li><a href="#ds-12">Pflicht zur Bereitstellung der Daten</a></li>
+        <li><a href="#ds-13">Automatisierte Entscheidungsfindung und Profiling</a></li>
+        <li><a href="#ds-14">Aktualität und Änderung dieser Datenschutzerklärung</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="ds-1">1. Verantwortlicher im Sinne der DSGVO</h2>
+    <p>Verantwortlich für die Datenverarbeitung auf dieser Website ist:</p>
+    <div class="info-block">
+      <address>
+        Ulas Kalayci<br>
+        c/o MDC#885<br>
+        Welserstraße 3<br>
+        87463 Dietmannsried<br>
+        Deutschland<br><br>
+        E-Mail: <a href="mailto:info@github.com/daiqiongzhao-bit/Juju">info@github.com/daiqiongzhao-bit/Juju</a><br>
+        Telefon: <a href="tel:+4915229278918">+49 1522 927 89 18</a>
+      </address>
+    </div>
+    <p>Weitere Angaben finden Sie im <a href="impressum.html">Impressum</a>.</p>
+
+    <h2 id="ds-2">2. Datenschutzbeauftragter</h2>
+    <p>
+      Ein Datenschutzbeauftragter ist gesetzlich nicht erforderlich (§ 38 BDSG: weniger als
+      20 Personen, die ständig mit der automatisierten Verarbeitung personenbezogener Daten
+      beschäftigt sind; keine besonderen Kategorien personenbezogener Daten i. S. v. Art. 9 DSGVO).
+      Bei Fragen zum Datenschutz wenden Sie sich bitte direkt an den oben genannten Verantwortlichen.
+    </p>
+
+    <h2 id="ds-3">3. Allgemeines zur Datenverarbeitung</h2>
+    <p>
+      Wir verarbeiten personenbezogene Daten unserer Besucherinnen und Besucher grundsätzlich nur,
+      soweit dies zur Bereitstellung einer funktionsfähigen Website sowie unserer Inhalte
+      erforderlich ist. Rechtsgrundlagen sind insbesondere Art. 6 Abs. 1 lit. f DSGVO (berechtigte
+      Interessen) sowie § 25 TDDDG (Schutz der Privatsphäre in Endeinrichtungen).
+    </p>
+
+    <h2 id="ds-4">4. Hosting über GitHub Pages (Drittland-Transfer USA)</h2>
+    <p>
+      Diese Website wird über den Dienst <strong>GitHub Pages</strong> ausgeliefert. Anbieter ist die
+      <strong>GitHub, Inc.</strong>, 88 Colin P Kelly Jr Street, San Francisco, CA 94107, USA - eine
+      Tochtergesellschaft der Microsoft Corporation.
+    </p>
+    <p>
+      Bei jedem Aufruf einer Seite werden automatisch durch den Browser Daten an die Server von GitHub
+      übermittelt und in sogenannten Server-Logfiles gespeichert. Hierzu gehören typischerweise:
+    </p>
+    <ul>
+      <li>die IP-Adresse Ihres Endgeräts</li>
+      <li>Datum und Uhrzeit des Zugriffs</li>
+      <li>die abgerufene URL und der Referrer</li>
+      <li>verwendeter Browser-Typ und -Version</li>
+      <li>verwendetes Betriebssystem</li>
+    </ul>
+    <p>
+      <strong>Zweck:</strong> technische Bereitstellung der Website, Aufrechterhaltung von Stabilität
+      und Sicherheit, Schutz vor Missbrauch und Angriffen.
+    </p>
+    <p>
+      <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. f DSGVO. Unser berechtigtes Interesse liegt
+      in der zuverlässigen, sicheren und kostengünstigen Auslieferung dieser Open-Source-Projektseite.
+    </p>
+    <p>
+      <strong>Drittland-Transfer:</strong> GitHub verarbeitet Daten auch in den USA. Die USA gelten als
+      Drittland im Sinne der DSGVO. Die Übermittlung erfolgt auf Grundlage des
+      Angemessenheitsbeschlusses der EU-Kommission vom 10.07.2023 (EU-US Data Privacy Framework,
+      Beschluss 2023/1795); die Microsoft Corporation als Muttergesellschaft von GitHub ist unter dem
+      Data Privacy Framework zertifiziert. Ergänzend bzw. ersatzweise kommen Standardvertragsklauseln
+      nach Art. 46 Abs. 2 lit. c DSGVO (Durchführungsbeschluss 2021/914/EU) zur Anwendung. Trotz dieser
+      Garantien kann nicht vollständig ausgeschlossen werden, dass US-Sicherheitsbehörden auf der
+      Grundlage US-amerikanischer Gesetze (insbesondere FISA 702, CLOUD Act) auf Daten zugreifen.
+    </p>
+    <p>
+      <strong>Speicherdauer:</strong> Die Speicherdauer der Server-Logs wird durch GitHub festgelegt.
+      Wir selbst haben auf diese Logdaten keinen direkten Zugriff. Nähere Informationen finden Sie in
+      der Datenschutzerklärung von GitHub:
+      <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">docs.github.com/site-policy/privacy-policies/github-general-privacy-statement</a>.
+    </p>
+
+    <h2 id="ds-5">5. Speicherung im lokalen Browser-Speicher (LocalStorage)</h2>
+    <p>
+      Damit Ihre Anzeige-Präferenzen über Seitenaufrufe hinweg erhalten bleiben, speichert die Website
+      folgende Werte im <em>localStorage</em> Ihres Browsers:
+    </p>
+    <div class="table-scroll" role="region" tabindex="0" aria-labelledby="ds-5-caption">
+    <table>
+      <caption id="ds-5-caption" class="sr-only">Im lokalen Browser-Speicher abgelegte Werte mit Inhalt, Zweck und Speicherdauer</caption>
+      <thead>
+        <tr>
+          <th>Schlüssel</th>
+          <th>Inhalt</th>
+          <th>Zweck</th>
+          <th>Speicherdauer</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>yuvomi-theme</code></td>
+          <td>z. B. <code>light</code> / <code>dark</code></td>
+          <td>Beibehaltung des gewählten Farbschemas</td>
+          <td>bis zur Löschung durch Sie</td>
+        </tr>
+        <tr>
+          <td><code>yuvomi-lang</code></td>
+          <td>z. B. <code>de</code> / <code>en</code></td>
+          <td>Beibehaltung der gewählten Sprache</td>
+          <td>bis zur Löschung durch Sie</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    <p>
+      <strong>Rechtsgrundlage:</strong> § 25 Abs. 2 Nr. 2 TDDDG. Die Speicherung dieser Präferenzen ist
+      unbedingt erforderlich, damit der von Ihnen ausdrücklich gewünschte Telemediendienst - die
+      Darstellung der Website in der von Ihnen ausgewählten Sprache und Farbgebung - bereitgestellt
+      werden kann. Eine Einwilligung ist daher nicht erforderlich. Eine Übermittlung dieser Werte an
+      Dritte oder an Server findet nicht statt.
+    </p>
+    <p>
+      <strong>So löschen Sie diese Werte:</strong> Über die Browser-Einstellungen unter
+      „Website-Daten löschen" / „Cookies und andere Website-Daten" oder über die Entwicklerwerkzeuge
+      (Application → Local Storage → github.com/daiqiongzhao-bit/Juju).
+    </p>
+    <p class="small">
+      Hinweis: Frühere Versionen dieser Website verwendeten die Schlüssel <code>oikos-theme</code> und
+      <code>oikos-lang</code>. Diese werden weiterhin ausgelesen, bis Sie Sprache oder Farbschema erneut umschalten.
+    </p>
+
+    <h2 id="ds-6">6. Keine Cookies, kein Tracking, keine Analyse-Tools, keine externen Requests</h2>
+    <p>
+      Diese Website setzt <strong>keine</strong> Cookies im rechtstechnischen Sinne ein. Es werden
+      insbesondere <strong>keine</strong> Analyse- oder Tracking-Dienste (z. B. Google Analytics,
+      Matomo, Plausible), <strong>keine</strong> Marketing-Pixel (z. B. Meta-, TikTok-, LinkedIn-Pixel),
+      <strong>keine</strong> Social-Media-Einbettungen und <strong>kein</strong> reCAPTCHA verwendet.
+      Schriftarten werden ausschließlich von unserem Server ausgeliefert (selbst-gehostete
+      WOFF2-Dateien); Google Fonts wird <strong>nicht</strong> nachgeladen. Es findet beim Seitenaufruf
+      <strong>kein</strong> Abruf externer Dienste statt - etwaige angezeigte Werte (z. B. die Anzahl
+      der GitHub-„Stars") werden bereits vor der Veröffentlichung statisch in die Seite eingebettet,
+      sodass Ihr Browser hierfür keine Verbindung zu Dritten aufbauen muss.
+    </p>
+
+    <h2 id="ds-7">7. Kontaktaufnahme per E-Mail</h2>
+    <p>
+      Wenn Sie uns per E-Mail kontaktieren, verarbeiten wir die in der E-Mail enthaltenen
+      personenbezogenen Daten (Absenderadresse, Inhalt) zum Zweck der Bearbeitung Ihrer Anfrage.
+      Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (vorvertragliche Maßnahmen / Vertragsdurchführung)
+      bzw. Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an der Beantwortung von Anfragen). Wir
+      löschen die Daten, sobald sie für die Zweckerreichung nicht mehr erforderlich sind und keine
+      gesetzlichen Aufbewahrungsfristen (z. B. § 257 HGB, § 147 AO) entgegenstehen.
+    </p>
+
+    <h2 id="ds-8">8. Empfänger personenbezogener Daten</h2>
+    <p>Empfänger Ihrer personenbezogenen Daten ist:</p>
+    <ul>
+      <li>
+        <strong>GitHub, Inc.</strong>, 88 Colin P Kelly Jr Street, San Francisco, CA 94107, USA - als
+        Hosting-Dienstleister (Server-Logs).
+      </li>
+    </ul>
+    <p>
+      Eine Übermittlung an weitere Dritte findet nicht statt, soweit wir nicht ausdrücklich an anderer
+      Stelle dieser Erklärung darüber informieren oder Sie ausdrücklich einwilligen.
+    </p>
+
+    <h2 id="ds-9">9. Speicherdauer</h2>
+    <ul>
+      <li><strong>Server-Logs bei GitHub:</strong> Speicherdauer wird von GitHub festgelegt (siehe verlinkte GitHub-Datenschutzerklärung).</li>
+      <li><strong>LocalStorage-Einträge:</strong> bis zur Löschung durch Sie im Browser.</li>
+      <li><strong>E-Mail-Korrespondenz:</strong> bis zur abschließenden Bearbeitung der Anfrage, längstens im Rahmen gesetzlicher Aufbewahrungspflichten.</li>
+    </ul>
+
+    <h2 id="ds-10">10. Ihre Rechte als betroffene Person</h2>
+    <p>Soweit wir personenbezogene Daten über Sie verarbeiten, stehen Ihnen folgende Rechte zu:</p>
+    <ul>
+      <li><strong>Auskunft</strong> nach Art. 15 DSGVO</li>
+      <li><strong>Berichtigung</strong> nach Art. 16 DSGVO</li>
+      <li><strong>Löschung</strong> nach Art. 17 DSGVO</li>
+      <li><strong>Einschränkung der Verarbeitung</strong> nach Art. 18 DSGVO</li>
+      <li><strong>Datenübertragbarkeit</strong> nach Art. 20 DSGVO</li>
+      <li><strong>Widerspruch</strong> gegen Verarbeitungen auf Grundlage von Art. 6 Abs. 1 lit. f DSGVO, nach Art. 21 DSGVO</li>
+      <li>Recht, eine erteilte Einwilligung jederzeit mit Wirkung für die Zukunft <strong>zu widerrufen</strong> (Art. 7 Abs. 3 DSGVO)</li>
+    </ul>
+    <p>Diese Rechte können Sie formlos gegenüber dem unter Ziffer 1 genannten Verantwortlichen geltend machen.</p>
+
+    <h3>Widerspruchsrecht nach Art. 21 DSGVO</h3>
+    <p>
+      Sie haben das Recht, aus Gründen, die sich aus Ihrer besonderen Situation ergeben, jederzeit
+      gegen die Verarbeitung Sie betreffender personenbezogener Daten, die aufgrund von Art. 6 Abs. 1
+      lit. f DSGVO erfolgt, Widerspruch einzulegen. Wir verarbeiten die personenbezogenen Daten dann
+      nicht mehr, es sei denn, wir können zwingende schutzwürdige Gründe für die Verarbeitung
+      nachweisen, die Ihre Interessen, Rechte und Freiheiten überwiegen, oder die Verarbeitung dient
+      der Geltendmachung, Ausübung oder Verteidigung von Rechtsansprüchen.
+    </p>
+
+    <h2 id="ds-11">11. Beschwerderecht bei einer Aufsichtsbehörde</h2>
+    <p>
+      Sie haben unbeschadet anderweitiger Rechtsbehelfe das Recht, sich bei einer
+      Datenschutz-Aufsichtsbehörde zu beschweren, insbesondere in dem Mitgliedstaat Ihres
+      Aufenthaltsorts, Ihres Arbeitsplatzes oder des Orts des mutmaßlichen Verstoßes (Art. 77 DSGVO).
+    </p>
+    <p>Die für den Verantwortlichen zuständige Aufsichtsbehörde ist:</p>
+    <div class="info-block">
+      <address>
+        Bayerisches Landesamt für Datenschutzaufsicht (BayLDA)<br>
+        Promenade 18<br>
+        91522 Ansbach<br>
+        Deutschland<br>
+        <a href="https://www.lda.bayern.de/" target="_blank" rel="noopener">www.lda.bayern.de</a>
+      </address>
+    </div>
+
+    <h2 id="ds-12">12. Pflicht zur Bereitstellung der Daten</h2>
+    <p>
+      Die Bereitstellung personenbezogener Daten ist weder gesetzlich noch vertraglich vorgeschrieben.
+      Sie sind nicht verpflichtet, personenbezogene Daten anzugeben. Eine Nichtbereitstellung kann
+      jedoch dazu führen, dass wir Anfragen nicht beantworten können.
+    </p>
+
+    <h2 id="ds-13">13. Automatisierte Entscheidungsfindung und Profiling</h2>
+    <p>
+      Eine automatisierte Entscheidungsfindung einschließlich Profiling gemäß Art. 22 DSGVO findet auf
+      dieser Website nicht statt.
+    </p>
+
+    <h2 id="ds-14">14. Aktualität und Änderung dieser Datenschutzerklärung</h2>
+    <p>
+      Diese Datenschutzerklärung hat den Stand vom <strong>09.06.2026</strong>. Durch die
+      Weiterentwicklung der Website oder aufgrund geänderter gesetzlicher bzw. behördlicher Vorgaben
+      kann es notwendig werden, diese Datenschutzerklärung anzupassen. Die jeweils aktuelle Fassung ist
+      stets unter <a href="https://github.com/daiqiongzhao-bit/Juju/datenschutz.html">https://github.com/daiqiongzhao-bit/Juju/datenschutz.html</a>
+      abrufbar.
+    </p>
+
+  </div>
+</main>
+
+<footer class="bot">
+  <div class="wrap">
+    <span>&copy; <span id="year">2026</span> Ulas Kalayci · Yuvomi</span>
+    <nav aria-label="Fußzeile">
+      <a href="index.html">Startseite</a>
+      <a href="impressum.html">Impressum</a>
+      <a href="datenschutz.html">Datenschutz</a>
+      <a href="https://github.com/daiqiongzhao-bit/Juju" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+
+<a class="to-top" href="#main-content" id="toTop"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>Nach oben</a>
+<script>
+(function(){
+  var b = document.getElementById('toTop'); if (!b) return;
+  function sync(){ b.classList.toggle('show', scrollY > 600); }
+  addEventListener('scroll', sync, { passive: true }); sync();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,3611 @@
+/**
+ * Modul: Kalender (Calendar)
+ * Zweck: Monats-/Wochen-/Tages-/Agenda-Ansicht mit vollem Termin-CRUD
+ * Abhängigkeiten: /api.js, /router.js (window.yuvomi)
+ */
+
+import { api } from '/api.js';
+import { renderRRuleFields, bindRRuleEvents, getRRuleValues, recurrenceRow } from '/rrule-ui.js';
+import { openModal as openSharedModal, closeModal, advancedSection, wireBlurValidation, reportFieldError } from '/components/modal.js';
+import { openDetailView, visibilityRow, assignedRow } from '/components/detail-view.js';
+import { stagger, wireScrollFade, scheduleUndoableDelete } from '/utils/ux.js';
+import { t, formatDate as formatPreferredDate, formatDayMonth, formatTime, timeSuffix, formatDateInput, parseDateInput, isDateInputValid, formatTimeInput, parseTimeInput } from '/i18n.js';
+import { esc, fmtLocation } from '/utils/html.js';
+import { shiftEndDateKey, isEndBeforeStart, weekStartIndex, weekdayOrder } from '/utils/date.js';
+import { truncateRuleBefore, shiftSeriesStart, shiftEndForStart } from '/utils/recurrence-scope.js';
+import { getReadableTextColor } from '/utils/color.js';
+import { refresh as refreshReminders } from '/reminders.js';
+import { parseRemindAtAsUtc } from '/utils/reminder-offset.js';
+import { renderUserMultiSelect, getSelectedUserIds, bindUserMultiSelect, renderAvatarStack } from '/components/user-multi-select.js';
+import { wireTablist } from '/utils/tablist.js';
+import { localizeBirthdayEvent } from '/utils/birthday-event.js';
+import { googleTargetValue, caldavTargetValue } from '/utils/sync-target.js';
+import { renderSkeletonList } from '/utils/skeleton.js';
+import { findPageFab } from '/utils/fab.js';
+
+// --------------------------------------------------------
+// Konstanten
+// --------------------------------------------------------
+
+const VIEWS      = ['month', 'week', 'day', 'agenda'];
+let viewTabs = null; // wireTablist-Controller der View-Umschaltung (Sync aus switchToDayView)
+const VIEW_LABELS = () => ({
+  month: t('calendar.viewMonth'),
+  week:  t('calendar.viewWeek'),
+  day:   t('calendar.viewDay'),
+  agenda: t('calendar.viewAgenda'),
+});
+const DAY_NAMES_SHORT = () => [
+  t('calendar.dayShortSunday'), t('calendar.dayShortMonday'), t('calendar.dayShortTuesday'),
+  t('calendar.dayShortWednesday'), t('calendar.dayShortThursday'), t('calendar.dayShortFriday'),
+  t('calendar.dayShortSaturday'),
+];
+const DAY_NAMES_LONG  = () => [
+  t('calendar.dayLongSunday'), t('calendar.dayLongMonday'), t('calendar.dayLongTuesday'),
+  t('calendar.dayLongWednesday'), t('calendar.dayLongThursday'), t('calendar.dayLongFriday'),
+  t('calendar.dayLongSaturday'),
+];
+const MONTH_NAMES     = () => [
+  t('calendar.monthJanuary'), t('calendar.monthFebruary'), t('calendar.monthMarch'),
+  t('calendar.monthApril'), t('calendar.monthMay'), t('calendar.monthJune'),
+  t('calendar.monthJuly'), t('calendar.monthAugust'), t('calendar.monthSeptember'),
+  t('calendar.monthOctober'), t('calendar.monthNovember'), t('calendar.monthDecember'),
+];
+
+// Kuratierte OKLCH-Palette (gedämpfte Jewel-Töne, verankert auf dem Violett der
+// App-Identität statt der geliehenen iOS-System-Farben). Gleichmäßiger Chroma-/
+// Hue-Abstand; jede Farbe ergibt sowohl eine ruhige getönte Fläche als auch eine
+// WCAG-AA-lesbare dunkle Tinte (siehe eventSurfaceStyle + calendar.css). Konkreter
+// Hex, weil Events die Farbe als Hex in der DB speichern und color.js Luminanz rechnet.
+const EVENT_COLORS = [
+  '#587DCE', '#3CA368', '#E0843E', '#CE5053',
+  '#8156C0', '#DB684C', '#3E9DCA', '#D8B349',
+  '#85868B', '#279EA4',
+];
+
+const EVENT_COLOR_NAMES = () => ({
+  '#587DCE': t('calendar.colorBlue'),
+  '#3CA368': t('calendar.colorGreen'),
+  '#E0843E': t('calendar.colorOrange'),
+  '#CE5053': t('calendar.colorRed'),
+  '#8156C0': t('calendar.colorPurple'),
+  '#DB684C': t('calendar.colorCoral'),
+  '#3E9DCA': t('calendar.colorSkyBlue'),
+  '#D8B349': t('calendar.colorYellow'),
+  '#85868B': t('calendar.colorGray'),
+  '#279EA4': t('calendar.colorCyan'),
+});
+
+const EVENT_ICON_ALIASES = {
+  drill: 'tooth',
+};
+
+const EVENT_ICON_CATEGORIES = () => [
+  {
+    key: 'general',
+    label: t('calendar.iconCategoryGeneral'),
+    icons: [
+      { value: 'calendar', label: t('calendar.iconCalendar') },
+      { value: 'alarm-clock', label: t('calendar.iconAlarm') },
+      { value: 'clock', label: t('calendar.iconClock') },
+      { value: 'bell', label: t('calendar.iconBell') },
+      { value: 'map-pin', label: t('calendar.iconLocation') },
+      { value: 'star', label: t('calendar.iconStar') },
+      { value: 'flag', label: t('calendar.iconFlag') },
+      { value: 'target', label: t('calendar.iconTarget') },
+      { value: 'flame', label: t('calendar.iconFlame') },
+    ],
+  },
+  {
+    key: 'health',
+    label: t('calendar.iconCategoryHealth'),
+    icons: [
+      { value: 'tooth', label: t('calendar.iconTooth') },
+      { value: 'hospital', label: t('calendar.iconHospital') },
+      { value: 'stethoscope', label: t('calendar.iconDoctor') },
+      { value: 'syringe', label: t('calendar.iconVaccine') },
+      { value: 'pill', label: t('calendar.iconMedicine') },
+      { value: 'bandage', label: t('calendar.iconBandage') },
+      { value: 'heart-pulse', label: t('calendar.iconHealth') },
+      { value: 'activity', label: t('calendar.iconActivity') },
+      { value: 'scissors', label: t('calendar.iconHaircut') },
+      { value: 'dumbbell', label: t('calendar.iconSports') },
+      { value: 'trophy', label: t('calendar.iconTrophy') },
+    ],
+  },
+  {
+    key: 'transport',
+    label: t('calendar.iconCategoryTransport'),
+    icons: [
+      { value: 'car', label: t('calendar.iconCar') },
+      { value: 'bus', label: t('calendar.iconBus') },
+      { value: 'train', label: t('calendar.iconTrain') },
+      { value: 'plane', label: t('calendar.iconPlane') },
+      { value: 'plane-takeoff', label: t('calendar.iconFlight') },
+      { value: 'fuel', label: t('calendar.iconFuel') },
+      { value: 'navigation', label: t('calendar.iconNavigation') },
+      { value: 'bike', label: t('calendar.iconBike') },
+    ],
+  },
+  {
+    key: 'work',
+    label: t('calendar.iconCategoryWork'),
+    icons: [
+      { value: 'briefcase', label: t('calendar.iconWork') },
+      { value: 'laptop', label: t('calendar.iconLaptop') },
+      { value: 'presentation', label: t('calendar.iconPresentation') },
+      { value: 'school', label: t('calendar.iconSchool') },
+      { value: 'graduation-cap', label: t('calendar.iconEducation') },
+      { value: 'book-open', label: t('calendar.iconReading') },
+      { value: 'pencil', label: t('calendar.iconStudy') },
+      { value: 'calculator', label: t('calendar.iconCalculator') },
+    ],
+  },
+  {
+    key: 'food',
+    label: t('calendar.iconCategoryFood'),
+    icons: [
+      { value: 'utensils', label: t('calendar.iconMeal') },
+      { value: 'cooking-pot', label: t('calendar.iconCooking') },
+      { value: 'coffee', label: t('calendar.iconCoffee') },
+      { value: 'cake', label: t('calendar.iconCake') },
+      { value: 'pizza', label: t('calendar.iconPizza') },
+      { value: 'wine', label: t('calendar.iconWine') },
+      { value: 'beer', label: t('calendar.iconBeer') },
+    ],
+  },
+  {
+    key: 'shopping',
+    label: t('calendar.iconCategoryShopping'),
+    icons: [
+      { value: 'shopping-bag', label: t('calendar.iconShopping') },
+      { value: 'shopping-cart', label: t('calendar.iconGroceries') },
+      { value: 'gift', label: t('calendar.iconGift') },
+      { value: 'credit-card', label: t('calendar.iconCard') },
+      { value: 'wallet', label: t('calendar.iconWallet') },
+      { value: 'piggy-bank', label: t('calendar.iconSavings') },
+      { value: 'landmark', label: t('calendar.iconBank') },
+    ],
+  },
+  {
+    key: 'leisure',
+    label: t('calendar.iconCategoryLeisure'),
+    icons: [
+      { value: 'music', label: t('calendar.iconMusic') },
+      { value: 'film', label: t('calendar.iconMovie') },
+      { value: 'ticket', label: t('calendar.iconTicket') },
+      { value: 'gamepad-2', label: t('calendar.iconGame') },
+      { value: 'camera', label: t('calendar.iconPhoto') },
+      { value: 'party-popper', label: t('calendar.iconParty') },
+    ],
+  },
+  {
+    key: 'family',
+    label: t('calendar.iconCategoryFamily'),
+    icons: [
+      { value: 'users', label: t('calendar.iconFamily') },
+      { value: 'baby', label: t('calendar.iconBaby') },
+      { value: 'dog', label: t('calendar.iconDog') },
+      { value: 'cat', label: t('calendar.iconCat') },
+      { value: 'paw-print', label: t('calendar.iconPet') },
+    ],
+  },
+  {
+    key: 'home',
+    label: t('calendar.iconCategoryHome'),
+    icons: [
+      { value: 'home', label: t('calendar.iconHome') },
+      { value: 'building', label: t('calendar.iconBuilding') },
+      { value: 'wrench', label: t('calendar.iconRepair') },
+      { value: 'hammer', label: t('calendar.iconMaintenance') },
+      { value: 'paintbrush', label: t('calendar.iconCleaning') },
+      { value: 'sofa', label: t('calendar.iconFurniture') },
+      { value: 'washing-machine', label: t('calendar.iconLaundry') },
+    ],
+  },
+  {
+    key: 'nature',
+    label: t('calendar.iconCategoryNature'),
+    icons: [
+      { value: 'leaf', label: t('calendar.iconLeaf') },
+      { value: 'tree-pine', label: t('calendar.iconTree') },
+      { value: 'flower', label: t('calendar.iconFlower') },
+      { value: 'sun', label: t('calendar.iconSun') },
+      { value: 'moon', label: t('calendar.iconMoon') },
+      { value: 'cloud-sun', label: t('calendar.iconWeather') },
+    ],
+  },
+];
+
+// Flache Liste aller Icons für Kompatibilität (z.B. eventIconName-Validierung)
+const EVENT_ICONS = EVENT_ICON_CATEGORIES().flatMap((cat) => cat.icons);
+
+const CUSTOM_EVENT_ICONS = new Set(['tooth']);
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const ATTACHMENT_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+const CALENDAR_VIEW_STORAGE_KEY = 'yuvomi:calendar:view';
+const LEGACY_CALENDAR_VIEW_STORAGE_KEY = 'yuvomi-calendar-view';
+const LAYER_HOLIDAYS_KEY = 'yuvomi:calendar:layer:holidays';
+const LAYER_SCHOOL_KEY    = 'yuvomi:calendar:layer:school';
+const ASSIGNED_TO_ME_KEY  = 'yuvomi:calendar:assignedToMe';
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const HOUR_HEIGHT = 56; // px pro Stunde in Wochen-/Tagesansicht
+
+function renderIconPickerResults(selectedIcon, query = '') {
+  const q = query.trim().toLowerCase();
+  if (q) {
+    const filtered = EVENT_ICON_CATEGORIES()
+      .flatMap((c) => c.icons)
+      .filter((icon) => icon.label.toLowerCase().includes(q) || icon.value.includes(q));
+    if (filtered.length === 0) {
+      return `<div class="event-icon-picker__no-results">${esc(t('calendar.iconSearchEmpty'))}</div>`;
+    }
+    return `
+      <div class="event-icon-picker__category-icons">
+        ${filtered.map((icon) => iconPickerOptionHtml(icon, selectedIcon)).join('')}
+      </div>`;
+  }
+  return EVENT_ICON_CATEGORIES().map((cat) => `
+    <div class="event-icon-picker__category">
+      <div class="event-icon-picker__category-label">${esc(cat.label)}</div>
+      <div class="event-icon-picker__category-icons">
+        ${cat.icons.map((icon) => iconPickerOptionHtml(icon, selectedIcon)).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function iconPickerOptionHtml(icon, selectedIcon) {
+  return `
+    <button type="button"
+            class="event-icon-picker__option ${selectedIcon === icon.value ? 'event-icon-picker__option--active' : ''}"
+            data-icon="${icon.value}"
+            role="radio"
+            aria-checked="${selectedIcon === icon.value ? 'true' : 'false'}"
+            aria-label="${esc(icon.label)}"
+            title="${esc(icon.label)}">
+      ${eventIconHtml(icon.value, 'event-icon-picker__option-icon')}
+    </button>`;
+}
+
+function openIconPickerDialog(selectedIcon, onSelect, onClose = () => {}) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay event-icon-dialog';
+  overlay.setAttribute('aria-modal', 'true');
+
+  const panel = document.createElement('div');
+  panel.className = 'modal-panel modal-panel--md event-icon-dialog__panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', t('calendar.iconLabel'));
+  panel.insertAdjacentHTML('beforeend', `
+    <div class="modal-panel__header">
+      <span class="modal-panel__title">${esc(t('calendar.iconLabel'))}</span>
+      <button class="modal-panel__close btn--ghost" type="button" aria-label="${esc(t('common.close'))}">
+        <i data-lucide="x" class="icon-md" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="modal-panel__body event-icon-dialog__body">
+      <input type="search" class="form-input event-icon-picker__search" id="event-icon-dialog-search"
+             placeholder="${esc(t('calendar.iconSearchPlaceholder'))}" autocomplete="off" aria-label="${esc(t('calendar.iconSearchPlaceholder'))}">
+      <div class="event-icon-dialog__results" id="event-icon-dialog-results" role="radiogroup" aria-label="${esc(t('calendar.iconLabel'))}">
+        ${renderIconPickerResults(selectedIcon)}
+      </div>
+    </div>
+  `);
+
+  function close() {
+    overlay.remove();
+    document.removeEventListener('keydown', onKeydown);
+    onClose();
+  }
+  function onKeydown(e) {
+    if (e.key === 'Escape') close();
+  }
+
+  panel.querySelector('.modal-panel__close')?.addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  panel.querySelector('#event-icon-dialog-search')?.addEventListener('input', (e) => {
+    const results = panel.querySelector('#event-icon-dialog-results');
+    results?.replaceChildren();
+    results?.insertAdjacentHTML('beforeend', renderIconPickerResults(selectedIcon, e.target.value));
+    if (window.lucide) lucide.createIcons({ el: results });
+  });
+  panel.addEventListener('click', (e) => {
+    const btn = e.target.closest('.event-icon-picker__option');
+    if (!btn) return;
+    onSelect(btn.dataset.icon);
+    close();
+  });
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', onKeydown);
+  panel.querySelector('#event-icon-dialog-search')?.focus();
+  if (window.lucide) lucide.createIcons({ el: panel });
+}
+
+// --------------------------------------------------------
+// Farbberechnung: Assignee-Farben haben Vorrang
+// Hierarchie: Assignees → manuelle Event-Farbe → Kalenderfarbe → Grau
+// --------------------------------------------------------
+
+/** Neutrale Fallback-Farbe wenn weder Assignee noch manuelle Farbe gesetzt. */
+const FALLBACK_COLOR = '#8E8E93';
+
+/**
+ * Gibt die primäre Einzelfarbe eines Events zurück.
+ * Wird für Textkontrastberechnung und Stellen genutzt, die keine Gradienten unterstützen.
+ * Priorität: 1. erster Assignee, 2. ev.color, 3. ev.cal_color, 4. Grau.
+ */
+function resolveEventColor(ev) {
+  const assignees = ev.assigned_users ?? [];
+  if (assignees.length > 0) return assignees[0].color || FALLBACK_COLOR;
+  return ev.color || ev.cal_color || FALLBACK_COLOR;
+}
+
+/**
+ * Gibt eine einzelne CSS-Füllfarbe zurück (nie ein Gradient).
+ * Eine Farbachse: 1. erster Assignee, 2. manuelle Event-Farbe, 3. Kalenderfarbe, 4. Grau.
+ * Mehrere Zugewiesene werden über den Avatar-Stack kommuniziert, nicht über eine
+ * diagonal geteilte Füllung — die wirkte wie ein Render-Artefakt und blieb bei der
+ * zweiten Farbe ungeprüft im Kontrast.
+ */
+function resolveEventBackground(ev) {
+  return resolveEventColor(ev);
+}
+
+/**
+ * Inline-Style für eine getönte Event-Fläche (Monat/Woche/Tag/Ganztägig).
+ * Setzt nur `--ev-color`; Tönung, lesbare Tinte und Kante leitet calendar.css per
+ * color-mix ab (theme-korrekt in Light & Dark, WCAG-AA für die gesamte Palette).
+ * Ersetzt die frühere vollgesättigte Füllung + getContrastColor-Textfarbe.
+ */
+function eventSurfaceStyle(ev) {
+  return `--ev-color:${esc(resolveEventColor(ev))};`;
+}
+
+/**
+ * Rendert den Avatar-Stack der Zugewiesenen für einen Termin-Chip in den
+ * Gitter-Ansichten (Monat/Woche/Tag). Die Chip-Farbe trägt bereits den ersten
+ * Assignee; der Stack liefert die Identität (Foto/Initialen), die Farbe allein
+ * nicht kommunizieren kann. Leerstring, wenn niemand zugewiesen ist.
+ */
+function chipAssigneeStack(ev, { size, maxVisible }) {
+  const users = ev.assigned_users ?? [];
+  if (!users.length) return '';
+  return `<span class="cal-chip__assigned">${renderAvatarStack(users, { size, maxVisible })}</span>`;
+}
+
+/**
+ * Textalternative der Zuweisung, z. B. „Zugewiesen an: Linda, Marco". Trägt die
+ * „Wer"-Information, die der Avatar-Stack nur visuell kommuniziert, in title-/
+ * aria-label-Attribute — damit Screenreader sie im Gitter mitbekommen.
+ * Leerstring, wenn niemand zugewiesen ist.
+ */
+function chipAssigneeLabel(ev) {
+  const names = (ev.assigned_users ?? []).map((u) => u.display_name).filter(Boolean);
+  return names.length ? `${t('calendar.assignedLabel')}: ${names.join(', ')}` : '';
+}
+
+/** Escapte ` · Zugewiesen an: …`-Ergänzung zum Anhängen an ein title-Attribut. */
+function chipAssigneeTitleSuffix(ev) {
+  const label = chipAssigneeLabel(ev);
+  return label ? ` · ${esc(label)}` : '';
+}
+
+// --------------------------------------------------------
+// State
+// --------------------------------------------------------
+
+let state = {
+  view:          'month',
+  today:         '',
+  cursor:        null,     // aktuell angezeigte Referenz-Datum (YYYY-MM-DD)
+  events:        [],
+  tasks:         [],       // Aufgaben mit due_date für Kalender-Anzeige
+  users:         [],
+  rangeFrom:     '',
+  rangeTo:       '',
+  holidays:      [],       // cached entries from holiday_cache
+  holidayPrefs:  {},       // subset of /preferences
+  weekStart:     1,        // getDay()-Index des Wochenstarts (0=So,1=Mo,6=Sa)
+  documentUploadBackend: 'local',
+  layerHolidays: true,     // toggle for public holiday layer
+  layerSchool:   true,     // toggle for school holiday layer
+  offlineSince:  null,     // Date des letzten Cache-Stands, wenn offline bedient
+  defaultDuration: 60,     // Standard-Termindauer (Minuten) aus den Präferenzen
+  currentUserId: null,     // eigene User-ID für „Mir zugewiesen"-Filter
+  assignedToMe:  false,    // nur Termine/Aufgaben zeigen, die mir zugewiesen sind
+};
+let _container = null;
+
+// Termin-Suche (#471): datumsunabhängiges Finden über den FTS-Index. Der
+// Suchmodus blendet eine Leiste unter der Toolbar ein und ersetzt den Ansichts-
+// Body durch eine chronologische Trefferliste; Schließen stellt die Ansicht her.
+let searchActive  = false;
+let searchQuery   = '';
+let searchResults = [];
+let searchTotal   = 0;
+
+// --------------------------------------------------------
+// Datumshelfer
+// --------------------------------------------------------
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function isoDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+
+function normalizeCalendarView(view, fallback = 'month') {
+  return VIEWS.includes(view) ? view : fallback;
+}
+
+function defaultCalendarViewFromState({ savedView = null, isMobile = false } = {}) {
+  return normalizeCalendarView(savedView, isMobile ? 'agenda' : 'month');
+}
+
+function defaultCalendarView() {
+  try {
+    const saved = localStorage.getItem(CALENDAR_VIEW_STORAGE_KEY)
+      ?? localStorage.getItem(LEGACY_CALENDAR_VIEW_STORAGE_KEY);
+    const isMobile = window.matchMedia?.('(max-width: 767px)').matches ?? false;
+    return defaultCalendarViewFromState({ savedView: saved, isMobile });
+  } catch {
+    return defaultCalendarViewFromState();
+  }
+}
+
+function setSavedCalendarView(view) {
+  if (!VIEWS.includes(view)) return;
+  try {
+    localStorage.setItem(CALENDAR_VIEW_STORAGE_KEY, view);
+  } catch {}
+}
+
+function getRangeForView(view, cursor) {
+  if (view === 'month') return getMonthRange(cursor);
+  if (view === 'week') return getWeekRange(cursor);
+  if (view === 'day') return { from: cursor, to: cursor };
+  if (view === 'agenda') return getAgendaRange(cursor);
+  return getMonthRange(cursor);
+}
+
+// Extract YYYY-MM-DD in the browser's local timezone from any datetime string.
+// For date-only strings (≤10 chars) slicing is safe; for datetime strings with an
+// explicit UTC offset or 'Z' suffix, new Date() converts to local before extraction.
+function localDate(str) {
+  if (!str || str.length <= 10) return (str || '').slice(0, 10);
+  const d = new Date(str);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function validDateParam(value) {
+  return DATE_KEY_RE.test(String(value || '')) ? String(value) : '';
+}
+
+function deepLinkTargetDate(initialEvent, dateParam) {
+  return validDateParam(dateParam) || localDate(initialEvent?.start_datetime);
+}
+
+function findDeepLinkedOccurrence(events, initialEvent, targetDate) {
+  if (!initialEvent) return null;
+  return events.find(
+    (ev) => ev.id === initialEvent.id && localDate(ev.start_datetime) === targetDate
+  ) || initialEvent;
+}
+
+// Extract HH:MM in the browser's local timezone from a datetime string.
+function localTime(str) {
+  if (!str || str.length <= 10) return '00:00';
+  const d = new Date(str);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function addMonths(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setMonth(d.getMonth() + n);
+  return isoDate(d);
+}
+
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+}
+
+// Erster Tag der Woche, die `dateStr` enthält, gemäß haushaltweitem Wochenstart
+// (state.weekStart als getDay()-Index). Standard Montag – wie zuvor getMondayOf.
+function startOfWeekOf(dateStr, weekStart = state.weekStart) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const diff = (d.getDay() - weekStart + 7) % 7;
+  d.setDate(d.getDate() - diff);
+  return isoDate(d);
+}
+
+function formatDate(dateStr, { long = false, weekday = false } = {}) {
+  if (weekday) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const wd = long ? DAY_NAMES_LONG()[d.getDay()] : DAY_NAMES_SHORT()[d.getDay()];
+    return `${wd}, ${formatPreferredDate(dateStr)}`;
+  }
+  return formatPreferredDate(dateStr);
+}
+
+function formatDateTime(datetimeStr) {
+  if (!datetimeStr) return '';
+  const date    = localDate(datetimeStr);
+  const hasTime = datetimeStr.length > 10;
+  const time    = hasTime ? formatTime(datetimeStr) : '';
+  return time ? `${formatDate(date)} ${time} ${timeSuffix()}`.trimEnd() : formatDate(date);
+}
+
+function eventIconName(icon) {
+  const normalized = EVENT_ICON_ALIASES[icon] || icon;
+  return EVENT_ICONS.some((item) => item.value === normalized) ? normalized : 'calendar';
+}
+
+function customEventIconHtml(icon, className) {
+  if (icon !== 'tooth') return '';
+  return `<svg class="${className} event-icon--custom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M8.5 3.5c1.2 0 2.1.5 3.5.5s2.3-.5 3.5-.5c2.4 0 4 1.8 4 4.4 0 2.2-1 4.2-1.7 5.7-.7 1.6-.8 3.1-1.1 4.7-.3 1.7-1.1 3.2-2.4 3.2-1.1 0-1.5-1.1-1.8-2.7-.2-1.2-.4-2.1-.5-2.1s-.3.9-.5 2.1c-.3 1.6-.7 2.7-1.8 2.7-1.3 0-2.1-1.5-2.4-3.2-.3-1.6-.4-3.1-1.1-4.7C5.5 12.1 4.5 10.1 4.5 7.9c0-2.6 1.6-4.4 4-4.4Z"/>
+    <path d="M10 6.2c.7.3 1.3.5 2 .5s1.3-.2 2-.5"/>
+  </svg>`;
+}
+
+function eventIconHtml(icon, className = 'event-icon') {
+  const name = eventIconName(icon);
+  if (CUSTOM_EVENT_ICONS.has(name)) return customEventIconHtml(name, className);
+  return `<i class="${className}" data-lucide="${name}" aria-hidden="true"></i>`;
+}
+
+function calendarMetaIconHtml(icon) {
+  return `<i data-lucide="${icon}" class="calendar-meta-icon icon-sm" aria-hidden="true"></i>`;
+}
+
+function calendarRepeatIconHtml() {
+  return '<i data-lucide="repeat" class="calendar-repeat-icon icon-sm" aria-hidden="true"></i>';
+}
+
+function eventIconElement(icon, className = 'event-icon') {
+  const name = eventIconName(icon);
+  if (name === 'tooth') {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', `${className} event-icon--custom`);
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+
+    const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    outline.setAttribute('d', 'M8.5 3.5c1.2 0 2.1.5 3.5.5s2.3-.5 3.5-.5c2.4 0 4 1.8 4 4.4 0 2.2-1 4.2-1.7 5.7-.7 1.6-.8 3.1-1.1 4.7-.3 1.7-1.1 3.2-2.4 3.2-1.1 0-1.5-1.1-1.8-2.7-.2-1.2-.4-2.1-.5-2.1s-.3.9-.5 2.1c-.3 1.6-.7 2.7-1.8 2.7-1.3 0-2.1-1.5-2.4-3.2-.3-1.6-.4-3.1-1.1-4.7C5.5 12.1 4.5 10.1 4.5 7.9c0-2.6 1.6-4.4 4-4.4Z');
+
+    const ridge = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    ridge.setAttribute('d', 'M10 6.2c.7.3 1.3.5 2 .5s1.3-.2 2-.5');
+
+    svg.append(outline, ridge);
+    return svg;
+  }
+
+  const el = document.createElement('i');
+  el.className = className;
+  el.dataset.lucide = name;
+  el.setAttribute('aria-hidden', 'true');
+  return el;
+}
+
+function isImageAttachment(mime) {
+  return ATTACHMENT_IMAGE_MIME.has(String(mime || '').toLowerCase());
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error(t('calendar.attachmentReadError')));
+    reader.readAsDataURL(file);
+  });
+}
+
+function attachmentDataUrl(data, mime) {
+  const raw = String(data || '');
+  if (!raw) return '';
+  if (raw.startsWith('data:')) return raw;
+  return mime ? `data:${mime};base64,${raw}` : raw;
+}
+
+function hasAttachment(event) {
+  return Boolean(event?.attachment_document_id || event?.attachment_data);
+}
+
+function attachmentUrls(event) {
+  const legacyUrl = attachmentDataUrl(event?.attachment_data, event?.attachment_mime);
+  return {
+    preview: event?.attachment_preview_url || legacyUrl,
+    download: event?.attachment_download_url || legacyUrl,
+  };
+}
+
+function truncateDescription(description, maxLength = 500) {
+  const text = String(description || '').trim();
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)} (...)`;
+}
+
+function attachmentPreviewHtml(event) {
+  if (!hasAttachment(event)) return '';
+  const name = esc(event.attachment_name || t('calendar.attachmentFallback'));
+  const urls = attachmentUrls(event);
+  return isImageAttachment(event.attachment_mime)
+    ? `<img src="${esc(urls.preview)}" alt="${name}">`
+    : `<a href="${esc(urls.download)}" download="${name}">${name}</a>`;
+}
+
+function selectedAttachmentLabel(name) {
+  return t('documents.selectedFileLabel', { name: name || t('calendar.attachmentFallback') });
+}
+
+function readDateInput(root, selector) {
+  return parseDateInput(root.querySelector(selector)?.value || '');
+}
+
+function getMonthRange(dateStr) {
+  const d     = new Date(dateStr + 'T00:00:00');
+  const year  = d.getFullYear();
+  const month = d.getMonth();
+  // Start des Monats, dann bis auf den Montag zurückgehen (Kalenderraster)
+  const firstOfMonth = new Date(year, month, 1);
+  // Bis zum gewählten Wochenstart zurückgehen (Kalenderraster).
+  const startOffset = (firstOfMonth.getDay() - state.weekStart + 7) % 7;
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setDate(gridStart.getDate() - startOffset);
+  const from = isoDate(gridStart);
+  // 42 Tage (6 Wochen) abdecken
+  const to   = addDays(from, 41);
+  return { from, to };
+}
+
+function getWeekRange(dateStr) {
+  const weekStart = startOfWeekOf(dateStr);
+  return { from: weekStart, to: addDays(weekStart, 6) };
+}
+
+function getAgendaRange(dateStr) {
+  return { from: dateStr, to: addDays(dateStr, 30) };
+}
+
+// Per-Render-Pass Day-Buckets. Vermeidet, dass jede der 42 Monats-Zellen die
+// komplette state.events/state.tasks-Liste neu filtert und pro Event ein neues
+// Date parst (O(Zellen × Events) → O(Events + Zellen)).
+// _dayIndex.active signalisiert, dass die Maps für die aktuelle Render-Phase
+// gültig sind; ansonsten fallen die Helfer auf direktes Filtern zurück.
+const _dayIndex = {
+  active:  false,
+  events:  new Map(), // isoDate -> Event[]
+  tasks:   new Map(), // isoDate -> Task[]
+};
+
+/**
+ * Baut die Tages-Buckets für Events und Tasks einmal pro Render-Durchlauf.
+ * Jedes Datum wird genau einmal geparst; mehrtägige Events werden in jeden
+ * Tag ihres Bereichs (geklammert auf das geladene Fenster) einsortiert.
+ */
+function buildDayIndex() {
+  const evMap = new Map();
+  // Events in Originalreihenfolge durchlaufen, damit pro Tag die Reihenfolge
+  // identisch zum bisherigen .filter()-Verhalten bleibt.
+  const lo = state.rangeFrom || '';
+  const hi = state.rangeTo   || '';
+  for (const e of state.events) {
+    const start = localDate(e.start_datetime);
+    const end   = e.end_datetime ? localDate(e.end_datetime) : start;
+    // Auf das geladene Fenster klammern, damit mehrtägige/fehlerhafte Events
+    // keinen unbegrenzten Bereich erzeugen.
+    let from = lo && start < lo ? lo : start;
+    const to = hi && end > hi ? hi : end;
+    if (from > to) continue;
+    for (let day = from; day <= to; day = addDays(day, 1)) {
+      const bucket = evMap.get(day);
+      if (bucket) bucket.push(e);
+      else evMap.set(day, [e]);
+    }
+  }
+
+  const taskMap = new Map();
+  for (const t of state.tasks) {
+    if (!t.due_date) continue;
+    const bucket = taskMap.get(t.due_date);
+    if (bucket) bucket.push(t);
+    else taskMap.set(t.due_date, [t]);
+  }
+
+  _dayIndex.events = evMap;
+  _dayIndex.tasks  = taskMap;
+  _dayIndex.active = true;
+}
+
+/**
+ * True, wenn der „Mir zugewiesen"-Filter aus ist oder das Element der eigenen
+ * User-ID zugewiesen ist. Wird auf Termine und Kalender-Aufgaben angewandt.
+ */
+function belongsToMe(item) {
+  if (!state.assignedToMe || state.currentUserId == null) return true;
+  return (item.assigned_users ?? []).some((u) => u.id === state.currentUserId);
+}
+
+function eventsOnDay(dateStr) {
+  const list = _dayIndex.active
+    ? (_dayIndex.events.get(dateStr) ?? [])
+    : state.events.filter((e) => {
+        const start = localDate(e.start_datetime);
+        const end   = e.end_datetime ? localDate(e.end_datetime) : start;
+        return start <= dateStr && end >= dateStr;
+      });
+  return state.assignedToMe ? list.filter(belongsToMe) : list;
+}
+
+/** True, wenn Start- und Enddatum auf verschiedene Kalendertage fallen. */
+function isMultiDayEvent(ev) {
+  if (!ev || !ev.start_datetime || !ev.end_datetime) return false;
+  return localDate(ev.start_datetime) !== localDate(ev.end_datetime);
+}
+
+/**
+ * Events, die in der Ganztags-Zeile statt im Zeitraster gezeigt werden:
+ * echte Ganztags-Events, datums-only Events und mehrtägige Zeit-Events.
+ * Mehrtägige Events erscheinen dadurch als durchgehender Balken über alle Tage,
+ * statt auf jedem Tag fälschlich als identischer Zeitblock (#225).
+ */
+function isAllDayLike(ev) {
+  return !!ev.all_day || !ev.start_datetime.includes('T') || isMultiDayEvent(ev);
+}
+
+/**
+ * Einordnung eines Events für einen bestimmten Tag in der Agenda:
+ *   'all-day' | 'single' | 'start' | 'middle' | 'end'.
+ * Mehrtägige Events liefern je nach Tag start/middle/end, damit die Uhrzeit den
+ * durchgehenden Zeitraum widerspiegelt statt auf jedem Tag start–end (#225).
+ */
+function agendaSegmentKind(ev, dayStr) {
+  if (ev.all_day || !ev.start_datetime.includes('T')) return 'all-day';
+  if (!isMultiDayEvent(ev)) return 'single';
+  const startDay = localDate(ev.start_datetime);
+  const endDay   = localDate(ev.end_datetime);
+  if (dayStr === startDay) return 'start';
+  if (dayStr === endDay)   return 'end';
+  return 'middle';
+}
+
+/**
+ * Filtert Tasks: nur open/in_progress mit due_date werden angezeigt.
+ * Abgelegte bleiben draußen - der Server liefert sie hier ohnehin nicht mehr mit
+ * (#688), die Prüfung steht als Rückfalllinie für vorgefüllte Listen.
+ */
+function filterTasksForCalendar(tasks) {
+  return tasks.filter(
+    (t) => t.due_date && t.status !== 'done' && !t.archived_at
+  );
+}
+
+/** Tasks, die an einem bestimmten Tag fällig sind. */
+function tasksOnDay(dateStr) {
+  const list = _dayIndex.active
+    ? (_dayIndex.tasks.get(dateStr) ?? [])
+    : state.tasks.filter((t) => t.due_date === dateStr);
+  return state.assignedToMe ? list.filter(belongsToMe) : list;
+}
+
+/** Holiday entries that overlap a given date (respects layer toggles). */
+function holidaysOnDay(dateStr) {
+  if (!state.holidays?.length) return [];
+  return state.holidays.filter((h) => {
+    if (h.start_date > dateStr || h.end_date < dateStr) return false;
+    if (h.type === 'public' && !state.layerHolidays) return false;
+    if (h.type === 'school' && !state.layerSchool)   return false;
+    return true;
+  });
+}
+
+/** Rendert einen read-only Task-Chip für Kalenderansichten. In der Monatsansicht
+ *  (interactive:false) ist die Tageszelle selbst der Drill-in-Button; die Chips
+ *  sind dort nur visuelles Signal und dürfen kein eigenes role/tabindex tragen -
+ *  sonst entsteht ein fokussierbarer Button im Zellen-Button (Audit P1).
+ *  icon:false lässt das check-square-Icon weg: die Monats-Bars sind nach Kanon
+ *  icon-frei, Woche/Tag/Agenda behalten es als Termin/Aufgabe-Unterscheidung. */
+function renderTaskChip(task, { interactive = true, icon = true } = {}) {
+  const priority = task.priority || 'none';
+  const label    = esc(task.title);
+  const timeStr  = task.due_time ? ` · ${task.due_time.slice(0, 5)}` : '';
+  const button   = interactive
+    ? ` role="button" tabindex="0" aria-label="${esc(t('calendar.taskChipAriaLabel', { title: task.title }))}"`
+    : '';
+  return `<div class="cal-task-chip cal-task-chip--${priority}"
+               data-task-id="${task.id}"${button}
+               title="${label}${esc(timeStr)}">
+    ${icon ? '<i data-lucide="check-square" class="icon-sm" aria-hidden="true"></i>' : ''}
+    <span>${label}${esc(timeStr)}</span>
+  </div>`;
+}
+
+// --------------------------------------------------------
+// API
+// --------------------------------------------------------
+
+async function loadRange(from, to) {
+  const calPath = `/calendar?from=${from}&to=${to}`;
+  try {
+    const [evRes, taskRes, holRes] = await Promise.all([
+      api.get(calPath),
+      api.get('/tasks?include_future=1').catch((err) => {
+        console.warn('[Calendar] Tasks-Fetch fehlgeschlagen:', err);
+        return { data: [] };
+      }),
+      api.get(`/calendar/holidays?from=${from}&to=${to}`).catch(() => ({ data: [] })),
+    ]);
+    state.events   = (evRes.data ?? []).map(localizeBirthdayEvent);
+    state.tasks    = filterTasksForCalendar(taskRes.data ?? []);
+    state.holidays = holRes.data ?? [];
+    // Offline-Stand: wenn der Browser offline ist, kamen die Daten aus dem
+    // Service-Worker-Cache. Den Cache-Zeitstempel (x-cached-at) als „Stand" lesen.
+    state.offlineSince = navigator.onLine ? null : await getCachedAt(calPath);
+  } catch (err) {
+    console.error('[Calendar] loadRange Fehler:', err);
+    state.events   = [];
+    state.tasks    = [];
+    state.holidays = [];
+    state.offlineSince = null;
+    window.yuvomi?.showToast(t('calendar.loadError'), 'danger');
+  }
+  state.rangeFrom = from;
+  state.rangeTo   = to;
+}
+
+/**
+ * Nur die Kalender-Events des aktuellen Bereichs neu laden (ohne Tasks/Feiertage).
+ * Für serienweite Bearbeitungen (#532), bei denen sich lediglich die Expansion
+ * ändert - vermeidet das Überholen unveränderter Tasks/Feiertage aus loadRange.
+ */
+async function reloadCalendarEventsOnly() {
+  if (!state.rangeFrom || !state.rangeTo) return;
+  try {
+    const res = await api.get(`/calendar?from=${state.rangeFrom}&to=${state.rangeTo}`);
+    state.events = (res.data ?? []).map(localizeBirthdayEvent);
+  } catch (err) {
+    console.error('[Calendar] reloadCalendarEventsOnly Fehler:', err);
+  }
+}
+
+/**
+ * Liest den x-cached-at-Zeitstempel einer offline bedienten API-Antwort aus dem
+ * Service-Worker-API-Cache. Findet den Cache versionsunabhängig per Prefix.
+ * @returns {Promise<Date|null>}
+ */
+async function getCachedAt(path) {
+  if (typeof caches === 'undefined') return null;
+  try {
+    const names    = await caches.keys();
+    const apiCache = names.find((n) => n.startsWith('yuvomi-api-'));
+    if (!apiCache) return null;
+    const cache = await caches.open(apiCache);
+    const res   = await cache.match(`/api/v1${path}`);
+    const ts    = res?.headers.get('x-cached-at');
+    const ms    = ts ? Number(ts) : NaN;
+    return Number.isFinite(ms) ? new Date(ms) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadUsers() {
+  try {
+    const res   = await api.get('/auth/users');
+    state.users = res.data;
+  } catch {
+    state.users = [];
+  }
+}
+
+// --------------------------------------------------------
+// Entry Point
+// --------------------------------------------------------
+
+export async function render(container, { user }) {
+  _container = container;
+  state.today  = isoDate(new Date());
+  state.cursor = state.today;
+  state.view   = defaultCalendarView();
+
+  container.replaceChildren();
+  container.insertAdjacentHTML('beforeend', `
+    <div class="calendar-page" id="calendar-page">
+      <div class="page-toolbar page-toolbar--wrap cal-toolbar" id="cal-toolbar"></div>
+      <div id="cal-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden;"></div>
+      <button class="page-fab" id="fab-new-event" aria-label="${t('calendar.newEvent')}">
+        <i data-lucide="plus" class="icon-xl" aria-hidden="true"></i>
+      </button>
+    </div>
+  `);
+
+  // Lade-Skeleton sofort einblenden, damit der erste Frame nicht leer bleibt,
+  // während Termine/Präferenzen laden (Sichtbarkeit des Systemstatus). Wird von
+  // renderView() beim ersten Render ersetzt; aria-busy quittiert den Ladezustand.
+  const bodyEl = container.querySelector('#cal-body');
+  bodyEl.setAttribute('aria-busy', 'true');
+  bodyEl.insertAdjacentHTML('beforeend', renderSkeletonList({ rows: 6, lines: 2 }));
+
+  const params    = new URLSearchParams(window.location.search);
+  const openId    = params.get('open');
+  const dateParam = validDateParam(params.get('date'));
+  let initialEvent = null;
+  if (openId && /^\d+$/.test(openId)) {
+    try {
+      const eventRes = await api.get(`/calendar/${openId}`);
+      if (eventRes?.data) {
+        initialEvent = localizeBirthdayEvent(eventRes.data);
+        state.cursor = deepLinkTargetDate(initialEvent, dateParam);
+      } else {
+        console.warn('[Calendar] Deep-link event not found:', openId);
+      }
+    } catch (err) {
+      console.warn('[Calendar] Deep-link event load failed:', err);
+    }
+  }
+
+  const { from, to } = getRangeForView(state.view, state.cursor);
+  const [,, prefsRes, documentOptionsRes] = await Promise.all([
+    loadRange(from, to),
+    loadUsers(),
+    api.get('/preferences').catch(() => ({ data: {} })),
+    api.get('/documents/meta/options').catch(() => ({ data: {} })),
+  ]);
+  state.holidayPrefs  = prefsRes.data ?? {};
+  state.weekStart     = weekStartIndex(prefsRes.data?.week_start);
+  state.defaultDuration = Number(prefsRes.data?.calendar_default_duration) || 60;
+  // Standardwerte für neue Termine (#497/#498).
+  state.defaultReminders = Array.isArray(prefsRes.data?.calendar_default_reminders)
+    ? prefsRes.data.calendar_default_reminders.map(Number)
+    : [];
+  state.defaultAssignMe  = !!prefsRes.data?.calendar_default_assign_me;
+  // Standard-Sync-Ziel für eigene neue Termine (#620).
+  state.defaultSyncTarget = prefsRes.data?.calendar_default_target || '';
+  state.documentUploadBackend = documentOptionsRes.data?.active_upload_backend ?? 'local';
+  state.layerHolidays = localStorage.getItem(LAYER_HOLIDAYS_KEY) !== 'false';
+  state.layerSchool   = localStorage.getItem(LAYER_SCHOOL_KEY)   !== 'false';
+  state.currentUserId = user?.id ?? null;
+  state.assignedToMe  = localStorage.getItem(ASSIGNED_TO_ME_KEY) === '1';
+
+  renderToolbar();
+  renderView();
+  bodyEl.removeAttribute('aria-busy');
+
+  findPageFab('fab-new-event')?.addEventListener('click', () => openEventModal({ mode: 'create' }));
+
+  if (initialEvent) {
+    const targetDate = deepLinkTargetDate(initialEvent, dateParam);
+    const occurrence = findDeepLinkedOccurrence(state.events, initialEvent, targetDate);
+
+    const chip =
+      container.querySelector(`[data-date="${CSS.escape(targetDate)}"] [data-id="${CSS.escape(openId)}"]`)
+      ?? container.querySelector(`[data-id="${CSS.escape(openId)}"]`);
+
+    if (chip) {
+      chip.scrollIntoView({ block: 'center', behavior: 'instant' });
+      openEventDetail(occurrence, chip);
+    } else {
+      // Kein sichtbarer Chip (Termin außerhalb der aktuellen Ansicht): Der
+      // Deep-Link landet trotzdem in der Leseansicht, nur ohne Verankerung.
+      openEventDetail(occurrence);
+    }
+  }
+}
+
+// --------------------------------------------------------
+// Toolbar
+// --------------------------------------------------------
+
+function renderToolbar() {
+  const bar = _container.querySelector('#cal-toolbar');
+  if (!bar) return;
+
+  const hp = state.holidayPrefs ?? {};
+  const showHolidayToggle = hp.holiday_show_public;
+  const showSchoolToggle  = hp.holiday_show_school;
+
+  const holidayToggleHtml = (showHolidayToggle || showSchoolToggle) ? `
+    <div class="cal-toolbar__layers">
+      ${showHolidayToggle ? `
+        <button class="cal-toolbar__layer-btn ${state.layerHolidays ? 'cal-toolbar__layer-btn--active' : ''}"
+                id="cal-layer-holidays" data-layer="holidays"
+                title="${t('calendar.toggleHolidays')}"
+                style="--layer-color:${esc(hp.holiday_public_color ?? '#FF3B30')}">
+          <span class="cal-toolbar__layer-dot"></span>
+          <span>${t('calendar.toggleHolidays')}</span>
+        </button>
+      ` : ''}
+      ${showSchoolToggle ? `
+        <button class="cal-toolbar__layer-btn ${state.layerSchool ? 'cal-toolbar__layer-btn--active' : ''}"
+                id="cal-layer-school" data-layer="school"
+                title="${t('calendar.toggleSchool')}"
+                style="--layer-color:${esc(hp.holiday_school_color ?? '#34C759')}">
+          <span class="cal-toolbar__layer-dot"></span>
+          <span>${t('calendar.toggleSchool')}</span>
+        </button>
+      ` : ''}
+    </div>
+  ` : '';
+
+  bar.replaceChildren();
+  bar.insertAdjacentHTML('beforeend', `
+    <h1 class="page-toolbar__title">${t('calendar.title')}</h1>
+    <div class="page-toolbar__center cal-toolbar__month">
+      <button class="btn btn--secondary cal-toolbar__today" id="cal-today">${t('calendar.today')}</button>
+      <button class="btn btn--icon" id="cal-prev" aria-label="${t('calendar.back')}">
+        <i data-lucide="chevron-left" aria-hidden="true"></i>
+      </button>
+      <span class="cal-toolbar__label" id="cal-label"></span>
+      <button class="btn btn--icon" id="cal-next" aria-label="${t('calendar.forward')}">
+        <i data-lucide="chevron-right" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="page-toolbar__actions">
+      ${holidayToggleHtml}
+      ${state.users.length > 1 && state.currentUserId != null ? `
+        <button class="cal-toolbar__layer-btn cal-toolbar__mine-btn ${state.assignedToMe ? 'cal-toolbar__layer-btn--active' : ''}"
+                id="cal-assigned-me" aria-pressed="${state.assignedToMe ? 'true' : 'false'}"
+                title="${t('calendar.assignedToMe')}" style="--layer-color:var(--module-calendar)">
+          <i data-lucide="user" class="icon-sm" aria-hidden="true"></i>
+          <span>${t('calendar.assignedToMe')}</span>
+        </button>
+      ` : ''}
+      <!-- KEIN aria-controls im geschlossenen Zustand: die Suchleiste entsteht
+           erst beim Öffnen (openCalendarSearch), und ein Verweis auf eine ID, die
+           es noch nicht gibt, kündigt einem Screenreader ein Ziel an, das nicht
+           existiert. Gesetzt wird es dort, wo die Leiste entsteht, und beim
+           Schließen wieder entfernt - dieselbe Regel wie in utils/sub-tabs.js:
+           ohne aufgelöstes Ziel bleibt das Attribut weg. -->
+      <button class="btn btn--icon cal-toolbar__search-btn" id="cal-search"
+              aria-label="${t('calendar.searchOpen')}" title="${t('calendar.searchOpen')}"
+              aria-expanded="false">
+        <i data-lucide="search" aria-hidden="true"></i>
+      </button>
+      <div class="cal-toolbar__views" role="tablist" aria-label="${t('nav.calendar')}">
+        ${VIEWS.map((v) => `
+          <button class="cal-toolbar__view-btn ${v === state.view ? 'cal-toolbar__view-btn--active' : ''}"
+                  role="tab" data-tab-id="${v}" aria-selected="${v === state.view ? 'true' : 'false'}"
+                  tabindex="${v === state.view ? '0' : '-1'}">${VIEW_LABELS()[v]}</button>
+        `).join('')}
+      </div>
+      <button class="btn btn--primary btn--icon toolbar-new-btn" id="cal-add" aria-label="${t('calendar.addEvent')}">
+        <i data-lucide="plus" aria-hidden="true"></i>
+      </button>
+    </div>
+  `);
+
+  if (window.lucide) lucide.createIcons({ el: bar });
+
+  updateLabel();
+
+  bar.querySelector('#cal-prev').addEventListener('click', () => navigate(-1));
+  bar.querySelector('#cal-next').addEventListener('click', () => navigate(1));
+  bar.querySelector('#cal-today').addEventListener('click', goToday);
+  bar.querySelector('#cal-add').addEventListener('click', () => openEventModal({ mode: 'create' }));
+  bar.querySelector('#cal-search').addEventListener('click', openCalendarSearch);
+
+  bar.querySelector('#cal-assigned-me')?.addEventListener('click', (e) => {
+    state.assignedToMe = !state.assignedToMe;
+    try { localStorage.setItem(ASSIGNED_TO_ME_KEY, state.assignedToMe ? '1' : '0'); } catch {}
+    const btn = e.currentTarget;
+    btn.classList.toggle('cal-toolbar__layer-btn--active', state.assignedToMe);
+    btn.setAttribute('aria-pressed', String(state.assignedToMe));
+    renderView();
+  });
+
+  bar.querySelectorAll('[data-layer]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const layer = btn.dataset.layer;
+      if (layer === 'holidays') {
+        state.layerHolidays = !state.layerHolidays;
+        localStorage.setItem(LAYER_HOLIDAYS_KEY, state.layerHolidays);
+        btn.classList.toggle('cal-toolbar__layer-btn--active', state.layerHolidays);
+      } else if (layer === 'school') {
+        state.layerSchool = !state.layerSchool;
+        localStorage.setItem(LAYER_SCHOOL_KEY, state.layerSchool);
+        btn.classList.toggle('cal-toolbar__layer-btn--active', state.layerSchool);
+      }
+      renderView();
+    });
+  });
+
+  // Ansichts-Umschalter scrollt auf Mobile horizontal (Scrollbalken versteckt):
+  // Rand-Fade als Affordanz (geteilte has-fade-*-Konvention, Audit F-06).
+  wireScrollFade(bar.querySelector('.cal-toolbar__views'));
+  viewTabs = wireTablist(bar.querySelector('.cal-toolbar__views'), {
+    activeId: state.view,
+    activeClass: 'cal-toolbar__view-btn--active',
+    onChange: async (view) => {
+      if (searchActive) closeCalendarSearch({ restoreView: false });
+      state.view = view;
+      setSavedCalendarView(view);
+      await reloadForView();
+      updateLabel();
+      renderView();
+    },
+  });
+}
+
+function updateLabel() {
+  const lbl = _container.querySelector('#cal-label');
+  if (!lbl) return;
+  const d    = new Date(state.cursor + 'T00:00:00');
+  const year = d.getFullYear();
+  const mon  = MONTH_NAMES()[d.getMonth()];
+
+  if (state.view === 'month')  lbl.textContent = `${mon} ${year}`;
+  if (state.view === 'week') {
+    // Mobil zeigt die "Woche" ein 3-Tage-Fenster um den Cursor (renderWeekView);
+    // ein "KW 30"-Label würde dann einen Bereich behaupten, der nicht zu sehen
+    // ist (Audit A1-19). Das Label nennt stattdessen den sichtbaren Bereich.
+    lbl.textContent = window.matchMedia('(max-width: 639px)').matches
+      ? t('calendar.dayRangeLabel', { from: formatDayMonth(addDays(state.cursor, -1)), to: formatPreferredDate(addDays(state.cursor, 1)) })
+      : t('calendar.weekNumberLabel', { week: getWeekNumber(state.cursor), month: mon, year });
+  }
+  if (state.view === 'day')    lbl.textContent = formatDate(state.cursor, { weekday: true, long: true });
+  if (state.view === 'agenda') lbl.textContent = t('calendar.agendaFrom', { date: formatDate(state.cursor) });
+}
+
+function getWeekNumber(dateStr) {
+  // ISO-8601: Woche 1 enthält den ersten Donnerstag des Jahres; Wochen beginnen
+  // montags. Verhindert die Off-by-one-Abweichung des naiven Jan-1-Ansatzes an
+  // Jahresgrenzen.
+  const d = new Date(dateStr + 'T00:00:00');
+  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7; // Mo=0 … So=6
+  target.setUTCDate(target.getUTCDate() - dayNr + 3); // Donnerstag dieser Woche
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstDayNr = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNr + 3);
+  return 1 + Math.round((target - firstThursday) / (7 * 86400000));
+}
+
+async function navigate(dir) {
+  if (searchActive) closeCalendarSearch({ restoreView: false });
+  if (state.view === 'month') {
+    state.cursor = addMonths(state.cursor, dir);
+  } else if (state.view === 'week') {
+    const isMobile = window.matchMedia('(max-width: 639px)').matches;
+    state.cursor = addDays(state.cursor, dir * (isMobile ? 3 : 7));
+  } else if (state.view === 'day') {
+    state.cursor = addDays(state.cursor, dir);
+  } else if (state.view === 'agenda') {
+    state.cursor = addDays(state.cursor, dir * 30);
+  }
+  await reloadForView();
+  updateLabel();
+  renderView();
+}
+
+async function goToday() {
+  if (searchActive) closeCalendarSearch({ restoreView: false });
+  state.cursor = state.today;
+  await reloadForView();
+  updateLabel();
+  renderView();
+}
+
+async function switchToDayView(date) {
+  state.cursor = date;
+  state.view = 'day';
+  setSavedCalendarView('day');
+  viewTabs?.sync('day');
+  await reloadForView();
+  updateLabel();
+  renderView();
+}
+
+async function reloadForView() {
+  const { from, to } = getRangeForView(state.view, state.cursor);
+
+  if (from !== state.rangeFrom || to !== state.rangeTo) {
+    await loadRange(from, to);
+  }
+}
+
+// --------------------------------------------------------
+// Ansicht-Dispatcher
+// --------------------------------------------------------
+
+// Dezenter Offline-Hinweis oberhalb der Toolbar: zeigt den letzten Cache-Stand,
+// wenn der Kalender offline aus dem Service-Worker-Cache bedient wurde.
+function updateOfflineNotice() {
+  const page = _container?.querySelector('#calendar-page');
+  if (!page) return;
+  const existing = page.querySelector('#cal-offline-notice');
+
+  if (!state.offlineSince) {
+    existing?.remove();
+    return;
+  }
+
+  const stamp = `${formatPreferredDate(state.offlineSince)} ${formatTime(state.offlineSince)}`.trim();
+  const label = t('offline.staleData', { time: stamp });
+
+  if (existing) {
+    const span = existing.querySelector('.cal-offline-notice__text');
+    if (span) span.textContent = label;
+    return;
+  }
+
+  const toolbar = page.querySelector('#cal-toolbar');
+  const html = `
+    <div class="cal-offline-notice" id="cal-offline-notice" role="status">
+      <i data-lucide="cloud-off" class="icon-sm" aria-hidden="true"></i>
+      <span class="cal-offline-notice__text">${esc(label)}</span>
+    </div>`;
+  if (toolbar) toolbar.insertAdjacentHTML('beforebegin', html);
+  else page.insertAdjacentHTML('afterbegin', html);
+  if (window.lucide) lucide.createIcons({ el: page.querySelector('#cal-offline-notice') });
+}
+
+// --------------------------------------------------------
+// Monatszellen-Kapazität (Audit P2)
+// --------------------------------------------------------
+
+// Render-Puffer je Zelle; wie viele Chips sichtbar bleiben, entscheidet
+// fitMonthDayCells aus der realen Zellhöhe. Der Deckel begrenzt nur das DOM an
+// extrem vollen Tagen (>14 Items) - "+N" zählt via data-total trotzdem korrekt.
+const MONTH_DAY_MAX_CHIPS = 14;
+
+let _monthGridResizeObserver = null;
+let _monthFitRaf = 0;
+
+// Sichtbare Chip-Zahl je Monatszelle aus der REALEN Zellhöhe ableiten. Weil
+// grid-auto-rows:1fr die Zellhöhe inhaltsunabhängig macht (per Grid verteilt,
+// variiert mit dem Viewport), ist die Messung stabil: Chips zu verstecken ändert
+// die Zellhöhe nicht. Der letzte Platz bleibt immer für die "+N"-Zeile reserviert,
+// damit nie ein Chip mittig abschneidet (vorher: festes Budget=3 clippte still).
+function fitMonthDayCells(grid) {
+  if (!grid) return;
+  grid.querySelectorAll('.month-day').forEach((cell) => {
+    const chips   = [...cell.querySelectorAll('.month-day__holiday, .month-day__event, .cal-task-chip')];
+    const moreRow = cell.querySelector('.month-day__more');
+    if (!moreRow) return;
+    const total = Number(cell.dataset.total) || chips.length;
+
+    // Reset auf vollständig sichtbar für eine stabile Messung.
+    chips.forEach((c) => c.classList.remove('is-clipped'));
+    moreRow.hidden = true;
+    moreRow.textContent = '';
+    if (!chips.length) return;
+
+    const cs         = getComputedStyle(cell);
+    const cellBottom = cell.getBoundingClientRect().bottom - parseFloat(cs.paddingBottom);
+
+    // Passt alles rein (inkl. evtl. nicht gerenderter Überzähliger)? Dann fertig.
+    const fitsAll = total <= chips.length
+      && chips[chips.length - 1].getBoundingClientRect().bottom <= cellBottom;
+    if (fitsAll) return;
+
+    // Platz für die "+N"-Zeile freihalten (einzeilig, Höhe unabhängig von N).
+    moreRow.hidden = false;
+    moreRow.textContent = t('calendar.moreEvents', { count: total });
+    const reserved = cellBottom - moreRow.getBoundingClientRect().height;
+
+    let visible = 0;
+    for (const chip of chips) {
+      if (chip.getBoundingClientRect().bottom <= reserved) visible += 1;
+      else break;
+    }
+    visible = Math.max(1, visible); // nie ganz leer wirken lassen
+
+    chips.forEach((chip, i) => chip.classList.toggle('is-clipped', i >= visible));
+    const hiddenCount = total - visible;
+    if (hiddenCount > 0) {
+      moreRow.textContent = t('calendar.moreEvents', { count: hiddenCount });
+    } else {
+      moreRow.hidden = true;
+      moreRow.textContent = '';
+    }
+  });
+}
+
+// Neurechnung per rAF drosseln: der ResizeObserver kann beim Fensterziehen
+// mehrfach pro Frame feuern; ein fit pro Frame reicht.
+function scheduleMonthFit(grid) {
+  if (_monthFitRaf) return;
+  _monthFitRaf = requestAnimationFrame(() => {
+    _monthFitRaf = 0;
+    fitMonthDayCells(grid);
+  });
+}
+
+function renderView() {
+  const body = _container.querySelector('#cal-body');
+  if (!body) return;
+  // Monats-Resize-Observer lösen, bevor das alte #month-grid detached wird;
+  // nur die Monatsansicht setzt ihn danach wieder auf.
+  _monthGridResizeObserver?.disconnect();
+  _monthGridResizeObserver = null;
+  body.replaceChildren();
+
+  // Tages-Buckets einmal pro Render-Pass aufbauen; danach wieder deaktivieren,
+  // damit spätere State-Mutationen (Modals etc.) keinen veralteten Index lesen.
+  buildDayIndex();
+  try {
+    if (state.view === 'month')  renderMonthView(body);
+    if (state.view === 'week')   renderWeekView(body);
+    if (state.view === 'day')    renderDayView(body);
+    if (state.view === 'agenda') renderAgendaView(body);
+  } finally {
+    _dayIndex.active = false;
+  }
+  if (window.lucide) lucide.createIcons({ el: body });
+  updateOfflineNotice();
+}
+
+// --------------------------------------------------------
+// Monatsansicht
+// --------------------------------------------------------
+
+function renderMonthView(container) {
+  const d      = new Date(state.cursor + 'T00:00:00');
+  const year   = d.getFullYear();
+  const month  = d.getMonth();
+
+  // Erster Tag des Monats
+  const firstDay  = new Date(year, month, 1);
+  // Bis zum gewählten Wochenstart zurückgehen.
+  const startOffset = (firstDay.getDay() - state.weekStart + 7) % 7;
+
+  // 42 Tage anzeigen (6 Wochen)
+  const startDate = new Date(firstDay);
+  startDate.setDate(startDate.getDate() - startOffset);
+
+  const days = Array.from({ length: 42 }, (_, i) => {
+    const dt = new Date(startDate);
+    dt.setDate(startDate.getDate() + i);
+    return { date: isoDate(dt), inMonth: dt.getMonth() === month };
+  });
+
+  container.replaceChildren();
+  container.insertAdjacentHTML('beforeend', `
+    <div class="month-view">
+      <div class="month-weekdays">
+        ${weekdayOrder(state.weekStart).map((idx) => `<div class="month-weekday">${DAY_NAMES_SHORT()[idx]}</div>`).join('')}
+      </div>
+      <div class="month-grid" id="month-grid">
+        ${days.map(({ date, inMonth }) => renderMonthDay(date, inMonth)).join('')}
+      </div>
+    </div>
+  `);
+
+  const grid = container.querySelector('#month-grid');
+  grid.addEventListener('click', (e) => {
+    const dayEl = e.target.closest('.month-day');
+    if (!dayEl) return;
+
+    // Mobil ist die ganze Zelle EIN Drill-in-Ziel: die Chips sind dort zu
+    // Punkten reduziert (reines "etwas ist los"-Signal), ein Tap darf nie in
+    // einem Event-Popup enden statt in der handlungsfähigen Tagesansicht (P1).
+    // Desktop behält die feinere Interaktion: Chip -> Ziel, Zelle -> Tag.
+    const isMobile = window.matchMedia('(max-width: 639px)').matches;
+    if (!isMobile) {
+      const taskChip = e.target.closest('.cal-task-chip');
+      if (taskChip) {
+        e.stopPropagation();
+        window.yuvomi.navigate(`/tasks?open=${taskChip.dataset.taskId}`);
+        return;
+      }
+      const evEl = e.target.closest('.month-day__event');
+      if (evEl) {
+        e.stopPropagation();
+        const ev = state.events.find((ev) => ev.id === parseInt(evEl.dataset.id, 10));
+        if (ev) openEventDetail(ev, evEl);
+        return;
+      }
+    }
+    switchToDayView(dayEl.dataset.date);
+  });
+
+  // Tastatur-Aktivierung der Tageszelle (role="button"): Enter/Space -> Tag.
+  // Nur wenn der Fokus auf der Zelle selbst liegt; innere Chips tragen desktop
+  // ihre eigene Semantik und werden hier nicht abgefangen (Audit P1).
+  grid.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const dayEl = e.target.closest('.month-day');
+    if (!dayEl || e.target !== dayEl) return;
+    e.preventDefault();
+    switchToDayView(dayEl.dataset.date);
+  });
+
+  // Sichtbare Kapazität je Zelle aus der realen Höhe ableiten und bei Viewport-
+  // Änderungen (Fenster-Resize, Sidebar-Toggle) neu rechnen (Audit P2). Der
+  // ResizeObserver feuert nach observe() initial einmal -> erster fit nach Paint.
+  _monthGridResizeObserver?.disconnect();
+  _monthGridResizeObserver = new ResizeObserver(() => scheduleMonthFit(grid));
+  _monthGridResizeObserver.observe(grid);
+}
+
+function renderMonthDay(date, inMonth) {
+  const evs      = eventsOnDay(date);
+  const dayTasks = tasksOnDay(date);
+  const dayHols  = holidaysOnDay(date);
+  const isToday  = date === state.today;
+  const classes  = [
+    'month-day',
+    !inMonth ? 'month-day--outside' : '',
+    isToday  ? 'month-day--today' : '',
+  ].filter(Boolean).join(' ');
+
+  // Alle Chips (Feiertagsband, Termine, Aufgaben) bis zu einem großzügigen Puffer
+  // ins DOM rendern; welche sichtbar bleiben, entscheidet fitMonthDayCells aus der
+  // REALEN Zellhöhe (grid-auto-rows:1fr -> variiert mit dem Viewport). Zuvor kappte
+  // ein festes Budget=3 blind: bei niedriger Zellhöhe schnitt die Zelle den letzten
+  // Chip mittig ab, ohne "+N" (Audit A1-04 / P2). data-total trägt die Gesamtzahl,
+  // damit "+N" auch die nicht gerenderten Überzähligen mitzählt. Reihenfolge
+  // Feiertag -> Termin -> Aufgabe.
+  const total     = dayHols.length + evs.length + dayTasks.length;
+  const holShown  = dayHols.slice(0, MONTH_DAY_MAX_CHIPS);
+  const evShown   = evs.slice(0, Math.max(0, MONTH_DAY_MAX_CHIPS - holShown.length));
+  const taskShown = dayTasks.slice(0, Math.max(0, MONTH_DAY_MAX_CHIPS - holShown.length - evShown.length));
+
+  const holHtml = holShown.map((h) => `
+    <div class="month-day__holiday" style="--holi-color:${esc(h.color)};--holi-ink:${esc(getReadableTextColor(h.color))}" title="${esc(h.name)}">
+      <span>${esc(h.name)}</span>
+    </div>
+  `).join('');
+
+  // Monatsgrid-Kanon (Apple Kalender / Fantastical): flache getönte Bar mit nur
+  // dem Titel. Icon und Avatar-Stack leben in der Tages-/Detailansicht; die
+  // "Wer"-Information bleibt für Tooltip/Screenreader im title-Attribut erhalten.
+  const evHtml = evShown.map((ev) => `
+    <div class="month-day__event"
+         data-id="${ev.id}"
+         style="${eventSurfaceStyle(ev)}"
+         title="${esc(ev.title)}${ev.cal_name ? ' · ' + esc(ev.cal_name) : ''}${chipAssigneeTitleSuffix(ev)}"
+    ><span>${esc(ev.title)}</span></div>
+  `).join('');
+
+  const taskHtml = taskShown.map((tk) => renderTaskChip(tk, { interactive: false, icon: false })).join('');
+
+  return `
+    <div class="${classes}" data-date="${date}" data-total="${total}"
+         role="button" tabindex="0"
+         aria-label="${esc(monthDayAriaLabel(date, total))}"${isToday ? ' aria-current="date"' : ''}>
+      <div class="month-day__number">${new Date(date + 'T00:00:00').getDate()}</div>
+      ${holHtml}
+      ${evHtml}
+      ${taskHtml}
+      <div class="month-day__more" hidden></div>
+    </div>
+  `;
+}
+
+// aria-label der Tageszelle: lokalisiertes Datum + (falls vorhanden) Zahl der
+// Einträge, damit Tastatur/Screenreader den Tag vor dem Drill-in einordnen
+// können. Leere Tage tragen nur das Datum (die role sagt "Schaltfläche"). P1.
+function monthDayAriaLabel(date, total) {
+  const d = formatPreferredDate(date);
+  return total > 0 ? `${d}, ${t('calendar.monthDayEntries', { count: total })}` : d;
+}
+
+// --------------------------------------------------------
+// Wochenansicht
+// --------------------------------------------------------
+
+function renderWeekView(container) {
+  const isMobile = window.matchMedia('(max-width: 639px)').matches;
+  // Auf Mobile: 3-Tage-Fenster zentriert um state.cursor statt vollem Mo–So
+  const days = isMobile
+    ? Array.from({ length: 3 }, (_, i) => addDays(state.cursor, i - 1))
+    : (() => {
+        const weekStart = startOfWeekOf(state.cursor);
+        return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+      })();
+  const colCount = days.length;
+
+  const alldayEvs = days.map((d) =>
+    eventsOnDay(d).filter(isAllDayLike)
+  );
+  const timedEvs = days.map((d) =>
+    eventsOnDay(d).filter((e) => !isAllDayLike(e))
+  );
+  const layouts = timedEvs.map((events) => layoutOverlaps(events));
+
+  container.replaceChildren();
+  container.insertAdjacentHTML('beforeend', `
+    <div class="week-view">
+      <div class="week-view__header" id="week-header"
+           style="display:grid;grid-template-columns:var(--space-12) repeat(${colCount},1fr);">
+        <div class="week-view__time-gutter"></div>
+        ${days.map((d) => {
+          const dt = new Date(d + 'T00:00:00');
+          return `<div class="week-view__day-header" data-date="${d}">
+            <div class="week-view__day-name">${DAY_NAMES_SHORT()[dt.getDay()]}</div>
+            <div class="week-view__day-num ${d === state.today ? 'week-view__day-num--today' : ''}">${dt.getDate()}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <!-- Ganztägige Ereignisse -->
+      <div class="allday-row" style="display:grid;grid-template-columns:var(--space-12) repeat(${colCount},1fr);">
+        <div class="calendar-all-day-label">${t('calendar.allDayShort')}</div>
+        ${days.map((d, i) => `
+          <div class="allday-cell">
+            ${holidaysOnDay(d).map((h) => `
+              <div class="allday-holiday" style="--holi-color:${esc(h.color)};--holi-ink:${esc(getReadableTextColor(h.color))}" title="${esc(h.name)}">
+                <span>${esc(h.name)}</span>
+              </div>
+            `).join('')}
+            ${alldayEvs[i].map((ev) => `
+              <div class="allday-event" data-id="${ev.id}"
+                   style="${eventSurfaceStyle(ev)}"
+                   title="${esc(ev.title)}${ev.cal_name ? ' · ' + ev.cal_name : ''}${chipAssigneeTitleSuffix(ev)}">${eventIconHtml(ev.icon, 'event-icon event-icon--compact')}<span>${esc(ev.title)}</span>${chipAssigneeStack(ev, { size: 16, maxVisible: 3 })}</div>
+            `).join('')}
+            ${tasksOnDay(d).map(renderTaskChip).join('')}
+          </div>
+        `).join('')}
+      </div>
+      <div class="week-view__scroll" id="week-scroll">
+        <div class="week-view__body">
+          <div class="week-view__times">
+            ${Array.from({ length: 24 }, (_, h) => `
+              <div class="week-view__time-slot" style="height:${HOUR_HEIGHT}px;">
+                <span class="week-view__time-label">${h === 0 ? '' : formatTime(new Date(2000, 0, 1, h, 0, 0))}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="week-view__columns" id="week-cols"
+               style="display:grid;grid-template-columns:repeat(${colCount},1fr);">
+            ${days.map((d, i) => `
+              <div class="week-view__col" data-date="${d}">
+                ${Array.from({ length: 24 }, (_, h) => `
+                  <div class="week-view__hour-line" style="top:${h * HOUR_HEIGHT}px;"></div>
+                `).join('')}
+                ${timedEvs[i].map((ev) => renderWeekEvent(ev, layouts[i].get(ev.id))).join('')}
+                ${d === state.today ? `<div class="week-view__now-line" id="now-line" style="top:${nowTop()}px;"></div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  // Event-Delegation
+  container.querySelector('#week-header').addEventListener('click', (e) => {
+    const header = e.target.closest('.week-view__day-header[data-date]');
+    if (header) switchToDayView(header.dataset.date);
+  });
+
+  container.querySelector('#week-cols').addEventListener('click', (e) => {
+    const evEl = e.target.closest('.week-event');
+    if (evEl) {
+      const ev = state.events.find((ev) => ev.id === parseInt(evEl.dataset.id, 10));
+      if (ev) openEventDetail(ev, evEl);
+      return;
+    }
+    const col = e.target.closest('[data-date]');
+    if (col) {
+      const time = clickedTime(e, col);
+      openEventModal({ mode: 'create', date: col.dataset.date, time });
+    }
+  });
+
+  container.querySelector('.allday-row').addEventListener('click', (e) => {
+    const taskChip = e.target.closest('.cal-task-chip');
+    if (taskChip) {
+      window.yuvomi.navigate(`/tasks?open=${taskChip.dataset.taskId}`);
+      return;
+    }
+    const evEl = e.target.closest('.allday-event');
+    if (evEl) {
+      const ev = state.events.find((ev) => ev.id === parseInt(evEl.dataset.id, 10));
+      if (ev) openEventDetail(ev, evEl);
+    }
+  });
+
+  // Scrollen zu aktueller Zeit
+  const scroll = container.querySelector('#week-scroll');
+  if (scroll) {
+    const h = new Date().getHours();
+    scroll.scrollTop = Math.max(0, h * HOUR_HEIGHT - 80);
+  }
+}
+
+function renderWeekEvent(ev, layout = null) {
+  const { start, end } = timeRangeForEvent(ev);
+  const duration = Math.max(end - start, 30);
+
+  const top    = (start / 60) * HOUR_HEIGHT;
+  const height = (duration / 60) * HOUR_HEIGHT - 2;
+  const left = layout ? `calc(${(layout.colIndex / layout.totalCols) * 100}% + 2px)` : '2px';
+  const width = layout ? `calc(${100 / layout.totalCols}% - 4px)` : 'auto';
+
+  return `
+    <div class="week-event" data-id="${ev.id}"
+         style="top:${top}px;height:${height}px;left:${left};width:${width};${eventSurfaceStyle(ev)}"
+         title="${esc(ev.title)}${chipAssigneeTitleSuffix(ev)}">
+      <div class="week-event__title">${eventIconHtml(ev.icon, 'event-icon event-icon--compact')}<span>${esc(ev.title)}</span>${(ev.recurrence_rule || ev.is_recurring_instance) ? calendarRepeatIconHtml() : ''}${chipAssigneeStack(ev, { size: 14, maxVisible: 2 })}</div>
+      <div class="week-event__time">${formatTime(ev.start_datetime)}${ev.end_datetime ? '–' + formatTime(ev.end_datetime) : ''}</div>
+    </div>
+  `;
+}
+
+function timeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+/**
+ * Addiert eine Minutendauer auf eine Datum/Zeit-Kombination und trägt den
+ * Überlauf über Mitternacht auf das Datum über.
+ * @returns {{ date: string, time: string }} lokaler Datums-Key (YYYY-MM-DD) + HH:MM
+ */
+function addDurationToDateTime(dateKey, timeStr, minutes) {
+  const total    = timeToMinutes(timeStr) + Math.max(0, minutes);
+  const dayShift = Math.floor(total / (24 * 60));
+  const dayMins  = ((total % (24 * 60)) + 24 * 60) % (24 * 60);
+  return {
+    date: dayShift ? addDays(dateKey, dayShift) : dateKey,
+    time: `${pad(Math.floor(dayMins / 60))}:${pad(dayMins % 60)}`,
+  };
+}
+
+function nowTop() {
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  return (minutes / 60) * HOUR_HEIGHT;
+}
+
+/** Berechnet die geklickte Uhrzeit (auf 30-Minuten gerundet) aus einem Click-Event
+ *  relativ zum übergebenen Spalten-Element. */
+function clickedTime(e, colEl) {
+  const rect = colEl.getBoundingClientRect();
+  const yOffset = Math.max(0, e.clientY - rect.top);
+  const totalMinutes = Math.round((yOffset / HOUR_HEIGHT) * 60 / 30) * 30;
+  const clamped = Math.min(Math.max(totalMinutes, 0), 23 * 60 + 30);
+  return `${pad(Math.floor(clamped / 60))}:${pad(clamped % 60)}`;
+}
+
+function timeRangeForEvent(ev) {
+  const start = timeToMinutes(localTime(ev.start_datetime));
+  const end = ev.end_datetime
+    ? timeToMinutes(localTime(ev.end_datetime))
+    : start + 60;
+  return {
+    start,
+    end: Math.max(end, start + 30),
+  };
+}
+
+function layoutOverlaps(events) {
+  const groups = [];
+  const sorted = [...events].sort((a, b) => {
+    const aRange = timeRangeForEvent(a);
+    const bRange = timeRangeForEvent(b);
+    return aRange.start - bRange.start || aRange.end - bRange.end;
+  });
+
+  let current = [];
+  let currentEnd = -1;
+  for (const ev of sorted) {
+    const range = timeRangeForEvent(ev);
+    if (!current.length || range.start < currentEnd) {
+      current.push(ev);
+      currentEnd = current.length === 1 ? range.end : Math.max(currentEnd, range.end);
+    } else {
+      groups.push(current);
+      current = [ev];
+      currentEnd = range.end;
+    }
+  }
+  if (current.length) groups.push(current);
+
+  const layout = new Map();
+  for (const group of groups) {
+    const columns = [];
+    const placements = [];
+    for (const ev of group) {
+      const range = timeRangeForEvent(ev);
+      let colIndex = columns.findIndex((end) => end <= range.start);
+      if (colIndex === -1) {
+        colIndex = columns.length;
+        columns.push(range.end);
+      } else {
+        columns[colIndex] = range.end;
+      }
+      placements.push({ ev, colIndex });
+    }
+    const totalCols = Math.max(columns.length, 1);
+    for (const placement of placements) {
+      layout.set(placement.ev.id, {
+        colIndex: placement.colIndex,
+        totalCols,
+      });
+    }
+  }
+  return layout;
+}
+
+// --------------------------------------------------------
+// Tagesansicht
+// --------------------------------------------------------
+
+function renderDayView(container) {
+  const dt      = new Date(state.cursor + 'T00:00:00');
+  const dayEvs  = eventsOnDay(state.cursor);
+  const allday  = dayEvs.filter(isAllDayLike);
+  const timed   = dayEvs.filter((e) => !isAllDayLike(e));
+  const layout = layoutOverlaps(timed);
+
+  container.replaceChildren();
+  // Kein eigener Datums-Header mehr: die Toolbar zeigt exakt dasselbe Datum
+  // bereits als Ansichts-Label (Audit A1-18).
+  container.insertAdjacentHTML('beforeend', `
+    <div class="day-view">
+      ${(allday.length || tasksOnDay(state.cursor).length || holidaysOnDay(state.cursor).length) ? `
+      <div class="allday-row" style="display:grid;grid-template-columns:var(--space-12) 1fr;">
+        <div class="calendar-all-day-label">${t('calendar.allDayShort')}</div>
+        <div class="allday-cell">
+          ${holidaysOnDay(state.cursor).map((h) => `
+            <div class="allday-holiday" style="--holi-color:${esc(h.color)};--holi-ink:${esc(getReadableTextColor(h.color))}" title="${esc(h.name)}">
+              <span>${esc(h.name)}</span>
+            </div>
+          `).join('')}
+          ${allday.map((ev) => `
+            <div class="allday-event" data-id="${ev.id}"
+                 style="${eventSurfaceStyle(ev)}"
+                 title="${esc(ev.title)}${ev.cal_name ? ' · ' + ev.cal_name : ''}${chipAssigneeTitleSuffix(ev)}">${eventIconHtml(ev.icon, 'event-icon event-icon--compact')}<span>${esc(ev.title)}</span>${chipAssigneeStack(ev, { size: 16, maxVisible: 3 })}</div>`).join('')}
+          ${tasksOnDay(state.cursor).map(renderTaskChip).join('')}
+        </div>
+      </div>` : ''}
+      <div class="day-view__scroll" id="day-scroll">
+        <div class="day-view__body">
+          <div class="day-view__times">
+            ${Array.from({ length: 24 }, (_, h) => `
+              <div class="week-view__time-slot" style="height:${HOUR_HEIGHT}px;">
+                <span class="week-view__time-label">${h === 0 ? '' : formatTime(new Date(2000, 0, 1, h, 0, 0))}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="day-view__col" data-date="${state.cursor}" id="day-col">
+            ${Array.from({ length: 24 }, (_, h) => `
+              <div class="week-view__hour-line" style="top:${h * HOUR_HEIGHT}px;"></div>
+            `).join('')}
+            ${timed.map((ev) => renderWeekEvent(ev, layout.get(ev.id))).join('')}
+            ${dayEvs.length === 0 ? `<div class="day-view__empty-hint" style="top:${(state.cursor === state.today ? nowTop() : 9 * HOUR_HEIGHT) + 16}px">${t('calendar.dayEmptyHint')}</div>` : ''}
+            ${state.cursor === state.today ? `<div class="week-view__now-line" style="top:${nowTop()}px;"></div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  container.querySelector('.allday-row')?.addEventListener('click', (e) => {
+    const taskChip = e.target.closest('.cal-task-chip');
+    if (taskChip) {
+      window.yuvomi.navigate(`/tasks?open=${taskChip.dataset.taskId}`);
+      return;
+    }
+    const evEl = e.target.closest('.allday-event');
+    if (evEl) {
+      const ev = state.events.find((ev) => ev.id === parseInt(evEl.dataset.id, 10));
+      if (ev) openEventDetail(ev, evEl);
+    }
+  });
+
+  container.querySelector('#day-col').addEventListener('click', (e) => {
+    const evEl = e.target.closest('.week-event');
+    if (evEl) {
+      const ev = state.events.find((ev) => ev.id === parseInt(evEl.dataset.id, 10));
+      if (ev) openEventDetail(ev, evEl);
+      return;
+    }
+    const time = clickedTime(e, e.currentTarget);
+    openEventModal({ mode: 'create', date: state.cursor, time });
+  });
+
+  const scroll = container.querySelector('#day-scroll');
+  if (scroll) {
+    const h = new Date().getHours();
+    scroll.scrollTop = Math.max(0, h * HOUR_HEIGHT - 80);
+  }
+}
+
+// --------------------------------------------------------
+// Agenda-Ansicht
+// --------------------------------------------------------
+
+function renderAgendaView(container) {
+  const { from, to } = getAgendaRange(state.cursor);
+  const days = Array.from({ length: 31 }, (_, i) => addDays(from, i));
+
+  const groups = days
+    .map((d) => ({ date: d, events: eventsOnDay(d), tasks: tasksOnDay(d), holidays: holidaysOnDay(d) }))
+    .filter((g) => g.events.length > 0 || g.tasks.length > 0 || g.holidays.length > 0);
+
+  container.replaceChildren();
+  container.insertAdjacentHTML('beforeend', `
+    <div class="agenda-view" id="agenda-view">
+      ${groups.length === 0
+        ? `<div class="empty-state">
+             <i data-lucide="calendar-plus" class="empty-state__icon" aria-hidden="true"></i>
+             <div class="empty-state__title">${t('calendar.agendaEmpty')}</div>
+             <button class="btn btn--primary empty-state__cta" id="agenda-empty-cta">${t('calendar.newEvent')}</button>
+           </div>`
+        : groups.map(({ date, events, tasks, holidays }) => `
+          <div class="agenda-day">
+            <div class="agenda-day__header ${date === state.today ? 'agenda-day__header--today' : ''}">
+              <span class="agenda-day__date">${formatDate(date)}</span>
+              <span class="agenda-day__weekday">${DAY_NAMES_LONG()[new Date(date + 'T00:00:00').getDay()]}</span>
+            </div>
+            ${holidays.length ? `<div class="agenda-holidays">${holidays.map((h) => `
+              <div class="agenda-holiday" style="--holi-color:${esc(h.color)}">
+                <span class="agenda-holiday__dot"></span>
+                <span>${esc(h.name)}</span>
+              </div>`).join('')}</div>` : ''}
+            ${events.length ? `<div class="list-rows">${events.map((ev) => renderAgendaEvent(ev, date)).join('')}</div>` : ''}
+            ${tasks.length ? `<div class="agenda-tasks">${tasks.map(renderTaskChip).join('')}</div>` : ''}
+          </div>
+        `).join('')
+      }
+    </div>
+  `);
+
+  stagger(container.querySelectorAll('.agenda-event'));
+
+  container.querySelector('#agenda-view').addEventListener('click', (e) => {
+    if (e.target.closest('#agenda-empty-cta')) {
+      openEventModal({ mode: 'create' });
+      return;
+    }
+    const taskChip = e.target.closest('.cal-task-chip');
+    if (taskChip) {
+      window.yuvomi.navigate(`/tasks?open=${taskChip.dataset.taskId}`);
+      return;
+    }
+    const evEl = e.target.closest('.agenda-event');
+    if (evEl) {
+      const ev = state.events.find((ev) => ev.id === parseInt(evEl.dataset.id, 10));
+      if (ev) openEventDetail(ev, evEl);
+    }
+  });
+
+  // Tastaturaktivierung der als role="button" ausgezeichneten Zeilen (Enter/Space).
+  container.querySelector('#agenda-view').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const evEl = e.target.closest('.agenda-event');
+    if (!evEl) return;
+    e.preventDefault();
+    const ev = state.events.find((x) => x.id === parseInt(evEl.dataset.id, 10));
+    if (ev) openEventDetail(ev, evEl);
+  });
+}
+
+// --------------------------------------------------------
+// Termin-Suche (#471)
+// Datumsunabhängiges Finden über den FTS-Index (Titel/Beschreibung/Ort).
+// Eine Leiste unter der Toolbar; der Body zeigt eine chronologische Trefferliste
+// (Vergangenheit + Zukunft) mit „Heute"-Anker. Klick öffnet den Termin im Kontext.
+// --------------------------------------------------------
+
+function openCalendarSearch() {
+  if (searchActive) {
+    _container.querySelector('#cal-search-input')?.focus();
+    return;
+  }
+  const toolbar = _container.querySelector('#cal-toolbar');
+  if (!toolbar) return;
+  searchActive  = true;
+  searchQuery   = '';
+  searchResults = [];
+
+  const toggle = _container.querySelector('#cal-search');
+  toggle?.setAttribute('aria-expanded', 'true');
+  // Erst jetzt gibt es ein Ziel, also erst jetzt der Verweis darauf.
+  toggle?.setAttribute('aria-controls', 'cal-search-bar');
+  toggle?.classList.add('cal-toolbar__search-btn--active');
+
+  toolbar.insertAdjacentHTML('afterend', `
+    <div class="cal-search" id="cal-search-bar" role="search">
+      <i data-lucide="search" class="cal-search__icon" aria-hidden="true"></i>
+      <input type="search" class="cal-search__input" id="cal-search-input"
+             placeholder="${esc(t('calendar.searchPlaceholder'))}"
+             aria-label="${esc(t('calendar.searchPlaceholder'))}"
+             autocomplete="off" enterkeyhint="search" spellcheck="false">
+      <button class="btn btn--icon cal-search__close" id="cal-search-close"
+              aria-label="${esc(t('calendar.searchClose'))}" title="${esc(t('calendar.searchClose'))}">
+        <i data-lucide="x" aria-hidden="true"></i>
+      </button>
+      <span id="cal-search-live" class="sr-only" role="status" aria-live="polite"></span>
+    </div>
+  `);
+
+  const bar   = _container.querySelector('#cal-search-bar');
+  const input = bar.querySelector('#cal-search-input');
+  if (window.lucide) lucide.createIcons({ el: bar });
+
+  renderCalendarSearchState('hint');
+
+  let timer = null;
+  input.addEventListener('input', () => {
+    const q = input.value;
+    clearTimeout(timer);
+    timer = setTimeout(() => runCalendarSearch(q), 220);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeCalendarSearch(); }
+  });
+  bar.querySelector('#cal-search-close').addEventListener('click', () => closeCalendarSearch());
+
+  input.focus();
+}
+
+function closeCalendarSearch({ restoreView = true } = {}) {
+  if (!searchActive) return;
+  searchActive  = false;
+  searchQuery   = '';
+  searchResults = [];
+  _container.querySelector('#cal-search-bar')?.remove();
+
+  const toggle = _container.querySelector('#cal-search');
+  toggle?.setAttribute('aria-expanded', 'false');
+  // Die Leiste ist gerade entfernt worden - der Verweis geht mit ihr.
+  toggle?.removeAttribute('aria-controls');
+  toggle?.classList.remove('cal-toolbar__search-btn--active');
+
+  if (restoreView) renderView();
+  toggle?.focus();
+}
+
+async function runCalendarSearch(raw) {
+  if (!searchActive) return;
+  const q = String(raw ?? '').trim();
+  searchQuery = q;
+
+  if (q.length < 2) {
+    searchResults = [];
+    searchTotal = 0;
+    renderCalendarSearchState('hint');
+    return;
+  }
+
+  renderCalendarSearchState('loading');
+  try {
+    const res = await api.get(`/calendar/search?q=${encodeURIComponent(q)}`);
+    // Verworfen, wenn die Suche zwischenzeitlich geschlossen oder weitergetippt wurde.
+    if (!searchActive || searchQuery !== q) return;
+    searchResults = (res.data ?? []).map(localizeBirthdayEvent);
+    searchTotal = Number.isFinite(res.total) ? res.total : searchResults.length;
+    renderCalendarSearchState(searchResults.length ? 'results' : 'empty');
+  } catch (err) {
+    if (!searchActive || searchQuery !== q) return;
+    console.warn('[Calendar] Suche fehlgeschlagen:', err);
+    renderCalendarSearchState('error');
+  }
+}
+
+// Aktualisiert die persistente sr-only-Live-Region in der Suchleiste. Bewusst
+// getrennt von der sichtbaren Trefferliste, damit Screenreader Statuswechsel
+// zuverlässig ansagen (ein bei jedem Render neu erzeugtes role=status wird oft
+// nicht vorgelesen).
+function setSearchLive(message) {
+  const live = _container.querySelector('#cal-search-live');
+  if (live) live.textContent = message;
+}
+
+function calendarSearchCountLabel() {
+  return searchTotal > searchResults.length
+    ? t('calendar.searchCountCapped', { shown: searchResults.length, total: searchTotal })
+    : t('calendar.searchCount', { count: searchResults.length });
+}
+
+function renderCalendarSearchState(kind) {
+  const body = _container.querySelector('#cal-body');
+  if (!body) return;
+  body.replaceChildren();
+
+  if (kind === 'hint') {
+    body.insertAdjacentHTML('beforeend', `
+      <div class="cal-search-status">
+        <i data-lucide="search" class="cal-search-status__icon" aria-hidden="true"></i>
+        <p class="cal-search-status__text">${esc(t('calendar.searchHint'))}</p>
+      </div>`);
+    setSearchLive(t('calendar.searchHint'));
+  } else if (kind === 'loading') {
+    body.insertAdjacentHTML('beforeend', renderSkeletonList({ rows: 5, lines: 2 }));
+    setSearchLive(t('common.loading'));
+  } else if (kind === 'empty') {
+    body.insertAdjacentHTML('beforeend', `
+      <div class="cal-search-status">
+        <i data-lucide="calendar-search" class="cal-search-status__icon" aria-hidden="true"></i>
+        <p class="cal-search-status__text">${esc(t('calendar.searchEmpty', { query: searchQuery }))}</p>
+        <button class="btn btn--secondary" id="cal-search-empty-cta">${esc(t('calendar.newEvent'))}</button>
+      </div>`);
+    body.querySelector('#cal-search-empty-cta')?.addEventListener('click', () => openEventModal({ mode: 'create' }));
+    setSearchLive(t('calendar.searchEmpty', { query: searchQuery }));
+  } else if (kind === 'error') {
+    body.insertAdjacentHTML('beforeend', `
+      <div class="cal-search-status">
+        <i data-lucide="alert-triangle" class="cal-search-status__icon cal-search-status__icon--error" aria-hidden="true"></i>
+        <p class="cal-search-status__text">${esc(t('calendar.searchError'))}</p>
+        <button class="btn btn--secondary" id="cal-search-retry">${esc(t('common.retry'))}</button>
+      </div>`);
+    body.querySelector('#cal-search-retry')?.addEventListener('click', () => runCalendarSearch(searchQuery));
+    setSearchLive(t('calendar.searchError'));
+  } else if (kind === 'results') {
+    renderCalendarSearchResults(body);
+    setSearchLive(calendarSearchCountLabel());
+  }
+
+  if (window.lucide) lucide.createIcons({ el: body });
+}
+
+function renderCalendarSearchResults(body) {
+  // Treffer nach Tag gruppieren; der Endpoint liefert bereits chronologisch sortiert.
+  const groups = [];
+  const byDate = new Map();
+  for (const ev of searchResults) {
+    const d = localDate(ev.start_datetime);
+    if (!byDate.has(d)) {
+      const g = { date: d, events: [] };
+      byDate.set(d, g);
+      groups.push(g);
+    }
+    byDate.get(d).events.push(ev);
+  }
+
+  body.insertAdjacentHTML('beforeend', `
+    <div class="agenda-view cal-search-results" id="cal-search-results">
+      <p class="cal-search-results__count" aria-hidden="true">${esc(calendarSearchCountLabel())}</p>
+      ${groups.map(({ date, events }) => `
+        <div class="agenda-day" data-date="${esc(date)}">
+          <div class="agenda-day__header ${date === state.today ? 'agenda-day__header--today' : ''}">
+            <span class="agenda-day__date">${formatDate(date, { long: true })}</span>
+            <span class="agenda-day__weekday">${DAY_NAMES_LONG()[new Date(date + 'T00:00:00').getDay()]}</span>
+          </div>
+          <div class="list-rows">${events.map((ev) => renderAgendaEvent(ev, date)).join('')}</div>
+        </div>
+      `).join('')}
+    </div>
+  `);
+
+  const results = body.querySelector('#cal-search-results');
+  stagger(results.querySelectorAll('.agenda-event'));
+
+  const activateResult = (evEl) => {
+    const ev = searchResults.find((x) => String(x.id) === evEl.dataset.id);
+    if (ev) openFoundEvent(ev);
+  };
+  results.addEventListener('click', (e) => {
+    const evEl = e.target.closest('.agenda-event');
+    if (evEl) activateResult(evEl);
+  });
+  results.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const evEl = e.target.closest('.agenda-event');
+    if (!evEl) return;
+    e.preventDefault();
+    activateResult(evEl);
+  });
+
+  // Auf den nächsten kommenden Treffer scrollen — Vergangenes bleibt darüber
+  // erreichbar, aber der Blick startet beim relevantesten (heute/zukünftig).
+  const upcoming = groups.find((g) => g.date >= state.today);
+  if (upcoming) {
+    results.querySelector(`.agenda-day[data-date="${CSS.escape(upcoming.date)}"]`)
+      ?.scrollIntoView({ block: 'start', behavior: 'instant' });
+  }
+}
+
+// Öffnet einen gefundenen Termin im Kontext: springt in die Tagesansicht des
+// Termindatums und zeigt das Detail-Popup (Fallback: Bearbeiten-Modal).
+async function openFoundEvent(ev) {
+  const date = localDate(ev.start_datetime);
+  closeCalendarSearch({ restoreView: false });
+  await switchToDayView(date);
+
+  const full = state.events.find((e) => e.id === ev.id) || ev;
+  const chip = _container.querySelector(`[data-id="${CSS.escape(String(ev.id))}"]`);
+  if (chip) {
+    chip.scrollIntoView({ block: 'center', behavior: 'instant' });
+    openEventDetail(full, chip);
+  } else {
+    openEventDetail(full);
+  }
+}
+
+export const __test = {
+  normalizeCalendarView,
+  defaultCalendarViewFromState,
+  filterTasksForCalendar,
+  tasksOnDay,
+  isMultiDayEvent,
+  isAllDayLike,
+  agendaSegmentKind,
+  deepLinkTargetDate,
+  findDeepLinkedOccurrence,
+  validDateParam,
+  hasAttachment,
+  attachmentUrls,
+  clickedTime,
+  HOUR_HEIGHT,
+};
+
+function renderAgendaEvent(ev, dayStr) {
+  const kind = agendaSegmentKind(ev, dayStr ?? localDate(ev.start_datetime));
+  let timeStr;
+  switch (kind) {
+    case 'all-day':
+    case 'middle':
+      timeStr = t('calendar.allDay');
+      break;
+    case 'start':
+      timeStr = t('calendar.spanFrom', { time: formatTime(ev.start_datetime) });
+      break;
+    case 'end':
+      timeStr = t('calendar.spanUntil', { time: formatTime(ev.end_datetime) });
+      break;
+    default: // single
+      timeStr = formatTime(ev.start_datetime)
+        + (ev.end_datetime ? ` – ${formatTime(ev.end_datetime)} ${timeSuffix()}`.trimEnd() : ` ${timeSuffix()}`.trimEnd());
+  }
+
+  const displayBg     = resolveEventBackground(ev);
+  const displayColor  = resolveEventColor(ev);
+  const calLabelColor = ev.cal_color || ev.color || displayColor;
+  const assignedUsers = ev.assigned_users ?? [];
+  return `
+    <div class="agenda-event" data-id="${ev.id}" role="button" tabindex="0"
+         aria-label="${esc(ev.title)}, ${esc(timeStr)}${chipAssigneeLabel(ev) ? ', ' + esc(chipAssigneeLabel(ev)) : ''}">
+      <div class="agenda-event__color" style="background:${esc(displayBg)};"></div>
+      <div class="agenda-event__body">
+        <div class="agenda-event__title">${eventIconHtml(ev.icon)}<span>${esc(ev.title)}</span>${(ev.recurrence_rule || ev.is_recurring_instance) ? calendarRepeatIconHtml() : ''}</div>
+        <div class="agenda-event__meta">
+          <span class="calendar-meta-item">${calendarMetaIconHtml('clock')}<span>${esc(timeStr)}</span></span>
+          ${ev.location ? `<span class="calendar-meta-item">${calendarMetaIconHtml('map-pin')}<span>${esc(fmtLocation(ev.location))}</span></span>` : ''}
+          ${ev.cal_name ? `<span class="event-cal-label" style="--cal-color:${esc(calLabelColor)}">${esc(ev.cal_name)}</span>` : ''}
+          ${eventVisibilityMeta(ev.visibility)}
+          ${assignedUsers.length ? `<span class="agenda-event__assigned">${renderAvatarStack(assignedUsers, { size: 20, maxVisible: 3 })}</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Sichtbarkeits-Indikator (#474): nur bei eingeschränkten Terminen ein dezentes
+// Icon mit Label — „Alle" bleibt icon-los.
+function eventVisibilityMeta(visibility) {
+  if (!visibility || visibility === 'all') return '';
+  const icon  = visibility === 'private' ? 'lock' : 'users';
+  const label = visibility === 'private'
+    ? t('common.visibility.private')
+    : t('common.visibility.assignees');
+  return `<span class="calendar-meta-item" title="${esc(label)}">${calendarMetaIconHtml(icon)}<span>${esc(label)}</span></span>`;
+}
+
+// --------------------------------------------------------
+// Termin-Detailansicht (beim Antippen eines Termins)
+// --------------------------------------------------------
+
+/** Anhang als Bildvorschau oder Download-Link - beides als DOM, nie als Markup. */
+function attachmentNode(ev) {
+  if (!hasAttachment(ev)) return null;
+  const name = ev.attachment_name || t('calendar.attachmentFallback');
+  const urls = attachmentUrls(ev);
+
+  if (isImageAttachment(ev.attachment_mime)) {
+    const wrap = document.createElement('div');
+    wrap.className = 'detail-attachment detail-attachment--image';
+    const img = document.createElement('img');
+    img.src = urls.preview;
+    img.alt = name;
+    wrap.appendChild(img);
+    return wrap;
+  }
+
+  const link = document.createElement('a');
+  link.className = 'detail-attachment detail-attachment--file';
+  link.href = urls.download;
+  link.download = name;
+  const icon = document.createElement('i');
+  icon.dataset.lucide = 'paperclip';
+  icon.className = 'icon-md';
+  icon.setAttribute('aria-hidden', 'true');
+  link.append(icon, document.createTextNode(name));
+  return link;
+}
+
+/** Kalendername als farbiger Chip, wie in der Agenda-Ansicht. */
+function calendarChipNode(ev) {
+  if (!ev.cal_name) return null;
+  const chip = document.createElement('span');
+  chip.className = 'event-cal-label';
+  chip.style.setProperty('--cal-color', ev.cal_color || ev.color || resolveEventColor(ev));
+  chip.textContent = ev.cal_name;
+  return chip;
+}
+
+/** Erinnerungen im Klartext („1 Tag vorher"), statt sie ganz zu verschweigen. */
+function reminderSummary(ev, reminders) {
+  const list = Array.isArray(reminders) ? reminders : [];
+  if (!list.length) return '';
+  const labels = REMINDER_OFFSETS();
+  return list
+    .map((r) => {
+      const value = reminderOffsetFromEvent(ev, r);
+      const match = labels.find((o) => o.value === value && o.value !== '');
+      // „Benutzerdefiniert…" ist als Auswahl-Label gedacht, nicht als Aussage -
+      // in der Leseansicht steht stattdessen der tatsächliche Zeitpunkt.
+      return value === 'custom' || !match
+        ? formatDateTime(parseRemindAtAsUtc(r.remind_at))
+        : match.label;
+    })
+    .filter(Boolean)
+    .join(', ');
+}
+
+/**
+ * Die Leseinformationen eines Termins.
+ *
+ * Wiederholung, Erinnerungen und Sichtbarkeit standen bisher nur im
+ * Bearbeitungsformular - wer wissen wollte, ob ein Termin wöchentlich
+ * wiederkehrt, musste ihn zum Bearbeiten öffnen.
+ */
+function renderEventDetail(ev, reminders = []) {
+  const timeStr = ev.all_day
+    ? `${formatPreferredDate(localDate(ev.start_datetime))} · ${t('calendar.allDay')}`
+    : formatDateTime(ev.start_datetime)
+      + (ev.end_datetime ? ` – ${formatTime(ev.end_datetime)} ${timeSuffix()}`.trimEnd() : '');
+
+  return [
+    { icon: 'calendar', label: t('calendar.detailCalendar'), node: calendarChipNode(ev) },
+    { icon: 'clock', label: t('calendar.detailWhen'), value: timeStr },
+    recurrenceRow(ev.recurrence_rule),
+    { icon: 'map-pin', label: t('calendar.locationLabel'), value: ev.location ? fmtLocation(ev.location) : '' },
+    assignedRow(ev.assigned_users, t('calendar.assignedLabel'), ev.assigned_name || ''),
+    {
+      icon: 'bell',
+      label: reminders.length > 1 ? t('reminders.sectionTitlePlural') : t('reminders.sectionTitle'),
+      value: reminderSummary(ev, reminders),
+    },
+    visibilityRow(ev.visibility),
+    {
+      icon: 'align-left',
+      label: t('calendar.descriptionLabel'),
+      value: ev.description ? truncateDescription(ev.description, 500) : '',
+      multiline: true,
+    },
+    { icon: 'paperclip', label: t('calendar.attachmentLabel'), node: attachmentNode(ev) },
+  ];
+}
+
+/**
+ * Der einzige Einstieg in einen bestehenden Termin. Ohne Anker (Deep-Link,
+ * Suchtreffer) wird daraus ein Sheet, mit Anker am Desktop ein Popover.
+ */
+async function openEventDetail(ev, anchor = null) {
+  // Haushaltshilfe-Besuche werden in ihrem eigenen Modul bearbeitet; der Umweg
+  // über eine Detailansicht führte sonst ins Leere.
+  if (ev?.housekeeping_visit_id) {
+    window.yuvomi.navigate(`/housekeeping?editVisit=${ev.housekeeping_visit_id}`);
+    return;
+  }
+
+  // Die Erinnerungen kosten einen eigenen Serveraufruf; alles andere steckt
+  // schon im Termin. Früher wurde davor gewartet, und der Antipp-Moment - der
+  // einzige, dessen ganzer Zweck Leichtigkeit ist - blieb einen Roundtrip lang
+  // stumm. Jetzt läuft der Aufruf neben dem Öffnen her und die Zeile kommt
+  // nach. Die Sync-Ziele braucht nur das Formular, die lädt erst dessen mount().
+  let reminders = [];
+  const remindersReady = loadReminderForEvent(ev.id).then((r) => { reminders = r; });
+
+  const actions = [{
+    id: 'detail-delete',
+    label: t('common.delete'),
+    variant: 'danger-ghost',
+    icon: 'trash-2',
+    align: 'start',
+    // force + await: Löschen entscheidet über die Eingaben mit, eine
+    // Verwerfen-Frage davor wäre die zweite Rückfrage für dieselbe
+    // Entscheidung. Der await hält das Löschen zurück, bis der Overlay-Slot
+    // wirklich frei ist - requestDeleteEvent öffnet bei Serien selbst einen
+    // Dialog, und das Shared-Modal kennt kein Stacking.
+    onClick: async ({ close }) => { await close({ force: true }); await requestDeleteEvent(ev); },
+  }];
+
+  // ICS-Abos: Ein lokal geänderter Termin lässt sich auf das Original
+  // zurücksetzen. Die Aktion gehört zum Objekt, also in die Fußzeile.
+  if (ev.external_source === 'ics' && ev.user_modified === 1) {
+    actions.push({
+      id: 'detail-ics-reset',
+      label: t('calendar.ics.reset'),
+      variant: 'ghost',
+      icon: 'rotate-ccw',
+      onClick: async ({ close }) => {
+        try {
+          await api.post(`/calendar/${ev.id}/reset`, {});
+          // Der Schreibvorgang ist durch - ohne force fragte der Dirty-Guard
+          // nach dem Verwerfen von Änderungen, die der Reset ohnehin
+          // zurückgenommen hat (#625).
+          await close({ force: true });
+          await reloadForView();
+          window.yuvomi?.showToast(t('calendar.ics.resetToast'), 'success');
+        } catch (err) {
+          // Server-Meldung bevorzugen (nutzerorientiert), sonst lokalisierter
+          // Fallback — nie den rohen JS-/Netzwerk-Fehlertext zeigen.
+          window.yuvomi?.showToast(err.data?.error ?? t('calendar.saveError'), 'danger');
+        }
+      },
+    });
+  }
+
+  const view = openDetailView({
+    title: ev.title,
+    accentColor: resolveEventBackground(ev),
+    anchor,
+    sections: renderEventDetail(ev, reminders),
+    actions,
+    edit: {
+      label: t('common.edit'),
+      title: t('calendar.editEvent'),
+      // Das Formular wartet auf die Erinnerungen, die Leseansicht nicht. Ohne
+      // diese Sperre baute ein sofortiger Klick auf „Bearbeiten" das Formular
+      // ohne Erinnerungszeilen auf - und saveEvent löscht die Erinnerungen des
+      // Termins, wenn es keine Zeile findet.
+      ready: remindersReady,
+      mount: (panel, pane) => {
+        pane.insertAdjacentHTML('beforeend', buildEventModalContent({ mode: 'edit', event: ev, reminder: reminders }));
+        wireEventForm(panel, { mode: 'edit', event: ev, reminder: reminders });
+      },
+      // Am Desktop bleibt der gewohnte Weg: Popover zu, Formular auf.
+      standalone: async () => {
+        await remindersReady;
+        openEventModal({ mode: 'edit', event: ev, reminder: reminders });
+      },
+    },
+  });
+
+  // Die Erinnerungszeile nachtragen. Zeilen ohne Inhalt fallen ohnehin weg, ein
+  // Termin ohne Erinnerung bewegt sich also gar nicht. `update` verwirft sich
+  // selbst, wenn der Nutzer inzwischen etwas anderes geöffnet hat.
+  await remindersReady;
+  if (reminders.length) view.update(renderEventDetail(ev, reminders));
+}
+
+// --------------------------------------------------------
+// Reminder-Helfer für Kalender-Events
+// --------------------------------------------------------
+
+async function loadReminderForEvent(eventId) {
+  try {
+    const data = await api.get(`/reminders/all?entity_type=event&entity_id=${eventId}`);
+    return Array.isArray(data.data) ? data.data : [];
+  } catch {
+    return [];
+  }
+}
+
+// Obergrenze für mehrere Erinnerungen je Termin — muss mit dem Server-Cap
+// (MAX_REMINDERS_PER_ENTITY in server/routes/reminders.js) übereinstimmen.
+const MAX_CALENDAR_REMINDERS = 5;
+
+const REMINDER_OFFSETS = () => [
+  { value: '',     label: t('reminders.offsetNone')   },
+  { value: '0',    label: t('reminders.offsetAtTime') },
+  { value: '15',   label: t('reminders.offset15min')  },
+  { value: '60',   label: t('reminders.offset1hour')  },
+  { value: '1440', label: t('reminders.offset1day')   },
+  { value: '2880', label: t('reminders.offset2days')  },
+  { value: '10080', label: t('reminders.offset1week') },
+  { value: '20160', label: t('reminders.offset2weeks') },
+  { value: 'custom', label: t('reminders.offsetCustom') },
+];
+
+function reminderOffsetFromEvent(event, reminder) {
+  if (!reminder || !event?.start_datetime) return '';
+  const remindMs = parseRemindAtAsUtc(reminder.remind_at).getTime();
+  const startMs  = new Date(reminderStartValue(event.start_datetime)).getTime();
+  const diffMin  = Math.round((startMs - remindMs) / 60000);
+  const opts = [0, 15, 60, 1440, 2880, 10080, 20160];
+  const match = opts.find((o) => o === diffMin);
+  return match !== undefined ? String(match) : 'custom';
+}
+
+function customReminderFromEvent(event, reminder) {
+  const fallback = { amount: 1, unit: 'days' };
+  if (!reminder || !event?.start_datetime) return fallback;
+  const diffMin = Math.max(0, Math.round(
+    (new Date(reminderStartValue(event.start_datetime)).getTime() - parseRemindAtAsUtc(reminder.remind_at).getTime()) / 60000
+  ));
+  if (diffMin % 10080 === 0 && diffMin >= 10080) return { amount: diffMin / 10080, unit: 'weeks' };
+  if (diffMin % 1440 === 0 && diffMin >= 1440) return { amount: diffMin / 1440, unit: 'days' };
+  if (diffMin % 60 === 0 && diffMin >= 60) return { amount: diffMin / 60, unit: 'hours' };
+  return { amount: Math.max(diffMin, 1), unit: 'minutes' };
+}
+
+function customReminderMinutes(amount, unit) {
+  const value = Math.max(parseInt(amount, 10) || 1, 1);
+  if (unit === 'weeks') return value * 10080;
+  if (unit === 'days') return value * 1440;
+  if (unit === 'hours') return value * 60;
+  return value;
+}
+
+function reminderStartValue(startDatetime) {
+  return startDatetime?.includes('T') ? startDatetime : `${startDatetime}T09:00`;
+}
+
+/**
+ * Rendert eine einzelne Erinnerungs-Zeile (Offset-Select + Custom-Felder +
+ * Entfernen-Button). Ohne Argument entsteht eine leere Standardzeile (#436).
+ */
+function reminderRowHtml({ offset = '0', amount = 1, unit = 'days' } = {}) {
+  const isCustom = offset === 'custom';
+  return `
+    <div class="reminder-row" data-reminder-row>
+      <div class="reminder-row__main">
+        <select class="form-input js-reminder-offset" aria-label="${esc(t('reminders.offsetLabel'))}">
+          ${REMINDER_OFFSETS().filter((o) => o.value !== '').map((o) =>
+            `<option value="${o.value}" ${offset === o.value ? 'selected' : ''}>${esc(o.label)}</option>`
+          ).join('')}
+        </select>
+        <button type="button" class="btn btn--ghost btn--icon js-reminder-remove" aria-label="${esc(t('reminders.removeReminder'))}">
+          <i data-lucide="x" class="icon-md" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="modal-grid modal-grid--2 reminder-custom js-reminder-custom" ${isCustom ? '' : 'hidden'}>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">${t('reminders.customAmountLabel')}</label>
+          <input class="form-input js-reminder-custom-amount" type="number" min="1" max="999" value="${amount}">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">${t('reminders.customUnitLabel')}</label>
+          <select class="form-input js-reminder-custom-unit">
+            <option value="minutes" ${unit === 'minutes' ? 'selected' : ''}>${t('reminders.customMinutes')}</option>
+            <option value="hours" ${unit === 'hours' ? 'selected' : ''}>${t('reminders.customHours')}</option>
+            <option value="days" ${unit === 'days' ? 'selected' : ''}>${t('reminders.customDays')}</option>
+            <option value="weeks" ${unit === 'weeks' ? 'selected' : ''}>${t('reminders.customWeeks')}</option>
+          </select>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderCalendarReminderSection(reminders = [], event = null, defaultOffsets = []) {
+  const list = Array.isArray(reminders) ? reminders : (reminders ? [reminders] : []);
+  let rows = list.map((rem) => ({
+    offset: reminderOffsetFromEvent(event, rem) || '0',
+    ...customReminderFromEvent(event, rem),
+  }));
+  // Neue Termine ohne bestehende Erinnerung: Standard-Erinnerungen vorbelegen (#497).
+  // Die Default-Offsets decken sich mit den Preset-Werten des Offset-Selects.
+  if (rows.length === 0 && Array.isArray(defaultOffsets) && defaultOffsets.length) {
+    rows = defaultOffsets.map((min) => ({ offset: String(min), amount: 1, unit: 'days' }));
+  }
+  const enabled = rows.length > 0;
+  const rowsHtml = (enabled ? rows : [{ offset: '0', amount: 1, unit: 'days' }])
+    .map((r) => reminderRowHtml(r)).join('');
+  return `
+    <div class="reminder-section">
+      <div class="reminder-section__header">
+        <label class="toggle" style="margin:0">
+          <input type="checkbox" id="modal-reminder-toggle" ${enabled ? 'checked' : ''}>
+          <span class="toggle__track"></span>
+          <span class="reminder-section__title">${t('reminders.enableLabel')}</span>
+        </label>
+      </div>
+      <div id="modal-reminder-fields" class="reminder-fields" ${enabled ? '' : 'style="display:none"'}>
+        <div class="reminder-rows" id="modal-reminder-rows">
+          ${rowsHtml}
+        </div>
+        <button type="button" class="btn btn--secondary btn--sm" id="modal-reminder-add">
+          <i data-lucide="plus" class="icon-sm" aria-hidden="true"></i>
+          ${t('reminders.addReminder')}
+        </button>
+      </div>
+    </div>`;
+}
+
+/**
+ * Verdrahtet die Mehrfach-Erinnerungs-Liste im Event-Modal (#436):
+ * Toggle, „Hinzufügen"/„Entfernen" und die Custom-Feld-Umschaltung je Zeile.
+ */
+function wireReminderRows(panel) {
+  const toggle = panel.querySelector('#modal-reminder-toggle');
+  const fields = panel.querySelector('#modal-reminder-fields');
+  const rowsEl = panel.querySelector('#modal-reminder-rows');
+  const addBtn = panel.querySelector('#modal-reminder-add');
+  if (!rowsEl) return;
+
+  const rowCount = () => rowsEl.querySelectorAll('[data-reminder-row]').length;
+  const syncAddState = () => {
+    if (addBtn) addBtn.disabled = rowCount() >= MAX_CALENDAR_REMINDERS;
+  };
+
+  const appendRow = () => {
+    rowsEl.insertAdjacentHTML('beforeend', reminderRowHtml());
+    const newRow = rowsEl.lastElementChild;
+    if (window.lucide && newRow) lucide.createIcons({ el: newRow });
+    syncAddState();
+  };
+
+  // Custom-Felder je Zeile ein-/ausblenden.
+  rowsEl.addEventListener('change', (e) => {
+    const sel = e.target.closest('.js-reminder-offset');
+    if (!sel) return;
+    const custom = sel.closest('[data-reminder-row]')?.querySelector('.js-reminder-custom');
+    if (custom) custom.hidden = sel.value !== 'custom';
+  });
+
+  // Zeile entfernen.
+  rowsEl.addEventListener('click', (e) => {
+    const rm = e.target.closest('.js-reminder-remove');
+    if (!rm) return;
+    rm.closest('[data-reminder-row]')?.remove();
+    syncAddState();
+  });
+
+  addBtn?.addEventListener('click', () => {
+    if (rowCount() >= MAX_CALENDAR_REMINDERS) return;
+    appendRow();
+  });
+
+  toggle?.addEventListener('change', () => {
+    const on = toggle.checked;
+    if (fields) fields.style.display = on ? '' : 'none';
+    if (on && rowCount() === 0) appendRow();
+  });
+
+  syncAddState();
+}
+
+// --------------------------------------------------------
+// CalDAV Target Helpers
+// --------------------------------------------------------
+
+async function loadSyncTargets(selectElement, currentEvent = null) {
+  if (!selectElement) return;
+
+  selectElement.replaceChildren();
+  const localOption = document.createElement('option');
+  localOption.value = '';
+  localOption.textContent = t('calendar.syncTargetLocal');
+  selectElement.appendChild(localOption);
+
+  // Ziele über die gemeinsame Lese-Route holen (#618): die Verwaltungsrouten
+  // sind admin-only und lieferten Familienmitgliedern nur 403 - übrig blieb
+  // "Lokal speichern". /sync-targets liefert bereits gefiltert (aktiviert +
+  // beschreibbar) und ohne Zugangsdaten.
+  let targets = { google: [], caldav: [] };
+  try {
+    const res = await api.get('/calendar/sync-targets');
+    targets = { google: res.data?.google || [], caldav: res.data?.caldav || [] };
+  } catch (err) {
+    console.warn('Failed to load sync targets:', err);
+  }
+
+  if (targets.google.length) {
+    const group = document.createElement('optgroup');
+    group.className = 'js-google-targets';
+    group.label = t('calendar.syncTargetGoogleGroup');
+    for (const cal of targets.google) {
+      const option = document.createElement('option');
+      option.value = googleTargetValue(cal.id);
+      option.textContent = cal.summary || cal.id;
+      group.appendChild(option);
+    }
+    selectElement.appendChild(group);
+  }
+
+  // CalDAV-Kalender nach Konto gruppieren - die Route liefert sie kontoweise
+  // sortiert, ein Wechsel der accountId beginnt die nächste optgroup.
+  let caldavGroup = null;
+  let caldavGroupAccountId = null;
+  for (const cal of targets.caldav) {
+    if (caldavGroupAccountId !== cal.accountId) {
+      caldavGroup = document.createElement('optgroup');
+      caldavGroup.label = `${t('calendar.syncTargetCaldavGroup')} · ${cal.accountName}`;
+      caldavGroupAccountId = cal.accountId;
+      selectElement.appendChild(caldavGroup);
+    }
+    const option = document.createElement('option');
+    option.value = caldavTargetValue(cal.accountId, cal.calendarUrl);
+    option.textContent = cal.calendarName || cal.calendarUrl;
+    caldavGroup.appendChild(option);
+  }
+
+  // Pre-select the editing event's existing target
+  if (currentEvent?.target_google_calendar_id) {
+    const value = googleTargetValue(currentEvent.target_google_calendar_id);
+    // Zeigt das Event auf ein (jetzt) nur-lesbares Ziel, das nicht mehr in der
+    // gefilterten Liste steht: Option nachtragen, damit Speichern das Ziel nicht
+    // still auf "Lokal" zurücksetzt. Der Server-Guard fängt den Outbound-Fall ab.
+    if (!Array.from(selectElement.options).some((o) => o.value === value)) {
+      let group = selectElement.querySelector('optgroup.js-google-targets');
+      if (!group) {
+        group = document.createElement('optgroup');
+        group.className = 'js-google-targets';
+        group.label = t('calendar.syncTargetGoogleGroup');
+        selectElement.appendChild(group);
+      }
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = currentEvent.target_google_calendar_id;
+      group.appendChild(option);
+    }
+    selectElement.value = value;
+  } else if (currentEvent?.target_caldav_account_id && currentEvent?.target_caldav_calendar_url) {
+    selectElement.value = caldavTargetValue(currentEvent.target_caldav_account_id, currentEvent.target_caldav_calendar_url);
+  } else if (!currentEvent) {
+    // Nur für NEUE Termine (#620). Ein bestehender Termin behält sein Ziel, auch
+    // wenn es "Lokal" ist - sonst würde das Öffnen und Speichern eines lokalen
+    // Termins ihn stillschweigend in einen Kalender schieben.
+    applyDefaultSyncTarget(selectElement);
+  }
+}
+
+/**
+ * Setzt das persönliche Standard-Sync-Ziel (#620) als Vorauswahl.
+ *
+ * Steht das gespeicherte Ziel nicht (mehr) in der Liste - Kalender deaktiviert,
+ * gelöscht, auf nur-lesend gestellt oder Konto entfernt - bleibt es bei "Lokal
+ * speichern". Die Alternative, die Option nachzutragen wie beim Bearbeiten eines
+ * Termins, wäre hier falsch: dort rettet sie ein bereits gesetztes Ziel, hier
+ * würde sie einen neuen Termin auf einen Kalender richten, der ihn nicht
+ * annehmen kann.
+ */
+function applyDefaultSyncTarget(selectElement) {
+  const target = state.defaultSyncTarget;
+  if (!target) return;
+  const available = Array.from(selectElement.options).some((o) => o.value === target);
+  if (available) selectElement.value = target;
+}
+
+// --------------------------------------------------------
+// Event-Modal (Erstellen / Bearbeiten)
+// --------------------------------------------------------
+
+// Blendet einen Hinweis ein, wenn „Nur Zugewiesene" gewählt ist, aber niemand
+// zugewiesen wurde — dann sieht faktisch nur der Ersteller den Termin (#474 Guard).
+function wireVisibilityWarning(panel, selectSel, msName, warnSel) {
+  const select = panel.querySelector(selectSel);
+  const warn   = panel.querySelector(warnSel);
+  if (!select || !warn) return;
+  const ms = panel.querySelector(`.user-ms[data-ms-name="${msName}"]`);
+  const update = () => {
+    const count = getSelectedUserIds(panel, msName).length;
+    warn.hidden = !(select.value === 'assignees' && count === 0);
+  };
+  select.addEventListener('change', update);
+  ms?.addEventListener('click', () => setTimeout(update, 0));
+  update();
+}
+
+function openEventModal({ mode, event = null, date = null, reminder = null, time = null }) {
+  if (mode === 'edit' && event?.housekeeping_visit_id) {
+    window.yuvomi.navigate(`/housekeeping?editVisit=${event.housekeeping_visit_id}`);
+    return;
+  }
+  const isEdit = mode === 'edit';
+  const content = buildEventModalContent({ mode, event, date, reminder, time });
+
+  openSharedModal({
+    title: isEdit ? t('calendar.editEvent') : t('calendar.newEvent'),
+    content,
+    size: 'md',
+    // Ein neuer Termin startet weiterhin mit dem Fokus im Titelfeld: Hier ist
+    // Tippen die Absicht, hier ist der Autofokus richtig.
+    onSave(panel) { wireEventForm(panel, { mode, event, reminder }); },
+  });
+}
+
+/**
+ * Verdrahtet das Termin-Formular. Eigene Funktion, weil das Formular an zwei
+ * Orten entsteht: als eigenes Modal (neuer Termin, Desktop-Bearbeiten) und als
+ * zweites Pane der Detailansicht, das erst beim Wechsel gemountet wird.
+ */
+function wireEventForm(panel, { mode, event = null, reminder = null }) {
+  const isEdit = mode === 'edit';
+  // RRULE-Events binden
+  bindRRuleEvents(panel, 'event');
+  bindRecurringScopeChooser(panel, 'modal-edit');
+  bindUserMultiSelect(panel, 'cal_assigned');
+  wireVisibilityWarning(panel, '#modal-visibility', 'cal_assigned', '#modal-visibility-warning');
+
+  // Color-Picker ausgrauen wenn Assignees gesetzt sind (Avatar-Farbe hat Vorrang)
+  function syncColorPickerState() {
+    const hasAssignees = getSelectedUserIds(panel, 'cal_assigned').length > 0;
+    const group  = panel.querySelector('.js-color-picker-group');
+    const hint   = panel.querySelector('#color-picker-assignee-hint');
+    const picker = panel.querySelector('#event-color-picker');
+    if (group)  group.classList.toggle('color-picker--disabled', hasAssignees);
+    if (hint)   hint.hidden = !hasAssignees;
+    if (picker) {
+      picker.setAttribute('aria-disabled', hasAssignees ? 'true' : 'false');
+      picker.querySelectorAll('.color-swatch').forEach((s) => {
+        if (hasAssignees) {
+          s.setAttribute('tabindex', '-1');
+        } else {
+          s.setAttribute('tabindex', s.classList.contains('color-swatch--active') ? '0' : '-1');
+        }
+      });
+    }
+  }
+  const msWidget = panel.querySelector('.user-ms[data-ms-name="cal_assigned"]');
+  msWidget?.addEventListener('change', syncColorPickerState);
+  syncColorPickerState();
+
+  const selectedColor = isEdit ? (event?.color || EVENT_COLORS[0]) : EVENT_COLORS[0];
+
+  // Farb-Auswahl: Auswahl + ARIA + Keyboard (Roving Tabindex)
+  function selectSwatch(target) {
+    panel.querySelectorAll('.color-swatch').forEach((s) => {
+      s.classList.remove('color-swatch--active');
+      s.setAttribute('aria-checked', 'false');
+      s.setAttribute('tabindex', '-1');
+    });
+    target.classList.add('color-swatch--active');
+    target.setAttribute('aria-checked', 'true');
+    target.setAttribute('tabindex', '0');
+  }
+  panel.querySelectorAll('.color-swatch').forEach((sw) => {
+    if (sw.dataset.color === selectedColor) selectSwatch(sw);
+    sw.addEventListener('click', () => { selectSwatch(sw); sw.focus(); });
+    sw.addEventListener('keydown', (e) => {
+      const swatches = [...panel.querySelectorAll('.color-swatch')];
+      const idx = swatches.indexOf(sw);
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = swatches[(idx + 1) % swatches.length];
+        selectSwatch(next); next.focus();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = swatches[(idx - 1 + swatches.length) % swatches.length];
+        selectSwatch(prev); prev.focus();
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selectSwatch(sw);
+      }
+    });
+  });
+
+  // Ganztägig-Toggle
+  const alldayCheck = panel.querySelector('#modal-allday');
+  const timeFields  = panel.querySelector('#time-fields');
+  const alldayFields = panel.querySelector('#allday-fields');
+  alldayCheck.addEventListener('change', () => {
+    if (alldayCheck.checked) { timeFields.style.display = 'none'; alldayFields.style.display = ''; }
+    else                      { timeFields.style.display = '';     alldayFields.style.display = 'none'; }
+  });
+  if (isEdit && event?.all_day) { timeFields.style.display = 'none'; alldayFields.style.display = ''; }
+
+  const iconInput = panel.querySelector('#modal-icon');
+  const iconTrigger = panel.querySelector('#modal-icon-trigger');
+  const selectIcon = (icon) => {
+    const nextIcon = eventIconName(icon);
+    if (iconInput) iconInput.value = nextIcon;
+    if (iconTrigger) {
+      iconTrigger.dataset.icon = nextIcon;
+      iconTrigger.replaceChildren(eventIconElement(nextIcon, 'event-icon-picker__trigger-icon'));
+    }
+    if (window.lucide) lucide.createIcons({ el: iconTrigger });
+  };
+
+  iconTrigger?.addEventListener('click', () => {
+    iconTrigger.setAttribute('aria-expanded', 'true');
+    openIconPickerDialog(iconInput?.value || 'calendar', (icon) => {
+      selectIcon(icon);
+      iconTrigger?.setAttribute('aria-expanded', 'false');
+      iconTrigger?.focus();
+    }, () => {
+      iconTrigger?.setAttribute('aria-expanded', 'false');
+      iconTrigger?.focus();
+    });
+  });
+
+  const attachmentInput = panel.querySelector('#modal-attachment');
+  const selectedAttachment = panel.querySelector('#modal-selected-attachment');
+  const attachmentPreview = panel.querySelector('#modal-attachment-preview');
+  const removeAttachment = panel.querySelector('#modal-remove-attachment');
+  const attachmentState = {
+    name: event?.attachment_name || null,
+    mime: event?.attachment_mime || null,
+    size: event?.attachment_size || null,
+    changed: false,
+    removed: false,
+  };
+
+  const syncSelectedAttachment = () => {
+    if (!selectedAttachment) return;
+    selectedAttachment.hidden = !attachmentState.name;
+    selectedAttachment.textContent = attachmentState.name ? selectedAttachmentLabel(attachmentState.name) : '';
+    if (removeAttachment) removeAttachment.hidden = !attachmentState.name;
+  };
+
+  const syncAttachmentSelection = () => {
+    if (!selectedAttachment) return;
+    const file = attachmentInput.files?.[0];
+    if (file) {
+      attachmentState.name = file.name;
+      attachmentState.mime = file.type || 'application/octet-stream';
+      attachmentState.size = file.size;
+      attachmentState.changed = true;
+      attachmentState.removed = false;
+      selectedAttachment.hidden = false;
+      selectedAttachment.textContent = selectedAttachmentLabel(file.name);
+      if (removeAttachment) removeAttachment.hidden = false;
+      if (attachmentPreview) {
+        attachmentPreview.replaceChildren();
+        attachmentPreview.hidden = true;
+      }
+      return;
+    }
+    syncSelectedAttachment();
+  };
+
+  attachmentInput?.addEventListener('change', syncAttachmentSelection);
+  removeAttachment?.addEventListener('click', () => {
+    if (attachmentInput) attachmentInput.value = '';
+    attachmentState.name = null;
+    attachmentState.mime = null;
+    attachmentState.size = null;
+    attachmentState.changed = true;
+    attachmentState.removed = true;
+    if (attachmentPreview) {
+      attachmentPreview.replaceChildren();
+      attachmentPreview.hidden = true;
+    }
+    syncSelectedAttachment();
+  });
+
+  const attachmentDropzone = panel.querySelector('#modal-attachment-dropzone');
+  if (attachmentDropzone && attachmentInput) {
+    ['dragenter', 'dragover'].forEach((eventName) => {
+      attachmentDropzone.addEventListener(eventName, (dropEvent) => {
+        dropEvent.preventDefault();
+        attachmentDropzone.classList.add('document-dropzone--active');
+      });
+    });
+    ['dragleave', 'drop'].forEach((eventName) => {
+      attachmentDropzone.addEventListener(eventName, (dropEvent) => {
+        dropEvent.preventDefault();
+        attachmentDropzone.classList.remove('document-dropzone--active');
+      });
+    });
+    attachmentDropzone.addEventListener('drop', (dropEvent) => {
+      const file = dropEvent.dataTransfer?.files?.[0];
+      if (!file) return;
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      attachmentInput.files = transfer.files;
+      syncAttachmentSelection();
+    });
+  }
+
+  syncSelectedAttachment();
+
+  // Erinnerungen: Toggle blendet die Zeilenliste ein/aus; „Hinzufügen" und
+  // „Entfernen" verwalten mehrere Erinnerungen je Termin (#436).
+  wireReminderRows(panel);
+
+  // Load unified sync targets (Google + CalDAV)
+  const syncTargetSelect = panel.querySelector('#event-sync-target');
+  if (syncTargetSelect) {
+    loadSyncTargets(syncTargetSelect, event);
+  }
+
+  // Enddatum dem Startdatum nachführen, damit das Verschieben des Starts
+  // das Ende nicht davor zurücklässt (Dauer bleibt erhalten).
+  const wireDateFollow = (startSel, endSel) => {
+    const startEl = panel.querySelector(startSel);
+    const endEl   = panel.querySelector(endSel);
+    if (!startEl || !endEl) return;
+    let prevStart = startEl.value;
+    startEl.addEventListener('change', () => {
+      if (isDateInputValid(startEl.value) && isDateInputValid(endEl.value)) {
+        const oldKey = parseDateInput(prevStart);
+        const newKey = parseDateInput(startEl.value);
+        const endKey = parseDateInput(endEl.value);
+        if (oldKey && newKey && endKey) {
+          endEl.value = formatDateInput(shiftEndDateKey(oldKey, newKey, endKey));
+        }
+      }
+      prevStart = startEl.value;
+    });
+  };
+  wireDateFollow('#modal-start-date', '#modal-end-date');
+  wireDateFollow('#modal-allday-start', '#modal-allday-end');
+
+  // Dynamische Termindauer (#441): das Ende folgt dem Start um die gemerkte
+  // Dauer. Ändert der Nutzer das Ende, wird die neue Dauer übernommen und bei
+  // der nächsten Start-Änderung angewendet. Nur für Zeit-Termine.
+  wireDurationMemory(panel);
+
+  panel.querySelector('#modal-cancel').addEventListener('click', closeModal);
+
+  panel.querySelector('#modal-delete')?.addEventListener('click', async () => {
+    closeModal({ force: true });
+    await requestDeleteEvent(event);
+  });
+
+  panel.querySelector('#modal-save').addEventListener('click', () => saveEvent(panel, mode, event, reminder, attachmentState));
+  // Pflichtfelder melden sich beim Verlassen inline statt erst beim
+  // Speichern als ortloser Toast (Critique P1).
+  wireBlurValidation(panel);
+  if (window.lucide) lucide.createIcons({ el: panel });
+}
+
+/**
+ * Verdrahtet die dynamische Termindauer (#441) im Event-Modal.
+ * - Start-Zeit ändern → Ende = Start + gemerkte Dauer (mit Datums-Übertrag).
+ * - Ende-Zeit ändern → gemerkte Dauer = Ende − Start (nur wenn positiv).
+ * Wirkt nur auf die Zeit-Felder; „Ganztägig" bleibt unberührt.
+ */
+function wireDurationMemory(panel) {
+  const startDateEl = panel.querySelector('#modal-start-date');
+  const startTimeEl = panel.querySelector('#modal-start-time');
+  const endDateEl   = panel.querySelector('#modal-end-date');
+  const endTimeEl   = panel.querySelector('#modal-end-time');
+  if (!startDateEl || !startTimeEl || !endDateEl || !endTimeEl) return;
+
+  const daysBetween = (fromKey, toKey) =>
+    Math.round((new Date(toKey + 'T00:00:00') - new Date(fromKey + 'T00:00:00')) / 86400000);
+
+  const readDuration = () => {
+    const sd = parseDateInput(startDateEl.value);
+    const st = parseTimeInput(startTimeEl.value);
+    const ed = parseDateInput(endDateEl.value);
+    const et = parseTimeInput(endTimeEl.value);
+    if (!sd || !st || !ed || !et) return null;
+    const diff = daysBetween(sd, ed) * 1440 + (timeToMinutes(et) - timeToMinutes(st));
+    return diff > 0 ? diff : null;
+  };
+
+  // Init: bereits gesetzte Dauer übernehmen, sonst Präferenz-Default.
+  let durationMin = readDuration() ?? (state.defaultDuration || 60);
+
+  startTimeEl.addEventListener('change', () => {
+    const sd = parseDateInput(startDateEl.value);
+    const st = parseTimeInput(startTimeEl.value);
+    if (!sd || !st) return;
+    const next = addDurationToDateTime(sd, st, durationMin);
+    endTimeEl.value = formatTimeInput(next.time);
+    if (isDateInputValid(endDateEl.value)) endDateEl.value = formatDateInput(next.date);
+  });
+
+  endTimeEl.addEventListener('change', () => {
+    const dur = readDuration();
+    if (dur) durationMin = dur;
+  });
+}
+
+// Neue Termine ohne explizite Uhrzeit starten heute zur nächsten halben
+// Stunde: der starre 09:00-Default legte den Start nachmittags in die
+// Vergangenheit (Audit A1-18). Andere Tage behalten 09:00 als neutralen
+// Start; kippt die Rundung über Mitternacht, ebenfalls.
+function defaultNewEventTime(dateStr) {
+  if (dateStr !== state.today) return '09:00';
+  const now = new Date();
+  const dayBefore = now.getDate();
+  now.setMinutes(now.getMinutes() <= 30 ? 30 : 60, 0, 0);
+  if (now.getDate() !== dayBefore) return '09:00';
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+function buildEventModalContent({ mode, event, date, reminder = null, time = null }) {
+  const isEdit = mode === 'edit';
+  const today  = date || state.today;
+
+  const startDate = isEdit ? localDate(event.start_datetime) : today;
+  const startTime = isEdit && event.start_datetime.length > 10
+    ? localTime(event.start_datetime) : (time ?? defaultNewEventTime(today));
+  // Standard-Termindauer aus den Präferenzen: neue Termine erhalten ein Ende,
+  // das um die konfigurierte Dauer nach dem Start liegt (#441).
+  const durationMin = state.defaultDuration || 60;
+  const derivedEnd  = addDurationToDateTime(startDate, startTime, durationMin);
+  const endDate   = isEdit && event.end_datetime ? localDate(event.end_datetime) : derivedEnd.date;
+  const endTime   = isEdit && event.end_datetime && event.end_datetime.length > 10
+    ? localTime(event.end_datetime)
+    : derivedEnd.time;
+  const selectedIcon = eventIconName(isEdit ? event.icon : 'calendar');
+
+  // Neue Termine: optional den aktuellen Nutzer vorbelegen (#498).
+  const selectedUserIds = isEdit
+    ? (event.assigned_users?.map((u) => u.id) ?? (event.assigned_to ? [event.assigned_to] : []))
+    : (state.defaultAssignMe && state.currentUserId != null ? [state.currentUserId] : []);
+  const visibility = (isEdit ? event.visibility : null) || 'all';
+
+  // Sekundärfelder: wandern hinter „Weitere Einstellungen". Beim Bearbeiten
+  // automatisch geöffnet, falls bereits Werte gesetzt sind. Der Ort steht als
+  // Alltagsfeld im Hauptbereich (Audit A1-11), nicht mehr hier.
+  const advancedFieldsOpen = isEdit
+    && (!!event.description || hasAttachment(event));
+
+  const advancedFieldsHtml = `
+    <div class="form-group js-color-picker-group">
+      <label class="form-label" id="event-color-label">${t('calendar.colorLabel')}</label>
+      <div class="color-picker" id="event-color-picker" role="radiogroup" aria-labelledby="event-color-label">
+        ${EVENT_COLORS.map((c, i) => `
+          <div class="color-swatch" data-color="${c}" style="background-color:${c};"
+               role="radio"
+               tabindex="${i === 0 ? '0' : '-1'}"
+               aria-checked="false"
+               aria-label="${EVENT_COLOR_NAMES()[c] ?? c}"></div>
+        `).join('')}
+      </div>
+      <p class="form-hint color-picker__assignee-hint" id="color-picker-assignee-hint" hidden>${t('calendar.colorOverriddenByAssignee')}</p>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="event-sync-target">${t('calendar.syncTargetLabel')}</label>
+      <select class="form-input" id="event-sync-target">
+        <option value="">${t('calendar.syncTargetLocal')}</option>
+      </select>
+      <small class="form-hint">${t('calendar.syncTargetHint')}</small>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="modal-description">${t('calendar.descriptionLabel')}</label>
+      <textarea class="form-input" id="modal-description" rows="2"
+                placeholder="${t('calendar.descriptionPlaceholder')}">${esc(isEdit && event.description ? event.description : '')}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="modal-attachment">${t('calendar.attachmentLabel')}</label>
+      <p class="document-storage-target">
+        <i data-lucide="${state.documentUploadBackend === 'webdav' ? 'cloud' : state.documentUploadBackend === 'local_folder' ? 'folder' : 'database'}" aria-hidden="true"></i>
+        <span>${t('documents.activeUploadTarget', {
+          target: state.documentUploadBackend === 'webdav'
+            ? t('documents.storageWebdav')
+            : state.documentUploadBackend === 'local_folder'
+              ? t('documents.storageLocalFolder')
+              : t('documents.storageLocal'),
+        })}</span>
+      </p>
+      <label class="document-dropzone" id="modal-attachment-dropzone" for="modal-attachment">
+        <input class="sr-only" id="modal-attachment" type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+        <span class="document-dropzone__icon">
+          <i data-lucide="file-up" aria-hidden="true"></i>
+        </span>
+        <span class="document-dropzone__title">${t('documents.dropzoneTitle')}</span>
+        <span class="document-dropzone__hint">${t('documents.dropzoneHint')}</span>
+        <span class="document-dropzone__file" id="modal-selected-attachment" ${isEdit && event.attachment_name ? '' : 'hidden'}>
+          ${isEdit && event.attachment_name ? esc(selectedAttachmentLabel(event.attachment_name)) : ''}
+        </span>
+      </label>
+      <div class="form-help">${t('calendar.attachmentHint')}</div>
+      <div class="event-attachment-preview" id="modal-attachment-preview" ${isEdit && hasAttachment(event) ? '' : 'hidden'}>
+        ${isEdit && hasAttachment(event) ? attachmentPreviewHtml(event) : ''}
+      </div>
+      <button class="btn btn--secondary" id="modal-remove-attachment" type="button"
+              ${isEdit && hasAttachment(event) ? '' : 'hidden'}>${t('calendar.attachmentRemove')}</button>
+    </div>`;
+
+  return `
+    <div class="event-title-picker">
+      <div class="form-group event-icon-picker">
+        <label class="form-label" for="modal-icon-trigger">${t('calendar.iconLabel')}</label>
+        <input type="hidden" id="modal-icon" value="${selectedIcon}">
+        <button type="button"
+                class="event-icon-picker__trigger"
+                id="modal-icon-trigger"
+                data-icon="${selectedIcon}"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-label="${t('calendar.iconLabel')}">
+          ${eventIconHtml(selectedIcon, 'event-icon-picker__trigger-icon')}
+        </button>
+      </div>
+      <div class="form-group event-title-picker__title">
+        <label class="form-label" for="modal-title">${t('calendar.titleLabel')}<span class="required-marker" aria-hidden="true"> *</span></label>
+        <input type="text" class="form-input" id="modal-title" required
+               placeholder="${t('calendar.titlePlaceholder')}" value="${esc(isEdit ? event.title : '')}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="toggle">
+        <input type="checkbox" id="modal-allday" ${isEdit && event.all_day ? 'checked' : ''}>
+        <span class="toggle__track"></span>
+        <span>${t('calendar.allDayToggle')}</span>
+      </label>
+    </div>
+
+    <div id="time-fields">
+      <div class="modal-grid modal-grid--2">
+        <div class="form-group">
+          <label class="form-label" for="modal-start-date">${t('calendar.startDateLabel')}</label>
+          <yuvomi-datepicker type="date" id="modal-start-date" value="${esc(formatDateInput(startDate))}" label="${esc(t('calendar.startDateLabel'))}"></yuvomi-datepicker>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="modal-start-time">${t('calendar.startTimeLabel')}</label>
+          <yuvomi-datepicker type="time" id="modal-start-time" value="${esc(formatTimeInput(startTime))}" label="${esc(t('calendar.startTimeLabel'))}"></yuvomi-datepicker>
+        </div>
+      </div>
+      <div class="modal-grid modal-grid--2">
+        <div class="form-group">
+          <label class="form-label" for="modal-end-date">${t('calendar.endDateLabel')}</label>
+          <yuvomi-datepicker type="date" id="modal-end-date" value="${esc(formatDateInput(endDate))}" label="${esc(t('calendar.endDateLabel'))}"></yuvomi-datepicker>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="modal-end-time">${t('calendar.endTimeLabel')}</label>
+          <yuvomi-datepicker type="time" id="modal-end-time" value="${esc(formatTimeInput(endTime))}" label="${esc(t('calendar.endTimeLabel'))}"></yuvomi-datepicker>
+        </div>
+      </div>
+    </div>
+
+    <div id="allday-fields" style="display:none;">
+      <div class="modal-grid modal-grid--2">
+        <div class="form-group">
+          <label class="form-label" for="modal-allday-start">${t('calendar.fromLabel')}</label>
+          <yuvomi-datepicker type="date" id="modal-allday-start" value="${esc(formatDateInput(startDate))}" label="${esc(t('calendar.fromLabel'))}"></yuvomi-datepicker>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="modal-allday-end">${t('calendar.toLabel')}</label>
+          <yuvomi-datepicker type="date" id="modal-allday-end" value="${esc(formatDateInput(endDate))}" label="${esc(t('calendar.toLabel'))}"></yuvomi-datepicker>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="modal-location">${t('calendar.locationLabel')}</label>
+      <input type="text" class="form-input" id="modal-location"
+             placeholder="${t('calendar.locationPlaceholder')}" value="${esc(isEdit && event.location ? event.location : '')}">
+    </div>
+
+    <div class="form-group">
+      ${renderUserMultiSelect(state.users, selectedUserIds, 'cal_assigned', 'calendar.assignedLabel')}
+    </div>
+
+    ${state.users.length > 1 ? `
+    <div class="form-group">
+      <label class="form-label" for="modal-visibility">${t('common.visibility.label')}</label>
+      <select class="input" id="modal-visibility" name="visibility">
+        <option value="all"       ${visibility === 'all'       ? 'selected' : ''}>${t('common.visibility.all')}</option>
+        <option value="assignees" ${visibility === 'assignees' ? 'selected' : ''}>${t('common.visibility.assignees')}</option>
+        <option value="private"   ${visibility === 'private'   ? 'selected' : ''}>${t('common.visibility.private')}</option>
+      </select>
+      <p class="form-hint">${t('common.visibility.hint')}</p>
+      <p class="form-hint field-hint--warn" id="modal-visibility-warning" role="status" hidden><i data-lucide="alert-triangle" aria-hidden="true"></i><span>${t('common.visibility.assigneesNobodyHint')}</span></p>
+    </div>` : ''}
+
+    ${advancedSection(advancedFieldsHtml, { open: advancedFieldsOpen })}
+
+    ${renderRRuleFields('event', isEdit ? event.recurrence_rule : null, { allowCount: true })}
+
+    ${isEdit && isLocalRecurringSeries(event) ? renderRecurringScopeChooser('modal-edit', event.start_datetime.slice(0, 10)) : ''}
+
+    ${renderCalendarReminderSection(reminder, event, isEdit ? [] : state.defaultReminders)}
+
+    <div class="modal-panel__footer modal-panel__footer--plain">
+      ${isEdit ? `<button class="btn btn--danger-outline" id="modal-delete">
+        <i data-lucide="trash-2" class="icon-md" aria-hidden="true"></i>${t('common.delete')}
+      </button>` : '<div></div>'}
+      <div style="display:flex;gap:var(--space-3)">
+        <button class="btn btn--ghost" id="modal-cancel">${t('common.cancel')}</button>
+        <button class="btn btn--primary" id="modal-save">${isEdit ? t('common.save') : t('common.create')}</button>
+      </div>
+    </div>`;
+}
+
+async function saveEvent(overlay, mode, event, existingReminder = null, attachmentState = null) {
+  const eventId = event?.id;
+  const saveBtn = overlay.querySelector('#modal-save');
+  const title   = overlay.querySelector('#modal-title').value.trim();
+
+  if (!title) {
+    // Fehler am Ort des Geschehens statt als Toast unten links (Critique P1):
+    // Meldung unterm Feld, Fehler-Rahmen, Fokus + Scroll aufs Feld.
+    reportFieldError(overlay.querySelector('#modal-title'), t('calendar.titleRequired'));
+    return;
+  }
+
+  const allday  = overlay.querySelector('#modal-allday').checked;
+  const color   = overlay.querySelector('.color-swatch--active')?.dataset.color || EVENT_COLORS[0];
+  const icon    = eventIconName(overlay.querySelector('#modal-icon')?.value);
+  const location    = overlay.querySelector('#modal-location').value.trim() || null;
+  const assigned_to = getSelectedUserIds(overlay, 'cal_assigned');
+  const description = overlay.querySelector('#modal-description').value.trim() || null;
+
+  let start_datetime, end_datetime;
+
+  if (allday) {
+    start_datetime = readDateInput(overlay, '#modal-allday-start')
+                   || readDateInput(overlay, '#modal-start-date');
+    end_datetime   = readDateInput(overlay, '#modal-allday-end')
+                   || readDateInput(overlay, '#modal-end-date');
+    end_datetime   = end_datetime || null;
+  } else {
+    const sd = readDateInput(overlay, '#modal-start-date');
+    const stRaw = overlay.querySelector('#modal-start-time').value;
+    const st = parseTimeInput(stRaw);
+    const ed = readDateInput(overlay, '#modal-end-date');
+    const etRaw = overlay.querySelector('#modal-end-time').value;
+    const et = parseTimeInput(etRaw);
+    if ((stRaw && !st) || (etRaw && !et)) {
+      reportFieldError(
+        overlay.querySelector(stRaw && !st ? '#modal-start-time' : '#modal-end-time'),
+        t('calendar.invalidDate')
+      );
+      return;
+    }
+    start_datetime = st ? `${sd}T${st}` : sd;
+    end_datetime   = ed ? (et ? `${ed}T${et}` : ed) : null;
+  }
+
+  const visibleDateFields = allday
+    ? ['#modal-allday-start', '#modal-allday-end']
+    : ['#modal-start-date', '#modal-end-date'];
+  const invalidDateField = visibleDateFields.find((selector) => !isDateInputValid(overlay.querySelector(selector)?.value));
+  if (!start_datetime || invalidDateField) {
+    reportFieldError(
+      overlay.querySelector(invalidDateField ?? visibleDateFields[0]),
+      t('calendar.invalidDate')
+    );
+    return;
+  }
+  if (isEndBeforeStart(start_datetime, end_datetime)) {
+    // Der Fehler klebt am Feld, das ihn verursacht: liegt schon das Enddatum
+    // vor dem Startdatum, am Datums-Feld; sonst (gleicher Tag, Zeit davor)
+    // an der Endzeit.
+    const endsOnEarlierDay = String(end_datetime).slice(0, 10) < String(start_datetime).slice(0, 10);
+    const endField = (allday ? overlay.querySelector('#modal-allday-end') : null)
+      ?? (endsOnEarlierDay ? overlay.querySelector('#modal-end-date') : null)
+      ?? (overlay.querySelector('#modal-end-time')?.value ? overlay.querySelector('#modal-end-time') : null)
+      ?? overlay.querySelector('#modal-end-date');
+    reportFieldError(endField, t('calendar.endBeforeStart'));
+    return;
+  }
+
+  saveBtn.disabled    = true;
+  saveBtn.textContent = '…';
+
+  try {
+    const rrule = getRRuleValues(overlay, 'event');
+    if (!rrule.valid_until) {
+      reportFieldError(overlay.querySelector('#event-rrule-until'), t('calendar.invalidDate'));
+      saveBtn.disabled    = false;
+      saveBtn.textContent = mode === 'edit' ? t('common.save') : t('common.create');
+      return;
+    }
+    const attachmentFile = overlay.querySelector('#modal-attachment')?.files?.[0];
+    let attachmentPayload = null;
+    if (attachmentFile) {
+      if (attachmentFile.size > MAX_ATTACHMENT_BYTES) throw new Error(t('calendar.attachmentTooLarge'));
+      attachmentPayload = {
+        name: attachmentFile.name,
+        mime: attachmentFile.type || 'application/octet-stream',
+        size: attachmentFile.size,
+        data: await readFileAsDataUrl(attachmentFile),
+      };
+    }
+
+    // Extract sync target (unified Google + CalDAV picker)
+    const syncTargetValue = overlay.querySelector('#event-sync-target')?.value || '';
+    let target_google_calendar_id = null;
+    let target_caldav_account_id = null;
+    let target_caldav_calendar_url = null;
+
+    if (syncTargetValue.startsWith('google:')) {
+      target_google_calendar_id = syncTargetValue.slice('google:'.length);
+    } else if (syncTargetValue.startsWith('caldav:')) {
+      const [accountId, calendarUrl] = syncTargetValue.slice('caldav:'.length).split('|');
+      if (accountId && calendarUrl) {
+        target_caldav_account_id = parseInt(accountId, 10);
+        target_caldav_calendar_url = calendarUrl;
+      }
+    }
+
+    const body = {
+      title, description, start_datetime, end_datetime,
+      all_day: allday ? 1 : 0,
+      location, color, icon, assigned_to,
+      visibility: overlay.querySelector('#modal-visibility')?.value || 'all',
+      recurrence_rule: rrule.recurrence_rule,
+      target_google_calendar_id,
+      target_caldav_account_id,
+      target_caldav_calendar_url,
+    };
+    if (attachmentPayload) {
+      Object.assign(body, {
+        attachment_name: attachmentPayload.name,
+        attachment_mime: attachmentPayload.mime,
+        attachment_size: attachmentPayload.size,
+        attachment_data: attachmentPayload.data,
+        document_folder_name: t('documents.calendarItemsFolder'),
+        document_name: t('calendar.attachmentDocumentName', { title, name: attachmentPayload.name }),
+        document_description: t('calendar.attachmentDocumentDescription', { title }),
+      });
+    } else if (attachmentState?.changed && attachmentState.removed) {
+      body.remove_attachment = true;
+    }
+
+    let savedEventId = eventId;
+    // Start, an dem die Erinnerungs-Offsets ausgerichtet werden. Für „ganze Serie"
+    // wird das auf den (evtl. verschobenen) Master-Start umgestellt (#532).
+    let reminderBaseStart = start_datetime;
+    // Serien-Scopes ändern die Expansion (Split/EXDATE): danach den sichtbaren
+    // Bereich neu laden, damit der Server korrekt expandiert (#532).
+    let reloadAfter = false;
+
+    if (mode === 'create') {
+      const res = await api.post('/calendar', body);
+      state.events.push(res.data);
+      savedEventId = res.data?.id;
+    } else {
+      // Scope-Auswahl greift nur für rein lokale Serien (#532); sonst normaler
+      // Master-Update wie bisher (Einzeltermine, externe Serien).
+      const scope = isLocalRecurringSeries(event)
+        ? getRecurringScope(overlay, 'modal-edit')
+        : 'series';
+      const occDate = event?.start_datetime?.slice(0, 10);
+      const truncated = scope === 'following' && event.is_recurring_instance
+        ? truncateRuleBefore(event.recurrence_rule, occDate)
+        : null;
+
+      if (scope === 'this') {
+        // Nur dieses Vorkommen: losgelösten Einzeltermin anlegen + Master-EXDATE.
+        const res = await api.post('/calendar', { ...body, recurrence_rule: null });
+        await api.post(`/calendar/${eventId}/exceptions`, { date: occDate });
+        savedEventId = res.data?.id;
+        reloadAfter = true;
+      } else if (truncated) {
+        // Dieser und folgende: Master per UNTIL kürzen, neue Serie ab hier anlegen.
+        // body trägt die (ggf. bearbeitete) recurrence_rule als Fortsetzungsregel.
+        await api.put(`/calendar/${eventId}`, { recurrence_rule: truncated });
+        const res = await api.post('/calendar', body);
+        savedEventId = res.data?.id;
+        reloadAfter = true;
+      } else {
+        // Ganze Serie (auch „folgende" beim ersten Vorkommen): Master aktualisieren.
+        // Bei lokalen Serien den DTSTART erhalten, indem die im Modal sichtbare
+        // Instanz-Verschiebung auf den Master-Start übertragen wird.
+        let seriesBody = body;
+        if (isLocalRecurringSeries(event)) {
+          const master  = (await api.get(`/calendar/${eventId}`)).data;
+          const allDay  = !!body.all_day;
+          const newStart = shiftSeriesStart(master.start_datetime, event.start_datetime, start_datetime, allDay);
+          const newEnd   = shiftEndForStart(newStart, start_datetime, end_datetime, allDay);
+          seriesBody = { ...body, start_datetime: newStart, end_datetime: newEnd };
+          reminderBaseStart = newStart;
+          reloadAfter = true;
+        }
+        const res = await api.put(`/calendar/${eventId}`, seriesBody);
+        const idx = state.events.findIndex((e) => e.id === eventId);
+        if (idx !== -1) state.events[idx] = res.data;
+      }
+    }
+
+    // Erinnerungen speichern oder löschen (mehrere je Termin möglich, #436).
+    if (savedEventId) {
+      const reminderOn = overlay.querySelector('#modal-reminder-toggle')?.checked;
+      const rowsEl     = overlay.querySelector('#modal-reminder-rows');
+      const startMs    = new Date(reminderStartValue(reminderBaseStart)).getTime();
+      let remindAts = [];
+
+      if (reminderOn && rowsEl) {
+        for (const row of rowsEl.querySelectorAll('[data-reminder-row]')) {
+          const offsetVal = row.querySelector('.js-reminder-offset')?.value;
+          if (offsetVal == null || offsetVal === '') continue;
+          const offsetMinutes = offsetVal === 'custom'
+            ? customReminderMinutes(
+                row.querySelector('.js-reminder-custom-amount')?.value,
+                row.querySelector('.js-reminder-custom-unit')?.value
+              )
+            : parseInt(offsetVal, 10);
+          remindAts.push(new Date(startMs - offsetMinutes * 60000).toISOString().slice(0, 19));
+        }
+        remindAts = [...new Set(remindAts)].slice(0, MAX_CALENDAR_REMINDERS);
+      }
+
+      if (remindAts.length) {
+        await api.put(`/reminders?entity_type=event&entity_id=${savedEventId}`, { remind_ats: remindAts });
+      } else {
+        await api.delete(`/reminders?entity_type=event&entity_id=${savedEventId}`).catch(() => {});
+      }
+      refreshReminders();
+    }
+
+    if (reloadAfter) {
+      await reloadCalendarEventsOnly();
+    }
+
+    closeModal({ force: true });
+    renderView();
+    window.yuvomi?.showToast(mode === 'create' ? t('calendar.createdToast') : t('calendar.savedToast'), 'success');
+  } catch (err) {
+    // Server-Validierungsmeldung bevorzugen, sonst lokalisierter Fallback; der
+    // rohe err.message-Text (Netzwerk/JS) wird nie gezeigt. Das Modal bleibt offen
+    // und der Button reaktiviert — die Eingaben des Nutzers bleiben erhalten.
+    window.yuvomi?.showToast(err.data?.error ?? t('calendar.saveError'), 'danger');
+    saveBtn.disabled    = false;
+    saveBtn.textContent = mode === 'edit' ? t('common.save') : t('common.create');
+  }
+}
+
+async function deleteEvent(id) {
+  const event = state.events.find((e) => e.id === id);
+  state.events = state.events.filter((e) => e.id !== id);
+  renderView();
+
+  scheduleUndoableDelete({
+    message: t('calendar.deletedToast'),
+    commit: async ({ keepalive }) => {
+      await api.delete(`/calendar/${id}`, { keepalive });
+      api.delete(`/reminders?entity_type=event&entity_id=${id}`, { keepalive }).catch(() => {});
+      if (keepalive) return; // Seite verschwindet — kein UI-Refresh mehr
+      refreshReminders();
+    },
+    restore: (err) => {
+      if (event) {
+        state.events = [...state.events, event];
+        renderView();
+      }
+      if (err) window.yuvomi?.showToast(err.data?.error ?? t('calendar.deleteError'), 'danger');
+    },
+  });
+}
+
+/**
+ * True für rein lokale, nicht extern synchronisierte Serien. Nur diese erhalten die
+ * Scope-Auswahl (#489/#532); Google/Apple/CalDAV/ICS-Serien würden beim nächsten Sync
+ * wiederkehren und bleiben deshalb „ganze Serie".
+ */
+function isLocalRecurringSeries(event) {
+  return !!event?.recurrence_rule
+    && (event.external_source ?? 'local') === 'local'
+    && !event.calendar_ref_id && !event.subscription_id;
+}
+
+/**
+ * Gemeinsame Scope-Auswahl für Serientermine (#532): identisches Control für
+ * „Bearbeiten" und „Löschen". Select (App-weites Formular-Vokabular) mit Default
+ * „Nur diesen Termin" (least-destructive) plus dynamischem Reichweiten-Hinweis,
+ * der das konkrete Vorkommensdatum nennt. `prefix` → Element-ID `${prefix}-scope`.
+ */
+function renderRecurringScopeChooser(prefix, occDateKey) {
+  return `
+    <div class="form-group">
+      <label class="form-label" for="${prefix}-scope">${t('calendar.recurringScopeLabel')}</label>
+      <select class="input" id="${prefix}-scope" name="${prefix}-scope" data-occ-date="${esc(occDateKey)}">
+        <option value="this" selected>${t('calendar.recurringScopeThis')}</option>
+        <option value="following">${t('calendar.recurringScopeFollowing')}</option>
+        <option value="series">${t('calendar.recurringScopeSeries')}</option>
+      </select>
+      <p class="form-hint" id="${prefix}-scope-hint" role="status"></p>
+    </div>`;
+}
+
+/** Reichweiten-Hinweistext für den gewählten Scope (mit formatiertem Datum). */
+function recurringScopeHint(value, occDateKey) {
+  if (value === 'series') return t('calendar.recurringScopeHintSeries');
+  const date = formatPreferredDate(occDateKey);
+  return value === 'following'
+    ? t('calendar.recurringScopeHintFollowing', { date })
+    : t('calendar.recurringScopeHintThis', { date });
+}
+
+/** Verdrahtet den dynamischen Hinweis der Scope-Auswahl. No-op ohne Chooser. */
+function bindRecurringScopeChooser(root, prefix) {
+  const sel  = root.querySelector(`#${prefix}-scope`);
+  const hint = root.querySelector(`#${prefix}-scope-hint`);
+  if (!sel || !hint) return;
+  const update = () => { hint.textContent = recurringScopeHint(sel.value, sel.dataset.occDate); };
+  sel.addEventListener('change', update);
+  update();
+}
+
+/** Liest den gewählten Scope; Default „this" (least-destructive). */
+function getRecurringScope(root, prefix) {
+  return root.querySelector(`#${prefix}-scope`)?.value || 'this';
+}
+
+/**
+ * Einstiegspunkt für das Löschen (#489/#532). Lokale Serien fragen „nur dieser
+ * Termin" / „dieser und folgende" / „ganze Serie"; alles andere (Einzeltermine,
+ * externe Serien) wird direkt gelöscht.
+ */
+async function requestDeleteEvent(event) {
+  if (!isLocalRecurringSeries(event)) {
+    await deleteEvent(event.id);
+    return;
+  }
+  const choice = await recurringDeleteChoice(event);
+  if (choice === 'series') await deleteEvent(event.id);
+  else if (choice === 'following') await deleteThisAndFollowing(event);
+  else if (choice === 'this') await deleteSingleOccurrence(event);
+  // null → abgebrochen, nichts tun
+}
+
+/**
+ * Auswahl-Dialog für das Löschen wiederkehrender Termine (#532). Nutzt dieselbe
+ * Scope-Komponente wie das Bearbeiten-Modal (Konsistenz) plus einen destruktiven
+ * „Löschen"-Bestätiger. Löst zu 'this' | 'following' | 'series' | null.
+ */
+function recurringDeleteChoice(event) {
+  const occDateKey = event.start_datetime.slice(0, 10);
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (value) => {
+      if (resolved) return;
+      resolved = true;
+      closeModal({ force: true });
+      resolve(value);
+    };
+    openSharedModal({
+      title: t('calendar.deleteRecurringTitle'),
+      size: 'sm',
+      content: `
+        ${renderRecurringScopeChooser('rds', occDateKey)}
+        <div class="modal-actions modal-actions--stack">
+          <button type="button" class="btn btn--danger" id="rds-confirm">${t('common.delete')}</button>
+          <button type="button" class="btn btn--ghost" id="rds-cancel">${t('common.cancel')}</button>
+        </div>`,
+      onClose: () => finish(null),
+      onSave(panel) {
+        bindRecurringScopeChooser(panel, 'rds');
+        panel.querySelector('#rds-confirm')?.addEventListener('click', () => finish(getRecurringScope(panel, 'rds')));
+        panel.querySelector('#rds-cancel')?.addEventListener('click', () => finish(null));
+      },
+    });
+  });
+}
+
+/**
+ * Löscht dieses und alle folgenden Vorkommen einer lokalen Serie (#532), indem die
+ * RRULE per UNTIL auf den Vortag gekürzt wird. Ist das geöffnete Vorkommen bereits
+ * das erste (Master-DTSTART), verschwindet die gesamte Serie. Optimistisch + Undo.
+ */
+async function deleteThisAndFollowing(event) {
+  // Erstes Vorkommen: „dieser und folgende" == ganze Serie.
+  if (!event.is_recurring_instance) {
+    await deleteEvent(event.id);
+    return;
+  }
+  const fromKey = event.start_datetime.slice(0, 10);
+  const newRule = truncateRuleBefore(event.recurrence_rule, fromKey);
+  if (!newRule) { await deleteEvent(event.id); return; }
+
+  const affects = (e) => e.id === event.id && e.start_datetime.slice(0, 10) >= fromKey;
+  const removed = state.events.filter(affects);
+  state.events  = state.events.filter((e) => !affects(e));
+  renderView();
+
+  scheduleUndoableDelete({
+    message: t('calendar.deletedToast'),
+    commit: async ({ keepalive }) => {
+      await api.put(`/calendar/${event.id}`, { recurrence_rule: newRule }, { keepalive });
+      if (keepalive) return; // Seite verschwindet — kein UI-Refresh mehr
+      // Verbleibende Instanzen tragen künftig die gekürzte Regel.
+      for (const e of state.events) if (e.id === event.id) e.recurrence_rule = newRule;
+    },
+    restore: (err) => {
+      state.events = [...state.events, ...removed];
+      renderView();
+      if (err) window.yuvomi?.showToast(err.data?.error ?? t('calendar.deleteError'), 'danger');
+    },
+  });
+}
+
+/**
+ * Nimmt genau ein Vorkommen einer lokalen Serie aus (#489), mit optimistischer
+ * Entfernung und Undo-Toast wie beim regulären Löschen.
+ */
+async function deleteSingleOccurrence(event) {
+  const date       = event.start_datetime.slice(0, 10);
+  const matches    = (e) => e.id === event.id && e.start_datetime.slice(0, 10) === date;
+  const removed    = state.events.filter(matches);
+  state.events     = state.events.filter((e) => !matches(e));
+  renderView();
+
+  scheduleUndoableDelete({
+    message: t('calendar.deletedToast'),
+    commit: ({ keepalive }) => api.post(`/calendar/${event.id}/exceptions`, { date }, { keepalive }),
+    restore: (err) => {
+      state.events = [...state.events, ...removed];
+      renderView();
+      if (err) window.yuvomi?.showToast(err.data?.error ?? t('calendar.deleteError'), 'danger');
+    },
+  });
+}

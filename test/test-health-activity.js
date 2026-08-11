@@ -1,0 +1,149 @@
+/**
+ * Modul: Aktivitäts-Logik-Test
+ * Zweck: Reine Funktionen weekSummary() (7 Tages-Buckets Mo–So mit Dauer-Summe
+ *        je Tag + Zeitraum from/to, Filterung außerhalb der Woche) und
+ *        activityTotals() (Anzahl/Dauer/Distanz/Kalorien-Summen). DOM-frei.
+ * Ausführen: node --loader ./test/test-browser-loader.mjs --test test/test-health-activity.js
+ */
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+const {
+  ACTIVITY_TYPES,
+  ACTIVITY_TYPE_VALUES,
+  activityType,
+  weekSummary,
+  activityTotals,
+} = await import('../public/utils/health-activity.js');
+
+// --------------------------------------------------------
+// Preset-Definitionen
+// --------------------------------------------------------
+
+test('ACTIVITY_TYPES: jeder Eintrag trägt value + vollständigen labelKey + icon', () => {
+  assert.ok(ACTIVITY_TYPES.length >= 5);
+  for (const a of ACTIVITY_TYPES) {
+    assert.equal(typeof a.value, 'string');
+    assert.ok(a.labelKey.startsWith('health.activity.type.'));
+    assert.equal(typeof a.icon, 'string');
+  }
+});
+
+test('ACTIVITY_TYPE_VALUES spiegelt die value-Reihenfolge', () => {
+  assert.deepEqual(ACTIVITY_TYPE_VALUES, ACTIVITY_TYPES.map((a) => a.value));
+});
+
+test('activityType: Treffer + null für Freitext-Typ', () => {
+  assert.equal(activityType('running')?.value, 'running');
+  assert.equal(activityType('Frisbee'), null);
+  assert.equal(activityType(null), null);
+});
+
+// --------------------------------------------------------
+// weekSummary — 7 Tages-Buckets Mo–So
+// --------------------------------------------------------
+
+// Anker Mittwoch, 2026-07-01 → Woche Mo 2026-06-29 … So 2026-07-05.
+const ANCHOR = '2026-07-01';
+
+test('weekSummary: 7 Buckets Mo–So mit korrektem Zeitraum', () => {
+  const s = weekSummary([], { anchor: ANCHOR, weekStartsOn: 1 });
+  assert.equal(s.buckets.length, 7);
+  assert.equal(s.from, '2026-06-29');
+  assert.equal(s.to, '2026-07-05');
+  assert.deepEqual(s.buckets.map((b) => b.date), [
+    '2026-06-29', '2026-06-30', '2026-07-01',
+    '2026-07-02', '2026-07-03', '2026-07-04', '2026-07-05',
+  ]);
+  assert.deepEqual(s.buckets.map((b) => b.index), [0, 1, 2, 3, 4, 5, 6]);
+});
+
+test('weekSummary: Dauer je Tag summiert, mehrere Einheiten pro Tag', () => {
+  const activities = [
+    { performed_at: '2026-06-29T07:00', duration_min: 30 },
+    { performed_at: '2026-06-29T18:30', duration_min: 45 },
+    { performed_at: '2026-07-05T10:00', duration_min: 60 },
+  ];
+  const s = weekSummary(activities, { anchor: ANCHOR, weekStartsOn: 1 });
+  assert.equal(s.buckets[0].durationMin, 75); // Mo: 30 + 45
+  assert.equal(s.buckets[0].count, 2);
+  assert.equal(s.buckets[6].durationMin, 60); // So
+  assert.equal(s.buckets[6].count, 1);
+  assert.equal(s.buckets[3].durationMin, 0);  // Do: leer
+});
+
+test('weekSummary: Einheiten außerhalb der Woche werden ignoriert', () => {
+  const activities = [
+    { performed_at: '2026-06-28T09:00', duration_min: 20 }, // So davor
+    { performed_at: '2026-07-06T09:00', duration_min: 20 }, // Mo danach
+    { performed_at: '2026-07-01T09:00', duration_min: 25 }, // in der Woche
+  ];
+  const s = weekSummary(activities, { anchor: ANCHOR, weekStartsOn: 1 });
+  const total = s.buckets.reduce((sum, b) => sum + b.durationMin, 0);
+  assert.equal(total, 25);
+  assert.equal(s.buckets[2].durationMin, 25); // Mi
+});
+
+test('weekSummary: fehlende/ungültige Dauer zählt als Einheit, aber nicht zur Summe', () => {
+  const activities = [
+    { performed_at: '2026-07-01T09:00' },                      // keine Dauer
+    { performed_at: '2026-07-01T10:00', duration_min: null },  // null
+    { performed_at: '2026-07-01T11:00', duration_min: 'abc' }, // ungültig
+    { performed_at: '2026-07-01T12:00', duration_min: 40 },
+  ];
+  const s = weekSummary(activities, { anchor: ANCHOR, weekStartsOn: 1 });
+  assert.equal(s.buckets[2].count, 4);
+  assert.equal(s.buckets[2].durationMin, 40);
+});
+
+test('weekSummary: performed_at mit Datetime-Anteil wird nach Datum gebucketet', () => {
+  const s = weekSummary(
+    [{ performed_at: '2026-07-03T23:59', duration_min: 10 }],
+    { anchor: ANCHOR, weekStartsOn: 1 },
+  );
+  assert.equal(s.buckets[4].durationMin, 10); // Fr
+});
+
+test('weekSummary: robust gegen leere/ungültige Eingaben', () => {
+  assert.equal(weekSummary(null, { anchor: ANCHOR }).buckets.length, 7);
+  assert.equal(weekSummary(undefined, { anchor: ANCHOR }).buckets.length, 7);
+  const s = weekSummary([null, undefined, {}], { anchor: ANCHOR });
+  assert.equal(s.buckets.reduce((sum, b) => sum + b.durationMin, 0), 0);
+});
+
+// --------------------------------------------------------
+// activityTotals — Summen über eine Liste
+// --------------------------------------------------------
+
+test('activityTotals: summiert Anzahl/Dauer/Distanz/Kalorien', () => {
+  const activities = [
+    { duration_min: 30, distance_km: 5, calories: 300 },
+    { duration_min: 45, distance_km: 8.5, calories: 500 },
+    { duration_min: 20 },
+  ];
+  const t = activityTotals(activities);
+  assert.equal(t.count, 3);
+  assert.equal(t.durationMin, 95);
+  assert.equal(t.distanceKm, 13.5);
+  assert.equal(t.calories, 800);
+});
+
+test('activityTotals: fehlende/ungültige Felder übersprungen, count zählt jede Einheit', () => {
+  const activities = [
+    { duration_min: null, distance_km: '', calories: undefined },
+    { duration_min: 'x', distance_km: 3, calories: 100 },
+    {},
+  ];
+  const t = activityTotals(activities);
+  assert.equal(t.count, 3);
+  assert.equal(t.durationMin, 0);
+  assert.equal(t.distanceKm, 3);
+  assert.equal(t.calories, 100);
+});
+
+test('activityTotals: leere/ungültige Eingaben → Nullsummen (null-Einträge zählen nicht)', () => {
+  const zero = { count: 0, durationMin: 0, distanceKm: 0, calories: 0 };
+  for (const input of [[], null, undefined, [null, undefined]]) {
+    assert.deepEqual(activityTotals(input), zero);
+  }
+});

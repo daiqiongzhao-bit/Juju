@@ -1,0 +1,2294 @@
+/* Modul: Gesundheit (Health)
+ * Phase 0: Gerüst — Sub-Tab-Leiste + fünf leere Panels mit Empty-States.
+ * Alle Werte aus tokens.css; --module-accent auf den Page-Root gescoped.
+ * Der finale --module-health-Wert wird in Phase 8 (/impeccable) fixiert.
+ */
+
+.health-page {
+  --module-accent: var(--module-health);
+  /* Der Zyklus-Ring und sein Lade-Skeleton müssen dasselbe Maß halten - das
+   * Skeleton hält den Platz frei, den der Ring danach einnimmt, und laufen sie
+   * auseinander, springt das Layout beim Übergang. Der Wert stand zweimal von
+   * Hand da. Die viewBox des SVG bleibt bewusst unabhängig: sie ist ein
+   * Koordinatensystem, keine Größe (das SVG skaliert per width: 100%). */
+  --cycle-ring-size: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* Full-bleed-Root (Issue #577): der Modulkopf ist ein direktes Kind dieses
+   * Roots und sein Chrome - Grund, Trennlinie, Sticky-Fläche - muss bis zur
+   * Shell-Kante laufen. Deshalb trägt der Root KEIN padding-inline; die
+   * Content-Spalte kommt über --page-inline-pad auf den Kindern (Kopf aus der
+   * Shell-Regel, Panels hier darunter). Vorher hing die Tab-Leiste außerhalb
+   * des Roots im Router-Wrapper, da war das Padding hier richtig. */
+  padding-bottom: calc(var(--nav-bottom-height) + var(--space-6));
+}
+
+/* Der 3px-Akzentstreifen über der Tabs-Leiste ist mit dem HIG-Rollout entfallen
+ * (DESIGN.md: „Don't Akzentstreifen an Toolbars oder Köpfen") - genauso wie bei
+ * .kitchen-tabs-bar, dem Muster, dem er nachgebaut war. Die Modul-Identität
+ * trägt der gefüllte aktive Tab. */
+
+.health-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding-inline: var(--page-inline-pad);
+}
+
+.health-panel[hidden] {
+  display: none;
+}
+
+/* Hier stand `.health-panel__head` - der Traeger des Panel-Titels, den die
+ * Sub-Tab-Leiste darueber bereits wortgleich fuehrt. Der Titel ist jetzt
+ * .sr-only und braucht keinen sichtbaren Kopf mehr (Finish-Review Runde 4,
+ * Befund 6); die Klasse hatte danach keinen Nutzer im Markup. */
+
+/* Empty-State: zentriertes Panel mit getöntem Icon-Well im Modul-Akzent.
+ * Randlos wie jede Karte auf dem Grouped-Grund; der frühere radial-gradient
+ * war Dekoration ohne Aussage und ist mit der HIG-Welt entfallen. */
+.health-empty {
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+  border: none;
+  /* --radius-lg, nicht `calc(var(--radius-md) + 4px)`: die Konzentrik-Formel
+   * leitet einen INNEREN Radius von einem äußeren ab, und diese Karte steht
+   * freistehend auf dem Grouped-Grund. Der Wert war identisch (16px), band die
+   * Karte aber an ein Token, mit dem sie nichts zu tun hat. */
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.health-empty__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+}
+
+.health-empty__icon i {
+  width: 28px;
+  height: 28px;
+}
+
+/* ==========================================================================
+ * Vitalwerte-Tab (Phase 2)
+ * ======================================================================== */
+
+.health-vitals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.health-vitals__loading {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Personen-Umschalter: horizontal scrollbare Chip-Leiste */
+.health-persons {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+  scrollbar-width: none;
+}
+
+.health-persons::-webkit-scrollbar { display: none; }
+
+.health-person-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  min-height: var(--target-base);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--transition-fast, var(--duration-sm)), color var(--transition-fast, var(--duration-sm)), background var(--transition-fast, var(--duration-sm));
+}
+
+.health-person-chip:hover {
+  border-color: var(--module-accent);
+}
+
+.health-person-chip.is-active {
+  border-color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.health-person-chip__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  flex: 0 0 auto;
+}
+
+.health-vitals__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.health-vitals__ranges {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+}
+
+.health-vitals__range {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--target-base) - var(--space-2));
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.health-vitals__range.is-active {
+  background: var(--module-accent);
+  color: var(--color-ink-on-vivid);
+}
+
+.health-vitals__add {
+  margin-inline-start: auto;
+}
+
+/* Karten-Grid je Metrik. Mindestbreite 160px: die schmalste Karte muss den
+ * längsten Metrik-Namen („Sauerstoffsättigung") einzeilig tragen können,
+ * seit Labels nicht mehr silbengetrennt werden (Critique P1). */
+.health-vitals__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Auf dem Grouped-Grund ist diese Kachel eine randlose Karte (Vitalwerte-Tab),
+ * INNERHALB der Übersichtskarte ein Inset-Well (tokens.css,
+ * Kasten-in-Kasten-Vokabular) - ein Well auf dem Grund wäre unsichtbar.
+ * Auswahl und Hover sprechen in beiden Fällen über einen Innenring. */
+.health-metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  text-align: start;
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast, var(--duration-sm));
+}
+
+.health-overview__card .health-metric-card {
+  background: var(--color-fill-well);
+  box-shadow: none;
+}
+
+.health-metric-card:hover {
+  box-shadow: inset 0 0 0 1px var(--module-accent);
+}
+
+.health-metric-card.is-active {
+  box-shadow: inset 0 0 0 2px var(--module-accent);
+}
+
+/* Flex mit Umbruch: passt der Metrik-Name nicht mehr NEBEN das Icon, wrappt
+ * er als ganzes Flex-Item auf eine eigene, volle Kartenzeile — erst dort darf
+ * der break-word-Backstop überhaupt greifen. (Ein Float-Ansatz scheitert:
+ * break-word füllt sonst die neben dem Icon verkürzte Zeile und chopt
+ * „Sauerstoffsättigu|ng" wortmittig.) */
+.health-metric-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+/* Metrik-Namen werden nicht mehr silbengetrennt: hyphens:auto (F-11) zerhackte
+ * „Sauerstoffsättigung" mitten im Wort (Critique P1). Die 160px-Mindestspalte
+ * des Karten-Grids trägt den längsten Namen auf der vollen Zeile; break-word
+ * bleibt reiner Backstop für Extremfälle jenseits der Kartenbreite. */
+.health-metric-card__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+  hyphens: manual;
+  text-align: left;
+}
+
+/* Die frühere Ausnahme `hyphens: auto` für das Übersichts-Widget ist mit Runde 3
+ * entfallen, und zwar als URSACHE des Trennwortbruchs, nicht nur als Symptom:
+ * mit auto ist die min-content-Breite des Labels eine SILBE, also unterschreitet
+ * das Flex-Item nie seine Mindestbreite und wrappt nie auf die eigene Zeile
+ * unter dem Icon - es trennt stattdessen („Sauerstoffsätti-gung"). Mit manual
+ * ist die min-content-Breite das ganze Wort, das Item rutscht auf die volle
+ * Zeile, und dort passt es. Den früher gefürchteten 119px-Fall löst jetzt das
+ * auto-fit-Raster (siehe .health-overview__vitals-grid). */
+
+.health-metric-card__icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--module-accent);
+}
+
+.health-metric-card__label {
+  font-size: var(--text-sm);
+}
+
+/* Wert und Einheit stehen auf einer gemeinsamen Grundlinie. Sie dürfen
+ * gemeinsam umbrechen (lange Dauern wie „7 Std. 30 Min."), aber nie mitten im
+ * Wort - deshalb wrap statt Ellipse und `overflow-wrap: normal`. */
+.health-metric-card__body {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.health-metric-card__value {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  overflow-wrap: normal;
+  hyphens: manual;
+}
+
+/* In der Übersichtskachel ist die Spalte schmaler als auf dem Vitalwerte-Tab:
+ * eine Stufe kleiner hält „7 Std. 30 Min." und die Einheit häufiger in einer
+ * Zeile, ohne die Hierarchie zu drehen (der Wert bleibt das Größte der Kachel). */
+.health-overview__vitals-grid .health-metric-card__value {
+  font-size: var(--text-xl);
+}
+
+.health-metric-card__value--empty {
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+}
+
+.health-metric-card__unit {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Mini-Trendlinie: gibt jeder Metrik-Karte einen eigenen Sub-Domänen-Charakter.
+ * preserveAspectRatio="none" streckt auf Kartenbreite; vector-effect hält die
+ * Strichstärke konstant. */
+.health-metric-card__spark {
+  width: 100%;
+  height: 22px;
+  display: block;
+  opacity: 0.9;
+  overflow: visible;
+}
+
+.health-metric-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.health-metric-card__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0h);
+}
+
+.health-metric-card__delta i {
+  width: 14px;
+  height: 14px;
+}
+
+/* Richtung wird allein über das Pfeil-Icon getragen, nicht über Farbe: „hoch" ist
+ * je nach Metrik gut ODER schlecht (Gewichtsabnahme, SpO₂, Glukose-Kontrolle),
+ * daher bewusst neutral — kein Danger-Rot für steigende Werte. */
+.health-metric-card__delta--up,
+.health-metric-card__delta--down,
+.health-metric-card__delta--flat { color: var(--color-text-secondary); }
+
+.health-metric-card__empty {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Trend-Chart-Sektion */
+.health-chart-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.health-chart-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.health-chart-section__title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+}
+
+.health-vitals__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.health-vitals__period {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.health-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.health-chart__axis {
+  font-size: var(--text-xs);
+  fill: var(--color-text-secondary);
+}
+
+/* Y-Wert-Labels am linken Rand: dezenter als die X-Datumsachse, damit die
+ * Kurve die Hauptrolle behält. */
+.health-chart__axis--y {
+  fill: var(--color-text-tertiary);
+}
+
+/* Flächenfüllung unter der Trend-Kurve — dieselbe Materialsprache über alle
+ * Health-Charts. Bewusst sehr transparent, damit Gitter und Werte durchscheinen. */
+.health-chart__area {
+  fill: color-mix(in oklab, var(--module-health) 14%, transparent);
+}
+
+.health-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.health-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.health-chart__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-2xs);
+}
+
+.health-chart-empty {
+  padding: var(--space-8) var(--space-4);
+}
+
+/* ==========================================================================
+ * Medikamente-Tab (Phase 3)
+ * ======================================================================== */
+
+.health-meds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.health-meds__loading {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.health-meds__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.health-meds__section-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.health-meds__add {
+  margin-inline-start: auto;
+}
+
+/* „Heute fällig"-Liste - Haarlinien-Liste, der Trenner ersetzt den Abstand.
+ * Auf dem Medikamente-Tab liegt sie auf dem Grouped-Grund und braucht deshalb
+ * einen eigenen Träger (Zeilenlisten-Regel, tokens.css). */
+.health-meds__due-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* Der Träger entscheidet: in der Übersichtskarte liegt die Liste schon in einer
+ * Karte - dort trägt sie nichts (Muster .health-overview__card ...). */
+.health-overview__card .health-meds__due-list {
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+/* Leerzustand: zentrierter Sekundärtext ohne Kasten - ein gestrichelter Rahmen
+ * wäre in einer randlosen Karte ein Kasten-in-Kasten, und eine eigene Fläche
+ * trüge je nach Träger (Karte oder Grund) unterschiedlich. */
+.health-meds__due-empty,
+.health-meds__empty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  border: none;
+}
+
+.health-dose {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  /* Dichtere Zeile: geringeres vertikales Padding, damit mehr Dosen ohne Scrollen
+   * sichtbar sind (Kern-Interaktion des Tabs). */
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  background: transparent;
+}
+
+.health-dose + .health-dose {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.health-dose__time {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  flex: 0 0 auto;
+}
+
+/* Der Name darf nicht unter ~8rem schrumpfen. So bricht bei Enge (Mobil) die
+ * Aktions-Gruppe in die zweite Zeile um, statt den Namen auf 0px zu verschlucken —
+ * bei einem Medikamenten-Tracker muss immer sichtbar sein, WELCHES Präparat gemeint ist. */
+.health-dose__name {
+  flex: 1 1 auto;
+  min-width: 8rem;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-dose__actions {
+  display: inline-flex;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+.health-dose__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+.health-dose__status i { width: 16px; height: 16px; }
+.health-dose__status--taken { color: var(--color-success); }
+.health-dose__status--skipped { color: var(--color-text-secondary); }
+
+/* Adherence-Karte */
+.health-adherence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.health-adherence__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.health-adherence__title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+}
+
+.health-adherence__period {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.health-adherence__value {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-semibold, 600);
+  /* Neutrale Tinte statt Modul-Magenta: der Prozentwert soll informieren, nicht
+   * alarmieren. Der Fortschrittsbalken trägt den Akzent. Konsistent mit dem
+   * Übersichts-Stat-Wert (--color-text-primary). */
+  color: var(--color-text-primary);
+}
+
+.health-adherence__bar {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+
+.health-adherence__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--module-accent);
+}
+
+.health-adherence__summary,
+.health-adherence__empty {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Medikamenten-Karten */
+.health-meds__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.health-med-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--transition-fast, var(--duration-sm)), box-shadow var(--transition-fast, var(--duration-sm));
+}
+
+button.health-med-card:hover {
+  border-color: var(--module-accent);
+}
+
+.health-med-card.is-inactive {
+  opacity: 0.7;
+}
+
+.health-med-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.health-med-card__name {
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-med-card__badges {
+  display: inline-flex;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+}
+
+.health-med-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-0h) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+  color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-ink), var(--color-text-primary));
+}
+
+.health-med-badge--muted {
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+}
+
+.health-med-card__sub {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.health-med-card__stock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Der Nachfüll-Chip rutscht bei Enge sauber in eine eigene Zeile, statt die
+ * Bestandszeile mitten im Text umbrechen zu lassen. */
+.health-med-card__stock i { width: 14px; height: 14px; flex: 0 0 auto; }
+
+.health-med-card__stock.is-warn {
+  color: var(--color-warning);
+}
+
+.health-med-card__refill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0h);
+  margin-inline-start: auto;
+  color: var(--color-warning);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.health-med-card__refill i { width: 14px; height: 14px; }
+
+/* Modal: Checkbox-Zeile + Einnahmeplan-Editor */
+.health-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+/* Checkbox im Modul-Akzent statt Browser-Default-Blau; größeres Tap-Ziel als die
+ * nativen 13px. Das umschließende Label vergrößert die Trefferfläche zusätzlich. */
+.health-check input[type="checkbox"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  /* Modals werden außerhalb von .health-page gerendert, wo --module-accent nicht
+   * gescoped ist. Der Router setzt --active-module-accent global; --module-health
+   * ist der Fallback (beide global verfügbar). */
+  accent-color: var(--active-module-accent, var(--module-health));
+  cursor: pointer;
+}
+
+.health-sched {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.health-sched-hint,
+.health-sched-empty {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Haarlinien-Liste: der Trenner ersetzt den Abstand (siehe tokens.css). */
+.health-sched-list {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.health-sched-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border: none;
+}
+
+.health-sched-row + .health-sched-row {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.health-sched-row__time {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold, 600);
+  flex: 0 0 auto;
+}
+
+.health-sched-row__days {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-sched-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.health-weekday-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.health-weekday {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--target-base);
+  min-height: var(--target-base);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.health-weekday.is-active {
+  border-color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+/* ==========================================================================
+ * Laborwerte-Tab (Phase 4)
+ * ======================================================================== */
+
+.health-labs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.health-labs__loading {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.health-labs__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.health-labs__section-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.health-labs__add {
+  margin-inline-start: auto;
+}
+
+/* Befund-Karten-Grid */
+.health-labs__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Leerzustand: zentrierter Sekundärtext ohne Kasten (siehe .health-meds__empty). */
+.health-labs__empty,
+.health-labs__detail-empty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  border: none;
+}
+
+.health-lab-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--transition-fast, var(--duration-sm)), box-shadow var(--transition-fast, var(--duration-sm));
+}
+
+.health-lab-card:hover {
+  border-color: var(--module-accent);
+}
+
+.health-lab-card.is-active {
+  border-color: var(--module-accent);
+  box-shadow: 0 0 0 1px var(--module-accent);
+}
+
+.health-lab-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.health-lab-card__date {
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.health-lab-card__name {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-lab-card__count {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.health-lab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0h);
+  padding: var(--space-0h) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
+  flex: 0 0 auto;
+}
+
+.health-lab-badge i { width: 12px; height: 12px; }
+
+.health-lab-badge--warn {
+  background: var(--color-warning-light);
+  color: var(--color-warning-ink);
+}
+
+/* Befund-Detail */
+.health-lab-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.health-lab-detail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.health-lab-detail__title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.health-lab-detail__date {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+}
+
+.health-lab-detail__lab {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.health-lab-detail__note {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+
+/* Analyten-Tabelle */
+.health-lab-table-wrap {
+  overflow-x: auto;
+}
+
+.health-lab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.health-lab-table th,
+.health-lab-table td {
+  padding: var(--space-2);
+  text-align: start;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.health-lab-table th {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-secondary);
+}
+
+.health-lab-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.health-lab-table__analyte {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.health-lab-table__value,
+.health-lab-table__ref {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.health-lab-table__ref {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* Flag-Indikator — farbcodiert nur über Tokens */
+.health-lab-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0h);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium, 500);
+  white-space: nowrap;
+}
+
+.health-lab-flag i { width: 14px; height: 14px; }
+
+.health-lab-flag--low    { color: var(--color-info); }
+.health-lab-flag--normal { color: var(--color-success); }
+.health-lab-flag--high   { color: var(--color-danger); }
+.health-lab-flag--none   { color: var(--color-text-tertiary, var(--color-text-secondary)); }
+
+/* Analyt-Trend */
+.health-lab-trend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.health-lab-trend__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.health-lab-trend__title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+}
+
+.health-lab-trend__select .input {
+  min-width: 140px;
+}
+
+.health-lab-trend__unit {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Modal: Analyt-Editor */
+.health-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.health-results-hint,
+.health-results-empty {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Haarlinien-Liste: der Trenner ersetzt den Abstand (siehe tokens.css). */
+.health-results-list {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.health-results-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border: none;
+}
+
+.health-results-row + .health-results-row {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.health-results-row__analyte {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-results-row__value {
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.health-results-row__flag { flex: 0 0 auto; }
+
+.health-results-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.health-results-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  min-height: var(--space-4);
+}
+
+.health-results-preview__label {
+  color: var(--color-text-secondary);
+}
+
+/* ==========================================================================
+ * Aktivität-Tab (Phase 4)
+ * ======================================================================== */
+
+.health-activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.health-activity__loading {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.health-activity__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.health-activity__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.health-activity__period {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.health-activity__add {
+  margin-inline-start: auto;
+}
+
+/* Summen-Karten */
+.health-activity__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Kennzahl-Kachel: liegt auf dem Grouped-Grund, also randlose Karte. */
+.health-activity-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.health-activity-stat__icon {
+  width: 18px;
+  height: 18px;
+  color: var(--module-accent);
+}
+
+.health-activity-stat__value {
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+}
+
+.health-activity-stat__label {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Balken-Chart */
+.health-activity__chart {
+  padding: var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+/* Trainings-Log */
+.health-activity__log-title {
+  margin-block-end: var(--space-2);
+}
+
+.health-activity__empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+/* Haarlinien-Liste: der Trenner ersetzt den Abstand (siehe tokens.css). */
+.health-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.health-activity-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border: none;
+  background: transparent;
+}
+
+.health-activity-row + .health-activity-row {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.health-activity-row__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  color: var(--module-accent);
+}
+
+.health-activity-row__icon i {
+  width: 18px;
+  height: 18px;
+}
+
+.health-activity-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.health-activity-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.health-activity-row__type {
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+}
+
+.health-activity-row__when {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.health-activity-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.health-activity-row__chip {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  padding: var(--space-0h) var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+}
+
+.health-activity-row__note {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.health-activity-row__edit {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+  /* .health-page bekommt hier BEWUSST keinen eigenen padding-inline mehr:
+   * --space-3 (12px) schlug --page-inline-pad (16px) und setzte den Inhalt
+   * mobil 4px neben die eigene Tab-Leiste — genau der Versatz, den #577
+   * beseitigt. Der Gutter kommt aus dem geteilten Token. */
+
+  .health-empty {
+    padding: var(--space-6) var(--space-3);
+  }
+
+  .health-vitals__cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .health-meds__list {
+    grid-template-columns: 1fr;
+  }
+
+  .health-labs__list {
+    grid-template-columns: 1fr;
+  }
+
+  .health-activity__summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ========================================================
+ * ÜBERSICHT-TAB
+ * ====================================================== */
+
+.health-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.health-overview__loading {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+/* Karten-Masonry: unterschiedlich hohe Karten (kurze „Einnahmetreue" neben hoher
+ * „Heute fällig") packen top-to-bottom ohne zeilengebundene Leerräume. Multicolumn
+ * mit break-inside statt Grid, dessen Zeilenhöhe sich am höchsten Nachbarn ausrichtet
+ * und darunter eine Void ließe. 1 Spalte Mobil → n Spalten je Breite. */
+.health-overview__grid {
+  column-width: 320px;
+  column-gap: var(--space-4);
+}
+
+.health-overview__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-md) + 2px);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+  break-inside: avoid;
+  margin-bottom: var(--space-4);
+}
+
+.health-overview__card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.health-overview__card-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--module-accent);
+  flex: 0 0 auto;
+}
+
+.health-overview__card-title {
+  margin: 0;
+}
+
+.health-overview__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Adherence + Streak */
+.health-overview__adherence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.health-overview__stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.health-overview__stat-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+
+.health-overview__stat-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.health-overview__streak-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-warning);
+}
+
+/* Letzte Vitalwerte */
+/* Eine Kachelhöhe je Rasterzeile (Finish-Review Runde 2, Fix 6). Die Ursache
+ * der ungleichen Höhen war NICHT das Raster, sondern das umbrechende Label:
+ * „Sauerstoffsättigung" machte seine Zeile dreizeilig, „Kopfumfang" blieb
+ * einzeilig. auto-fit statt fester Zweispaltigkeit löst genau das - unter
+ * ~310px Panelbreite fällt das Raster auf eine Spalte, statt den längsten
+ * Metriknamen in eine 119px-Spalte zu quetschen (der Fall, für den vorher
+ * `hyphens: auto` eingebaut war). Mit gleich hohen Kacheln gleicht das Grid
+ * die Zeilen dann von selbst über `stretch` aus; ein `grid-auto-rows: 1fr`
+ * darüber wäre in der einspaltigen Fassung schädlich - es zöge die leere
+ * „Größe"-Kachel auf die Höhe der Blutdruck-Kachel mit Trendzeile. */
+.health-overview__vitals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-2);
+}
+
+/* Nächste Erinnerungen */
+/* Haarlinien-Liste: der Trenner ersetzt den Abstand (siehe tokens.css). */
+.health-overview__reminders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.health-overview-reminder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  background: transparent;
+  border: none;
+}
+
+.health-overview-reminder + .health-overview-reminder {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.health-overview__reminders-empty,
+.health-overview__export-hint {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Schnell-Erfassung */
+.health-overview__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Export */
+.health-overview__export {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.health-overview__export-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.health-overview__export-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Untere Reihe der Aktivität-Toolbar auf Mobil: der „Erfassen"-Button nimmt die
+ * volle Breite, statt asymmetrisch rechts unter dem Wochen-Stepper zu hängen. */
+@media (max-width: 640px) {
+  .health-activity__toolbar .health-activity__add {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+/* ==========================================================================
+ * Geteilte Bausteine (Phase 8): Nur-Lesen-Hinweis, Disclaimer, Chart-Details
+ * ======================================================================== */
+
+/* Nur-Lesen-Banner beim Betrachten der Daten einer anderen Person. Ruhig,
+ * informativ — kein Alarm-Ton, aber deutlicher als das bloße Fehlen der Buttons. */
+.health-readonly-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.health-readonly-banner i {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+/* Medizinischer Disclaimer — bewusst leise (kein Diagnose-Anspruch). */
+.health-disclaimer {
+  margin: 0;
+  padding-top: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.health-disclaimer--modal {
+  padding-top: 0;
+}
+
+/* Chart-Feinschliff: dezente Gitternetzlinien + Labor-Referenzband. */
+.health-chart__grid {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.health-chart__band {
+  fill: color-mix(in srgb, var(--color-success) var(--tint-wash), transparent);
+}
+
+.health-chart__band-line {
+  stroke: color-mix(in srgb, var(--color-success) var(--tint-hint), transparent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .health-person-chip,
+  .health-metric-card,
+  .health-med-card,
+  .health-lab-card {
+    transition: none;
+  }
+}
+
+/* ========================================================
+   ZYKLUS-TAB (/health/cycle)
+   ======================================================== */
+
+.health-cycle__loading {
+  padding: var(--space-4) 0;
+}
+
+/* Lade-Skeleton: spiegelt die Hero-Silhouette (Ring + Statistikspalte). */
+.cycle-skeleton {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cycle-skeleton__ring {
+  width: var(--cycle-ring-size);
+  height: var(--cycle-ring-size);
+  border-radius: var(--radius-full);
+  flex: 0 0 auto;
+  margin-inline: auto;
+}
+
+.cycle-skeleton__side {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+@media (max-width: 640px) {
+  .cycle-skeleton { flex-direction: column; }
+  .cycle-skeleton__ring { width: 200px; height: 200px; }
+}
+
+/* ---- Hero: Ring + Statistik ---- */
+
+.cycle-hero {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+}
+
+.cycle-hero__side {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cycle-ring {
+  position: relative;
+  width: var(--cycle-ring-size);
+  height: var(--cycle-ring-size);
+  flex: 0 0 auto;
+  margin-inline: auto;
+}
+
+.cycle-ring__svg { width: 100%; height: 100%; display: block; }
+
+.cycle-ring__track { stroke: color-mix(in oklab, var(--color-border) 75%, transparent); }
+
+.cycle-ring__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-0h);
+  padding: 0 var(--space-8);
+  pointer-events: none;
+}
+
+.cycle-ring__phase {
+  font-weight: 700;
+  font-size: var(--text-lg);
+  line-height: 1.15;
+  color: var(--color-text-primary);
+  text-wrap: balance;
+}
+
+.cycle-ring[data-phase="menstruation"] .cycle-ring__phase { color: var(--cycle-period); }
+.cycle-ring[data-phase="fertile"] .cycle-ring__phase     { color: var(--cycle-fertile); }
+.cycle-ring[data-phase="ovulation"] .cycle-ring__phase   { color: var(--cycle-ovulation); }
+
+.cycle-ring__day { font-size: var(--text-sm); color: var(--color-text-secondary); }
+.cycle-ring__status { font-size: var(--text-xs); font-weight: 600; color: var(--module-accent); margin-top: var(--space-0h); }
+
+.cycle-ring__now {
+  transform-box: fill-box;
+  transform-origin: center;
+  /* Puls nur beim Mount (3 Schläge) statt endlos — zieht den Blick beim Betreten
+     des Tabs auf „heute" und beruhigt sich dann (Critique: Dauerpuls lenkt ab). */
+  animation: cycle-pulse 2.4s ease-in-out 3;
+}
+
+@keyframes cycle-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.18); }
+}
+
+/* ---- Schwangerschaft (Vorhersage pausiert) ---- */
+
+.cycle-preg {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  margin-top: var(--space-4);
+  padding: var(--space-5);
+  /* Randlose Karte wie überall; die Hervorhebung trägt der Inhalt (getöntes
+   * Icon), nicht ein Kartendekor aus getönter Kante plus Verlauf. */
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.cycle-preg__icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+}
+
+.cycle-preg__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+
+.cycle-preg__title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--module-accent);
+}
+
+.cycle-preg__week {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--color-text-primary);
+}
+
+.cycle-preg__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+.cycle-preg__badge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-ink), var(--color-text-primary));
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+}
+
+.cycle-preg__countdown { font-size: var(--text-sm); color: var(--color-text-secondary); }
+
+.cycle-preg__bar {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-border) 70%, transparent);
+  overflow: hidden;
+}
+
+.cycle-preg__bar-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: var(--module-accent);
+  /* transform statt width: layout-frei animierbar (Detector layout-transition);
+   * der Füllstand kommt als --cycle-fill (0..1) aus dem Markup. */
+  transform-origin: left center;
+  transform: scaleX(var(--cycle-fill, 0));
+  transition: transform var(--duration-md) ease;
+}
+
+.cycle-preg__due { font-size: var(--text-sm); color: var(--color-text-secondary); }
+.cycle-preg__nodate { font-size: var(--text-sm); color: var(--color-text-secondary); margin: 0; }
+.cycle-preg__paused { font-size: var(--text-xs); color: var(--color-text-tertiary); margin: 0; }
+.cycle-preg__edit { align-self: flex-start; margin-top: var(--space-1); }
+
+.cycle-settings__sep {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-2) 0;
+}
+
+/* ---- Statistik-Karten ---- */
+
+.cycle-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+/* Kennzahlkarte auf dem Grouped-Grund: randlose Karte. Die frühere
+ * surface-2-Fläche lag im Dark UNTER dem Grund (#050507 auf #0A0A0C) und
+ * verschwand dort fast vollständig. */
+.cycle-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0h);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: none;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.cycle-stat__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.cycle-stat__head svg { width: 14px; height: 14px; }
+.cycle-stat__value { font-weight: 700; font-size: var(--text-sm); color: var(--color-text-primary); }
+.cycle-stat__sub { font-size: var(--text-2xs); color: var(--color-text-secondary); }
+
+/* Ø-Kachel: volle Breite, zwei Werte nebeneinander mit dünnem Trenner. Bricht die
+   gleichförmige 2×2-Kartenwiederholung und spart einen doppelten Rahmen. */
+.cycle-stat--dual {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  gap: 0;
+}
+
+.cycle-stat__pair-item {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0h);
+}
+
+.cycle-stat__pair-item + .cycle-stat__pair-item {
+  padding-inline-start: var(--space-3);
+  margin-inline-start: var(--space-3);
+  border-inline-start: 1px solid var(--color-border);
+}
+
+/* ---- Schnellerfassung „Heute" ---- */
+
+.cycle-today {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  /* Aktionsleiste auf dem Grouped-Grund: randlose Karte (siehe .cycle-stat). */
+  background: var(--color-surface);
+  border: none;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.cycle-today__label { font-weight: 600; font-size: var(--text-sm); color: var(--color-text-secondary); }
+.cycle-today__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* ---- Monatskalender ---- */
+
+.cycle-cal { margin-top: var(--space-6); }
+.cycle-section__title { margin: 0 0 var(--space-3); }
+
+.cycle-cal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.cycle-cal__nav { display: flex; align-items: center; gap: var(--space-1); }
+.cycle-cal__month {
+  min-width: 10ch;
+  text-align: center;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  text-transform: capitalize;
+}
+
+/* Sieben Spalten auf Phone-Breite: der Gap schrumpft stufenlos mit, damit die
+   Zellen auf schmalen Geräten so breit wie möglich bleiben und näher an ein
+   komfortables Daumen-Ziel kommen. Fluid statt eigener Viewport-Schwelle — ein
+   380px-Breakpoint hätte den Kontrakt aus tokens.css §11c gebrochen und
+   zwischen 380 und 640px hart gesprungen. */
+.cycle-cal__weekdays,
+.cycle-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: clamp(var(--space-0h), 0.53vw, var(--space-1));
+}
+
+.cycle-cal__wd {
+  text-align: center;
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+  padding: var(--space-1) 0;
+}
+
+.cycle-cal__day {
+  position: relative;
+  aspect-ratio: 1;
+  /* Daumen-Ziel: nie unter ~40px fallen, auch wenn die Spaltenbreite auf schmalen
+     Phones kleiner würde (jeder Tag ist ein Log-Button). */
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background var(--duration-xs) ease;
+}
+
+.cycle-cal__day:disabled { cursor: default; }
+.cycle-cal__day.is-out { opacity: 0.4; }
+button.cycle-cal__day:not(:disabled):hover { background: var(--color-surface-2); }
+.cycle-cal__num { position: relative; z-index: 1; }
+
+/* Phasen tragen je einen NON-COLOR-Marker (nicht nur Farbton), damit sie auch bei
+   Farbschwäche unterscheidbar sind (WCAG 1.4.1): Menstruation = Vollfläche,
+   fruchtbar = Diagonal-Schraffur (Textur), Eisprung = kräftiger Rand-Ring (Form),
+   vorhergesagt = weicher Umriss statt Füllung. */
+.cycle-cal__day.is-menstruation { background: color-mix(in oklab, var(--cycle-period) 22%, transparent); }
+
+.cycle-cal__day.is-fertile {
+  background-color: color-mix(in oklab, var(--cycle-fertile) 12%, transparent);
+  background-image: repeating-linear-gradient(45deg,
+    color-mix(in oklab, var(--cycle-fertile) 42%, transparent) 0 1.5px,
+    transparent 1.5px 5px);
+}
+
+.cycle-cal__day.is-ovulation {
+  background: color-mix(in oklab, var(--cycle-ovulation) 20%, transparent);
+  font-weight: 700;
+}
+.cycle-cal__day.is-ovulation::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 2px solid var(--cycle-ovulation);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+/* Vorhergesagte Periode: Umriss statt Füllung (grenzt sie von geloggten Tagen ab). */
+.cycle-cal__day.is-menstruation.is-predicted {
+  background: color-mix(in oklab, var(--cycle-period) 8%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--cycle-period) 55%, transparent);
+}
+
+.cycle-cal__day.is-today {
+  box-shadow: inset 0 0 0 2px var(--module-accent);
+  font-weight: 700;
+}
+
+.cycle-cal__dot {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--cycle-period);
+  z-index: 1;
+}
+
+.cycle-cal__day[data-flow="spotting"] .cycle-cal__dot { opacity: 0.55; }
+.cycle-cal__day[data-flow="heavy"] .cycle-cal__dot { width: 6px; height: 6px; }
+
+/* ---- Legende ---- */
+
+.cycle-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.cycle-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+}
+
+.cycle-legend__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-2xs);
+  display: inline-block;
+}
+
+/* Swatches spiegeln die Kalender-Marker 1:1 (dieselben Non-color-Cues), damit die
+   Legende die Textur/Form lehrt, nicht nur die Farbe. */
+.cycle-legend__swatch.is-menstruation { background: color-mix(in oklab, var(--cycle-period) 22%, transparent); }
+.cycle-legend__swatch.is-menstruation.is-predicted {
+  background: color-mix(in oklab, var(--cycle-period) 8%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--cycle-period) 55%, transparent);
+}
+.cycle-legend__swatch.is-fertile {
+  background-color: color-mix(in oklab, var(--cycle-fertile) 12%, transparent);
+  background-image: repeating-linear-gradient(45deg,
+    color-mix(in oklab, var(--cycle-fertile) 42%, transparent) 0 1.5px,
+    transparent 1.5px 5px);
+}
+.cycle-legend__swatch.is-ovulation {
+  background: color-mix(in oklab, var(--cycle-ovulation) 20%, transparent);
+  border: 2px solid var(--cycle-ovulation);
+}
+.cycle-legend__swatch.is-today { box-shadow: inset 0 0 0 2px var(--module-accent); }
+
+/* ---- Verlauf ---- */
+
+.cycle-history { margin-top: var(--space-6); }
+
+/* Haarlinien-Liste: der Trenner ersetzt den Abstand (siehe tokens.css). */
+.cycle-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cycle-history__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border: none;
+}
+
+.cycle-history__row + .cycle-history__row {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.cycle-history__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--cycle-period);
+  flex: 0 0 auto;
+}
+
+.cycle-history__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-0h); }
+.cycle-history__range { font-weight: 600; font-size: var(--text-sm); color: var(--color-text-primary); }
+.cycle-history__meta { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+
+.cycle-history__chip {
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+}
+
+/* ---- Fuß (Export/Einstellungen) ---- */
+
+.cycle-footer {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+}
+
+/* ---- Modal-Auswahlchips (Flow/Symptome/Stimmung) ----
+ * Hießen bis #609 .cycle-choice, weil sie nur im Zyklus-Tagebuch vorkamen. Die
+ * Stimmungs-Skala im Vitalwerte-Dialog braucht dieselbe Auswahlreihe; ein
+ * zweiter Chip-Baustein daneben wäre eine Kopie mit anderem Namen. */
+
+.health-choices { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* Die Stimmungs-Skala ist eine Reihe gleich breiter Stufen: die Ordnung von
+ * „sehr schlecht" nach „sehr gut" ist Teil der Information und darf nicht von
+ * der Textlänge der einzelnen Stufen verzerrt werden - daher eine feste
+ * Fünftel-Basis statt Inhaltsbreite. Der Umbruch auf sehr schmalen Geräten
+ * ergibt sich aus der Mindestbreite (Touch-Ziel), nicht aus einem eigenen
+ * Breakpoint: eine private Schwelle hier wäre eine Grenze, an der genau dieses
+ * eine Element anders umbricht als der Rest der App (tokens.css §11c). */
+.health-choices--scale .health-choice {
+  flex: 1 1 calc((100% - 4 * var(--space-2)) / 5);
+  min-width: var(--target-base);
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+/* Größer als die 15px der Chip-Reihe: das Gesicht ist hier der eigentliche
+ * Inhalt der Stufe, nicht die Verzierung eines Labels. */
+.health-choices--scale .health-choice svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+}
+
+.health-choices--scale .health-choice-label {
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+
+.health-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  min-height: var(--target-base);
+  transition: background var(--duration-xs) ease, border-color var(--duration-xs) ease;
+}
+
+.health-choice svg { width: 15px; height: 15px; }
+
+.health-choice[aria-pressed="true"] {
+  border-color: var(--module-accent);
+  background: color-mix(in oklab, var(--module-accent) 12%, transparent);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.cycle-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.cycle-hint { font-size: var(--text-xs); color: var(--color-text-secondary); margin: 0; }
+
+/* Bulk-Sichtbarkeit: Sekundär-Button plus ausklappbare Inline-Bestätigung. */
+.cycle-bulk { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+.cycle-bulk__confirm {
+  width: 100%;
+  padding: var(--space-3);
+  /* Inline-Panel in einer Karte: Inset-Well, kein Kasten (siehe tokens.css). */
+  background: var(--color-fill-well);
+  border: none;
+  border-radius: var(--radius-md);
+  flex-direction: column;
+  gap: var(--space-3);
+}
+/* display erst wenn sichtbar - sonst überschreibt der Flex das UA-[hidden]. */
+.cycle-bulk__confirm:not([hidden]) { display: flex; }
+.cycle-bulk__question { color: var(--color-text-primary); }
+.cycle-bulk__actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+
+@media (max-width: 640px) {
+  .cycle-hero { flex-direction: column; }
+  .cycle-ring { width: 200px; height: 200px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cycle-ring__now { animation: none; }
+  .cycle-cal__day { transition: none; }
+  .health-choice { transition: none; }
+}
+
+/* Messwert-Historie unter dem Vitals-Chart (Audit R2, A2-08): kompakte Zeilen,
+ * Löschen als row-action nur in der eigenen Ansicht. */
+.health-recent {
+  margin-top: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-work);
+  padding: var(--space-2) var(--space-3);
+}
+
+.health-recent__title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.health-recent__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.health-recent__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--target-md);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.health-recent__row:first-child { border-top: none; }
+
+.health-recent__date {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  min-width: 96px;
+}
+
+.health-recent__value {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.health-recent__value small {
+  color: var(--color-text-tertiary);
+}
+
+/* Einnahmeprotokoll-Aufklapper unter der Adhärenz (Audit R2, A2-22). */
+.health-medlog {
+  margin-top: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-work);
+  padding: var(--space-2) var(--space-3);
+}
+
+.health-medlog summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  min-height: var(--target-md);
+  display: flex;
+  align-items: center;
+}
+
+.health-medlog__list {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+}
+
+.health-medlog__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-md);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--text-sm);
+}
+
+.health-medlog__row svg {
+  width: 14px;
+  height: 14px;
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.health-medlog__row.is-skipped svg {
+  color: var(--color-text-tertiary);
+}
+
+.health-medlog__med {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-medlog__time,
+.health-medlog__status {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}

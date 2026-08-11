@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0A0A0C" media="(prefers-color-scheme: dark)">
+  <title>Keine Verbindung – Yuvomi</title>
+  <!-- Dieselbe Theme-Entscheidung wie in der App: der gespeicherte Wunsch
+       (`yuvomi-theme`) schlaegt die Systemeinstellung und setzt `data-theme` auf
+       <html>. Das Skript ist dasselbe, das index.html im Kopf laedt, und es
+       liegt im Precache des Service Workers - ohne Netz laeuft es also auch.
+       Faellt es aus, greift die prefers-color-scheme-Regel unten.
+       KEIN Inline-Skript: die CSP dieses Servers erlaubt nur `script-src 'self'`. -->
+  <script src="/theme-init.js"></script>
+  <style>
+    /* Lokale Spiegel der App-Tokens (styles/tokens.css).
+     *
+     * WARUM GESPIEGELT: die Seite ist die Service-Worker-Huelle. Sie muss ohne
+     * Netz und ohne die Stylesheet-Kette der App stehen, kann also keine
+     * Tokens importieren - sie fuehrt dieselben WERTE.
+     *
+     * Bis 2026-08-08 fuehrte sie eine EIGENE Welt: #1a1a2e Nachtblau, ein
+     * Akzent #4A90D9, den die App nirgends kennt, und drei benachbarte
+     * Schriftgroessen (14/16/20, Verhaeltnis 1.4:1) ohne Hierarchie. Sie sah
+     * damit aus wie eine fremde Seite - ausgerechnet in dem Moment, in dem ein
+     * Nutzer wissen will, ob er noch in seiner App ist.
+     *
+     * Wer hier etwas aendert, aendert es in tokens.css mit (und umgekehrt).
+     * Die Werte stehen als Literale, weil es keine zweite Quelle gibt, die
+     * dieses Dokument erreichen koennte. */
+    :root {
+      /* Farben - Light (tokens.css :root) */
+      --color-bg:             #F2F2F7;  /* --neutral-100 */
+      --color-surface:        #FFFFFF;
+      --color-border:         #E5E5EA;  /* --neutral-200 */
+      --color-text:           #1C1C1E;  /* --neutral-900 */
+      --color-text-secondary: #636366;  /* --neutral-600, 5.75:1 auf weiss */
+      --color-accent:         #4F4DC9;
+      --color-ink-on-vivid:   #FFFFFF;
+
+      /* Form */
+      --radius: 12px;                   /* --radius-md */
+
+      /* Typografie - die SEMANTISCHEN Rollen der App, nicht drei Groessenstufen.
+       * Title 1 fuer den Zustand, Subheadline fuer die Erklaerung, Body fuer die
+       * Aktion: 28/15/17px, Verhaeltnis 1.87:1 (Audit 2026-08-08, P3-4). */
+      --type-title:     1.75rem;    /* 28px - Title 1  (= --text-3xl) */
+      --type-body:      1.0625rem;  /* 17px - Body     (= --type-body) */
+      --type-secondary: 0.9375rem;  /* 15px - Subheadline */
+      --line-height-tight: 1.21;
+      --line-height-base:  1.47;
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    /* Dark - dieselben Werte wie der Dark-Block in tokens.css. Zweimal
+     * geschrieben, weil beide Wege dorthin fuehren muessen: das System
+     * (prefers-color-scheme) und die ausdrueckliche Wahl (data-theme, gesetzt
+     * von theme-init.js). Die Wahl gewinnt, deshalb steht sie zuletzt. */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --color-bg:             #0A0A0C;
+        --color-surface:        #1C1C1E;
+        --color-border:         #3E3E42;
+        --color-text:           #F2F2F7;
+        --color-text-secondary: #AEAEB2;
+        /* Spiegelt --_color-accent aus tokens.css. Hier traegt der Wert nur
+         * Flaeche (Retry-Knopf) und Fokusring, nie Text: #0A0A0C darauf 6,58,
+         * Ring gegen #0A0A0C 6,58. Die alte Notiz „~5:1 auf #1C1C1E" nannte
+         * eine Textrolle, die diese Datei nicht hat. */
+        --color-accent:         #8A87FF;
+        --color-ink-on-vivid:   #0A0A0C;
+      }
+    }
+    :root[data-theme="dark"] {
+      --color-bg:             #0A0A0C;
+      --color-surface:        #1C1C1E;
+      --color-border:         #3E3E42;
+      --color-text:           #F2F2F7;
+      --color-text-secondary: #AEAEB2;
+      --color-accent:         #8A87FF;
+      --color-ink-on-vivid:   #0A0A0C;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-family: var(--font-sans);
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 40px 32px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+    }
+    .icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 24px;
+      color: var(--color-text-secondary);
+    }
+    h1 {
+      font-size: var(--type-title);
+      line-height: var(--line-height-tight);
+      font-weight: 600;
+      margin-bottom: 8px;
+      /* 28px auf einer 296px breiten Textspalte: „Keine Verbindung" passt in
+       * einer Zeile, laengere Uebersetzungen brechen sauber statt zu ueberlaufen. */
+      text-wrap: balance;
+    }
+    p {
+      font-size: var(--type-secondary);
+      color: var(--color-text-secondary);
+      line-height: var(--line-height-base);
+      margin-bottom: 28px;
+    }
+    /* Die Kapsel - EINE Buttonform, app-weit (DESIGN.md, Guard Sonde 3).
+     * Vorher trug der Knopf --radius-md und war damit die einzige Stelle der
+     * App mit einer eigenen Buttonform. */
+    .retry {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      /* 44px Mindesthoehe: die Seite erscheint fast immer auf dem Telefon, und
+       * der Knopf ist ihr einziges Ziel. 10px Polsterung ergaben 39px. */
+      min-height: 44px;
+      padding: 10px 24px;
+      background: var(--color-accent);
+      color: var(--color-ink-on-vivid);
+      border: none;
+      border-radius: 999px;
+      font-size: var(--type-body);
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .retry:hover { opacity: 0.85; }
+    .retry:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 2px;
+    }
+    /* Auch diese Seite hat kein Stylesheet, das den Motion-Schutz mitbringt. */
+    @media (prefers-reduced-motion: reduce) {
+      .retry { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- `main` statt `div`: die Karte IST der Inhalt dieser Seite. offline.html
+       war die einzige der sechs anonymen Seiten ohne Landmarke - ohne sie
+       findet ein Screenreader keinen Einstieg und muss von oben durchlaufen
+       (Audit 2026-08-08, P3-4). -->
+  <main class="card">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <line x1="1" y1="1" x2="23" y2="23"/>
+      <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+      <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+      <path d="M10.71 5.05A16 16 0 0 1 22.56 9"/>
+      <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+      <line x1="12" y1="20" x2="12.01" y2="20"/>
+    </svg>
+    <h1>Keine Verbindung</h1>
+    <p>Yuvomi ist gerade nicht erreichbar. Bitte prüfe deine Internetverbindung und versuche es erneut.</p>
+    <!-- EIN LINK AUF DIE EIGENE ADRESSE, KEIN `onclick`.
+         Der Knopf trug `onclick="location.reload()"` und tat damit NICHTS: die
+         CSP dieses Servers setzt `script-src 'self'` ohne `unsafe-inline`, und
+         Chrome blockt Inline-Handler entsprechend („Executing inline event
+         handler violates ... script-src-attr 'none'"). Die einzige Aktion der
+         Seite war seit Einfuehrung der CSP tot.
+         Ein leeres `href` loest gegen die AKTUELLE Adresse auf - und die ist
+         beim Service-Worker-Fallback die urspruenglich gewuenschte Seite
+         (`respondWith`, kein Redirect). Der Versuch geht also dorthin zurueck,
+         wo der Nutzer hinwollte, nicht auf die Wurzel. Ohne eine Zeile JS. -->
+    <a class="retry" href="">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+      Erneut versuchen
+    </a>
+  </main>
+</body>
+</html>

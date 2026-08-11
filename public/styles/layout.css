@@ -1,0 +1,4895 @@
+/**
+ * Modul: Layout
+ * Zweck: App-Shell-Layout, Navigation (Bottom Mobile / Sidebar Desktop), Responsive Grid
+ * Abhängigkeiten: tokens.css, reset.css
+ *
+ * Navigation:
+ *   Mobile (<1024px):  Bottom-Nav-Bar, 5 Haupt-Module
+ *   Desktop (≥1024px): Expanded Sidebar mit Labels (220px)
+ *
+ * Referenz: Apple HIG Sidebar-Pattern
+ */
+
+/* --------------------------------------------------------
+ * App-Shell
+ * -------------------------------------------------------- */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  /* -webkit-fill-available als iOS-Fallback: In manchen iOS-WebKit-Versionen
+   * ist 100dvh minimal kleiner als die tatsächliche WKWebView-Höhe, was zu einem
+   * sichtbaren Streifen unten führt. -webkit-fill-available füllt zuverlässig. */
+  height: -webkit-fill-available;
+  height: 100dvh;
+  /* Containing-Block für den lebenden Backdrop (.lg-backdrop, position: absolute;
+   * inset: 0). Bewusst KEIN isolation/z-index → app-shell bleibt kein eigener
+   * Stacking-Context, damit die globale z-Reihenfolge (Toast 300 > Modal 200 etc.)
+   * unverändert bleibt. Der Backdrop malt mit z-index: 0 über die opaken
+   * html/body-Hintergründe; .app-content liegt via position: relative darüber. */
+  position: relative;
+}
+
+/* --------------------------------------------------------
+ * Loading-Screen
+ * -------------------------------------------------------- */
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  width: 100%;
+  background-color: var(--color-bg);
+}
+
+.app-loading__logo {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-accent);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* --------------------------------------------------------
+ * Seiten-Übergangs-Animation (direktional)
+ * -------------------------------------------------------- */
+/* Basis: unsichtbar vor Animation */
+.page-transition {
+  opacity: 0;
+  /* Höhe durchreichen: dieser Wrapper steht zwischen .app-content und jedem
+   * Modul-Root. Ohne eigene Höhe ist er `auto`, und ein `height: 100%` am
+   * Modul-Root darunter hat keinen definiten Bezug - die Prozentangabe fällt
+   * dann still auf `auto` zurück und der Root wächst mit seinem Inhalt statt
+   * sich in den verfügbaren Platz zu fügen.
+   *
+   * Genau daran hingen die acht `height: calc(100dvh - ...)`-Formeln in den
+   * Modul-CSS: sie rechneten die Viewport-Höhe nach, weil die Kette sie nicht
+   * lieferte. Nachgerechnete Höhen kennen aber nur, was zum Zeitpunkt des
+   * Schreibens unter der Seite lag - die FAB-Zone (--fab-safe-zone) kam später
+   * dazu und fehlte in allen acht. Mit durchgereichter Höhe stimmt jede
+   * Änderung an .app-content automatisch überall.
+   *
+   * Seiten, die länger sind als der Platz (kein overflow am Root), laufen wie
+   * bisher heraus und werden von .app-content gescrollt. */
+  height: 100%;
+}
+
+/* Nach der In-Animation soll es sichtbar bleiben → direkt auf der Klasse */
+.page-transition--in-right,
+.page-transition--in-left {
+  opacity: 1;
+  transform: none;
+}
+
+/* Keyframes OHNE forwards */
+@keyframes page-slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes page-slide-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes page-out-left {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateX(-20px); }
+}
+@keyframes page-out-right {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateX(20px); }
+}
+
+@keyframes page-crossfade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.page-transition--in-right {
+  animation: page-slide-in-right var(--duration-md) var(--ease-out);
+}
+.page-transition--in-left {
+  animation: page-slide-in-left var(--duration-md) var(--ease-out);
+}
+.page-transition--out-left {
+  animation: page-out-left var(--duration-xs) ease forwards; /* ← out braucht forwards, wird ja eh entfernt */
+  pointer-events: none;
+}
+.page-transition--out-right {
+  animation: page-out-right var(--duration-xs) ease forwards;
+  pointer-events: none;
+}
+
+.page-transition--crossfade {
+  animation: page-crossfade-in 180ms var(--ease-out);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition--in-right,
+  .page-transition--in-left {
+    animation: none;
+    opacity: 1;
+  }
+  .page-transition--out-left,
+  .page-transition--out-right {
+    animation: none;
+  }
+  .page-transition--crossfade {
+    animation: none;
+    opacity: 1;
+  }
+  #main-content {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------
+ * Layout: Mobile (Standard, < 1024px)
+ * -------------------------------------------------------- */
+.app-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  padding-top: var(--offline-banner-height, 0px);
+  /* Bewusste Layout-Transition (Detector layout-transition, geprüft): das Offline-
+   * Banner schiebt den Inhalt hinunter - echte Layout-Höhe, per transform nicht
+   * animierbar. Selten (nur bei Offline-Wechsel); reduced-motion schaltet sie ab. */
+  transition: padding-top var(--duration-md) ease;
+  background-color: var(--color-bg);
+}
+
+/* Der Scrollport endet über dem FAB.
+ *
+ * Der FAB ist `position: fixed` über einem Scrollport und überdeckt damit
+ * zwangsläufig, was gerade unter ihm steht - bei `scrollTop = 0` gemessen bis
+ * 80,6% einer Zeilenaktion (phoneSm /pantry, Critique P1 2026-07-30). Die
+ * beiden bisherigen Antworten griffen beide zu kurz: eine reservierte Spur pro
+ * Zeile kostete bei 320px 24% der Viewportbreite (zurückgebaut), und
+ * `padding-bottom` am Listenende scrollt mit, wirkt also nur, wenn der Nutzer
+ * schon unten ist.
+ *
+ * MARGE, NICHT PADDING - darin liegt der ganze Unterschied. Padding sitzt am
+ * Ende des Inhalts und wandert beim Scrollen mit; eine Marge verkürzt den
+ * Container selbst. Der Streifen darunter gehört dem FAB bei jedem
+ * Scrollstand.
+ *
+ * AN .app-content, NICHT AN DEN LISTEN. Die App hat zwei Scrollport-
+ * Architekturen: in Küche und Budget ist der Modul-Root `overflow: hidden` und
+ * eine innere Liste scrollt, in Belohnungen und anderswo scrollt .app-content
+ * die ganze Seite. Eine Marge hier verkürzt in beiden Fällen das richtige
+ * Element - im ersten Fall über den kürzeren Modul-Root, im zweiten direkt.
+ * Sieben `padding-bottom: *-fab-clearance` in vier Dateien sind dadurch
+ * entfallen, samt der drei auseinandergedrifteten Kopien des Tokens.
+ *
+ * NUR MIT FAB: `:has()` fragt die Seite, statt eine Klasse zu verlangen, die
+ * beim nächsten neuen Modul vergessen wird. `:not([hidden])`, weil eine Seite
+ * ihren FAB zeitweise verbergen kann - dann gehört ihr der Platz.
+ *
+ * Gefragt wird an der SHELL, nicht am Scrollport: der FAB hängt seit #634 in
+ * `.fab-layer` neben `.app-content`, nicht mehr darin. */
+.app-shell:has(.fab-layer .page-fab:not([hidden])) .app-content {
+  margin-block-end: var(--fab-safe-zone);
+}
+
+/* #main-content wird nach jeder Navigation programmatisch fokussiert, damit
+ * Tastatur-/Screenreader-Fokus in die neue Seite springt (Skip-Link-Muster).
+ * Das ist ein Region-Fokus-Ziel, kein interaktives Element — es darf keinen
+ * sichtbaren Rahmen zeigen. Beim ersten Laden (ohne vorherige Pointer-
+ * Interaktion) würde der Browser den programmatischen Fokus sonst als
+ * :focus-visible werten und ein Outline um den ganzen Inhaltsbereich zeichnen. */
+.app-content:focus,
+.app-content:focus-visible {
+  outline: none;
+}
+
+/* Sidebar auf Mobile verstecken */
+.nav-sidebar {
+  display: none;
+}
+
+/* --------------------------------------------------------
+ * Bottom Navigation (Mobil + Tablet)
+ *
+ * Kompakte Bar mit pillenförmigen Icon-Wells und lesbaren Labels.
+ * Leichter Blur-Effekt für Glassmorphismus.
+ * -------------------------------------------------------- */
+.nav-bottom {
+  /* Flex-Kind von .app-shell statt position: fixed - zuverlässiger auf iOS PWA.
+   * position: fixed kann durch will-change: transform in iOS-Compositor-Layern
+   * falsch referenziert werden. Als Flex-Kind am Ende der 100dvh-App-Shell ist
+   * die Position garantiert am Viewport-Bottom.
+   *
+   * Liquid Glass: die Bar selbst ist eine transparente Zone; das
+   * Glas-Material trägt die schwebende Kapsel .nav-bottom__items. Der
+   * gleitende Indikator bleibt Kind von .nav-bottom und misst echte Rects
+   * (positionTabIndicator) — die Kapsel-Margins rechnen sich automatisch ein. */
+  position: relative;
+  flex-shrink: 0;
+  width: 100%;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) var(--space-3) calc(var(--safe-area-inset-bottom) + var(--space-2));
+  z-index: var(--z-nav);
+}
+
+/* ── Items-Reihe: die schwebende Glas-Kapsel ── */
+.nav-bottom__items {
+  display: flex;
+  /* min-height statt fixer Höhe: lange Labels (de/fr, z. B. „Haushaltsbuch",
+   * „Paramètres") dürfen die Bar auf zwei Zeilen wachsen lassen, statt zu
+   * clippen. Kurze Labels behalten die kompakte Höhe. */
+  min-height: var(--nav-height-mobile);
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+}
+
+/* ── More-Button (Button-Basis, ansonsten wie nav-item) ── */
+.nav-item--more,
+.nav-item--kitchen,
+.nav-item--search {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.nav-item--active {
+  color: var(--active-module-accent, var(--color-accent));
+}
+
+/* ── More-Backdrop ── */
+.more-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: var(--color-overlay);
+  z-index: calc(var(--z-nav) + 1);
+  backdrop-filter: var(--blur-2xs);
+  -webkit-backdrop-filter: var(--blur-2xs);
+}
+
+.more-backdrop--visible {
+  display: block;
+  animation: fade-in var(--duration-sm) ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Der persistente Install-Promo-Banner (z-toast) weicht JEDEM fokussierten
+ * Overlay — regulären Modals (.modal-overlay: Hilfe, Änderungen, Löschdialoge,
+ * Formulare …), dem More-Sheet und dem Such-Overlay — statt deren Inhalt zu
+ * überlagern. Deklarativ via :has() (im Projekt etabliert: auth.css,
+ * user-multi-select.css); reaktiv beim Ein-/Ausblenden, ohne JS-Hooks. */
+html:has(.modal-overlay) yuvomi-install-prompt,
+html:has(.more-sheet[aria-hidden="false"]) yuvomi-install-prompt,
+html:has(.search-overlay--visible) yuvomi-install-prompt {
+  display: none;
+}
+
+/* ── More-Sheet ── */
+.more-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: var(--space-4) var(--space-4) calc(var(--space-4) + var(--safe-area-inset-bottom));
+  z-index: calc(var(--z-nav) + 2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  transform: translateY(100%);
+  transition: transform var(--duration-lg) var(--ease-out);
+}
+
+/* App-Launcher-Raster: farbige Modul-Icons als Helden, kein Kasten drumherum.
+ * 3 Spalten: bei 4 Spalten war die Zelle (~80px auf 375px-Viewports) schmaler
+ * als „Haushaltshilfe" — jede Silbentrennung („Haushaltshil-fe") oder Ellipse
+ * zerhackt dort den Modulnamen (Critique P1). Mit 3 Spalten (~109px) passt
+ * jeder deutsche Modulname ungebrochen auf eine Zeile. */
+.more-sheet__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: var(--space-2);
+  row-gap: var(--space-3);
+  margin-block: var(--space-1);
+}
+
+.more-sheet[aria-hidden="false"] {
+  transform: translateY(0);
+}
+
+/* ── More-Sheet Drag-Handle ── */
+.more-sheet__handle {
+  grid-column: 1 / -1;
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-border);
+  margin: 0 auto var(--space-2);
+}
+
+/* ── More-Sheet Suchleiste ── */
+.more-sheet__search {
+  grid-column: 1 / -1;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-elevated);
+  border: 1.5px solid var(--color-border);
+  color: var(--color-text-tertiary);
+  cursor: text;
+  font-family: inherit;
+  text-align: left;
+  margin-bottom: var(--space-1);
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), transform 100ms ease;
+  user-select: none;
+}
+
+.more-sheet__search:hover {
+  border-color: var(--color-border-strong, var(--color-border));
+  background-color: var(--color-surface-hover);
+}
+
+.more-sheet__search:active {
+  border-color: var(--color-accent);
+  background-color: color-mix(in srgb, var(--color-accent) var(--tint-state), var(--color-surface-elevated));
+  transform: scale(0.985);
+}
+
+.more-sheet__search:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-color: var(--active-module-accent, var(--color-accent));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-shadow), transparent);
+}
+
+.more-sheet__search-icon {
+  width: var(--space-4);
+  height: var(--space-4);
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.more-sheet__search:hover .more-sheet__search-icon,
+.more-sheet__search:active .more-sheet__search-icon {
+  color: var(--color-accent);
+}
+
+.more-sheet__search-placeholder {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  flex: 1;
+}
+
+/* ── More-Item: App-Icon (farbiges Icon = Held, kein Kasten) ── */
+.more-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.more-item:active .more-item__icon-well {
+  transform: scale(0.92);
+}
+
+.more-item[aria-current="page"] {
+  color: var(--active-module-accent, var(--color-accent));
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Das farbige Rounded-Square IST das Modul (echte App-Icon-Sprache): solide
+ * Akzentfläche + kontrastierender Glyph (--color-ink-on-vivid: weiß im Light-,
+ * dunkle Tinte im Dark-Mode). Solide Flächen trennen ähnliche Hues (Rose ≠
+ * Mauve ≠ Beere) deutlich besser als blasse 20%-Pastelle. */
+.more-item__icon-well {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--item-module-accent, var(--color-text-secondary));
+  color: var(--color-ink-on-vivid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* Der Inset-Specular kommt aus den Tokens, nicht von Hand. Hier standen 30/12
+   * gegen die 28/12 der Tokens - dieselbe Absicht, eine Ziffer daneben, und
+   * damit die dritte Schreibweise eines Effekts, den es schon zweimal gab.
+   * Wichtiger als die Ziffer: die Tokens hängen am --glass-inset-strength-
+   * Schalter und fallen unter prefers-reduced-transparency / prefers-contrast
+   * mit; ein handgeschriebener Wert bliebe dort stehen. */
+  box-shadow:
+    var(--glass-inset-elevated),
+    var(--glass-inset-bottom-base);
+  transition: transform var(--duration-xs) var(--ease-out);
+}
+
+/* Aktives Modul (Sheet auf dieser Route geöffnet): Akzent-Ring statt Tint. */
+.more-item[aria-current="page"] .more-item__icon-well {
+  outline: 2px solid var(--active-module-accent, var(--color-accent));
+  outline-offset: 2px;
+}
+
+.more-item__icon {
+  width: var(--space-6);
+  height: var(--space-6);
+  flex-shrink: 0;
+}
+
+.more-item__label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  line-height: 1.2;
+  /* Modulnamen werden nie silbengetrennt: hyphens:auto (F-09) zerhackte
+   * „Haushaltshil-fe" in der Primärnavigation (Critique P1) — die 3-Spalten-
+   * Zelle oben gibt jedem Namen jetzt genug Breite. Mehrwort-Namen brechen an
+   * der Wortgrenze; break-word bleibt reiner Backstop für Langwörter jenseits
+   * der Zellbreite und bricht erst, wenn nichts anderes geht. */
+  hyphens: manual;
+  overflow-wrap: break-word;
+}
+
+.more-item[aria-current="page"] .more-item__label {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ── More-Sheet Divider: trennt Modul-Grid vom System-Cluster ── */
+.more-sheet__divider {
+  height: 1px;
+  background-color: var(--color-border-subtle);
+  margin: 0;
+}
+
+/* ── System-Cluster: kompakte Reihe (Einstellungen | Hilfe | Änderungen |
+ * Abmelden) — Icon-über-Label, monochrom. ── */
+.more-sheet__system {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+}
+
+/* System-Item: Icon-über-Label, monochrom — leichter als die farbigen
+ * Modul-App-Icons, klar als „Meta/System" lesbar. */
+.more-action {
+  position: relative; /* Anker für den Update-Punkt (.nav-dot, #490) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  min-height: var(--target-base);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.more-action:active {
+  background-color: var(--color-surface-hover);
+  transform: scale(0.96);
+}
+
+/* Aktives System-Ziel (z. B. Einstellungen offen) markieren. */
+.more-action[aria-current="page"] {
+  color: var(--active-module-accent, var(--color-accent));
+  font-weight: var(--font-weight-semibold);
+}
+
+.more-action__icon {
+  width: var(--space-6);
+  height: var(--space-6);
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.more-action[aria-current="page"] .more-action__icon {
+  color: var(--active-module-accent, var(--color-accent));
+}
+
+.more-action__label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.2;
+  /* Wie .more-item__label: keine Silbentrennung in Nav-Labels (Critique P1).
+   * Die System-Zeile bleibt 4-spaltig — ihr längstes Label („Einstellungen")
+   * passt dort einzeilig; break-word nur als Backstop. */
+  hyphens: manual;
+  overflow-wrap: break-word;
+}
+
+/* ── Such-Overlay ── */
+/* Mobile: bildschirmfüllendes Sheet, das von unten einfährt (nativer Pattern
+ * für Touch). Am Desktop (≥768px, weiter unten) wird daraus eine zentrierte
+ * Command-Palette über einem geblurten Scrim — dort ist das Overlay nur noch
+ * die Scrim-Ebene und das .search-overlay__panel die Karte. */
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  /* Leichte Modul-Tönung statt randlosem Weiß: die Suche gehört sichtbar zur
+   * App-Fläche (Audit A1-14). */
+  background-color: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-wash), var(--color-bg));
+  z-index: calc(var(--z-nav) + 3);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform var(--duration-lg) var(--ease-out);
+}
+
+.search-overlay--visible {
+  transform: translateY(0);
+}
+
+/* Gruppiert Kopf + Treffer + Schließen. Auf Mobile transparent und
+ * bildschirmfüllend (das Overlay trägt die Tönung), Bezugsrahmen für den
+ * absolut positionierten Schließen-Button. */
+.search-overlay__panel {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-overlay__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* Rechts Raum für den absolut positionierten Schließen-Button. */
+  padding: calc(var(--space-3) + var(--safe-area-inset-top))
+           calc(var(--space-4) + var(--target-base) + var(--space-3))
+           var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.search-overlay__input {
+  flex: 1;
+  height: var(--target-lg);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+}
+
+.search-overlay__input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.search-overlay__close {
+  /* Liegt im DOM hinter den Treffern (Tab-Weg: Suchfeld -> Ergebnisse,
+   * Audit A1-14), visuell aber weiterhin oben rechts im Kopfbereich. */
+  position: absolute;
+  top: calc(var(--space-3) + var(--safe-area-inset-top));
+  right: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--target-base);
+  height: var(--target-base);
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.search-overlay__close-icon {
+  width: var(--space-5);
+  height: var(--space-5);
+}
+
+.search-overlay__results {
+  flex: 1;
+  /* Verschachteltes Flex-Kind (overlay > panel > results): ohne min-height:0
+   * greift overflow-y nicht und lange Trefferlisten würden im höhen-gedeckelten
+   * Desktop-Panel abgeschnitten statt gescrollt. */
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4) calc(var(--space-4) + var(--safe-area-inset-bottom));
+}
+
+.search-overlay__empty {
+  text-align: center;
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-8);
+}
+
+.search-section {
+  margin-bottom: var(--space-5);
+}
+
+.search-result__meta {
+  display: block;
+  margin-top: var(--space-0h);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.search-section__heading {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  letter-spacing: var(--tracking-normal);
+  margin-bottom: var(--space-2);
+}
+
+.search-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  margin-bottom: var(--space-2);
+  transition: background-color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.search-result:active {
+  background-color: var(--color-surface-hover);
+}
+
+/* Scope-Launcher im Leerzustand: „Direkt öffnen"-Kacheln, die zugleich zeigen,
+ * was durchsucht wird, und ins jeweilige Modul springen (Critique P1). */
+.search-scopes {
+  margin-top: var(--space-5);
+}
+
+.search-scopes__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.search-scope {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* Grid-Item: ohne min-width:0 sprengen lange Labels (andere Locales) die
+   * Kachel statt umzubrechen. */
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+  overflow-wrap: break-word;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .search-scope:hover {
+    background-color: var(--color-surface-hover);
+    border-color: var(--color-border);
+  }
+}
+
+.search-scope:active {
+  background-color: var(--color-surface-hover);
+}
+
+.search-scope__icon {
+  width: var(--space-5);
+  height: var(--space-5);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+/* ── Such-Overlay: Desktop-Command-Palette (≥768px) ──
+ * Aus dem Mobile-Vollbild-Sheet wird eine zentrierte, oben verankerte Glas-
+ * Karte über einem geblurten Modul-Scrim — dieselbe Grammatik wie .modal-overlay
+ * (die App bleibt als weiches Bild sichtbar, statt durch eine flache Fläche
+ * ersetzt zu werden). Kein Bottom-Slide: Ein-/Ausblenden über opacity. */
+@media (min-width: 768px) {
+  .search-overlay {
+    /* Scrim statt Vollflächen-Tönung (gespiegelt aus .modal-overlay). */
+    background-color: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-wash), var(--color-overlay-glass));
+    backdrop-filter: var(--blur-xs) saturate(120%);
+    -webkit-backdrop-filter: var(--blur-xs) saturate(120%);
+    align-items: center;          /* Panel horizontal zentriert */
+    justify-content: flex-start;  /* oben verankert */
+    padding: 12vh var(--space-6) var(--space-6);
+    /* Kein translateY-Vollhub am Desktop; über opacity/visibility togglen. */
+    transform: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--duration-md) var(--ease-out),
+                visibility 0s linear var(--duration-md);
+  }
+
+  .search-overlay--visible {
+    transform: none;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity var(--duration-md) var(--ease-out);
+  }
+
+  .search-overlay__panel {
+    flex: 0 0 auto;
+    width: min(640px, 92vw);
+    max-height: calc(100dvh - 12vh - var(--space-6));
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    /* Auftakt gespiegelt aus @keyframes modal-scale-in: Fade + scale(0.95→1)
+     * mit ease-out-expo, statt eines vom Bildschirmrand hochfahrenden Sheets.
+     * Als Transition (nicht Keyframe), weil das Overlay persistent ist und nur
+     * per --visible getoggelt wird. */
+    opacity: 0;
+    transform: scale(0.95);
+    transition: opacity var(--duration-md) var(--ease-out),
+                transform var(--duration-md) var(--ease-out);
+  }
+
+  .search-overlay--visible .search-overlay__panel {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Am Desktop sitzt das Panel frei im Raum — Notch-/Safe-Area-Reserven aus
+   * Kopf, Schließen-Button und Treffer-Boden entfallen. */
+  .search-overlay__header {
+    padding-top: var(--space-3);
+  }
+
+  .search-overlay__close {
+    top: var(--space-3);
+  }
+
+  .search-overlay__results {
+    padding-bottom: var(--space-4);
+  }
+}
+
+/* ── Nav-Item (Bottom-Bar): Basis-State ── */
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-0h);
+  padding: var(--space-1) var(--space-1);
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+  min-height: var(--target-lg);
+  min-width: var(--target-lg);
+  text-decoration: none;
+  position: relative;
+}
+
+.nav-bottom .nav-item {
+  padding-block: var(--space-0h);
+  padding-inline: var(--space-0h);
+  min-width: 0;
+}
+
+.nav-item__icon-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  background-color: var(--color-danger);
+  color: var(--color-ink-on-vivid);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.nav-item__icon-wrap .nav-badge {
+  position: absolute;
+  top: calc(-1 * var(--space-1));
+  right: calc(-1 * var(--space-1));
+}
+
+/* Punkt ohne Zahl: markiert eine ungelesene Neuigkeit, keine Menge (#490).
+   Akzentviolett statt Danger-Rot - eine neue Version ist eine Nachricht, kein
+   Alarm. Der Ring in der Nav-Fläche trennt ihn vom Icon darunter. */
+.nav-dot {
+  position: absolute;
+  top: calc(-1 * var(--space-0h));
+  right: calc(-1 * var(--space-0h));
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-surface);
+  pointer-events: none;
+}
+
+/* Listenzeile im „Mehr"-Sheet: kein Icon-Well, der Punkt hängt an der Zeile. */
+.more-action > .nav-dot {
+  top: var(--space-1);
+  right: var(--space-1);
+}
+
+/* ── Nav-Item: Aktiv ── */
+.nav-item[aria-current="page"] {
+  color: var(--active-module-accent, var(--color-accent));
+}
+
+/* ── Icon-Well (Bottom-Nav + Sidebar) ── */
+.nav-item__icon-well {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-secondary);
+  box-shadow: inset 0 var(--space-px) 0 var(--glass-highlight-subtle);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.nav-bottom .nav-item__icon-well {
+  width: var(--target-base);
+  /* Sichtbare Tap-Fläche 44×40 statt 44×32 — füllt die 44×44-Komfortzone für
+   * Ein-Daumen-Nutzung besser aus und senkt das Fehl-Tap-Risiko. */
+  height: var(--target-md);
+  border-radius: var(--radius-full);
+  /* Inaktiv: nacktes Icon, keine gefüllte Well-Kachel (auch im No-Glass-
+   * Fallback). Leichter, ruhiger Ton — die aktive Pille trägt den Zustand. */
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-tertiary);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--duration-xs) var(--ease-out),
+    opacity var(--duration-xs) var(--ease-out);
+}
+
+.nav-sidebar .nav-item__icon-well {
+  width: 26px;
+  height: 26px;
+}
+
+/* Der äußere Indikator ist die einzige aktive Fläche; das Icon trägt den Modulakzent. */
+.nav-item[aria-current="page"] .nav-item__icon-well,
+.nav-item--active .nav-item__icon-well {
+  background: transparent;
+  color: var(--item-module-accent, var(--active-module-accent, var(--color-accent)));
+  box-shadow: none;
+}
+
+/* Aktive Icons als „filled variant": Lucide bleibt Stroke-Bibliothek, die
+ * Tab-Bar-Sprache des Kanons (gefülltes Symbol im aktiven Tab) entsteht über
+ * eine getönte Innenfüllung unter vollem Stroke. Wirkt nur auf geschlossene
+ * Pfade; Linien-Icons bleiben unverändert.
+ *
+ * DIE REGEL GILT FÜR JEDEN AUSGEWÄHLTEN ZUSTAND, nicht nur für die Tab-Bar
+ * (Redesign Runde 4, C-6). Bis dahin trug ausgewählt-sein in Segmenten, Tabs
+ * und Chips allein die FLÄCHE; das Symbol darin blieb dasselbe wie im
+ * unausgewählten Nachbarn. Apple wechselt an dieser Stelle die Symbolvariante,
+ * und der Kanon kennt dafür nur eine Sprache - also spricht sie überall.
+ *
+ * Ein zweiter Kanal, kein Ersatz: die Fläche trägt den Zustand weiter, die
+ * Füllung verstärkt ihn. Kontrast kann sie nicht kosten - sie macht das Symbol
+ * dichter, nicht blasser, und zwar in seiner eigenen Farbe. */
+.nav-item[aria-current="page"] .nav-item__icon-well svg,
+.nav-item--active .nav-item__icon-well svg,
+.more-item[aria-current="page"] .more-item__icon-well svg,
+.sub-tab--active svg,
+.list-tab--active svg,
+.filter-chip--active svg,
+.contact-filter-chip--active svg,
+.group-toggle__btn--active svg,
+.documents-view-toggle__btn--active svg,
+.segmented__item.is-active svg,
+.cal-toolbar__view-btn--active svg,
+.cal-toolbar__layer-btn--active svg,
+.cal-toolbar__search-btn--active svg,
+.theme-toggle__btn--active svg,
+.perm-modeswitch__btn.is-active svg,
+.perm-seg__opt.is-active svg {
+  /* 30 % statt 16 %: auf Tab-Bar-Größe (20px) las die schwächere Füllung
+   * weiter als Outline (Finish-Verdict Fundament-Phase, Fix 8). */
+  fill: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+/* Bottom-Nav aktiv: die gleitende Indikatorfläche übernimmt den Zustand. */
+.nav-bottom .nav-item[aria-current="page"],
+.nav-bottom .nav-item--active {
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.nav-item__icon {
+  width: var(--space-5);
+  height: var(--space-5);
+  flex-shrink: 0;
+}
+
+.nav-item__label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Bottom-Bar-Labels dürfen zweizeilig umbrechen statt einzeilig zu ellipsieren.
+ * In 5 gleichen Flex-Slots (~72px bei 360px) clippt eine Single-Line lange
+ * Komposita (de/fr) zu „Einst…"; zwei zentrierte Zeilen erhalten die
+ * Recognition. overflow-wrap:anywhere bricht auch fugenlose Langwörter. */
+.nav-bottom .nav-item__label {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  text-align: center;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
+}
+
+/* Das Label steht auf der getönten Indikator-Pille, also auf einer Tönung
+ * SEINER EIGENEN FARBE - genau der Fall, für den tokens.css die Konvention
+ * „Akzent-Text auf akzent-getöntem Grund" führt (70 % Akzent + 30 %
+ * text-primary). Zehn Stylesheets wenden sie an; die Tab-Bar war die einzige
+ * Stelle, die den rohen Akzent schrieb.
+ *
+ * Gemessen am gerenderten Pixel im Dark, vorher → nachher: Übersicht 3.41 →
+ * 4.92:1, Kalender 4.14 → 5.51:1, Aufgaben 5.88 → 6.58:1, Einkauf 4.85 →
+ * 5.94:1. Zwei der vier lagen unter AA, und kein Token-Guard konnte das sehen:
+ * das Paar entsteht erst aus Fläche plus Tint plus Glas im Dokument.
+ *
+ * Das ICON behält den vollen Akzent - für Nicht-Text gilt 3:1, und die
+ * Konvention sagt das ausdrücklich. */
+/* Und dieselbe Konvention in der SIDEBAR, aus demselben Grund (Runde 6,
+ * Phase 3). Der gleitende Indikator tönt dort dieselbe Farbe, die das Label
+ * schreibt; gemessen im Dark auf der Übersicht: 4.20:1 gegen #29292D, also
+ * unter AA.
+ *
+ * Warum das Phase 0b entging, obwohl sie genau diesen Fall behandelte: die
+ * Kontrast-Sonde maß, BEVOR der Indikator an seiner Position angekommen war
+ * (§6, „Wandernder Sidebar-Indikator"). Erst nachdem der Harness auf Ruhe
+ * wartet statt auf das erste Kind, stand die Pille beim Messen da. Ein Guard
+ * misst nur, was zum Messzeitpunkt existiert - und das ist eine Eigenschaft
+ * des Guards, nicht der Regel. */
+.nav-bottom .nav-item[aria-current="page"] .nav-item__label,
+.nav-bottom .nav-item--active .nav-item__label,
+.nav-sidebar .nav-item[aria-current="page"] .nav-item__label,
+.nav-sidebar .nav-item--active .nav-item__label {
+  color: color-mix(
+    in srgb,
+    var(--item-module-accent, var(--active-module-accent, var(--color-accent))) 70%,
+    var(--color-text-primary)
+  );
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Fokusring außen um die Icon-Well legen (nicht innen ins Item) — so ist er
+ * für Tastatur-/Sehbeeinträchtigte klar zu orten, statt hinter Icon+Label zu
+ * verschwinden. */
+.nav-bottom .nav-item:focus-visible {
+  outline: none;
+}
+
+/* AUSNAHME vom Fokusring-Token: ein Nav-Item zeigt auf SEIN Modul, nicht auf
+ * das gerade offene. Der Ring trägt deshalb --item-module-accent und fällt erst
+ * dahinter auf den aktiven Akzent zurück. Nur die Farbe weicht ab. */
+.nav-bottom .nav-item:focus-visible .nav-item__icon-well {
+  --focus-ring-color: var(--item-module-accent, var(--active-module-accent, var(--color-accent)));
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.nav-bottom .nav-item:active .nav-item__icon-well {
+  transform: translateY(var(--space-px)) scale(0.96);
+  opacity: var(--opacity-glass-elevated);
+}
+
+/* --------------------------------------------------------
+ * Page FAB - Schwebender Erstellen-Button (alle Breakpoints)
+ *
+ * Einheitlicher runder Plus-Button auf allen Unterseiten.
+ * Mobile: über der Bottom-Nav. Desktop: unten rechts im Content.
+ * Toolbar-"Neu"-Buttons werden überall versteckt.
+ * -------------------------------------------------------- */
+@keyframes fab-in {
+  from  { transform: scale(0.5) translateY(12px); opacity: 0; }
+  65%   { transform: scale(1.07) translateY(-2px); opacity: 1; }
+  to    { transform: scale(1)   translateY(0);    opacity: 1; }
+}
+
+/* Wohnort des FAB: ein Shell-Kind neben dem Scrollport, kein Kind von ihm.
+ *
+ * Der FAB ist fixiert, hing aber im Modul-Root und damit im scrollenden
+ * `.app-content`. Ein fixiertes Kind eines Scrollers ist auf iOS nicht
+ * verlässlich viewport-fest (Compositor-Layer des Scrollers) - dieselbe Falle,
+ * die die Bottom-Nav schon aus `position: fixed` geholt hat, siehe dort. Es war
+ * das letzte fixierte Element im Scrollport (#634).
+ *
+ * Die Layer selbst trägt KEIN Layout: 0×0 an der Shell-Ecke. Sichtbar ist allein
+ * ihr fixiertes Kind, dessen Geometrie unverändert aus den --fab-*-Tokens kommt.
+ * Bewusst kein z-index → kein eigener Stacking-Context, die Reihenfolge
+ * gegenüber Nav/Modal/Toast bleibt exakt die alte. Der Modulakzent kommt aus
+ * --active-module-accent (Router setzt es je Route und je Theme), weil die
+ * Vererbung über den Modul-Root hier endet. */
+.fab-layer {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  --module-accent: var(--active-module-accent, var(--color-accent));
+}
+
+/* Die Verankerung des FAB - einmal, für den Knopf UND für die Gruppe.
+ *
+ * Ein Speed-Dial ist ein FAB mit ausklappbarer Liste, und die Liste muss mit
+ * ihm wandern. Deshalb trägt in diesem Fall die Gruppe die Fixierung und der
+ * Knopf darin gibt seine ab (siehe `.page-fab-group`) - die Geometrie steht
+ * aber weiterhin nur an DIESER Stelle. Die zweite Handschrift war genau der
+ * Weg, auf dem sie auseinanderlief: das Dashboard schrieb 52px von Hand und
+ * kannte die Touch-Stufe von --fab-size (tokens.css) dadurch nicht. */
+.page-fab,
+.page-fab-group {
+  position: fixed;
+  /* Geometrie aus tokens.css (--fab-size / --fab-offset-bottom): der Freiraum
+   * unter Listen (--fab-safe-zone, oben an `.app-content`) leitet sich daraus
+   * ab und kann so nicht mehr vom FAB wegdriften. */
+  bottom: var(--fab-offset-bottom);
+  right: var(--space-4);
+  z-index: calc(var(--z-nav) - 1);
+}
+
+/* Der FAB einer Speed-Dial-Gruppe positioniert sich nicht selbst: er ist das
+ * einzige Kind im Fluss, die Gruppe schrumpft dadurch exakt auf seine Fläche,
+ * und die Aktionsliste hängt absolut darüber, ohne die Gruppe aufzublähen.
+ * Das ersetzt das frühere `pointer-events: none` am Kasten - ein Kasten, der
+ * nur so gross ist wie der Knopf, fängt nichts ab, was ihm nicht gehört. */
+.page-fab-group {
+  display: flex;
+}
+
+.page-fab-group > .page-fab {
+  position: static;
+}
+
+.page-fab {
+  width: var(--fab-size);
+  height: var(--fab-size);
+  border-radius: var(--radius-full);
+  background-color: var(--module-accent, var(--color-accent));
+  color: var(--color-ink-on-vivid);
+  /* Specular über die Inset-Tokens, nicht als rohe rgba: sie tragen den Faktor
+   * --glass-inset-strength, der unter prefers-reduced-transparency und
+   * prefers-contrast auf 0 fällt. Der rohe Wert überlebte den Schalter genau
+   * dort, wo dieser Fallback greift - ohne backdrop-filter überschreibt
+   * glass.css die Zeile nicht. Der Fallback bleibt bewusst eine Stufe schwächer
+   * als der Glaspfad (medium statt strong): dort trägt die Kante das Material,
+   * hier nur die Kapselform. */
+  box-shadow: var(--shadow-lg), var(--glass-inset-medium), var(--glass-inset-bottom-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+  transition: transform var(--transition-base), background-color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+  animation: fab-in 420ms var(--ease-out) backwards;
+}
+
+.page-fab:hover {
+  background-color: color-mix(in srgb, var(--module-accent, var(--color-accent)) 85%, black);
+}
+
+.page-fab:active {
+  transform: scale(0.92);
+}
+
+/* AUSNAHME vom Fokusring-Token (tokens.css §7b), und die einzige mit einer
+ * optischen Begründung: der FAB ist selbst akzentfarben. Ein Ring im
+ * Modulakzent läge Farbe auf Farbe und wäre unsichtbar. Er wird deshalb
+ * invertiert - heller Ring direkt am Knopf, der Akzent als äußerer Halo per
+ * box-shadow. Überschrieben wird nur die FARBE, Breite und Offset kommen aus
+ * den Tokens: so wandert der FAB mit, wenn der Ring app-weit dicker wird. */
+.page-fab:focus-visible {
+  --focus-ring-color: var(--color-bg);
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: 0 0 0 4px var(--module-accent, var(--color-accent));
+}
+
+/* Long Loop: FAB-Animation nach N Aufrufen deaktivieren */
+html.fab-anim-done .page-fab {
+  animation: none;
+}
+
+/* HIER STAND `.page-fab--retracted` (#634).
+ *
+ * Der FAB fuhr beim Abwärtsscrollen weg, um die Zeilenaktion freizugeben, über
+ * der er sonst lag (bis 53.2% Überdeckung, Critique 2026-07-30). Diese
+ * Begründung war schon entfallen, bevor der Mechanismus fiel: `--fab-safe-zone`
+ * verkürzt den Scrollport, sodass bei JEDEM Scrollstand nichts Bedienbares mehr
+ * unter dem FAB liegt (0 Überdeckungen nachgemessen). Übrig blieb Sicht-Komfort
+ * beim Scrollen - zu wenig für den Preis, den er hatte: der Zustand hing an
+ * einer Klasse, die nur ein weiteres Scroll-Ereignis wieder abnahm, und ein
+ * einziges Abwärts-Delta ohne Nutzergeste (iOS-Adressleiste, Scroll-Anchoring
+ * beim Nachladen einer Liste) machte die Primäraktion des Moduls unerreichbar.
+ *
+ * Kein Ersatz nötig, und keiner erwünscht: --fab-safe-zone trägt den Freiraum
+ * bereits, und der FAB darf nichts mehr haben, was ihn verschwinden lässt.
+ * test-frontend-audit.js hält das fest. */
+
+/* Desktop: FAB Position anpassen (keine Bottom-Nav) und etwas kleiner */
+@media (min-width: 1024px) {
+  .page-fab,
+  .page-fab-group {
+    bottom: var(--space-8);
+    right: var(--space-8);
+  }
+
+  .page-fab {
+    width: var(--target-lg);
+    height: var(--target-lg);
+  }
+}
+
+/* ================================================================
+ * Geteilte Page-Toolbar (Modul-Kopf)
+ *
+ * Vereinheitlicht NUR das Gerüst aller Modul-Köpfe (Höhe, Padding,
+ * Akzent-/Trennrand, Sticky-Verhalten, Titel-Typografie), damit der
+ * Kopf beim Modulwechsel nicht „springt". Modul-spezifischer Inhalt
+ * (Suche, Filter-Chips, Views, Monats-Nav, Tabs) lebt weiter in den
+ * Modul-CSS-Dateien als direkte Flex-Children dieser Shell.
+ *
+ * BREITE UND BLEED (Issue #577): Der Kopf ist ein Full-bleed-Rail. Das
+ * Chrome — Akzentstreifen, Trennlinie, Hintergrund, Sticky-Fläche —
+ * läuft bis an die Shell-Kante; der INHALT sitzt über
+ * --page-inline-pad in derselben zentrierten Content-Spalte wie der
+ * Seiten-Body. Vorher trug der Modul-Root das max-width, der Kopf lag
+ * mit drin, und der 3px-Streifen endete 210px vor der Kante.
+ * Bedingung: .page-toolbar muss DIREKTES Kind des Modul-Roots sein,
+ * sonst löst das `100%` in --page-inline-pad gegen einen anderen
+ * Containing Block auf und die Fluchtlinie bricht.
+ * ================================================================ */
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+  padding-inline: var(--page-inline-pad);
+  /* HIG: kein farbiger Akzentbalken an der Nav-Bar — Modul-Identität
+   * spricht über den Tint der Controls und den Titel. Der 3px-border-top der
+   * Alt-Welt ist bewusst entfallen (Redesign 2026-08). */
+  border-bottom: 1px solid var(--color-border);
+  /* Opaker Hintergrund, bewusst OHNE backdrop-filter: position:sticky plus
+   * backdrop-filter innerhalb eines overflow:auto-Containers leert auf
+   * iOS/WebKit (ab iOS 26) den gesamten Scroll-Container. Der Hinweis stand
+   * bis #577 an einem Vier-Modul-Override in glass.css, der mit dem Bleed-Fix
+   * entfallen ist — die Warnung gilt weiterhin für jeden Modul-Kopf. */
+  background-color: var(--color-bg);
+  position: sticky;
+  /* Das Andocken der Large-Title-Leiste (Redesign Runde 4, C-1) ist eine Sache
+   * der KOMPAKTEN Grössenklasse und steht deshalb in deren Media-Query weiter
+   * unten. Hier bleibt die Leiste bei top: 0. */
+  top: 0;
+  z-index: var(--z-sticky);
+  /* Wirkt nur in Flex-Spalten-Pages (Notizen/Kalender), verhindert dort
+   * das Stauchen des Kopfes; in Block-Pages ist es ein No-op. */
+  flex-shrink: 0;
+}
+
+.page-toolbar__title {
+  /* Größe/Weight kommen aus der Canonical-Page-Head-Rolle in typography.css
+   * (.u-toolbar-title / .page-toolbar__title → --type-toolbar-title, 20px). */
+  white-space: nowrap;
+  /* min-width:0 allein kürzt bei nowrap NICHT — ohne overflow/text-overflow
+   * läuft der Titel in langen Locales („Haushaltsbuch", „Paramètres") aus
+   * seiner Box statt sauber zu ellipsieren. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.page-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* Drängt die Aktionen an den rechten Rand, wenn kein wachsender
+   * Mittelteil (z.B. Suche mit flex:1) vorhanden ist. */
+  margin-left: auto;
+  /* Ohne das behält der Slot die max-content-Breite seiner Kinder und schiebt
+   * den ganzen Kopf über die Viewport-Kante — im Kalender gemessen (uk, 375px:
+   * 431px breit, 72px hinaus). Das Clipping von `main.app-content` macht den
+   * Bruch unsichtbar, nicht harmlos. */
+  min-width: 0;
+}
+
+/* --------------------------------------------------------
+ * Tab-Leiste im Modulkopf (Redesign Runde 6, Phase 0)
+ *
+ * REGEL: Der Modulkopf ist genau EINE `.page-toolbar`, verdrahtet von der
+ * Shell. Kein Modul setzt `--page-toolbar-lead`, keine zweite Titelgrösse und
+ * KEINE EIGENE FLEX-RICHTUNG. Eine Tab-Leiste im Kopf ist eine eigene,
+ * horizontal scrollende Zeile.
+ *
+ * WARUM ALS SHELL-REGEL: zwei Module (Haushaltshilfe, Belohnungen) kippten
+ * ihren Kopf unter dem Modul-Breakpoint auf `flex-direction: column`, während
+ * die Large-Title-Zone `flex-wrap: wrap` und `flex-basis: 100%` setzt. In
+ * Spaltenrichtung bedeutet `flex-basis` die HÖHE und `wrap` erzeugt eine zweite
+ * SPALTE - der Kopf der Haushaltshilfe ragte bei 375px 79px über die rechte
+ * Kante (uk 129px, vi 117px), sichtbar wurde es nur nicht, weil
+ * `main.app-content` horizontal clippt. Die Richtung des Kopfes ist damit keine
+ * Modulentscheidung mehr.
+ *
+ * WARUM ÜBER `[role="tablist"]` UND NICHT ÜBER KLASSENNAMEN: die vier Leisten
+ * heissen `.housekeeping-tabs`, `.rewards-tabs`, `.cal-toolbar__views` und
+ * `.budget-tabs`. Eine Regel über diese Liste gilt für vier Dateien, nicht für
+ * die Bauart - und beim fünften Modul fehlt sie. Die ARIA-Rolle ist das
+ * Merkmal, das die Leiste zur Leiste macht, und sie ist im Markup ohnehin
+ * Pflicht.
+ *
+ * Guards: Ebene 3 (`test:frontend-audit`, kein Modul-CSS setzt eine
+ * Flex-Richtung auf einer Kopf-Klasse) und Ebene 4
+ * (`test:document-guards`, Sonde 1: kein Kopf-Nachfahre ragt bei 375px hinaus).
+ * -------------------------------------------------------- */
+.page-toolbar [role="tablist"] {
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.page-toolbar [role="tablist"]::-webkit-scrollbar {
+  display: none;
+}
+
+/* Center-Slot des Canonical Page Head: wachsende Mitte (Suche, Datums-Nav).
+ * flex:1 schiebt die Aktionen via deren margin-left:auto an den Rand. Auf
+ * schmalen Viewports darf der Kopf umbrechen — der Center-Slot nimmt dann
+ * eine eigene Zeile ein (siehe .page-toolbar--wrap). */
+.page-toolbar__center {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Opt-in: Kopf darf umbrechen; Center-Slot rutscht auf Zeile 2 unter
+ * Titel + Aktionen, sobald der Platz in einer Zeile nicht reicht. */
+.page-toolbar--wrap {
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
+}
+
+.page-toolbar--wrap .page-toolbar__center {
+  flex-basis: 100%;
+  order: 3;
+}
+
+@media (min-width: 768px) {
+  .page-toolbar--wrap .page-toolbar__center {
+    flex-basis: auto;
+    order: 0;
+  }
+}
+
+/* Opt-in: der Kopf sitzt UNTER einer Tab-Gruppenleiste (.sub-tabs-bar).
+ *
+ * Historisch gab die Variante genau eine Eigenschaft ab: den 3px-Akzentstreifen,
+ * den die Gruppenleiste schon trug (Doppelstreifen aus Issue #577). Seit dem
+ * HIG-Rollout trägt weder `.page-toolbar` noch `.kitchen-tabs-bar` einen
+ * Streifen - die Deklaration ist ein No-op und bleibt nur als benannter Ort,
+ * falls die Gruppen-Variante wieder etwas abzugeben hat. Der Wert der Klasse
+ * liegt heute in ihrem zweiten Teil: dem `top`-Hinweis unten.
+ *
+ * Das `top` NICHT verschieben. Naheliegend wäre, den Kopf um die Höhe der
+ * Gruppenleiste nach unten zu versetzen, damit er „darunter" klebt. Das
+ * unterstellt aber, der Scrollport sei das Viewport. In den Küchen-Tabs ist der
+ * Modul-Root eine Flex-Spalte mit `overflow: hidden` und damit SELBST der
+ * Scrollport; die Gruppenleiste liegt außerhalb davon. Ein `top: 56px` schob
+ * den Kopf dort 56px nach UNTEN über den folgenden Inhalt - im Vorrat lag er
+ * über der Filter-Chip-Leiste, im Essensplan über der ersten Slot-Reihe
+ * (gemessen 2026-07-29). Innerhalb eines nicht scrollenden Roots ist `top: 0`
+ * korrekt, und die Leiste darüber kann den Kopf ohnehin nicht überlaufen.
+ *
+ * Nutzer: die vier Küchen-Tabs. Für health-tabs.js ebenso verwendbar. */
+.page-toolbar--in-group {
+  border-top: none;
+}
+
+/* Opt-in: der Kopf-INHALT endet dort, wo der Körper endet - beim schmalen
+ * Lesemaß (--content-max-width-narrow) statt an der Content-Spalte.
+ *
+ * Nutzer: die drei Küchen-Listen (Rezepte, Einkaufen, Vorrat). Ihr Körper ist
+ * über .list-scroller auf 720px gekappt, ihr Kopf lief bis an die Content-Spalte:
+ * gemessen bei 1280px Fensterbreite endete die Liste bei x=972, der
+ * Lagerort-Knopf im Vorrat und die drei Listen-Aktionen im Einkauf aber bei
+ * x=1248 - 276px über leerer Fläche. DESIGN.md macht die gemeinsame Fluchtlinie
+ * zur Bedingung, und zwar für BEIDE Kanten.
+ *
+ * WARUM NICHT `> * { max-width: ... }`: genau so stand die Regel bisher, je
+ * einmal in shopping.css und pantry.css. Sie griff nie. Gekappt wurde die
+ * Breite jedes Slots - die Slots sind aber schmaler als das Lesemaß (im Vorrat
+ * misst der Aktions-Slot 40px), und `.page-toolbar__actions { margin-left:
+ * auto }` schob sie danach unverändert an die äußere Kante. Das Maß ist nicht
+ * die Breite der Slots, sondern das ENDE der Zeile: eine Marge am letzten Slot,
+ * egal welcher das ist.
+ *
+ * Das Prozent löst gegen die Content-Box des Kopfes auf und wandert damit von
+ * selbst mit der Fensterbreite mit; `max()` nimmt die Marge zurück, sobald die
+ * Spalte schmaler als das Lesemaß ist. Deshalb ohne Breakpoint - die
+ * Vorgängerregeln standen in `@media (min-width: 1024px)` und ließen den
+ * Versatz zwischen 720px und 1024px stehen, wo der Körper längst gekappt ist.
+ *
+ * Der Rail bleibt full-bleed: Hintergrund, Trennlinie und Sticky-Fläche laufen
+ * weiter bis zur Shell-Kante, nur die Zeile darin wird kürzer. */
+.page-toolbar--narrow > :last-child {
+  margin-inline-end: max(0px, calc(100% - var(--content-max-width-narrow)));
+}
+
+/* --------------------------------------------------------
+ * Large-Title-Zone des Modulkopfes (HIG, Redesign Runde 4 / C-1)
+ *
+ * In der KOMPAKTEN Grössenklasse - der Welt mit Tab-Bar unten, unter 1024px -
+ * steht der Seitentitel als Large Title auf einer eigenen Zeile über der
+ * Bar-Zeile. Beim Scrollen wandert er aus dem Scrollport, die Bar-Zeile bleibt
+ * (siehe das negative `top` an der Basisregel). Ab 1024px regiert die Sidebar;
+ * dort ist der Titel Teil der Leiste und bleibt beim Inline-Schnitt, genau wie
+ * Apples reguläre Grössenklasse es hält.
+ *
+ * WER: jeder Kopf mit eigenem Seitentitel. Die Gruppen-Variante ist
+ * ausgenommen - ihr `.page-toolbar__title` ist kein Seitentitel, sondern der
+ * umbenennbare Name der gerade offenen Liste (Einkauf), und über ihr steht
+ * bereits die Tab-Leiste des Moduls.
+ *
+ * WARUM ALS REGEL statt als Modul-Opt-in: der Kopf ist die einzige Komponente,
+ * die alle 17 Module teilen. Eine Klasse, die jedes Modul selbst setzen müsste,
+ * fehlt beim achtzehnten.
+ * -------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .page-toolbar:not(.page-toolbar--in-group):has(> .page-toolbar__title) {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  /* Der Kopf klebt nicht mit seiner ganzen Höhe, sondern erst, wenn seine
+   * oberen Zeilen aus dem Scrollport gewandert sind: `--page-toolbar-lead` ist
+   * genau deren Höhe, gemessen von `wireCollapsingHeader` (utils/ux.js). Übrig
+   * bleibt die Bar-Zeile - Apples Navigationsleiste, in die der Large Title
+   * hineinscrollt.
+   *
+   * NEGATIVES top STATT KLASSEN-UMSCHALTER: eine Klasse, die beim Scrollen
+   * Zeilen ausblendet, ändert die Höhe eines Elements im Fluss; der Inhalt
+   * darunter rutscht nach, der Scroll-Offset verschiebt sich und der Kopf
+   * oszilliert um seine eigene Schwelle. Hier ändert sich die Höhe nie.
+   * Ohne Lead (einzeiliger Kopf) ist der Wert 0 und die Leiste klebt bei 0. */
+  .page-toolbar--stacked {
+    top: calc(-1 * var(--page-toolbar-lead, 0px));
+  }
+
+  /* In der gedeckelten Architektur wandert der Kopf nicht; dort klappt er ein
+   * (siehe unten) und muss bei 0 kleben bleiben. */
+  .page-toolbar--capped {
+    top: 0;
+  }
+
+  /* Nur der UMBRUCH steht hier. Welche Schriftgrösse die beiden Zustände der
+   * Zone tragen, entscheidet die Canonical-Page-Head-Rolle in typography.css -
+   * dort liegen alle Titel-Schnitte an EINEM Ort, und ein Guard hält das
+   * (test:typography, „globale Toolbar- und Kartentitel folgen den
+   * semantischen Rollen"). */
+  .page-toolbar:not(.page-toolbar--in-group) > .page-toolbar__title {
+    flex-basis: 100%;
+    /* NOWRAP BLEIBT, DIE ELLIPSE DER BASISREGEL IST DIE ANTWORT - gemessen,
+     * nicht geraten (Runde 6, Phase 0). Bei 375px stehen 343px zur Verfügung;
+     * von 360 Paaren aus 24 Locales und 15 Modultiteln reisst GENAU EINES die
+     * Zeile: `id`/Haushaltshilfe („Asisten Rumah Tangga", 351px, 8px zu breit).
+     *
+     * Umbrechen wäre für diesen einen Fall der teurere Weg: die kollabierende
+     * Leiste misst `--page-toolbar-lead` EINMAL, und ein Titel, der je nach
+     * Sprache ein- oder zweizeilig ist, verschiebt die Schwelle, an der der
+     * Kopf andockt. Ein höhenstabiler Kopf ist die Voraussetzung von C-1; die
+     * Ellipse kostet in einer Sprache acht Pixel Text, den die Navigation
+     * ohnehin ein zweites Mal führt. */
+  }
+
+  /* Steht die Tab-Leiste direkt im Kopf, ist sie die Bar-Zeile UNTER dem Large
+   * Title - dieselbe Rollenverteilung wie bei Titel + Aktionen, nur dass die
+   * Leiste die ganze Zeile führt. Ihr `margin-inline-start: auto`
+   * (Belohnungen) und ihr `justify-content: flex-end` (Haushaltshilfe) waren
+   * richtig, solange sie sich die Zeile mit dem Titel teilte, und sind falsch,
+   * sobald sie eine eigene hat. Die Zeilenordnung entscheidet die Shell. */
+  .page-toolbar:not(.page-toolbar--in-group):has(> .page-toolbar__title) > [role="tablist"] {
+    flex-basis: 100%;
+    margin-inline-start: 0;
+    justify-content: flex-start;
+  }
+
+  /* Der Center-Slot (Suche, Zeitraum-Navigation) gehört zur Lead-Zone und
+   * scrollt mit weg. Die --wrap-Variante schob ihn bisher UNTER die Aktionen;
+   * mit eigener Titelzeile ist die DOM-Reihenfolge die richtige: Titel, dann
+   * Kontext, dann Bar-Zeile. */
+  .page-toolbar--wrap:not(.page-toolbar--in-group):has(> .page-toolbar__title) > .page-toolbar__center {
+    order: 0;
+  }
+
+  /* Das `margin-left: auto` der Basisregel drängt die Aktionen an den rechten
+   * Rand - richtig, solange sie sich die Zeile mit dem Titel teilen. Steht der
+   * Titel auf eigener Zeile, hat die Bar-Zeile nur noch diesen einen Slot, und
+   * der Rechtsschub liess das Segment mit einer leeren halben Zeile links
+   * daneben stehen. Ohne Titel in der Zeile beginnt sie an der Fluchtlinie.
+   * Im eingeklappten Zustand steht der Titel wieder daneben - dort gilt der
+   * Rechtsschub der Basisregel weiter.
+   *
+   * Dasselbe für den Center-Slot und die geteilte Suche: Notizen schob sie mit
+   * demselben Auto-Rand ans Zeilenende und deckelte sie auf 280px - beides
+   * richtig, solange sie sich die Zeile mit dem Titel teilte, beides falsch,
+   * sobald sie eine eigene hat. Die Zeilenordnung ist eine Entscheidung der
+   * Shell, nicht des Moduls; also nimmt die Shell sie zurück. */
+  .page-toolbar--stacked:not(.is-collapsed) > .page-toolbar__actions,
+  .page-toolbar--stacked:not(.is-collapsed) > .page-toolbar__center,
+  .page-toolbar--stacked:not(.is-collapsed) > .page-search {
+    margin-inline-start: 0;
+  }
+
+  .page-toolbar--stacked:not(.is-collapsed) > .page-search {
+    max-width: none;
+  }
+
+  /* Die Trennlinie erscheint erst, wenn die Leiste angedockt ist - am
+   * Scroll-Anfang steht der Large Title nahtlos auf dem Seitengrund.
+   * `--stacked` setzt der Helfer nur, wenn es überhaupt eine Lead-Zone gibt;
+   * ein einzeiliger Kopf behält seine Linie durchgehend. */
+  .page-toolbar--stacked:not(.is-docked) {
+    border-bottom-color: transparent;
+  }
+
+  /* GEDECKELTE ARCHITEKTUR (Budget, Kalender, Notizen, Kontakte): dort ist der
+   * Modul-Root `overflow: hidden` und eine innere Liste scrollt - der Kopf
+   * liegt ausserhalb des Scrollports und bewegt sich nie, ein negatives `top`
+   * bliebe wirkungslos. Hier klappt die Large-Title-Zeile beim Scrollen
+   * tatsächlich ein, und das ist genau hier gefahrlos: der Höhenwechsel
+   * verlängert nur den inneren Port, ohne dessen Scroll-Offset anzufassen (in
+   * der scrollenden Architektur wäre er die Quelle einer Oszillation).
+   *
+   * WAS KOLLABIERT, ENTSCHEIDET DER INHALT DES SLOTS - dieselbe Abgrenzung wie
+   * beim Kopf zwischen Bereich und Gruppe:
+   *   ZEITRAUM der Seite (Monat im Budget, Datum im Kalender) → bleibt stehen.
+   *     Er beantwortet beim Scrollen weiter „wo bin ich".
+   *   SUCHE (Kontakte) → klappt mit ein, genau wie sie in der scrollenden
+   *     Architektur aus dem Bild wandert (Apples `hidesSearchBarWhenScrolling`).
+   *     Nicht aber, solange sie den Fokus hat oder einen Wert trägt - eine
+   *     Suche, die einem beim Scrollen der eigenen Treffer unter den Händen
+   *     verschwindet, wäre der falsche Gehorsam gegenüber der Regel. */
+  .page-toolbar--capped.is-collapsed > .page-toolbar__title {
+    flex-basis: auto;
+  }
+
+  .page-toolbar--capped.is-collapsed
+    > .page-search.page-toolbar__center:not(:focus-within):not(:has(input:not(:placeholder-shown))) {
+    display: none;
+  }
+
+  .page-toolbar--capped > .page-toolbar__title {
+    transition: font-size var(--duration-sm) var(--ease-out);
+  }
+}
+
+@media (max-width: 1023px) and (prefers-reduced-motion: reduce) {
+  .page-toolbar--capped > .page-toolbar__title {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-toolbar {
+    /* Nur die Bauhöhe verdichten. Der horizontale Rand bleibt bewusst
+     * --page-inline-pad: er muss mit dem Seiten-Body fluchten, und ein
+     * eigener Wert hier war genau die Quelle des 16px-Versatzes. */
+    padding-block: var(--space-2);
+    /* Engere Nähte, damit Titel + Aktionen EINE Zeile teilen statt zu
+     * umbrechen - der gestapelte Kopf hielt die erste Karte bei ~40 %
+     * Viewport (Finish-Verdict Fundament-Phase, Fix 6). Wirkt shell-weit
+     * auf alle .page-toolbar-Module; wer trotzdem nicht passt, bricht
+     * weiter kontrolliert um (flex-wrap bleibt). */
+    gap: var(--space-1);
+  }
+
+  .page-toolbar__actions {
+    gap: var(--space-1);
+  }
+}
+
+/* --------------------------------------------------------
+ * Formular-Checkbox (geteilt)
+ *
+ * Nutzer: die Küchen-Dialoge („Artikel von der Einkaufsliste löschen" im
+ * Übernahme-Dialog, die Mahlzeit-Typen im Rezept-Formular).
+ *
+ * WARUM: Beide waren nackte `<input type="checkbox">` - System-Größe, System-
+ * Akzentfarbe, keine eigene Trefferfläche -, während die Liste daneben
+ * 44×44-Custom-Controls benutzt und SECHS andere Module (Geburtstage, Kontakte,
+ * Dokumente, Gesundheit, Belohnungen, Einstellungen) ihre Checkboxen bereits per
+ * `accent-color` und fester Größe einkleiden. Die folgenreichste Checkbox des
+ * Moduls - sie löscht die eingekauften Artikel von der Liste und ist
+ * standardmäßig aktiv - war damit die unauffälligste (Critique 2026-07-30, P2).
+ *
+ * DER DEFAULT BLEIBT AKTIV. Wer eingekauft hat und die Ware einräumt, will sie
+ * nicht ein zweites Mal kaufen; das Häkchen wegzunehmen wäre der seltene Fall. Was
+ * fehlte, war nicht der andere Default, sondern ein Control, das man sieht.
+ *
+ * NATIVE CHECKBOX, KEIN NACHBAU: das ist die App-Konvention (sechs Module) und die
+ * native Box bringt Tastatur, Indeterminate-Zustand und Plattform-Semantik mit.
+ * `.toggle` daneben ist bewusst etwas anderes - ein Schalter für „Zustand an/aus",
+ * keine Auswahl aus mehreren.
+ * -------------------------------------------------------- */
+
+.form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  /* Die Trefferfläche sitzt am LABEL, nicht an der Box: eine 20px-Box auf 44px
+   * aufzublasen würde sie visuell verfälschen, das Label ist ohnehin klickbar. */
+  min-height: var(--target-md);
+}
+
+@media (hover: none) {
+  .form-check {
+    min-height: var(--target-lg);
+  }
+}
+
+.form-check input[type="checkbox"] {
+  width: var(--space-5);
+  height: var(--space-5);
+  /* --active-module-accent, NICHT nur --module-accent: das Modal hängt im
+   * Top-Layer außerhalb der Modul-Wurzel, die --module-accent setzt. Mit dem
+   * Modul-Token allein fiel die Checkbox auf den violetten App-Akzent zurück,
+   * während der ganze Dialog um sie herum das Küchen-Orange trug (gemessen
+   * rgb(108,58,237) statt #C2410C). Genau dafür setzt der Router
+   * --active-module-accent global auf <html> - dieselbe Kette, die FAB und Nav
+   * benutzen. --module-accent bleibt vorn, damit ein Control INNERHALB einer
+   * Modul-Wurzel weiter sein eigenes Modul spiegelt. */
+  accent-color: var(--module-accent, var(--active-module-accent, var(--color-accent)));
+  flex-shrink: 0;
+  cursor: pointer;
+  margin: 0;
+}
+
+/* --------------------------------------------------------
+ * Überlaufmenü (geteilt, native Popover-API)
+ *
+ * Nutzer: der Kopf der Einkaufsliste auf Touch (utils/popover-menu.js). Er trug
+ * dort fünf Bedienelemente in 173px Höhe, drei davon unbeschriftete Icons -
+ * darunter „Liste löschen" für die Liste des ganzen Haushalts (Critique
+ * 2026-07-30).
+ *
+ * Diese Grammatik existiert im Repo bereits zweimal privat:
+ * `.contact-more-menu__panel` + `.contact-menu-item` (contacts.css) und
+ * `.documents-context-menu` + `__item` (documents.css). Beide sind bis auf die
+ * Klassennamen deckungsgleich mit dem hier. Sie sind bewusst nicht mitmigriert -
+ * der Auftrag war die Küche, und zwei fremde Module umzustellen ist ein eigener
+ * Schritt. Wer ihn geht, löscht dort rund 60 Zeilen und ändert hier nichts.
+ * -------------------------------------------------------- */
+
+/* `display: none` als Grundzustand, `flex` erst bei :popover-open: das UA-Blatt
+ * setzt `display: none` auf `[popover]`, und eine eigene display-Deklaration
+ * ohne Popover-Bedingung würde es schlagen - dieselbe Falle wie die
+ * [hidden]-Durchsetzung ein paar Zeilen weiter unten. */
+.popover-menu {
+  position: fixed;
+  margin: 0;
+  inset: auto;
+  z-index: var(--z-dropdown);
+  min-width: 200px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-0h);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  /* Die Position rechnet JS erst im `toggle`-Ereignis; ohne die Startopazität
+   * blitzt das Panel eine Frame lang oben links auf. */
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.popover-menu:popover-open {
+  display: flex;
+}
+
+/* Icon UND Textlabel, immer. Das ist der ganze Zweck des Menüs: die drei
+ * Kopf-Aktionen des Einkaufs waren mobil nackte Glyphen. */
+.popover-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  text-align: start;
+  cursor: pointer;
+  /* --target-md, nicht --target-lg: die Einträge stehen in einer Liste mit
+   * Trennung durch Abstand, nicht als isolierte Ziele in einer Zeile. */
+  min-height: var(--target-md);
+  transition: background-color var(--transition-fast);
+}
+
+@media (hover: none) {
+  .popover-menu__item {
+    min-height: var(--target-lg);
+  }
+}
+
+.popover-menu__item:hover,
+.popover-menu__item:focus-visible {
+  background-color: var(--color-surface-hover);
+}
+
+.popover-menu__item i,
+.popover-menu__item svg {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.popover-menu__item--danger,
+.popover-menu__item--danger i,
+.popover-menu__item--danger svg {
+  color: var(--color-danger);
+}
+
+.popover-menu__item--danger:hover,
+.popover-menu__item--danger:focus-visible {
+  background-color: color-mix(in srgb, var(--color-danger) var(--tint-state), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover-menu,
+  .popover-menu__item {
+    transition: none;
+  }
+}
+
+/* Toolbar-"Neu"-Buttons überall verstecken - FAB übernimmt.
+ * Gemeinsame Klasse statt ID-Liste (Audit 1.9): neue Module ergänzen nur die
+ * Klasse an ihrem Toolbar-Button, statt diesen Selektor erweitern zu müssen. */
+.toolbar-new-btn {
+  display: none !important;
+}
+
+/* [hidden] durchsetzen: Klassen wie `.page-fab`/`.btn` setzen `display: flex`
+ * bzw. `inline-flex` und schlagen damit das UA-`[hidden] { display: none }` bei
+ * gleicher Spezifität — das Element bleibt sichtbar, obwohl es ausgeblendet
+ * wurde. Bisher wurde dieselbe Falle punktuell in documents.css, contacts.css
+ * und budget.css entschärft; hier steht sie einmal für alle geteilten
+ * Bedienelemente. `hidden` heißt versteckt, ausnahmslos. */
+/* Seit 2026-07-30 auch `.page-toolbar`: ohne aktive Liste versteckt die
+ * Einkaufsliste ihren #list-head, und dessen `display: flex` schlug das
+ * UA-`[hidden]`. Übrig blieb ein 25px hoher leerer Streifen über dem
+ * Leerzustand. Die Selektorliste bleibt bewusst lückenlos - der Guard in
+ * test-budget-ui.js prüft die Nähe von Selektor und Deklaration. */
+/* Und `.recipe-detail`: das Aufklapp-Panel der Rezeptzeile trägt `display: grid`
+ * und war deshalb dauerhaft offen, obwohl `hidden` gesetzt war und das Chevron
+ * „zu" zeigte - dieselbe Falle, drittes Mal. Ein Prüfskript, das nur die
+ * DOM-Property `hidden` liest, sieht sie NICHT; es braucht das berechnete
+ * `display`. */
+/* Und `.list-bulkbar`: die Sammelaktions-Leiste des Einkaufs trägt
+ * `display: flex` und ist nur bei abgehakten Artikeln gefüllt - ohne diese Zeile
+ * blieb bei null Treffern ein leerer, gerahmter und getönter Streifen über der
+ * Liste stehen. Vierte Fundstelle derselben Falle. */
+.page-fab[hidden],
+.btn[hidden],
+.form-group[hidden],
+.page-toolbar[hidden],
+.recipe-detail[hidden],
+.list-bulkbar[hidden],
+p.field-hint--warn[hidden] {
+  display: none !important;
+}
+
+/* ================================================================
+ * Sidebar Navigation - Desktop (≥ 1024px)
+ *
+ * Design: Flach, kein Neumorphismus. Dezenter Seitenrand.
+ * Aktiver State: Hintergrund-Highlight + Akzentstreifen links.
+ * Hover: Subtile Hintergrundfarbe, kein Shadow.
+ * ================================================================ */
+@media (min-width: 1024px) {
+  :root {
+    --sidebar-width: var(--sidebar-width-expanded);
+  }
+
+  .app-shell {
+    flex-direction: row;
+  }
+
+  .app-content {
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 0;
+    margin-left: var(--sidebar-width);
+    /* Begleitet den Sidebar-Collapse (siehe .nav-sidebar width): der Inhalt rückt
+     * nach - bewusste Layout-Transition, reduced-motion schaltet sie ab. */
+    transition: margin-left var(--transition-slow);
+  }
+
+  .nav-bottom {
+    display: none;
+  }
+
+  /* ── Sidebar anzeigen ── */
+  .nav-sidebar {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--color-border-subtle);
+    flex-direction: column;
+    z-index: var(--z-nav);
+    padding: var(--space-4) 0 var(--space-4);
+    /* Bewusste Layout-Transition (Detector layout-transition, geprüft):
+     * der Collapse ändert echte Inhaltsbreite - transform kann Breite nicht
+     * animieren, ein Overlay-Umbau stünde in keinem Verhältnis. Läuft nur
+     * beim manuellen Ein-/Ausklappen; reduced-motion schaltet sie ab. */
+    transition: width var(--transition-slow);
+    overflow: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-sidebar,
+    .app-content,
+    .nav-sidebar__toggle {
+      transition: none;
+    }
+  }
+
+  .nav-sidebar__logo {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    /* Feste Höhe verhindert vertikales Springen beim Ein-/Ausklappen.
+     * padding-left 14px zentriert den 28px-Logomark auf X=28 — fluchtet mit
+     * den Nav-Item-Icon-Wells (siehe .nav-sidebar .nav-item). Krumme px-Werte,
+     * weil exakte Pixel-Zentrierung nicht auf die 4px-Token-Skala fällt. */
+    height: 56px;
+    padding: 0 var(--space-5) 0 14px;
+    margin-bottom: var(--space-1);
+    flex-shrink: 0;
+    gap: var(--space-3);
+  }
+
+  /* SVG-Logomark (via DOM API in router.js injiziert, Gradient im SVG selbst) */
+  .nav-sidebar__logomark {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .nav-sidebar__logomark svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .nav-sidebar__brand-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.1;
+  }
+
+  .nav-sidebar__brand-name {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .nav-sidebar__version {
+    margin-top: var(--space-0h);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: var(--tracking-label);
+    color: var(--color-text-tertiary);
+  }
+
+  /* ── Nav-Items Container ── */
+  .nav-sidebar__items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-0h);
+    /* Kein seitliches Container-Padding: Item-Padding steuert die Icon-Flucht,
+     * die schwebende Indikator-Pille zieht ihren Einzug über left/right. Unten
+     * ein kleiner Puffer, damit das letzte Item (Settings) beim Scrollen nicht an
+     * die Footer-Haarlinie stößt. */
+    padding: 0 0 var(--space-2);
+    flex: 1;
+    /* Ohne min-height:0 schrumpft ein Flex-Item nicht unter seine Inhaltshöhe -
+     * overflow-y:auto bliebe wirkungslos und die Liste liefe über den Footer. */
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
+  }
+  .nav-sidebar__items::-webkit-scrollbar { display: none; }
+
+  /* Scroll-Affordanz (Audit F-01): wireScrollFade (utils/ux.js) setzt
+   * has-fade-start/-end, sobald oberhalb/unterhalb Einträge verborgen sind.
+   * Der weiche Anriss ersetzt den bewusst versteckten Scrollbalken — ohne ihn
+   * waren Budget/Gesundheit/Einstellungen auf 800er-Laptops unauffindbar. */
+  .nav-sidebar__items.has-fade-end {
+    mask-image: linear-gradient(to bottom, var(--mask-opaque) calc(100% - var(--space-8)), transparent);
+    -webkit-mask-image: linear-gradient(to bottom, var(--mask-opaque) calc(100% - var(--space-8)), transparent);
+  }
+
+  .nav-sidebar__items.has-fade-start {
+    mask-image: linear-gradient(to bottom, transparent, var(--mask-opaque) var(--space-8));
+    -webkit-mask-image: linear-gradient(to bottom, transparent, var(--mask-opaque) var(--space-8));
+  }
+
+  .nav-sidebar__items.has-fade-start.has-fade-end {
+    mask-image: linear-gradient(to bottom, transparent, var(--mask-opaque) var(--space-8), var(--mask-opaque) calc(100% - var(--space-8)), transparent);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, var(--mask-opaque) var(--space-8), var(--mask-opaque) calc(100% - var(--space-8)), transparent);
+  }
+
+  /* Footer ist eine eigene, nicht-scrollende Region (flex-shrink:0) und setzt
+   * sich mit einer Haarlinie vom scrollenden Nav-Bereich ab — so verschmilzt das
+   * gepinnte Settings-Item nie mit Hilfe/Änderungen/Abmelden. */
+  .nav-sidebar__footer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--space-0h);
+    padding: var(--space-2) var(--space-1) 0;
+    margin-top: var(--space-1);
+    border-top: 1px solid var(--color-border-subtle);
+    flex-shrink: 0;
+  }
+
+  /* Abmelden bricht in eine eigene, volle Zeile unter Hilfe/Änderungen und
+   * setzt sich mit einer Haarlinie als terminale Aktion ab. Doppelte
+   * Klassen-Spezifität (.nav-item.nav-item--logout) + volle flex-Shorthand
+   * schlagen die spätere `.nav-item { flex: 0 1 auto }`-Regel, die sonst
+   * flex-basis auf auto zurücksetzte → Zeile blieb schmal statt vollbreit. */
+  .nav-sidebar__footer-actions .nav-item.nav-item--logout {
+    flex: 1 1 100%;
+    margin-top: var(--space-1);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--color-border-subtle);
+  }
+
+  /* ── Nav-Item: Sidebar ── */
+  .nav-sidebar .nav-item {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    border-radius: var(--radius-sm);
+    /* padding-left 15px zentriert das 26px-Icon-Well auf X=28 — fluchtet mit
+     * dem Logomark. Krumm, weil exakte Zentrierung neben der 4px-Token-Skala liegt. */
+    padding: var(--space-1) var(--space-3) var(--space-1) 15px;
+    gap: var(--space-3);
+    /* Desktop-Pointer-Target (40px) statt Touch-Target (48px): mit 13 Items +
+     * 4 Sektionslabels passt die Liste so bis ~800px Fensterhöhe ohne Scroll
+     * (Audit F-01). Die Bottom-Nav für Touch behält 48px. */
+    min-height: var(--target-md);
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    background: transparent;
+    transition:
+      color var(--transition-fast),
+      background-color var(--transition-fast);
+    position: relative;
+  }
+
+  .nav-sidebar .nav-item__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  .nav-sidebar .nav-item__label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .nav-sidebar__footer-actions .nav-item {
+    flex: 0 1 auto;
+    min-width: 0;
+    justify-content: flex-start;
+    padding: var(--space-2) var(--space-1);
+    gap: var(--space-1);
+  }
+
+  /* ── Hover: dezente Hintergrundfarbe ── */
+  .nav-sidebar .nav-item:hover:not([aria-current="page"]) {
+    color: var(--color-text-primary);
+    background-color: var(--color-surface-3);
+  }
+
+  /* ── Aktiv: Hintergrund-Highlight + Akzent-Indikator ── */
+  .nav-sidebar .nav-item[aria-current="page"] {
+    color: var(--active-module-accent, var(--color-accent));
+    font-weight: var(--font-weight-semibold);
+    background-color: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-state), transparent);
+  }
+
+  /* Akzentstreifen links */
+  .nav-sidebar .nav-item[aria-current="page"]::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: var(--space-2);
+    bottom: var(--space-2);
+    width: 3px;
+    border-radius: 0 var(--radius-full) var(--radius-full) 0;
+    background: var(--active-module-accent, var(--color-accent));
+  }
+
+  /* Active-Press auf Desktop */
+  .nav-sidebar .nav-item:active {
+    transform: scale(0.97);
+  }
+
+  /* ── Einstellungen ans Ende ── */
+  .nav-sidebar__items > .nav-item--pinned-end:not(:only-child) {
+    margin-top: auto;
+  }
+
+  /* ── Sidebar Toggle ── */
+  .nav-sidebar__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    align-self: stretch;
+    padding: 0 var(--space-4) var(--space-2);
+    margin-top: calc(-1 * var(--space-2));
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+    /* padding begleitet den Sidebar-Collapse (Detector layout-transition, geprüft);
+     * reduced-motion schaltet sie im Block unten ab. */
+    transition: color var(--transition-fast), padding var(--transition-slow);
+  }
+
+  .nav-sidebar__toggle:hover {
+    color: var(--color-text-secondary);
+  }
+
+  .nav-sidebar__toggle svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+  }
+
+  /* ── Sidebar eingeklappt (icon-only) ── */
+  html.sidebar-collapsed {
+    --sidebar-width: 56px;
+  }
+
+  html.sidebar-collapsed .nav-sidebar .nav-sidebar__logo {
+    padding-right: 14px;
+  }
+
+  html.sidebar-collapsed .nav-sidebar .nav-sidebar__brand-text {
+    display: none;
+  }
+
+  html.sidebar-collapsed .nav-sidebar .nav-sidebar__toggle {
+    padding-right: var(--space-5);
+    padding-left: 0;
+  }
+
+  /* Eingeklappt: Labels bleiben im Layout (Sidebar-Breite ist fix, overflow:hidden
+   * beschneidet den Überhang), nur per Opacity verborgen. So kein „display:block"-
+   * Pop, der den Text mitten in der Breiten-Animation auf Einzelzeichen klippt —
+   * und der Accessible Name des Items bleibt erhalten (besser für Screenreader). */
+  html.sidebar-collapsed .nav-sidebar .nav-item__label {
+    opacity: 0;
+    transition: opacity var(--duration-xs) ease;
+  }
+
+  /* Eingeklappt stapelt der Footer vertikal. align-items:stretch dehnt die
+   * drei Items auf volle Rail-Breite (statt sie zentriert je nach verstecktem
+   * Label-Rest unterschiedlich breit zu lassen — sonst landeten ihre Icons an
+   * verschiedenen X-Positionen, #501). padding-inline:0 + padding-left:15px an
+   * den Items setzt die Icon-Flucht deckungsgleich mit den Body-Items. */
+  html.sidebar-collapsed .nav-sidebar .nav-sidebar__footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+    padding-inline: 0;
+  }
+
+  html.sidebar-collapsed .nav-sidebar__footer-actions .nav-item {
+    padding-left: 15px;
+  }
+
+  /* Eingeklappt stapelt der Footer bereits vertikal (icon-only) — der
+   * Vollzeilen-Umbruch entfällt (flex komplett zurücksetzen, sonst streckt
+   * flex-grow das Icon in der Spalte), die Haarlinie bleibt als Trenner. */
+  html.sidebar-collapsed .nav-sidebar__footer-actions .nav-item.nav-item--logout {
+    flex: 0 0 auto;
+    margin-top: var(--space-0h);
+  }
+
+  /* Eingeklappt: anders als die Nav-Item-Labels (die neben ihrem Icon in
+   * derselben Zeile sitzen und nur ausgeblendet werden müssen) belegt ein
+   * Sektionslabel eine eigene Zeile — bliebe es nur per opacity verborgen,
+   * klaffte zwischen den Icon-Gruppen eine leere Zeile (#501). Daher zusätzlich
+   * die Box auf null Höhe kollabieren; der Flyout (Hover/Fokus) stellt sie her. */
+  html.sidebar-collapsed .nav-sidebar .nav-section-label {
+    opacity: 0;
+    height: 0;
+    padding-block: 0;
+    overflow: hidden;
+    transition: opacity var(--duration-xs) ease;
+  }
+
+  /* ── Eingeklappt: Rail expandiert bei Hover/Fokus und zeigt Labels ──
+   * Wandelt den Icon-only-Recall in Recognition-on-demand für Maus (hover) und
+   * Tastatur (focus-within). Touch ist bewusst NICHT abgedeckt: ein Tap
+   * navigiert sofort und verweilt nicht im Fokus — auf Touch bleibt der
+   * eingeklappte Rail icon-only (bei ≥1024px jedoch selten). Die Sidebar ist
+   * fixed und überlagert Inhalt beim Aufklappen wie ein Flyout — --sidebar-width
+   * (und damit der .app-content-Margin) bleibt 56px, also kein Reflow. Die
+   * Breite animiert über die bestehende width-Transition. */
+  html.sidebar-collapsed:not(.sidebar-collapse-pointer-lock) .nav-sidebar:hover,
+  html.sidebar-collapsed .nav-sidebar:focus-within {
+    width: var(--sidebar-width-expanded);
+    box-shadow: var(--shadow-lg);
+  }
+
+  html.sidebar-collapsed:not(.sidebar-collapse-pointer-lock) .nav-sidebar:hover .nav-sidebar__brand-text,
+  html.sidebar-collapsed .nav-sidebar:focus-within .nav-sidebar__brand-text {
+    display: flex;
+  }
+
+  /* Beim Aufklappen die Labels erst einblenden, NACHDEM die Breite gewachsen ist
+   * (Delay ≈ Dauer der width-Transition 0.4s). So erscheint der Text bei voller
+   * Breite statt beschnitten mitzuwachsen. Ausblenden (un-hover) läuft ohne Delay
+   * über die Basis-Regel oben. */
+  html.sidebar-collapsed:not(.sidebar-collapse-pointer-lock) .nav-sidebar:hover .nav-item__label,
+  html.sidebar-collapsed .nav-sidebar:focus-within .nav-item__label,
+  html.sidebar-collapsed:not(.sidebar-collapse-pointer-lock) .nav-sidebar:hover .nav-section-label,
+  html.sidebar-collapsed .nav-sidebar:focus-within .nav-section-label {
+    opacity: 1;
+    transition: opacity 180ms ease 220ms;
+  }
+
+  /* Flyout: die eingeklappt auf null Höhe kollabierten Sektionslabels wieder
+   * als eigene Zeile aufspannen (Gegenstück zur Kollaps-Regel oben). */
+  html.sidebar-collapsed:not(.sidebar-collapse-pointer-lock) .nav-sidebar:hover .nav-section-label,
+  html.sidebar-collapsed .nav-sidebar:focus-within .nav-section-label {
+    height: auto;
+    padding-block: var(--space-2) var(--space-1);
+  }
+
+  /* Beim Aufklappen (Hover/Fokus) muss der Footer das Expanded-Layout annehmen:
+   * Zeile statt Spalte, Abmelden bricht als volle Zeile um. Ohne dies blieben
+   * Hilfe/Änderungen/Abmelden in der eingeklappten, zentrierten Spalte stehen
+   * und flüchteten nicht linksbündig wie im gepinnten Zustand (#488). */
+  html.sidebar-collapsed:not(.sidebar-collapse-pointer-lock) .nav-sidebar:hover .nav-sidebar__footer-actions,
+  html.sidebar-collapsed .nav-sidebar:focus-within .nav-sidebar__footer-actions {
+    flex-direction: row;
+    align-items: center;
+    padding-inline: var(--space-1);
+  }
+
+  /* Flyout: den 15px-Icon-Einzug der eingeklappten Spalte zurücknehmen, damit
+   * Hilfe/Änderungen wie im gepinnten Expanded-Zustand bündig stehen. */
+  html.sidebar-collapsed:not(.sidebar-collapse-pointer-lock) .nav-sidebar:hover .nav-sidebar__footer-actions .nav-item,
+  html.sidebar-collapsed .nav-sidebar:focus-within .nav-sidebar__footer-actions .nav-item {
+    padding-left: var(--space-1);
+  }
+
+  html.sidebar-collapsed:not(.sidebar-collapse-pointer-lock) .nav-sidebar:hover .nav-sidebar__footer-actions .nav-item.nav-item--logout,
+  html.sidebar-collapsed .nav-sidebar:focus-within .nav-sidebar__footer-actions .nav-item.nav-item--logout {
+    flex: 1 1 100%;
+    margin-top: var(--space-1);
+  }
+
+  /* ── Fokus-Ring der Nav-Items/Toggle nach innen versetzt ──
+   * Die Items sitzen flush-links an der geclippten Sidebar-Kante
+   * (.nav-sidebar overflow:hidden, .nav-sidebar__items overflow-y:auto → auch
+   * horizontal beschnitten). Ein positiver --focus-ring-offset würde den Ring an
+   * der linken Kante abschneiden; der Inset-Wert bleibt vollständig sichtbar -
+   * genau der Fall, für den tokens.css §7b das zweite Offset-Token führt. */
+  .nav-sidebar .nav-item:focus-visible,
+  .nav-sidebar__toggle:focus-visible {
+    outline-offset: var(--focus-ring-offset-inset);
+  }
+}
+
+
+/* --------------------------------------------------------
+ * Seiten-Container
+ * -------------------------------------------------------- */
+.page {
+  padding: var(--space-4);
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+}
+
+.page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.page__title {
+  /* Feste Token-Stufen statt fluidem clamp (Produkt-Register: feste rem-Skala,
+   * keine literalen rem). Mobil --text-2xl (24px), Desktop --text-3xl (30px). */
+  text-wrap: balance;
+}
+
+@media (min-width: 1024px) {
+  .page {
+    padding: var(--space-8) var(--space-8);
+  }
+
+  .page__title {
+  }
+}
+
+@media (min-width: 1440px) {
+  .page {
+    padding: var(--space-8) var(--space-10);
+  }
+}
+
+/* --------------------------------------------------------
+ * Cards
+ *
+ * Einheitliches Card-Pattern für alle Module:
+ * - Padding: 16px (mobile), 20px (desktop)
+ * - Radius: 12px
+ * - Shadow: subtle (sm)
+ * - Internes Spacing: 8–12px
+ * - Hover auf Desktop: leichter Lift (1px)
+ *
+ * Varianten:
+ * .card              - Basis (kein Padding)
+ * .card--padded      - Mit Padding
+ * .card--compact     - Enges Padding (12px)
+ * .card--flat        - Kein Shadow, nur Border
+ * .card--interactive - Hover-Lift + Cursor
+ * -------------------------------------------------------- */
+.card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.card--padded {
+  padding: var(--space-4);
+}
+
+.card--compact {
+  padding: var(--space-3);
+}
+
+.card--flat {
+  box-shadow: none;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.card--interactive {
+  cursor: pointer;
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.card--interactive:hover {
+  transform: translateY(-3px) scale(1.002);
+  box-shadow: var(--shadow-lg);
+}
+
+.card--interactive:active {
+  transform: scale(0.98);
+  background-color: var(--color-surface-3);
+  box-shadow: var(--shadow-sm);
+}
+
+.card--interactive:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+@media (min-width: 1024px) {
+  .card--padded {
+    padding: var(--space-5);
+  }
+}
+
+/* ── Card-Inhalts-Utilities ── */
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.card__title {
+  font-size: var(--type-card-title);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  text-wrap: balance;
+}
+
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* --------------------------------------------------------
+ * Modal-Basis
+ *
+ * Einheitliches Modal-Pattern für alle Module:
+ * - Mobile: Bottom-Sheet (gerundet oben)
+ * - Desktop: Zentriert (max-width variabel)
+ * - Overlay: var(--color-overlay)
+ * - Padding: 16px
+ * - Radius: 16px
+ * -------------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  /* Modul-getönter, leicht geblurter Backdrop: das Modul bleibt als
+   * weiches, eingefärbtes Bild hinter dem Panel sichtbar statt durch eine
+   * flache Dim-Fläche ersetzt zu werden. --blur-xs wird unter
+   * prefers-reduced-transparency/-contrast automatisch zu blur(0) — der
+   * Fallback unten stellt dann ein volldeckenderes Overlay wieder her. */
+  background-color: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-wash), var(--color-overlay-glass));
+  backdrop-filter: var(--blur-xs) saturate(120%);
+  -webkit-backdrop-filter: var(--blur-xs) saturate(120%);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: max(var(--space-3), env(safe-area-inset-top))
+           max(var(--space-3), env(safe-area-inset-right))
+           max(var(--space-3), env(safe-area-inset-bottom))
+           max(var(--space-3), env(safe-area-inset-left));
+  animation: modal-overlay-in var(--duration-md) ease forwards;
+  /* iOS Safari: click-Events auf non-interactive divs erfordern cursor:pointer */
+  cursor: pointer;
+}
+
+@media (min-width: 768px) {
+  .modal-overlay {
+    padding: var(--space-6);
+  }
+}
+
+.modal-panel {
+  background-color: var(--color-surface);
+  width: 100%;
+  /* Mobile: bewusst auf ~88dvh gedeckelt, damit oben ein Streifen des
+   * geblurten Moduls sichtbar bleibt — das Sheet wirkt als Karte über dem
+   * Modul, nicht als Vollbild-Takeover. Safe-Areas bleiben respektiert. */
+  max-height: min(88dvh, calc(100dvh - (2 * var(--space-3)) - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: var(--shadow-lg);
+  /* Dezentes Einfahren: kurzer Hub + leichte Skalierung statt vollem
+   * translateY(100%)-Vollhub. Wirkt leichter und weniger einnehmend. */
+  animation: modal-sheet-in 280ms var(--ease-out) forwards;
+  /* Cursor vom Overlay zurücksetzen */
+  cursor: default;
+}
+
+@media (min-width: 768px) {
+  .modal-panel {
+    max-width: 520px;
+    max-height: calc(100dvh - (2 * var(--space-6)));
+    border-radius: var(--radius-lg);
+    animation: modal-scale-in var(--duration-md) var(--ease-out) forwards;
+  }
+  .modal-panel--sm { max-width: 400px; }
+  .modal-panel--lg { max-width: 680px; }
+  .modal-panel--xl { max-width: min(960px, 95vw); max-height: calc(100dvh - (2 * var(--space-6))); }
+}
+
+.modal-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  background-color: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.modal-panel__title {
+  font-size: var(--type-section-title);
+  font-weight: var(--font-weight-semibold);
+  text-wrap: balance;
+}
+
+.modal-panel__close {
+  width: var(--target-base);
+  height: var(--target-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  transition: background-color var(--transition-fast);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.modal-panel__close:hover {
+  background-color: var(--color-surface-3);
+}
+
+/* Kopf-Bedienelemente als Gruppe: das Schließen-X behält seinen Platz in der
+ * Ecke, eine optionale Kopf-Aktion („Bearbeiten") setzt sich links daneben. */
+.modal-panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* Textbutton im Kopf. Bewusst Text statt Icon: „Bearbeiten" ist eine benannte
+ * Absicht, in die man nicht hineinstolpern soll - ein Stiftsymbol wäre ein
+ * Rätsel an der Stelle, an der die Ansicht ihren Modus wechselt. */
+.modal-panel__action {
+  min-height: var(--target-base);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  /* Modul-Akzent führt (DESIGN.md §2): Die Kopf-Aktion gehört zum Modul, in dem
+   * das Modal steht, nicht zur Shell. */
+  color: var(--active-module-accent, var(--color-accent));
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  transition: background-color var(--transition-fast);
+}
+
+/* Sobald eine Flaeche darunter faehrt, zieht der Text auf primary - dieselbe
+ * Bewegung wie bei .btn--ghost:hover. Der Modul-Akzent haelt seine Zusage
+ * ">=5:1 auf weiss" (tokens.css) auf dem Kopf-Grund, aber nicht mehr auf dem
+ * Hover-Grau: dort standen elf der achtzehn Tints zwischen 4,24 und 4,31.
+ * Die Modul-Identitaet traegt der Ruhezustand, nicht der Hover. */
+.modal-panel__action:hover {
+  background-color: var(--color-surface-3);
+  color: var(--color-text-primary);
+}
+
+.modal-panel__body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Kein Scroll-Chaining: Am Ende des Modal-Inhalts weiterzuwischen darf nicht
+   * die Seite dahinter bewegen. Fällt beim Sheet am stärksten auf, weil dort
+   * gewischt statt gescrollt wird und die Detailansicht kurz genug ist, um
+   * schnell am Ende anzukommen. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Container für Formular-Raster: 2-Spalten-Felder collabieren nach
+   * MODALBREITE (sm 400 / md 520 / lg 680), nicht Viewport. Ein sm-Modal
+   * auf großem Desktop bleibt so einspaltig statt gequetscht. */
+  container: modal-body / inline-size;
+}
+
+/* Modal-Content-Grids (z. B. 2 Spalten in Formularen) */
+.modal-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+.modal-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.modal-grid > * {
+  min-width: 0;
+}
+
+.modal-grid > .form-group {
+  margin-bottom: 0;
+}
+
+/* Gleich hohe Karten/Boxen in Modal-Grids */
+.modal-panel__body .grid {
+  align-items: stretch;
+}
+
+.modal-panel__body .grid > .card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+@container modal-body (max-width: 480px) {
+  .modal-grid--2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Live-Changelog modal */
+.changelog-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.changelog-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2);
+}
+
+.changelog-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  min-width: 0;
+}
+
+.changelog-summary__item span {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+}
+
+.changelog-summary__item strong {
+  font-size: var(--text-lg);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.changelog-version-note {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.changelog-version-note--warning {
+  color: var(--color-warning, var(--color-text-secondary));
+}
+
+/* „Version X ist verfügbar" - dieselbe Nachricht wie der Punkt an der
+   Navigation, deshalb derselbe Akzent statt einer Warnfarbe (#490). */
+.changelog-version-note--update {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-medium);
+}
+
+.changelog-status {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.changelog-status--muted {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-2);
+}
+
+.changelog-status--error {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) var(--tint-wash), var(--color-surface));
+}
+
+.changelog-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.changelog-release {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.changelog-release--current {
+  border-color: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-hint), var(--color-border));
+  background: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-state), var(--color-surface));
+}
+
+.changelog-release__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.changelog-release__version {
+  margin: 0;
+  font-size: var(--text-xl);
+  color: var(--color-text-primary);
+}
+
+.changelog-release__badge {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-surface), var(--color-surface));
+  color: var(--active-module-accent, var(--color-accent));
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.changelog-section + .changelog-section {
+  margin-top: var(--space-3);
+}
+
+.changelog-section__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.changelog-section__list {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--color-text-primary);
+}
+
+.changelog-section__list li + li {
+  margin-top: var(--space-1);
+}
+
+.changelog-release__empty {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* --------------------------------------------------------
+ * Rückmeldung eines Formulars
+ *
+ * Beide Boxen standen bis zur Namensbereinigung als `.login-error` /
+ * `.login-success` im Auth-Stylesheet, obwohl der Fehler-Kasten längst auch in
+ * Aufgaben, Dokumenten und Belohnungen stand. Ein Formular kann überall stehen,
+ * also steht seine Rückmeldung in der Shell-Ebene.
+ * -------------------------------------------------------- */
+.form-error {
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-danger-light);
+  color: var(--color-danger-ink);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+
+/* Die Fehlerregion wird nach einem Fehlschlag programmatisch fokussiert
+ * (tabindex="-1"), damit sehende Tastaturnutzer sie bemerken. Die rote Box
+ * kommuniziert den Zustand bereits - kein zusätzlicher Fokusring nötig. */
+.form-error:focus {
+  outline: none;
+}
+
+/* Gegenstück zur Fehlerbox: die Erfolgsmeldung nach dem Einlösen einer
+ * Einladung oder eines Reset-Links stand bisher unausgezeichnet im Fließtext. */
+.form-success {
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-success-light);
+  color: var(--color-success-ink);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+
+/* --------------------------------------------------------
+ * Progressive Disclosure: „Weitere Einstellungen"
+ * Einklappbarer Block für Sekundärfelder in Modal-Formularen.
+ * -------------------------------------------------------- */
+.form-advanced {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.form-advanced__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--target-base);
+  padding: var(--space-2) 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--type-secondary);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--transition-fast);
+}
+
+/* Default-Disclosure-Dreieck entfernen (Cross-Browser) */
+.form-advanced__summary::-webkit-details-marker { display: none; }
+.form-advanced__summary::marker { content: ''; }
+
+.form-advanced__summary:hover {
+  color: var(--color-text-primary);
+}
+
+.form-advanced__summary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.form-advanced__chevron {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  transition: transform var(--transition-base);
+}
+
+.form-advanced[open] .form-advanced__chevron {
+  transform: rotate(180deg);
+}
+
+.form-advanced__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .form-advanced__chevron { transition: none; }
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Einleitender Hinweis-Text über gestapelten Modal-Aktionen (z. B. Scope-Wahl). */
+.modal-lead {
+  margin: 0 0 var(--space-4);
+}
+
+/* Folgen-Erklärung unter der Bestätigungsfrage (confirmModal detail-Slot). */
+.modal-confirm__detail {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  text-wrap: pretty;
+}
+
+.modal-actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.modal-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* Fußzeile INNERHALB des scrollenden Bodys (kein direktes Panel-Kind): dort
+ * trägt der Modal-Rahmen die Trennlinie schon, eine zweite säße mitten im
+ * Inhalt. Ersetzt 20 gleichlautende Inline-Styles, die diese Neutralisierung
+ * je Modul nachbauten — mit drei verschiedenen Abständen (space-4/5/6) für
+ * denselben Footer. Doppelklasse für Spezifität (0,2,0) gegen die Basisregel. */
+.modal-panel__footer.modal-panel__footer--plain {
+  border-top: none;
+  padding: 0;
+  margin-top: var(--space-4);
+}
+
+/* Nach dem strukturellen Move (modal.js) liegt die Fußzeile direkt im Panel,
+ * außerhalb des scrollenden Bodys. Die höhere Spezifität (0,2,0) stellt das
+ * kanonische Layout auch gegen die alten In-Body-Neutralisierer der
+ * Modul-Klassen (contact-modal__footer, subscriptions-modal-footer) sicher. */
+.modal-panel > .modal-panel__footer {
+  border-top: 1px solid var(--color-border-subtle);
+  padding: var(--space-3) var(--space-4);
+  margin-top: 0;
+  background-color: var(--color-surface);
+  flex-shrink: 0;
+}
+
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes modal-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Mobile-Sheet: sanfter kurzer Hub + leichte Skalierung (kein Vollhub). */
+@keyframes modal-sheet-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+/* ── Bottom Sheet: Handle + Closing Animation (Mobile < 768px) ── */
+@media (max-width: 767px) {
+  /* Sheet am unteren Rand verankern: oben bleibt ein Streifen des geblurten
+   * Moduls sichtbar (Karte über dem Modul statt zentrierter Vollbild-Dialog). */
+  .modal-overlay {
+    align-items: flex-end;
+  }
+
+  .modal-panel {
+    /* Extra top padding for the drag handle */
+    padding-top: calc(var(--space-4) + 20px);
+    position: relative;
+  }
+
+  .modal-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Visuelle Linie bleibt klein, Hit-Area ist 44px hoch */
+    width: 36px;
+    height: 44px;
+    background-color: transparent;
+    /* Nur die dünne Griff-Linie ist sichtbar; oben/unten transparent. Die
+       Linienfarbe läuft über --modal-handle-color, damit der Glass-Modus sie
+       (in glass.css) umfärben kann, OHNE das background-Shorthand zu benutzen —
+       das hatte das Gradient gelöscht und den Griff zum vollen 36×44-Block
+       gemacht (#569). */
+    background-image: linear-gradient(
+      to bottom,
+      transparent calc(50% - 2px),
+      var(--modal-handle-color, var(--color-border)) calc(50% - 2px),
+      var(--modal-handle-color, var(--color-border)) calc(50% + 2px),
+      transparent calc(50% + 2px)
+    );
+    border-radius: var(--radius-full);
+  }
+
+  .modal-panel--closing {
+    animation: sheet-out var(--duration-md) ease forwards;
+  }
+}
+
+@keyframes sheet-out {
+  from { transform: translateY(0); }
+  to   { transform: translateY(16px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-panel {
+    animation: none;
+  }
+  .modal-panel--closing {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------
+ * Buttons
+ * -------------------------------------------------------- */
+/* BUTTONFORM, app-weit EINE (HIG-Rollout Runde 3): die Kapsel. Der Direction
+ * Contract nennt „Kapsel-Controls" ausdrücklich, und die Liquid-Glass-Ära hat
+ * Apples Buttons durchgehend auf capsule gestellt. Bis Runde 3 stand hier
+ * --radius-md, während glass.css .btn--primary/.btn--secondary auf
+ * --radius-full zog (gleiche Spezifität, spätere Datei) - Modul-Aktionen
+ * rendern deshalb als Vollkapsel, Ghost- und Danger-Buttons als 12px-Ecke.
+ * Zwei Sprachen aus einer Ladereihenfolge; jetzt eine aus einer Regel. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  min-height: var(--target-lg);
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+  .btn {
+    min-height: var(--target-md);
+  }
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Akzentregel „Modul-Akzent führt": Primäraktionen tragen den Akzent des aktiven
+ * Moduls (wie FAB und Fokusringe); Violett bleibt Shell-Flächen und modul-losen
+ * Routen (Login/Setup) vorbehalten. Die 88%/76%-Abdunklung reproduziert die
+ * „Action"-Abstufung des bisherigen --color-btn-primary generisch je Akzent. */
+.btn--primary {
+  background-color: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) 88%, var(--neutral-950));
+  color: var(--color-ink-on-vivid);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn--primary:hover {
+  background-color: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) 76%, var(--neutral-950));
+  box-shadow: var(--shadow-md);
+}
+
+.btn--secondary {
+  background-color: transparent;
+  color: var(--active-module-accent, var(--color-accent));
+  border: 1.5px solid var(--color-border);
+}
+
+.btn--secondary:hover {
+  background-color: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-state), transparent);
+  border-color: var(--active-module-accent, var(--color-accent));
+}
+
+.btn--danger {
+  background-color: var(--color-danger);
+  color: var(--color-ink-on-vivid);
+}
+
+.btn--danger:hover {
+  background-color: var(--color-danger-hover);
+}
+
+/* Zerstörende Aktionen mit sekundärem Gewicht (Trennen, Widerrufen, Abmelden).
+   Ohne diese Regel fiel die Klasse auf die UA-Farbe `buttontext` zurück - im
+   Dark Mode schwarz auf Fast-Schwarz (1.32:1). */
+.btn--danger-outline {
+  background-color: transparent;
+  color: var(--color-danger);
+  border: 1.5px solid var(--color-danger);
+}
+
+.btn--danger-outline:hover {
+  background-color: var(--color-danger);
+  color: var(--color-ink-on-vivid);
+  border-color: var(--color-danger);
+}
+
+/* AUSNAHME vom Fokusring-Token: der Knopf verspricht eine destruktive Folge,
+ * und die Gefahrenfarbe trägt er schon in Rand und Text. Über
+ * `--focus-ring-color` statt `outline-color`, damit die Ausnahme dieselbe
+ * Stellschraube benutzt wie die übrigen fünf. */
+.btn--danger-outline:focus-visible {
+  --focus-ring-color: var(--color-danger);
+}
+
+.btn--ghost {
+  background-color: transparent;
+  color: var(--color-text-secondary);
+}
+
+/* EINE Hover-Deklaration. Bis zur Aufräumrunde standen hier --color-surface-2
+ * und in glass.css derselbe Selektor mit dieser Tönung plus backdrop-filter -
+ * zwei Farbwerte für denselben Zustand, von denen faktisch immer der zweite
+ * gewann. Der Blur ist entfallen (Glas gehört dem Chrome), der Farbwert ist
+ * geblieben. */
+.btn--ghost:hover {
+  background-color: color-mix(in srgb, var(--color-text-tertiary) 10%, transparent);
+  color: var(--color-text-primary);
+}
+
+/* Zerstörende Aktion mit tertiärem Gewicht: roter Text, aber ohne Rahmen/Füllung,
+   damit „Löschen" im Event-Popover hinter „Bearbeiten" zurücktritt statt gleich
+   gewichtet daneben zu stehen (Critique-Minor). */
+.btn--danger-ghost {
+  background-color: transparent;
+  color: var(--color-danger);
+}
+
+.btn--danger-ghost:hover {
+  background-color: var(--color-surface-2);
+  color: var(--color-danger-hover);
+}
+
+/* AUSNAHME wie .btn--danger-outline: Gefahrenfarbe statt Modul-Akzent. */
+.btn--danger-ghost:focus-visible {
+  --focus-ring-color: var(--color-danger);
+}
+
+/* Eingerasteter Zustand eines Umschalt-Buttons (z. B. Mehrfachauswahl in
+   Aufgaben). Trägt `aria-pressed="true"`; ohne diese Regel war der aktive
+   Zustand nur für Screenreader erkennbar, visuell aber identisch zum Ruhezustand.
+   Steht nach allen Varianten, damit es sie bei gleicher Spezifität überschreibt. */
+.btn--active {
+  background-color: var(--active-module-accent, var(--color-accent));
+  color: var(--color-ink-on-vivid);
+  border-color: transparent;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Inaktiv, aber erreichbar. `disabled` nimmt einen Button aus der Tab-Ordnung -
+   wer per Tastatur navigiert, erfährt dann nie, dass es die Aktion gibt, und
+   der Grund für die Sperre bleibt ihm verborgen. `aria-disabled` meldet den
+   Zustand, ohne den Fokus zu verweigern; der Klick wird im Handler verworfen.
+   Statt Opazität (gemessen 1.9:1) eine echte gedeckte Farbe. */
+.btn[aria-disabled='true'] {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  background-color: transparent;
+  cursor: not-allowed;
+}
+
+.btn[aria-disabled='true']:hover {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  background-color: transparent;
+}
+
+/* ================================================================
+ * Zeilen-Aktionen — geteilte Grammatik (Audit F1)
+ *
+ * EIN Stil für Bearbeiten/Löschen/Mehr-Aktionen in allen Listen und Karten:
+ * nackter Icon-Button, ruhiger Grundzustand, klare 44px-Touch-Fläche, ohne
+ * Hover-Reveal lesbar (Touch). Ersetzt die zuvor pro Modul gestreuten Stile
+ * (mal Fill-Kreis, mal nacktes Icon, mal zu blass). Delete trägt --danger,
+ * semantische Sonderfälle (z.B. Anrufen) setzen nur die Farbe.
+ * ================================================================ */
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.row-action {
+  width: var(--target-lg);
+  height: var(--target-lg);
+  min-width: var(--target-lg);
+  min-height: var(--target-lg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.row-action:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.row-action:active {
+  transform: scale(0.94);
+}
+
+.row-action:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.row-action--danger:hover {
+  background: var(--color-danger-light);
+  color: var(--color-danger-ink);
+}
+
+.row-action--success {
+  color: var(--color-success);
+}
+
+.row-action--success:hover {
+  background: var(--color-success-light);
+  color: var(--color-success-ink);
+}
+
+.row-action svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Auch der Icon-Button ist eine Kapsel, hier also ein Kreis - Apples eigene
+ * Icon-Buttons sind rund. Die frühere --radius-sm-Ecke war der letzte Rest der
+ * zwei Buttonformen: sie überschrieb die Basisregel und stand damit neben der
+ * Kapsel, die dieselbe Datei zwei Bildschirme weiter oben setzt. */
+/* EINE Größe, und sie schaltet nach der ZEIGERFÄHIGKEIT: --target-base ist am
+ * Zeiger 44px und am Finger 48px (tokens.css). Vorher stand hier --target-lg
+ * mit einem Wechsel auf --target-md ab 1024px — also nach der Breite, während
+ * tokens.css als Kanon führt „das Kriterium ist die Zeigerfähigkeit, nicht die
+ * Breite". Ein Tablet ab 1024px bekam damit 40px, und die Aufgaben- und die
+ * Abo-Leiste hatten den Shell-Fehler je für sich lokal repariert: derselbe
+ * Kopf-Icon-Knopf mass 40px in Kalender und Kontakten und 44px in Aufgaben und
+ * Dokumenten. Zwei Antworten auf eine Frage, entstanden aus einem Kriterium,
+ * das keines war. */
+.btn--icon {
+  padding: var(--space-2);
+  min-height: var(--target-base);
+  min-width: var(--target-base);
+}
+
+
+/* FAB und page-fab ausblenden wenn virtuelle Tastatur offen (nur Mobile) */
+@media (max-width: 1023px) {
+  .keyboard-visible .fab,
+  .keyboard-visible .page-fab {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* --------------------------------------------------------
+ * Form-Elemente
+ * -------------------------------------------------------- */
+.input,
+.form-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  min-height: var(--target-lg);
+}
+
+@media (min-width: 1024px) {
+  .input,
+  .form-input {
+    min-height: var(--target-md);
+    font-size: var(--text-base);
+  }
+}
+
+/* Ein Select rendert sein Chevron INNERHALB der Box, rechtsbündig. Mit dem
+ * Feld-Padding von 12px läuft ein langer Optionstext darunter und wird
+ * mittendrin gekappt („Nächstes Fälligkei|"). Das Polster ist deshalb kein
+ * Modul-Detail, sondern gehört zum Feldkanon - app-weit, damit es nicht in
+ * jedem Modul neu entdeckt werden muss. */
+select.input,
+select.form-input {
+  padding-inline-end: var(--space-8);
+  text-overflow: ellipsis;
+}
+
+.input:focus,
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+/* Auf ALLE Textfelder, nicht nur auf .input/.form-input.
+ *
+ * Vorher griff die Regel nur über die zwei Klassen. Jedes Feld ohne sie fiel auf
+ * Chromes UA-Default #757575 zurück, der im Dark Mode nicht mitkippt: gemessen
+ * 3.46:1 an den beiden Quick-Add-Feldern der Einkaufsliste und 3.12:1 am
+ * globalen Suchfeld - unter den 4.5:1, die WCAG 1.4.3 auch für Platzhaltertext
+ * fordert (Critique 2026-07-29). Der Elementselektor deckt jedes künftige Feld
+ * mit ab, statt auf die richtige Klasse zu hoffen. */
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1; /* Firefox setzt ::placeholder sonst auf opacity < 1 und senkt den Kontrast erneut */
+}
+
+.label, .form-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+/* Nebensatz IM Label - der Hinweis, der zum Feld gehoert, aber nicht sein Name
+ * ist („(Markdown-Formatierung moeglich)"). Eine Stufe leiser als das Label:
+ * eine Groesse kleiner, regulaeres Gewicht, tertiaerer Text.
+ *
+ * WARUM ALS KLASSE: die Stelle trug ihre drei Werte inline im
+ * JS-Template-String (`font-weight:400;color:var(--text-tertiary);
+ * font-size:.85em`) - mit einem Token, das es nie gab (es heisst
+ * `--color-text-tertiary`), also erbte der Hinweis die Label-Farbe und stufte
+ * gar nicht ab. Der Typo-Guard sieht Stylesheets, keine Template-Strings; die
+ * Werte kamen so aus dem System heraus (Audit 2026-08-08, P3-1). */
+.form-label__hint {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-tertiary);
+}
+
+.required-marker {
+  color: var(--color-danger);
+  margin-left: var(--space-0h);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+/* ── Inline-Validierung ── */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.form-field--error .input,
+.form-field--error .form-input {
+  border-color: var(--color-danger);
+}
+
+.form-field--valid .input,
+.form-field--valid .form-input {
+  border-color: var(--color-success);
+}
+
+.form-field__error {
+  display: none;
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.form-field--error .form-field__error {
+  display: flex;
+}
+
+/* Pulse-Animation bei wiederholtem Fehler */
+@keyframes field-error-pulse {
+  0%, 100% { box-shadow: none; }
+  40%       { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 35%, transparent); }
+}
+
+.form-field--error-repeat .input,
+.form-field--error-repeat .form-input {
+  animation: field-error-pulse 500ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .form-field--error-repeat .input,
+  .form-field--error-repeat .form-input { animation: none; }
+}
+
+/* --------------------------------------------------------
+ * Zutaten-Zeile (geteilt: Mahlzeiten- + Rezept-Modal)
+ * Global statt modul-scoped, weil Modals im geteilten Overlay rendern und der
+ * Router immer nur EIN Modul-Stylesheet aktiv hält. Markup: ingredient-row.js.
+ * -------------------------------------------------------- */
+.ingredient-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-glass-inner);
+}
+
+.ingredient-row__name {
+  flex: 2;
+}
+
+.ingredient-row__qty {
+  flex: 1;
+  min-width: 0;
+}
+
+.ingredient-row__cat {
+  flex: 1.5;
+  min-width: 0;
+  font-size: var(--type-body);
+}
+
+.ingredient-row__remove {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* NICHT --color-text-disabled: der Knopf ist bedienbar, er tritt nur zurueck.
+   * Die Ruhefarbe eines erreichbaren Bedienelements traegt 3:1 (dieselbe Regel
+   * wie bei .meal-slot__add-btn in meals.css). */
+  color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  transition: color var(--transition-fast);
+}
+
+.ingredient-row__remove::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.ingredient-row__remove:hover {
+  color: var(--color-danger);
+}
+
+.meal-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-0h) var(--space-2);
+  border-radius: var(--radius-full);
+}
+
+/* Die Beschriftung nimmt die lesbare Stufe, nicht die Vollfarbe: auf der eigenen
+   blassen Füllung trug die Vollfarbe keine 4,5 mehr (Frühstück 4,42:1 light,
+   Abendessen 4,46:1 dark). Siehe tokens.css, "die LESBARE STUFE". */
+.meal-type-badge--breakfast { background: var(--meal-breakfast-light); color: var(--meal-breakfast-ink); }
+.meal-type-badge--lunch     { background: var(--meal-lunch-light);    color: var(--meal-lunch-ink); }
+.meal-type-badge--dinner    { background: var(--meal-dinner-light);   color: var(--meal-dinner-ink); }
+.meal-type-badge--snack     { background: var(--meal-snack-light);    color: var(--meal-snack-ink); }
+
+/* --------------------------------------------------------
+ * Toggle-Switch
+ * Custom iOS-style toggle, ersetzt native Checkboxen.
+ * Usage: <label class="toggle"><input type="checkbox"><span class="toggle__track"></span></label>
+ * -------------------------------------------------------- */
+.toggle {
+  /* position:relative macht dieses Label zum Containing-Block der visuell
+   * versteckten, absolut positionierten .toggle-Checkbox. Ohne das positioniert
+   * sich die Checkbox relativ zum nächsten positionierten Vorfahren (dem
+   * overflow:hidden .modal-panel); beim Antippen scrollt der Browser dann das
+   * Panel statt des Modal-Bodys in die Checkbox — es entsteht ein großer leerer
+   * Block und die folgenden Felder werden unerreichbar (#483, nur mobil, hier
+   * beim Erinnerungs-Toggle im Termin-Modal). */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  gap: var(--space-3);
+}
+
+.toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.toggle__track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  background-color: var(--neutral-300);
+  border-radius: var(--radius-full);
+  transition: background-color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.toggle__track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background: var(--color-surface);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast) var(--ease-out);
+}
+
+.toggle input:checked + .toggle__track {
+  background-color: var(--active-module-accent, var(--color-accent));
+}
+
+.toggle input:checked + .toggle__track::after {
+  transition: transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toggle input:checked + .toggle__track::after {
+  transform: translateX(18px);
+}
+
+.toggle input:focus-visible + .toggle__track {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.toggle input:disabled + .toggle__track {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle__track,
+  .toggle__track::after {
+    transition: none;
+  }
+
+  .fab,
+  .page-fab { animation: none; }
+
+  .list-stagger > * { animation: none; }
+
+  .swipe-row--hint > :first-child { animation: none; }
+
+  .btn--loading::after { animation: none; }
+}
+
+/* --------------------------------------------------------
+ * Skeleton-Loading
+ * -------------------------------------------------------- */
+.skeleton {
+  /* Linienfarbe aus Surface + Ink gemischt: garantierter Kontrast in beiden
+   * Themes mit EINER Definition (zuvor border-subtle/surface-2 — im Dark Mode
+   * deckungsgleich mit der Kartenfläche #222220, dadurch unsichtbar). */
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-text-primary) 18%, var(--color-surface)) 25%,
+    color-mix(in srgb, var(--color-text-primary) 30%, var(--color-surface)) 50%,
+    color-mix(in srgb, var(--color-text-primary) 18%, var(--color-surface)) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Reduced-Motion: Shimmer aus, statische Fläche bleibt sichtbar. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* ── Geteilte Skeleton-Liste (alle Module) ──
+ * EINE Lade-Sprache statt modul-eigener „Lädt…"-Texte. Global definiert,
+ * damit die Breiten-Varianten auf JEDER Seite greifen (zuvor lagen sie nur
+ * in dashboard.css und waren außerhalb des Dashboards wirkungslos).
+ * Markup-Hilfe: public/utils/skeleton.js → renderSkeletonList(). */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skeleton-card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: var(--radius-xs);
+}
+
+.skeleton-line--title  { height: 18px; width: 45%; }
+.skeleton-line--short  { width: 35%; }
+.skeleton-line--medium { width: 60%; }
+.skeleton-line--full   { width: 100%; }
+
+/* --------------------------------------------------------
+ * Leer-Zustände (Empty States)
+ * -------------------------------------------------------- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  animation: empty-state-in var(--duration-2xl) var(--ease-out) both;
+  /* Immer oben ansetzen, nie in der Restfläche zentriert.
+   *
+   * In einem Grid-Elternteil mit `align-content: start` (Rezepte, Vorrat) saß der
+   * Leerzustand oben, in einer gestreckten Flex-Spalte (Einkaufen) zentrierte
+   * ihn `justify-content: center` in der ganzen Resthöhe: gemessen lag der Titel
+   * bei y=174 / 242 / 482, also drei Achsen für denselben Zustand (Critique
+   * 2026-07-29). `flex: 0 0 auto` verhindert das Strecken; in Grid-Eltern ist es
+   * ein No-op. Die 48px Innenabstand oben geben den Abstand zum Kopf. */
+  flex: 0 0 auto;
+}
+
+@keyframes empty-state-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-state { animation: none; }
+  .empty-state__cta { animation: none; }
+}
+
+.empty-state__icon {
+  width: 56px;
+  height: 56px;
+  color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-hint), var(--color-text-disabled));
+}
+
+.empty-state__title {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  /* Der Titel ist seit dem Audit ein <h2> (Überschriften-Semantik für
+   * Screenreader). Der UA-Margin einer Überschrift würde die gap-basierte
+   * Abstandsfolge des Leerzustands verdoppeln. */
+  margin: 0;
+}
+
+.empty-state__description {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  max-width: 280px;
+  line-height: var(--line-height-base);
+}
+
+.empty-state__hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  max-width: 280px;
+  line-height: var(--line-height-relaxed);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-surface-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  text-align: center;
+}
+
+.empty-state__cta {
+  margin-top: var(--space-2);
+  animation: list-item-in var(--duration-xl) var(--ease-out) var(--duration-xl) both;
+}
+
+/* Technische Fehlerdetails: zugeklappt unauffällig, aufgeklappt lesbar und
+ * kopierbar. Der Stack darf nicht die Seite horizontal schieben - er scrollt
+ * in seinem eigenen Kasten. */
+.empty-state__details {
+  max-width: min(100%, 560px);
+  width: 100%;
+  margin-top: var(--space-2);
+  text-align: left;
+}
+
+.empty-state__details > summary {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  text-align: center;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.empty-state__details > summary:hover {
+  color: var(--color-text-secondary);
+}
+
+.empty-state__details > summary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.empty-state__details > pre {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background-color: var(--color-surface-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--line-height-relaxed);
+  white-space: pre;
+  overflow-x: auto;
+  user-select: text;
+}
+
+.empty-state--compact {
+  padding: var(--space-4) var(--space-3);
+  gap: var(--space-2);
+}
+.empty-state--compact .empty-state__description {
+  font-size: var(--text-sm);
+}
+
+/* --------------------------------------------------------
+ * Responsive Grid (Utility)
+ * -------------------------------------------------------- */
+.grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .grid--2 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 1024px) {
+  .grid--3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 1440px) {
+  .grid--4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* --------------------------------------------------------
+ * Layout-Primitives
+ *
+ * Wiederverwendbare Content-Area-Patterns für Desktop.
+ * Mobile: immer single-column (Stacking).
+ *
+ * .layout-master-detail  - Liste links, Detail rechts (Aufgaben, Einkauf)
+ * .layout-content-aside  - Hauptinhalt + schmale Seitenleiste (Kalender)
+ * .layout-center         - Zentrierter schmaler Content (Settings, Login)
+ * .layout-wide           - Volle Breite mit max-width (Dashboard)
+ * -------------------------------------------------------- */
+
+/* ── Master-Detail ──
+ * Mobile: gestapelt (Detail wird programmatisch ein-/ausgeblendet).
+ * Desktop: 2 Spalten - Liste ~40%, Detail ~60%.
+ */
+.layout-master-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+}
+
+.layout-master-detail__master {
+  flex: 1;
+  min-width: 0;
+}
+
+.layout-master-detail__detail {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .layout-master-detail {
+    flex-direction: row;
+    gap: var(--space-6);
+  }
+
+  .layout-master-detail__master {
+    flex: 0 0 380px;
+    max-width: 420px;
+    overflow-y: auto;
+    max-height: calc(100dvh - var(--space-16));
+    position: sticky;
+    top: var(--space-8);
+  }
+
+  .layout-master-detail__detail {
+    flex: 1;
+  }
+}
+
+@media (min-width: 1440px) {
+  .layout-master-detail__master {
+    flex: 0 0 420px;
+    max-width: 460px;
+  }
+}
+
+/* ── Content + Aside ──
+ * Mobile: gestapelt.
+ * Desktop: Hauptinhalt nimmt Platz ein, Aside ist 280–320px.
+ */
+.layout-content-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+}
+
+.layout-content-aside__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.layout-content-aside__aside {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .layout-content-aside {
+    flex-direction: row;
+    gap: var(--space-6);
+  }
+
+  .layout-content-aside__main {
+    flex: 1;
+  }
+
+  .layout-content-aside__aside {
+    flex: 0 0 280px;
+    overflow-y: auto;
+    max-height: calc(100dvh - var(--space-16));
+    position: sticky;
+    top: var(--space-8);
+  }
+}
+
+@media (min-width: 1440px) {
+  .layout-content-aside__aside {
+    flex: 0 0 320px;
+  }
+}
+
+/* ── Center ──
+ * Schmaler, zentrierter Content-Bereich (max. 720px).
+ * Ideal für Settings, Formulare, Einzelansichten.
+ */
+.layout-center {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* ── Wide ──
+ * Volle verfügbare Breite mit max-width.
+ * Für Dashboard und andere Multi-Column-Ansichten.
+ */
+.layout-wide {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+}
+
+/* ── Prose ──
+ * Text-Content mit optimaler Lesebreite.
+ */
+.prose {
+  max-width: 720px;
+}
+
+/* ── Sticky-Header (Modul-Toolbars) ──
+ * Klebt am oberen Rand beim Scrollen.
+ */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  /* Opaque background required: backdrop-filter on position:sticky inside overflow:auto
+   * triggers a WebKit compositor bug that blanks the entire scroll container (iOS 26+). */
+  background-color: var(--color-bg);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/* Hier stand ein prefers-reduced-transparency-Fallback für fünf Modul-Köpfe -
+ * der letzte Rest einer Annahme, die seit Issue #577 nicht mehr gilt. Er
+ * schaltete ein `backdrop-filter` ab, das keiner von ihnen mehr trägt (der
+ * Vier-Modul-Override entfiel mit dem Canonical Page Head, glass.css Sektion 28),
+ * und färbte sie dabei auf `--color-surface` um, während `.page-toolbar`
+ * überall sonst auf `--color-bg` steht. Ein Fallback für eine Eigenschaft, die
+ * niemand setzt, ist keine Absicherung, sondern eine zweite Antwort auf eine
+ * Frage, die die Regel darüber schon beantwortet: der Modulkopf ist opak, in
+ * jedem Medienzustand. */
+
+/* --------------------------------------------------------
+ * Toast-Benachrichtigungen
+ * -------------------------------------------------------- */
+.toast-container {
+  position: fixed;
+  bottom: calc(var(--nav-bottom-height) + var(--safe-area-inset-bottom) + var(--space-4));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  width: min(calc(100% - var(--space-8)), 380px);
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .toast-container {
+    bottom: var(--space-8);
+  }
+}
+
+@media (min-width: 1024px) {
+  .toast-container {
+    bottom: var(--space-6);
+    left: calc(var(--sidebar-width) + (100% - var(--sidebar-width)) / 2);
+  }
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background-color: var(--neutral-800);
+  color: var(--neutral-50);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+  animation: toast-in var(--duration-lg) var(--ease-out) forwards;
+}
+
+.toast__icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.toast__undo {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-full);
+  color: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.toast__undo {
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity var(--transition-fast), transform var(--duration-2xs) ease;
+}
+
+.toast__undo:hover {
+  opacity: 1;
+}
+
+.toast__undo:active {
+  transform: scale(0.94);
+  opacity: 1;
+}
+
+.toast--success { background-color: var(--color-success); color: var(--toast-success-text); }
+.toast--danger  { background-color: var(--color-danger);  color: var(--toast-danger-text); }
+.toast--warning { background-color: var(--color-warning); color: var(--toast-warning-text); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.toast--out {
+  animation: toast-out var(--duration-md) ease forwards;
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.95) translateY(4px); }
+}
+
+/* --------------------------------------------------------
+ * RRULE-Felder (Wiederholungs-Formular, shared Tasks + Kalender)
+ * -------------------------------------------------------- */
+
+.rrule-fields {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-4);
+}
+
+.rrule-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface-2);
+  border-radius: var(--radius-sm);
+}
+
+/* Progressive Disclosure: bei „keine Wiederholung" trägt das Element das
+ * hidden-Attribut — display:flex oben darf es nicht überstimmen. */
+.rrule-details[hidden] {
+  display: none;
+}
+
+.rrule-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rrule-interval-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rrule-interval-unit {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.rrule-until-field {
+  flex: 1;
+  min-width: 220px;
+}
+
+.rrule-day-grid {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-top: var(--space-1);
+}
+
+/* Ankerschalter „ab Erledigung" (#658). Sitzt unter dem Takt, weil er ihn
+ * verankert und nicht selbst einer ist: erst „jede Woche", dann „ab wann". */
+.rrule-anchor {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-3);
+}
+
+.rrule-anchor__hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.rrule-day {
+  width: var(--target-md);
+  height: var(--target-md);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.rrule-day::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.rrule-day:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.rrule-day--active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-ink-on-vivid);
+}
+
+.rrule-day--active:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+@media (max-width: 1023px) {
+  .rrule-day {
+    width: var(--target-base);
+    height: var(--target-base);
+  }
+  .rrule-day-grid {
+    gap: var(--space-0h);
+    justify-content: space-between;
+  }
+}
+
+/* ── Submit-Feedback Animationen ── */
+
+/* Checkbox-Pop: kanonische Definition - shopping.css + tasks.css verwenden diese */
+@keyframes check-pop {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(0.8); }
+  60%  { transform: scale(1.3); }
+  80%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes btn-shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-4px); }
+  40%       { transform: translateX(4px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+.btn--shaking {
+  animation: btn-shake var(--duration-xl) ease;
+}
+
+/* prefers-reduced-motion: kein Schütteln, nur Farb-Feedback */
+.btn--error-static {
+  background-color: var(--color-danger) !important;
+  color: var(--color-ink-on-vivid) !important;
+  pointer-events: none;
+}
+
+.btn--success {
+  background-color: var(--color-success) !important;
+  color: var(--color-ink-on-vivid) !important;
+  pointer-events: none;
+}
+
+/* Button loading state: hides text, shows spinner */
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn--loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+
+.btn--loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  margin-left: -7px;
+  border: 2px solid var(--color-glass-hover);
+  border-top-color: var(--color-text-on-accent);
+  border-radius: var(--radius-full);
+  animation: btn-spin 550ms linear infinite;
+}
+
+/* For non-primary buttons (secondary, ghost) */
+.btn--secondary.btn--loading::after,
+.btn--ghost.btn--loading::after {
+  border-color: var(--color-border);
+  border-top-color: var(--color-accent);
+}
+
+/* --------------------------------------------------------
+ * Swipe-Wrapper - Gemeinsame Basis (Aufgaben, Einkauf, Geburtstage)
+ * Modulsache bleibt allein, wie die KARTE in der Zeile sich verhält
+ * (.swipe-row .task-card, .swipe-row .shopping-item, .swipe-row
+ * .birthday-item); die Geste, die Reveal-Rollen und der Hinweis sind geteilt.
+ * Der JS-Teil liegt in utils/swipe-row.js.
+ * -------------------------------------------------------- */
+/* Der Wischwrapper ist eine reine Buehne fuer die Geste: KEIN eigener Radius,
+ * KEIN eigener Abstand. Beides gehoert dem Traeger der Zeilenliste, der die
+ * Wischflaeche mit seinem `overflow: hidden` ohnehin beschneidet.
+ *
+ * Die Zusage stand vorher dreimal: die Geburtstage setzten sie zurueck, die
+ * Aufgaben trugen sie mit (Karte pro Zeile), und im Einkauf blieb sie
+ * unbemerkt stehen - gemessen 8px Luft ZWISCHEN Haarlinie und Zeile, in
+ * genau der Liste, die als Vorbild der Zeilenlisten-Regel gilt. Eine geteilte
+ * Regel ohne Guard ist eine wandernde Annahme; hier traegt sie die Basis. */
+.swipe-row {
+  position: relative;
+  overflow: hidden;
+  /* Verhindert ungewolltes Flackern auf iOS */
+  -webkit-backface-visibility: hidden;
+}
+
+/* Waehrend der Geste traegt die bewegte Zeile die Traegerflaeche: das
+ * Reveal-Panel liegt unter ihr und darf nur dort sichtbar werden, wo sie
+ * weggewischt ist. Solange jede Zeile eine eigene Kartenflaeche hatte, fiel
+ * das nicht auf - in dem Moment, in dem sie flach wird, laege der Zeilentext
+ * ueber dem aufgedeckten Panel. Geteilt statt je Modul: die drei Wischlisten
+ * hatten dafuer drei Regeln, die alle nur den Schatten setzten.
+ *
+ * NICHT `:first-child`: die Reveal-Panels stehen im Markup VOR der Karte, und
+ * absolut positioniert liegen sie ohnehin darunter. Der Selektor traf damit
+ * das fuehrende Panel (0,2,0 schlaegt .swipe-reveal--done mit 0,1,0) - das
+ * Panel verlor seine Aktionsfarbe, und die bewegte Karte blieb ohne Traeger.
+ * `:not(.swipe-reveal)` benennt, was gemeint war: alles, was kein Panel ist. */
+.swipe-row--swiping > :not(.swipe-reveal) {
+  background-color: var(--color-surface-work);
+  box-shadow: var(--shadow-lg);
+}
+
+/* DAS COMPOSITOR-VERSPRECHEN HAENGT AN DER GESTE, NICHT AN DER ZEILE.
+ *
+ * `will-change: transform` stand fest auf `.swipe-row .shopping-item` und
+ * `.swipe-row .task-card`: im Demo-Seed trugen es 26 Einkaufszeilen und 11
+ * Aufgabenkarten GLEICHZEITIG, im Ruhezustand, ohne dass ein Finger die Liste
+ * beruehrt haette - jede mit eigener Compositor-Ebene samt Speicher (gemessen
+ * 54 Ebenen / ~15,2 MB auf /tasks, Audit 2026-08-08, P2-1). Die Last waechst
+ * linear mit der Zeilenzahl, und eine echte Familienliste ist laenger als der
+ * Seed - auf genau den aelteren Telefonen, die laut PRODUCT.md die Hauptszene
+ * sind.
+ *
+ * `--armed` setzt swipe-row.js bei `touchstart`, also BEVOR die erste
+ * Bewegung kommt: das haelt den ersten Frame ruhig, ohne mehr als die eine
+ * beruehrte Zeile zu promoten. `--swiping` waere zu spaet (es entsteht erst,
+ * wenn die Richtung feststeht), eine Dauerregel zu frueh.
+ *
+ * Geteilt statt je Modul: die Geste ist geteilt, die Geburtstage hatten das
+ * Versprechen ueberhaupt nie und wischen dieselbe Bewegung.
+ *
+ * `:not(.swipe-reveal)` aus demselben Grund wie oben: bewegt wird die Karte,
+ * nicht das Panel - `:first-child` promotete das falsche Element. */
+.swipe-row--armed > :not(.swipe-reveal) {
+  will-change: transform;
+}
+
+/* Reveal-Panels hinter der Karte */
+.swipe-reveal {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 50ms linear;
+}
+
+/* --------------------------------------------------------
+ * List Stagger
+ * Füge .list-stagger zum Container hinzu.
+ * Items erscheinen sequenziell beim ersten Rendern.
+ * -------------------------------------------------------- */
+@keyframes list-item-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.list-stagger > * {
+  animation: list-item-in var(--duration-md) var(--ease-out) both;
+}
+
+.list-stagger > *:nth-child(1)   { animation-delay: 0ms; }
+.list-stagger > *:nth-child(2)   { animation-delay: 35ms; }
+.list-stagger > *:nth-child(3)   { animation-delay: 65ms; }
+.list-stagger > *:nth-child(4)   { animation-delay: 90ms; }
+.list-stagger > *:nth-child(5)   { animation-delay: 112ms; }
+.list-stagger > *:nth-child(6)   { animation-delay: 130ms; }
+.list-stagger > *:nth-child(7)   { animation-delay: 145ms; }
+.list-stagger > *:nth-child(8)   { animation-delay: 157ms; }
+.list-stagger > *:nth-child(9)   { animation-delay: 166ms; }
+.list-stagger > *:nth-child(n+10) { animation-delay: 173ms; }
+
+/* --------------------------------------------------------
+ * Swipe Affordance Hint
+ * Einmalig per JS: .swipe-row--hint auf das erste Element.
+ * Gibt nach Seitenladezeit einen kurzen Nudge-Hinweis.
+ * -------------------------------------------------------- */
+/* Der Nudge zeigt in die Richtung, in die gewischt werden kann - und die ist
+ * in RTL die andere. Ein Vorzeichen statt einer zweiten Keyframe-Liste: die
+ * Bewegung ist dieselbe, nur ihre Achse folgt der Schreibrichtung. */
+@keyframes swipe-nudge {
+  0%   { transform: translateX(0); }
+  20%  { transform: translateX(calc(-18px * var(--swipe-nudge-dir, 1))); }
+  45%  { transform: translateX(0); }
+  60%  { transform: translateX(calc(-9px * var(--swipe-nudge-dir, 1))); }
+  80%  { transform: translateX(0); }
+  100% { transform: translateX(0); }
+}
+
+.swipe-row--hint > :first-child {
+  animation: swipe-nudge 800ms var(--ease-out) 1200ms both;
+}
+
+[dir='rtl'] .swipe-row--hint > :first-child {
+  --swipe-nudge-dir: -1;
+}
+
+/* Swipe-Affordanz: permanente Chevron-Hints an den Kartenrändern */
+.swipe-row::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 20px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3,4 9,10 3,16'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity var(--transition-fast);
+}
+
+.swipe-row:hover::after,
+.swipe-row:focus-within::after {
+  opacity: 0.55;
+}
+
+/* Der Chevron ist eine Richtungsangabe, kein Ornament: er zeigt zum
+ * Zeilenende, und das liegt in RTL links. */
+[dir='rtl'] .swipe-row::after {
+  transform: translateY(-50%) scaleX(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swipe-row::after { display: none; }
+}
+
+@media (min-width: 1024px) {
+  .swipe-row::after { display: none; }
+}
+
+/* Reveal-Panels: ZWEI ACHSEN, getrennt gehalten.
+ *
+ * Die SEITE ist die Kante, an der das Panel liegt (`--leading` am Zeilenanfang,
+ * `--trailing` am Zeilenende), die ROLLE trägt allein die Bedeutung. Bis
+ * Runde 4 steckte beides in einer Klasse - `--delete` hiess „löschen UND
+ * links", weil der einzige Nutzer, der Einkauf, nach rechts löschte. Die
+ * Geburtstage löschen zur anderen Seite, und dieselbe Rolle war damit nicht
+ * wiederverwendbar, ohne eine vierte zu erfinden.
+ *
+ * Anfang und Ende sind LOGISCH, nicht links und rechts: in `ar` und `fa` setzt
+ * die App `dir=rtl`, und bis Runde 6 trugen die logischen Namen physische
+ * Eigenschaften - dort fielen Name und Wirkung auseinander, ohne dass jemand
+ * etwas ändert. `swipe-row.js` leitet die Fingerbewegung aus derselben
+ * Schreibrichtung ab.
+ *
+ * Beides sind geteilte Rollen, keine Modulsache: dieselbe Geste soll in jeder
+ * Liste dasselbe bedeuten. */
+.swipe-reveal--leading {
+  inset-inline-start: 0;
+  border-start-start-radius: var(--radius-md);
+  border-end-start-radius: var(--radius-md);
+}
+
+.swipe-reveal--trailing {
+  inset-inline-end: 0;
+  border-start-end-radius: var(--radius-md);
+  border-end-end-radius: var(--radius-md);
+}
+
+.swipe-reveal--done   { background-color: var(--color-success); color: var(--color-ink-on-vivid); }
+.swipe-reveal--edit   { background-color: var(--color-accent);  color: var(--color-ink-on-vivid); }
+.swipe-reveal--delete { background-color: var(--color-danger);  color: var(--color-ink-on-vivid); }
+
+/* --------------------------------------------------------
+ * Reduced Transparency — layout.css Fallbacks
+ * glass.css deckt Glass-Komponenten ab; diese drei Elemente
+ * nutzen backdrop-filter außerhalb von @supports und brauchen
+ * eigene Fallbacks.
+ * -------------------------------------------------------- */
+@media (prefers-reduced-transparency: reduce) {
+  .nav-bottom {
+    background-color: var(--color-surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .more-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .sticky-header {
+    background-color: var(--color-bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* Ohne Blur braucht der Modal-Backdrop wieder volle Deckkraft, damit das
+   * dahinterliegende Modul nicht unscharf-frei durchscheint. */
+  .modal-overlay {
+    background-color: var(--color-overlay);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* --------------------------------------------------------
+ * Keyboard Shortcut Modal
+ * -------------------------------------------------------- */
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.shortcuts-row,
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.shortcuts-row:last-child,
+.help-row:last-child {
+  border-bottom: none;
+}
+
+/* Mobile-Hilfe-Zeilen tragen ein Lucide-Icon statt einer Taste. */
+.help-row__icon {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.shortcut-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  padding: var(--space-0h) var(--space-2);
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  border-bottom: 2px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.shortcut-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* --------------------------------------------------------
+ * Offline-Banner
+ * -------------------------------------------------------- */
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: calc(var(--z-toast) + 1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--color-warning-light);
+  color: var(--color-warning-ink);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-warning) var(--tint-hint), transparent);
+  animation: offline-banner-in var(--duration-md) var(--ease-out);
+}
+
+.offline-banner[hidden] {
+  display: none;
+}
+
+@keyframes offline-banner-in {
+  from { opacity: 0; transform: translateY(-100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offline-banner { animation: none; }
+}
+
+/* --------------------------------------------------------
+ * Print-Styles
+ * -------------------------------------------------------- */
+@media print {
+  .nav-sidebar,
+  .nav-bottom,
+  .fab,
+  .toast-container,
+  .modal-overlay,
+  .modal-backdrop {
+    display: none !important;
+  }
+
+  .app-content {
+    margin-left: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .app-shell {
+    display: block;
+  }
+
+  /* Gedruckt wird hell. Die Farbwelt regelt das nicht hier, sondern an der
+   * Quelle: beide Dark-Blöcke in tokens.css stehen unter `@media screen` und
+   * greifen auf Papier gar nicht erst (die Begründung und die Messung stehen
+   * dort). Bis 2026-08-09 färbte dieser Block nur den `body`, während jede
+   * Fläche darunter ihren Dark-Token behielt - schwarze Tinte auf schwarzem
+   * Grund.
+   *
+   * Hier bleibt allein, was Papier-Eigenheit ist und keine Theme-Frage: der
+   * Bogen ist weiß, nicht der Grouped-Grund. */
+  :root {
+    color-scheme: light;
+    --color-bg: #ffffff;
+  }
+
+  .card {
+    box-shadow: none;
+    /* Die Kante trägt hier die Trennung, die der Schatten nicht mehr leistet -
+     * und dafür ist jedes Kanten-Token zu hell: sie sind für feine Linien auf
+     * einem leuchtenden Display gebaut und drucken als nichts. Der Wert steht
+     * deshalb lokal statt als Token-Override. `--color-border-subtle` global
+     * anzuheben war der erste Versuch und ein Regress: es ist an vier Stellen
+     * auch FLÄCHE (Kalenderraster, Dokument-Trenner), und der dunklere Wert
+     * drückte den Text darauf auf 3.73:1. */
+    border: 1px solid #c9c9c9;
+    break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .nav-item,
+  a[data-route]::after {
+    content: none;
+  }
+}
+
+/* --------------------------------------------------------
+ * Skip-Link (sichtbar bei Keyboard-Focus)
+ * -------------------------------------------------------- */
+.sr-only:focus-visible {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-skip-link);
+  width: auto;
+  height: auto;
+  padding: var(--space-2) var(--space-4);
+  margin: 0;
+  clip: auto;
+  white-space: normal;
+  overflow: visible;
+  background: var(--color-accent);
+  color: var(--color-ink-on-vivid);
+  font-size: var(--text-sm);
+  border-radius: 0 0 var(--radius-sm) 0;
+}
+
+/* --------------------------------------------------------
+ * Icon-Größen-Utilities
+ * Größen für Lucide-Icons (<i data-lucide>). Klassen werden
+ * vom Lucide-Renderer auf das erzeugte <svg> übertragen.
+ *
+ * Genau ein Name pro Stufe — die Werte stehen als --icon-* in
+ * tokens.css. Die früheren Aliase (.icon-xs, .icon-11, .icon-base,
+ * .icon-2xl) trugen dieselben Werte wie sm/md/xl und sind entfernt;
+ * Icon-Größen niemals inline per style="width:…" setzen.
+ * -------------------------------------------------------- */
+.icon-sm { width: var(--icon-sm); height: var(--icon-sm); flex-shrink: 0; }
+.icon-md { width: var(--icon-md); height: var(--icon-md); flex-shrink: 0; }
+.icon-lg { width: var(--icon-lg); height: var(--icon-lg); flex-shrink: 0; }
+.icon-xl { width: var(--icon-xl); height: var(--icon-xl); flex-shrink: 0; }
+
+/* Icons innerhalb von Buttons sollen keine Pointer-Events fangen */
+button i[data-lucide],
+button svg { pointer-events: none; }
+
+/* Tabular numbers: gleichbreite Ziffern für Zahlen/Beträge */
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* Kompakter Icon-Button: 44px Klickfläche, optisch kompakt durch geringes
+ * Padding. Die Form kommt aus der .btn-Basisregel (Kapsel), nicht von hier -
+ * eine eigene Ecke waere die zweite Buttonsprache. */
+.btn--icon-sm {
+  padding: var(--space-1);
+  min-height: var(--target-base);
+  min-width: var(--target-base);
+}
+
+/* Textarea: vertikale Größenänderung ist nutzbar */
+textarea.input { resize: vertical; }
+
+/* --------------------------------------------------------
+ * High Contrast (prefers-contrast: more)
+ * Tokens in tokens.css stellen bereits opake Glass-Werte bereit.
+ * Hier kommen komponentenspezifische Korrekturen hinzu.
+ * -------------------------------------------------------- */
+@media (prefers-contrast: more) {
+  /* Fokus: dicker und weiter versetzt.
+   *
+   * Über die Tokens, nicht über die Properties. `outline-width` auf
+   * `:focus-visible` (0,1,0) verliert gegen jede Komponentenregel wie
+   * `.page-fab:focus-visible` (0,2,0) - die Verstärkung griff deshalb nur beim
+   * Basisring und ausgerechnet nicht bei den rund 45 Komponenten, auf denen
+   * tatsächlich bedient wird. Als Token-Neudefinition ziehen alle mit, auch die
+   * begründeten Ausnahmen, die Breite und Offset ohnehin aus den Tokens lesen. */
+  :root {
+    --focus-ring-width: 3px;
+    --focus-ring-offset: 4px;
+    --focus-ring-offset-inset: -3px;
+  }
+
+  /* Ghost- und Secondary-Buttons: explizite Umrandung */
+  .btn--ghost,
+  .btn--secondary {
+    border: 1.5px solid currentColor;
+  }
+
+  .btn--ghost:hover {
+    background-color: var(--color-surface-3);
+  }
+
+  /* Karten: Schatten entfernen, Border verstärken */
+  .card {
+    box-shadow: none;
+    border: 1px solid var(--color-border);
+  }
+
+  .card--flat {
+    border-color: var(--color-text-secondary);
+  }
+
+  /* Formulareingaben: kräftigere Border */
+  .input,
+  .form-input {
+    border-color: var(--color-text-primary);
+    border-width: 2px;
+  }
+
+  /* Aktiver Nav-Eintrag: zusätzliche Unterstreichung als farb-unabhängiger Indikator */
+  .nav-item[aria-current="page"],
+  .nav-item--active {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* --------------------------------------------------------
+ * Signature Moment: Eingabefeld-Glow nach erfolgreichem Item-Add
+ * -------------------------------------------------------- */
+@keyframes input-add-flash {
+  0%   { box-shadow: none; }
+  25%  { box-shadow: 0 0 0 3px color-mix(in srgb, var(--module-accent, var(--color-accent)) 45%, transparent); }
+  100% { box-shadow: none; }
+}
+
+.quick-add__input--flash {
+  animation: input-add-flash 550ms var(--ease-out) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-add__input--flash { animation: none; }
+}
+
+/* --------------------------------------------------------
+ * Windows High Contrast / Forced Colors
+ * -------------------------------------------------------- */
+@media (forced-colors: active) {
+  .btn,
+  .page-fab,
+  .fab          { border: 1px solid ButtonText; }
+  .card         { border: 1px solid CanvasText; }
+  .modal-panel  { border: 2px solid CanvasText; }
+  .nav-item[aria-current="page"],
+  .nav-item--active { border-bottom: 2px solid Highlight; }
+}
+
+/* ============================================================
+ * Liquid Nav — Custom Icons, Indikatoren, Abschnittsbezeichnung
+ * ============================================================ */
+
+/* SVG-Icons füllen ihren Eltern-Container */
+.nav-item__icon svg,
+.more-item__icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── Sidebar: Indikator-Container braucht position:relative ── */
+.nav-sidebar__items {
+  position: relative;
+}
+
+/* ── Sidebar: Morphende Indikator-Pille (Strukturell) ──
+ * Persistente Aktiv-Pille: verankert am aktiven Item, gleitet nur bei echtem
+ * Routenwechsel (Signature-Moment) — nicht beim Hover. */
+.nav-sidebar__indicator {
+  position: absolute;
+  /* Schwebend zentriert: seitlicher Einzug statt voller Breite */
+  left: var(--space-1);
+  right: var(--space-1);
+  top: 0;
+  height: var(--target-md); /* füllt das 40px-Sidebar-Item (Audit F-01) */
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  transition:
+    transform 450ms var(--ease-sidebar-glide),
+    opacity var(--duration-lg) ease;
+  will-change: transform;
+  z-index: 0;
+}
+
+/* ── Sidebar: Zarte Hover-/Fokus-Vorschau (Strukturell) ──
+ * Entkoppelt vom Aktiv-Marker: eine ruhige Fläche (kein Glas-Blur, kein Akzent),
+ * die dem Hover/Fokus folgt, damit die Aktiv-Pille beim Erkunden stehen bleibt. */
+.nav-sidebar__hover {
+  position: absolute;
+  left: var(--space-1);
+  right: var(--space-1);
+  top: 0;
+  height: var(--target-md); /* füllt das 40px-Sidebar-Item (Audit F-01) */
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-3);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 280ms var(--ease-sidebar-glide),
+    opacity 180ms ease;
+  will-change: transform, opacity;
+  z-index: 0;
+}
+
+/* ── Sidebar: Sektions-Gruppe (SR-Semantik) ──
+ * role="group" + aria-labelledby macht die visuelle Gruppierung für Screenreader
+ * sichtbar. display:flex bewahrt das Item-Stacking + gemeinsame Lücke. */
+.nav-sidebar__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0h);
+}
+
+/* Nav-Items über dem Sidebar-Indikator */
+.nav-sidebar__items--liquid .nav-item {
+  z-index: 1;
+}
+
+/* Kein linker Akzentbalken wenn Liquid-Indikator aktiv */
+.nav-sidebar__items--liquid .nav-item[aria-current="page"]::before {
+  display: none;
+}
+
+/* Kein statischer Hintergrund und kein Shadow-Highlight wenn Indikator aktiv */
+.nav-sidebar__items--liquid .nav-item[aria-current="page"] {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Kein statischer Hover-Hintergrund wenn Liquid-Indikator aktiv —
+ * das separate .nav-sidebar__hover-Element übernimmt die Vorschau (via router.js). */
+.nav-sidebar__items--liquid .nav-item:hover:not([aria-current="page"]) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ── Sidebar: Abschnittsbezeichnung (z.B. "Haushalt") ──
+ * Sentence-Case Gruppierungslabel (Typo-Rolle in typography.css). Tertiär
+ * gefärbt, damit es als ruhige Über-Beschriftung liest und nicht mit den
+ * Nav-Item-Labels (secondary, 14px) um Gewicht konkurriert. #6A6964 auf
+ * --sidebar-bg ≈ 5:1 (AA ✓). */
+.nav-section-label {
+  color: var(--color-text-tertiary);
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  user-select: none;
+  pointer-events: none;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Mobile: Tab-Indikator (Strukturell) ──
+ * Kapsel hinter dem Icon, nicht hinter Icon+Label: die bar-hohe Variante
+ * schnitt die Label-Grundlinie an und stieß im ersten/letzten Slot an die
+ * Bar-Kante, wo ihre Rundung gekappt wurde (#569-Nachtrag). Die exakte
+ * Geometrie (Höhe/Breite/Versatz) setzt positionTabIndicator() aus dem
+ * Icon-Well-Rect; die Werte hier sind der Stand vor dem ersten Messen. */
+.nav-bottom__indicator {
+  position: absolute;
+  top: 0;
+  bottom: auto;
+  left: 0;
+  height: var(--target-md);
+  border-radius: var(--radius-full);
+  pointer-events: none;
+  transition:
+    transform var(--duration-md) var(--ease-out),
+    opacity var(--transition-fast);
+  will-change: transform;
+  z-index: 0;
+}
+
+.nav-bottom__indicator::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline: var(--space-1);
+  border-radius: inherit;
+}
+
+/* Nav-Items im Bottom-Bar über dem Indikator */
+.nav-bottom .nav-item {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-sidebar__indicator,
+  .nav-sidebar__hover,
+  .nav-bottom__indicator {
+    transition: opacity 0.01ms;
+  }
+
+  /* Die Flyout-Labels standen hier mit `transition: opacity 0.01ms` und dem
+   * Hinweis „sofort sichtbar statt 0.22s Delay". Beides trug nicht: `reset.css`
+   * setzt in diesem Medienzustand `transition-duration: 0s !important`, und
+   * einen `transition-delay` gibt es in der ganzen App an keiner Stelle - die
+   * Basisregeln beider Labels schreiben `transition: opacity var(--duration-xs)
+   * ease`, also eine Dauer ohne Verzögerung. Eine wirkungslose Zeile, die eine
+   * Feinsteuerung behauptet, kostet beim Lesen mehr als sie leistet. */
+
+  .nav-bottom .nav-item:active .nav-item__icon-well {
+    transform: none;
+    opacity: 1;
+  }
+
+  /* More-Sheet: kein vestibulär belastender Slide-up. Der Transform snappt
+   * ohne Bewegung; das Erscheinen trägt ein sanfter Opacity-Fade (die
+   * kanonische Reduced-Motion-Alternative). Backdrop faded weiterhin nur
+   * Opacity (bewegungsfrei) und bleibt daher unverändert. */
+  .more-sheet {
+    transition: opacity var(--transition-fast);
+    opacity: 0;
+  }
+
+  .more-sheet[aria-hidden="false"] {
+    opacity: 1;
+  }
+
+  .more-sheet__search:active,
+  .more-action:active {
+    transform: none;
+  }
+
+  .more-item:active .more-item__icon-well {
+    transform: none;
+  }
+
+  /* Das aus der More-Sheet-Suche geöffnete Voll-Overlay teilt denselben
+   * translateY-Slide — ebenfalls durch einen bewegungsfreien Fade ersetzen. */
+  .search-overlay {
+    transition: opacity var(--transition-fast);
+    opacity: 0;
+  }
+
+  .search-overlay--visible {
+    opacity: 1;
+  }
+
+  /* Desktop-Palette: kein Scale-Auftakt — das Panel erscheint ohne Bewegung,
+   * der Scrim übernimmt den (reduzierten) Fade. */
+  .search-overlay__panel {
+    transition: none;
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Read-only-Modul-Modus (#467): Bei „Nur lesen"-Rechten die Anlege-Affordance
+   ausblenden und einen erklärenden Hinweis oben in der Seite zeigen. Die
+   verbindliche Sperre liegt am Server; dies ist die ehrliche UI-Entsprechung. */
+html[data-module-readonly] .page-fab {
+  display: none !important;
+}
+
+.module-readonly-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.module-readonly-banner i {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+/* Warn-Variante für Formular-Hinweise (#474 Sichtbarkeits-Guard): hebt einen
+   Hinweis mit überraschender Konsequenz von neutralem Hilfetext ab, ohne zu
+   schreien. Als Zusatzklasse neben .form-hint / .task-field-hint. Der p-Selektor
+   erhöht die Spezifität, damit die später geladene Page-CSS-Hint-Farbe nicht gewinnt. */
+p.field-hint--warn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-warning);
+}
+
+p.field-hint--warn i,
+p.field-hint--warn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}

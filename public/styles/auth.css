@@ -1,0 +1,274 @@
+/**
+ * Modul: Anmeldung und Kontoeinrichtung
+ * Zweck: Styles für die Seiten VOR der App-Shell
+ * Abhängigkeiten: tokens.css, reset.css, layout.css
+ *
+ * EINE Seitenfamilie, fünf Routen: /login, /setup, /join, /forgot-password und
+ * /reset-password. Sie hieß bis zur Namensbereinigung nach ihrer ersten Route
+ * (`login.css`, `.login-*`), obwohl vier der fünf Seiten keine Anmeldung sind -
+ * gemeinsam ist ihnen, dass sie ohne App-Shell auskommen.
+ *
+ * Was hier NICHT mehr steht: die Rückmeldung eines Formulars (`.form-error`,
+ * `.form-success`). Sie stand als `.login-*` hier, während sie längst auch in
+ * Aufgaben, Dokumenten und Belohnungen benutzt wurde, und liegt jetzt in
+ * layout.css.
+ */
+
+/* Diese Seiten werden direkt in #app.app-shell gerendert (keine Sidebar/App-Shell
+ * vor dem Login). Ab >=1024px schaltet .app-shell auf flex-direction: row für die
+ * Sidebar um – ohne Sidebar schrumpft der Seiten-Wrapper dann auf Inhaltsbreite und
+ * wird linksbündig (sieht aus wie das Mobil-Layout). Solange eine Auth-Seite präsent
+ * ist, bleibt die Shell daher im Spaltenfluss, damit das Formular voll zentriert. */
+.app-shell:has(.auth-page) {
+  flex-direction: column;
+}
+
+.auth-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  width: 100%;
+  padding: var(--space-4);
+  /* Der Seitengrund, ohne Verlauf. Hier stand bis Runde 3 ein radialer
+   * Akzent-Hauch mit der Begründung der abgelösten Welt („Akzent-Scarcity-Regel
+   * ≤10 %") - der letzte chromatische Verlauf der App, und ausgerechnet auf der
+   * einzigen Seite, die ein abgemeldeter Nutzer je sieht. Die Marke trägt hier
+   * das Tile, nicht die Bühne. */
+  background: var(--color-bg);
+}
+
+/* Hero-Bereich über dem Login-Formular */
+.auth-hero {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+/* Marken-Anker: App-Tile mit dem Yuvomi-Zeichen (drei transluzente Kreise).
+ * Selbstbewusst (gefülltes Tile, weicher Schatten) und warm – „Würde ohne Kälte". */
+.auth-hero__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-16);
+  height: var(--space-16);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-accent);
+  /* Nicht --color-text-on-accent: das ist statisches Weiss und wird im Dark-Block
+   * nirgends redefiniert, während --color-accent dort aufhellt - gemessene
+   * 2,72:1 auf dem Zeichen. --color-ink-on-vivid kippt mit dem Modus und liegt
+   * so in beiden Themes bei 6,06:1 bzw. 6,40:1. */
+  color: var(--color-ink-on-vivid);
+  box-shadow:
+    var(--shadow-md),
+    /* Lichtkante, kein Text: bleibt weiss und nimmt im Dark-Modus zurück, weil
+     * die Fläche dort selbst hell ist. Eigenes Token, damit die Zeile nicht
+     * versehentlich der Textfarbe oben folgt. */
+    inset 0 1px 0 var(--glass-highlight-subtle);
+}
+
+.auth-hero__mark svg {
+  width: 55%;
+  height: 55%;
+}
+
+/* Large Title wie jeder Seitentitel, in Label-Farbe. Der Titel stand bis Runde 3
+ * auf einer eigenen 48px-Stufe und in --color-accent - beides verbietet
+ * DESIGN.md ausdruecklich (Ueberschriften enden bei 34px; Large Titles tragen
+ * immer --color-text-primary). Die Marke trägt das Tile darueber, das laut
+ * PRODUCT.md unantastbar ist. */
+.auth-hero__title {
+  font-size: var(--type-page-title-mobile);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  letter-spacing: var(--tracking-tight);
+  margin-bottom: var(--space-2);
+}
+
+.auth-hero__tagline {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+  max-width: 360px;
+  line-height: var(--line-height-relaxed, 1.6);
+}
+
+/* Die Karte, die das Formular trägt */
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.auth-form__submit {
+  width: 100%;
+  margin-top: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* Einleitungstext unter dem Kartentitel (/join). */
+.auth-card__intro {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+
+/* Hinweis unter einem Feld, das die Einladung vorgibt. Bewusst ohne
+ * display-Angabe: eine solche überschriebe das UA-display:none des
+ * hidden-Attributs, und der Hinweis stünde auch ohne Vorgabe da. */
+.auth-form__hint {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Das vorgegebene Feld selbst: eigene Klasse statt eines .input[readonly]-
+ * Selektors. readonly wird auch dort gesetzt, wo ein Feld nur seine Tastatur-
+ * eingabe sperrt und trotzdem normal aussehen soll; die Dämpfung gilt hier
+ * ausdrücklich nur für "die Einladung gibt diesen Wert vor". */
+.input--fixed {
+  background-color: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+/* Caps-Lock-Hinweis am Passwortfeld */
+.auth-capslock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-warning);
+}
+
+/* Das display:flex oben überschreibt sonst das UA-display:none des
+ * hidden-Attributs – Hinweis würde permanent sichtbar sein. */
+.auth-capslock[hidden] {
+  display: none;
+}
+
+.auth-capslock i {
+  width: var(--text-base, 1rem);
+  height: var(--text-base, 1rem);
+  flex-shrink: 0;
+}
+
+/* Nach falschen Zugangsdaten wird der Recovery-Link betont, damit der Nutzer
+ * einen Ausweg sieht statt es blind erneut zu versuchen. */
+.auth-form__forgot--emphasis a {
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-accent);
+}
+
+.auth-version {
+  margin-top: var(--space-4);
+  /* Platz reservieren, damit die spät nachgeladene Version das zentrierte
+   * Formular nicht nach oben schiebt (CLS). */
+  min-height: var(--text-sm);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  text-align: center;
+}
+
+/* „oder"-Trenner zwischen Passwort- und SSO-Anmeldung */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--color-border);
+}
+
+/* Passwort-Sichtbarkeit-Toggle */
+.input-password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.input-password-wrapper .input {
+  flex: 1;
+  min-width: 0;
+  /* logisch statt physisch, damit der Toggle-Platz in RTL auf der richtigen
+   * Seite reserviert wird (ar/fa) */
+  padding-inline-end: calc(var(--target-lg) + var(--space-1));
+}
+
+.password-toggle {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Komfortable Daumen-Trefferfläche (≥44 px) statt der bisherigen 40 px */
+  width: var(--target-lg);
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  /* logische Ecken: rundet in RTL automatisch die richtige Seite */
+  border-start-start-radius: 0;
+  border-start-end-radius: var(--radius-md);
+  border-end-end-radius: var(--radius-md);
+  border-end-start-radius: 0;
+  transition: color var(--transition-fast);
+}
+
+.password-toggle:hover {
+  color: var(--color-text-primary);
+}
+
+.password-toggle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+
+.password-toggle i {
+  width: var(--text-lg, 1.125rem);
+  height: var(--text-lg, 1.125rem);
+  pointer-events: none;
+}
+
+/* Feld-Fehler-Zustand */
+.form-group--error .input {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) var(--tint-shadow), transparent);
+}
+
+.form-group--error .label {
+  color: var(--color-danger);
+}
+
+.auth-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: auth-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-spinner { animation: none; opacity: 0.6; }
+}

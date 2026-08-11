@@ -1,0 +1,5235 @@
+/**
+ * Modul: Datenbank (Database)
+ * Zweck: SQLite/SQLCipher Verbindung, Schema-Migration (versioniert) und Query-Helfer
+ * Abhängigkeiten: better-sqlite3-multiple-ciphers
+ *
+ * Verschlüsselung:
+ *   `better-sqlite3-multiple-ciphers` ist ein API-kompatibler Ersatz für
+ *   `better-sqlite3`, der die Cipher-Schicht bereits im vorkompilierten Binary
+ *   mitbringt. Es wird KEIN System-SQLCipher und kein Quell-Build benötigt -
+ *   das gilt für Docker und Bare-Metal gleichermaßen.
+ *
+ *   Ohne DB_ENCRYPTION_KEY läuft die App bewusst mit unverschlüsseltem SQLite
+ *   (Entwicklung). Ist der Key gesetzt, wird der Cipher auf `sqlcipher`
+ *   (AES-256) gestellt und beim Start hart verifiziert: fehlender
+ *   Cipher-Support oder eine trotz Key unverschlüsselte Datei sind ein
+ *   Startfehler, kein stilles Weiterlaufen. Eine bereits vorhandene
+ *   unverschlüsselte Datenbank wird dabei einmalig migriert.
+ */
+
+import Database from 'better-sqlite3-multiple-ciphers';
+import path from 'path';
+import fs from 'node:fs/promises';
+import { mkdirSync, existsSync, renameSync, rmSync, copyFileSync, openSync, readSync, closeSync } from 'node:fs';
+import { createLogger } from './logger.js';
+import { decodeHtmlEntities } from './utils/html-entities.js';
+import { toE164, defaultCountryFromConfig } from './utils/phone.js';
+
+const log = createLogger('DB');
+
+const DB_KEY = process.env.DB_ENCRYPTION_KEY;
+
+// --------------------------------------------------------
+// Pfad-Auflösung (Legacy-Migration oikos.db → yuvomi.db)
+// --------------------------------------------------------
+//
+// Yuvomi hieß früher „Oikos". Die DB-Datei lag standardmäßig unter `oikos.db`
+// (bzw. `/data/oikos.db` in allen ausgelieferten Docker-Templates). Damit
+// Bestands-Nutzer beim Update NICHTS von Hand ändern müssen, leiten wir den
+// effektiven Pfad ab:
+//   - kein DB_PATH gesetzt              → <root>/yuvomi.db
+//   - DB_PATH endet auf oikos.db        → <dir>/yuvomi.db  (Legacy-Default erkannt)
+//   - DB_PATH endet auf yuvomi.db       → <dir>/yuvomi.db  (neuer Default)
+//   - beliebiger anderer DB_PATH        → unverändert (Custom-Pfad wird respektiert)
+// In allen „managed" Fällen wird eine vorhandene `oikos.db` beim Start einmalig
+// nach `yuvomi.db` migriert. Dass auch der NEUE Default `yuvomi.db` als managed
+// gilt, ist bewusst: aktualisiert ein Bestands-User seine Compose-Datei auf den
+// neuen Default, läge die Daten weiter in `oikos.db` — die Migration greift trotzdem.
+let DB_PATH;
+let LEGACY_DB_PATH; // null außer bei „managed" Layout
+{
+  const configured = process.env.DB_PATH;
+  const baseDir = configured
+    ? path.dirname(configured)
+    : path.join(import.meta.dirname, '..');
+  const base = configured ? path.basename(configured) : null;
+  const isManagedLayout = !configured || base === 'oikos.db' || base === 'yuvomi.db';
+  DB_PATH = isManagedLayout ? path.join(baseDir, 'yuvomi.db') : configured;
+  LEGACY_DB_PATH = isManagedLayout ? path.join(baseDir, 'oikos.db') : null;
+}
+
+/**
+ * Einmalige, idempotente Migration der Legacy-Datenbankdatei `oikos.db` → `yuvomi.db`.
+ * Läuft beim Start VOR dem Öffnen der Verbindung. Absturzsicher:
+ *   - Nichts zu tun (frische Installation / bereits migriert) → return.
+ *   - Doppelzustand (beide existieren) → Ziel gewinnt, Legacy bleibt liegen, Warnung.
+ *   - Read-only-Volume → kein Crash, Fallback auf Legacy-Pfad.
+ */
+function migrateLegacyDbFile() {
+  if (!LEGACY_DB_PATH) return;             // Custom-Pfad → keine Migration
+  if (existsSync(DB_PATH)) {
+    if (existsSync(LEGACY_DB_PATH)) {
+      log.warn(
+        `Both ${path.basename(DB_PATH)} and legacy ${path.basename(LEGACY_DB_PATH)} exist — ` +
+        `using ${path.basename(DB_PATH)} and leaving the legacy file untouched.`
+      );
+    }
+    return;                                // bereits migriert / frisch
+  }
+  if (!existsSync(LEGACY_DB_PATH)) return;  // nichts zu migrieren
+
+  log.info(`Legacy database detected — migrating ${LEGACY_DB_PATH} → ${DB_PATH}`);
+
+  // 1. WAL des Legacy-Files VOLLSTÄNDIG in die Hauptdatei einfalten. Erst wenn der
+  //    TRUNCATE-Checkpoint nachweislich gelang, trägt `oikos.db` allein den
+  //    kompletten Zustand (WAL = 0 Bytes) — dann ist ein Rename der reinen .db
+  //    verlustfrei. Schlägt der Checkpoint fehl, könnten committete Frames noch im
+  //    WAL liegen; dann NICHT teil-migrieren.
+  let checkpointed = false;
+  try {
+    // Bestands-Installationen haben typischerweise einen gesetzten Key UND eine
+    // noch unverschlüsselte Datei (bis v1.52.x lief `PRAGMA key` ins Leere).
+    // Setzten wir ihr den Key auf, läse SQLite sie als verschlüsselt und schon
+    // der Checkpoint scheiterte mit „file is not a database" — über eine völlig
+    // intakte Datenbank. Verschlüsselt wird erst nach dem Rename, durch
+    // encryptPlaintextDatabase() auf dem dann gültigen DB_PATH.
+    const encrypted = !isPlaintextDatabase(LEGACY_DB_PATH);
+    const legacy = new Database(LEGACY_DB_PATH);
+    try {
+      if (encrypted) applyEncryptionKey(legacy);
+      // wal_checkpoint(TRUNCATE) WIRFT nicht, wenn eine andere Verbindung den
+      // WAL-Lock hält — es liefert eine Zeile { busy, log, checkpointed }. Nur
+      // busy === 0 bedeutet, dass der WAL vollständig gefaltet & getrunct wurde
+      // (busy === 0 gilt auch für Nicht-WAL-DBs, die kein WAL haben). Bei busy != 0
+      // dürfen wir NICHT umbenennen, sonst lösen wir die .db von ungefalteten Frames.
+      const [row] = legacy.pragma('wal_checkpoint(TRUNCATE)');
+      checkpointed = row != null && row.busy === 0;
+      if (!checkpointed) {
+        log.warn(`Legacy checkpoint incomplete (busy=${row?.busy}).`);
+      }
+    } finally {
+      legacy.close();
+    }
+  } catch (err) {
+    log.warn(`Legacy checkpoint failed (${err?.message}).`);
+  }
+
+  if (!checkpointed) {
+    // WAL könnte committete Daten enthalten, die wir nicht sicher von der .db
+    // trennen können → KEINE Teil-Migration. Auf dem Legacy-Pfad weiterlaufen
+    // (SQLite öffnet oikos.db samt intaktem WAL); nächster Boot versucht es erneut.
+    log.warn(`Deferring migration — continuing on legacy path ${LEGACY_DB_PATH}.`);
+    DB_PATH = LEGACY_DB_PATH;
+    return;
+  }
+
+  // 2. Checkpoint gelang → die .db ist vollständig und eigenständig. Nur sie
+  //    umbenennen; die nun leeren Legacy-Sidecars best-effort entfernen (SQLite
+  //    legt -wal/-shm für yuvomi.db bei Bedarf neu an).
+  try {
+    renameSync(LEGACY_DB_PATH, DB_PATH);
+    for (const suffix of ['-wal', '-shm']) {
+      const stale = `${LEGACY_DB_PATH}${suffix}`;
+      if (existsSync(stale)) {
+        try { rmSync(stale); } catch { /* harmlos: leeres/locked Sidecar */ }
+      }
+    }
+    log.info(`Database migrated to ${DB_PATH}`);
+  } catch (err) {
+    // z. B. read-only Volume → NICHT crashen, weiter auf Legacy-Pfad laufen.
+    log.warn(
+      `Could not rename legacy database (${err?.message}); ` +
+      `continuing on legacy path ${LEGACY_DB_PATH}.`
+    );
+    DB_PATH = LEGACY_DB_PATH;
+  }
+}
+
+let db;
+
+// --------------------------------------------------------
+// Initialisierung
+// --------------------------------------------------------
+
+/**
+ * Datenbankverbindung öffnen, SQLCipher-Key setzen, Migrations ausführen.
+ * Einmalig beim Serverstart aufrufen.
+ * @param {{ plaintextBackup?: boolean }} [options] `plaintextBackup: false`
+ *   unterdrückt die Klartext-Sicherheitskopie der Verschlüsselungs-Migration.
+ *   Nur für Aufrufer, die die Quelldaten selbst schon gesichert halten — siehe
+ *   `restoreFromFile()`.
+ * @returns {import('better-sqlite3-multiple-ciphers').Database}
+ */
+function init({ plaintextBackup = true } = {}) {
+  if (db) return db;
+  if (!path.isAbsolute(DB_PATH)) {
+    log.warn(
+      `DB_PATH "${DB_PATH}" is a relative path — inside Docker this resolves to ` +
+      `"${path.resolve(DB_PATH)}", which is NOT the mounted volume. ` +
+      `Data will be lost on container restart. Use an absolute path, e.g. DB_PATH=/data/yuvomi.db`
+    );
+  }
+  mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  migrateLegacyDbFile();
+
+  // Beide Prüfungen laufen VOR dem Öffnen: fehlt der Cipher-Support, darf gar
+  // nicht erst eine unverschlüsselte Datei entstehen.
+  if (DB_KEY) {
+    assertCipherSupport();
+    encryptPlaintextDatabase({ backup: plaintextBackup });
+  }
+
+  db = new Database(DB_PATH);
+
+  applyEncryptionKey(db);
+
+  if (DB_KEY) {
+    // Sicherstellen dass die Datenbank tatsächlich entschlüsselbar ist
+    try {
+      assertReadable(db);
+    } catch {
+      throw new Error(
+        `[DB] Wrong encryption key — ${DB_PATH} could not be decrypted. ` +
+        'Check DB_ENCRYPTION_KEY against the value used when the database was created.'
+      );
+    }
+  }
+
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  db.pragma('synchronous = NORMAL');
+  db.pragma('temp_store = MEMORY');
+
+  migrate();
+  reconcileCriticalSchema();
+
+  // Erst hier steht garantiert eine beschriebene Datei auf der Platte. Der
+  // Header ist der einzige Beleg, der nicht auf einer API-Zusage beruht.
+  if (DB_KEY) assertStoredEncrypted();
+
+  log.info(`Connected: ${DB_PATH} | Schema v${currentVersion()}`);
+  return db;
+}
+
+function applyEncryptionKey(database) {
+  if (!DB_KEY) return;
+  // `cipher` muss vor `key` gesetzt werden. `sqlcipher` = AES-256 im
+  // SQLCipher-Format (statt des Default-Ciphers ChaCha20).
+  database.pragma("cipher = 'sqlcipher'");
+  database.pragma(`key="x'${Buffer.from(DB_KEY, 'utf8').toString('hex')}'"`);
+}
+
+function assertReadable(database) {
+  database.prepare('SELECT count(*) FROM sqlite_master').get();
+}
+
+/**
+ * Belegt, dass das geladene Binary überhaupt verschlüsseln kann.
+ * `sqlite3mc_version()` existiert ausschließlich in
+ * better-sqlite3-multiple-ciphers. Ohne diese Prüfung schluckt reguläres
+ * SQLite das unbekannte `PRAGMA key` kommentarlos und die Daten lägen im
+ * Klartext, während die Konfiguration Verschlüsselung verspricht.
+ */
+function assertCipherSupport() {
+  const probe = new Database(':memory:');
+  try {
+    probe.prepare('SELECT sqlite3mc_version() AS version').get();
+  } catch {
+    throw new Error(
+      '[DB] DB_ENCRYPTION_KEY is set, but the installed SQLite binding has no ' +
+      'encryption support (expected better-sqlite3-multiple-ciphers). Refusing ' +
+      'to start rather than storing your data unencrypted.'
+    );
+  } finally {
+    probe.close();
+  }
+}
+
+/** Header jeder unverschlüsselten SQLite-Datei. Verschlüsselt ist er Zufallsrauschen. */
+const SQLITE_PLAINTEXT_HEADER = Buffer.from('SQLite format 3\0', 'binary');
+
+function isPlaintextDatabase(filePath) {
+  let fd;
+  try {
+    fd = openSync(filePath, 'r');
+    const head = Buffer.alloc(SQLITE_PLAINTEXT_HEADER.length);
+    const bytesRead = readSync(fd, head, 0, head.length, 0);
+    return bytesRead === head.length && head.equals(SQLITE_PLAINTEXT_HEADER);
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* Datei ist ohnehin gleich zu */ }
+    }
+  }
+}
+
+/**
+ * Einmalige Migration einer unverschlüsselten Bestands-Datenbank.
+ *
+ * Bis einschließlich v1.52.x war `DB_ENCRYPTION_KEY` faktisch wirkungslos:
+ * das ausgelieferte Binary hatte keine Cipher-Schicht, `PRAGMA key` lief ins
+ * Leere. Bestands-Installationen haben deshalb einen gesetzten Key UND eine
+ * unverschlüsselte Datei. Ohne diese Migration würde die App nach dem Update
+ * nicht mehr starten.
+ *
+ * Der Ablauf lässt das Original bis zum abschließenden, atomaren rename
+ * unangetastet: bricht der Vorgang ab, ist die Datenbank unverändert.
+ *
+ * @param {{ backup?: boolean }} [options] `backup: false` überspringt die
+ *   Klartext-Sicherheitskopie. Gedacht für den Restore-Pfad: dort ist die
+ *   eingespielte Backup-Datei selbst die Sicherung, und `.pre-restore-*` deckt
+ *   den Rollback ab. Eine dritte, unverschlüsselte Vollkopie im Datenverzeichnis
+ *   wäre reine Duplikation — und würde sich bei jedem Restore erneut anhäufen.
+ */
+function encryptPlaintextDatabase({ backup = true } = {}) {
+  if (!existsSync(DB_PATH)) return;           // Neuinstallation
+  if (!isPlaintextDatabase(DB_PATH)) return;  // bereits verschlüsselt
+
+  // Ein bereits vorhandenes Backup darf nicht überschrieben werden: nach dem
+  // Einspielen eines alten Klartext-Backups liefe die Migration erneut und
+  // würde sonst die Sicherheitskopie des ersten Durchlaufs vernichten.
+  let backupPath = null;
+  if (backup) {
+    backupPath = `${DB_PATH}.plaintext-backup`;
+    if (existsSync(backupPath)) {
+      backupPath = `${DB_PATH}.plaintext-backup-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    }
+  }
+  const workingPath = `${DB_PATH}.encrypting`;
+
+  log.warn(`${DB_PATH} is unencrypted but DB_ENCRYPTION_KEY is set — encrypting now.`);
+
+  // Offenes WAL einchecken, damit die .db-Datei für sich vollständig ist.
+  // wal_checkpoint(TRUNCATE) WIRFT NICHT, wenn eine andere Verbindung den
+  // WAL-Lock hält — es liefert { busy, log, checkpointed }. Nur busy === 0
+  // heißt, dass alle committeten Frames in der .db stehen. Würden wir bei
+  // busy != 0 weitermachen, verschlüsselten wir eine unvollständige Kopie und
+  // löschten anschließend die Sidecars: committete Daten wären verloren.
+  // Deshalb hier abbrechen statt teil-migrieren — unverschlüsselt weiterlaufen
+  // ist wegen der Sicherheitszusage ebenfalls keine Option.
+  let checkpointed = false;
+  const source = new Database(DB_PATH);
+  try {
+    const [row] = source.pragma('wal_checkpoint(TRUNCATE)');
+    checkpointed = row != null && row.busy === 0;
+    if (!checkpointed) {
+      log.warn(`WAL checkpoint incomplete (busy=${row?.busy}) — not encrypting a partial copy.`);
+    }
+  } finally {
+    source.close();
+  }
+
+  if (!checkpointed) {
+    throw new Error(
+      `[DB] Cannot encrypt ${DB_PATH}: its write-ahead log could not be checkpointed, ` +
+      'which means another connection is still using the database. Encrypting now ' +
+      'would risk losing committed data. Make sure no second instance is running ' +
+      'against this volume and start again.'
+    );
+  }
+
+  if (backupPath) copyFileSync(DB_PATH, backupPath);
+  copyFileSync(DB_PATH, workingPath);
+
+  try {
+    const working = new Database(workingPath);
+    try {
+      // rekey ist im WAL-Modus nicht erlaubt.
+      working.pragma('journal_mode = DELETE');
+      working.pragma("cipher = 'sqlcipher'");
+      working.pragma(`rekey="x'${Buffer.from(DB_KEY, 'utf8').toString('hex')}'"`);
+      working.pragma('journal_mode = WAL');
+    } finally {
+      working.close();
+    }
+  } catch (err) {
+    for (const suffix of ['', '-wal', '-shm']) {
+      try { rmSync(`${workingPath}${suffix}`, { force: true }); } catch { /* Aufräumen ist best-effort */ }
+    }
+    throw new Error(
+      `[DB] Encrypting the existing database failed (${err?.message}). ` +
+      `The original database is untouched at ${DB_PATH}.`
+    );
+  }
+
+  renameSync(workingPath, DB_PATH);
+
+  // Sidecars der unverschlüsselten Datei sind nach dem Checkpoint leer und
+  // passen nicht mehr zur neuen Datei.
+  for (const suffix of ['-wal', '-shm']) {
+    try { rmSync(`${DB_PATH}${suffix}`, { force: true }); } catch { /* SQLite legt sie neu an */ }
+    try { rmSync(`${workingPath}${suffix}`, { force: true }); } catch { /* dito */ }
+  }
+
+  if (!backupPath) {
+    log.info('Database encrypted (AES-256).');
+    return;
+  }
+
+  log.info(`Database encrypted (AES-256). Plaintext backup: ${backupPath}`);
+  log.warn(
+    `${backupPath} still contains UNENCRYPTED data — delete it once you have ` +
+    'verified that the app starts and your data is complete.'
+  );
+}
+
+/**
+ * Letzte Instanz gegen den stillen Fehlschlag: liegt trotz gesetztem Key eine
+ * unverschlüsselte Datei auf der Platte, ist der Start ein Fehler.
+ */
+function assertStoredEncrypted() {
+  if (!isPlaintextDatabase(DB_PATH)) return;
+  throw new Error(
+    `[DB] DB_ENCRYPTION_KEY is set, but ${DB_PATH} is stored unencrypted. ` +
+    'Refusing to continue — your data would not be protected.'
+  );
+}
+
+// --------------------------------------------------------
+// Migrations-Engine
+// --------------------------------------------------------
+
+/**
+ * Alle Migrationen in aufsteigender Reihenfolge.
+ * Neue Migrations am Ende anhängen - niemals bestehende ändern.
+ */
+const MIGRATIONS = [
+  {
+    version: 1,
+    description: 'Initial schema',
+    up: `
+      -- Benutzer
+      CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        username      TEXT    UNIQUE NOT NULL,
+        display_name  TEXT    NOT NULL,
+        password_hash TEXT    NOT NULL,
+        avatar_color  TEXT    NOT NULL DEFAULT '#007AFF',
+        role          TEXT    NOT NULL DEFAULT 'member'
+                              CHECK(role IN ('admin', 'member')),
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Aufgaben
+      CREATE TABLE IF NOT EXISTS tasks (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        title           TEXT    NOT NULL,
+        description     TEXT,
+        category        TEXT    NOT NULL DEFAULT 'Sonstiges',
+        priority        TEXT    NOT NULL DEFAULT 'none'
+                                CHECK(priority IN ('none', 'low', 'medium', 'high', 'urgent')),
+        status          TEXT    NOT NULL DEFAULT 'open'
+                                CHECK(status IN ('open', 'in_progress', 'done')),
+        due_date        TEXT,
+        due_time        TEXT,
+        assigned_to     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        is_recurring    INTEGER NOT NULL DEFAULT 0,
+        recurrence_rule TEXT,
+        parent_task_id  INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Einkaufslisten
+      CREATE TABLE IF NOT EXISTS shopping_lists (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Essensplan (muss vor shopping_items stehen wegen FK-Referenz)
+      CREATE TABLE IF NOT EXISTS meals (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        date       TEXT    NOT NULL,
+        meal_type  TEXT    NOT NULL
+                           CHECK(meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
+        title      TEXT    NOT NULL,
+        notes      TEXT,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Einkaufsartikel (nach meals, wegen added_from_meal FK)
+      CREATE TABLE IF NOT EXISTS shopping_items (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_id         INTEGER NOT NULL REFERENCES shopping_lists(id) ON DELETE CASCADE,
+        name            TEXT    NOT NULL,
+        quantity        TEXT,
+        category        TEXT    NOT NULL DEFAULT 'Sonstiges',
+        is_checked      INTEGER NOT NULL DEFAULT 0,
+        added_from_meal INTEGER REFERENCES meals(id) ON DELETE SET NULL,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Mahlzeit-Zutaten
+      CREATE TABLE IF NOT EXISTS meal_ingredients (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        meal_id          INTEGER NOT NULL REFERENCES meals(id) ON DELETE CASCADE,
+        name             TEXT    NOT NULL,
+        quantity         TEXT,
+        on_shopping_list INTEGER NOT NULL DEFAULT 0,
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Kalender-Events
+      CREATE TABLE IF NOT EXISTS calendar_events (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        title                TEXT    NOT NULL,
+        description          TEXT,
+        start_datetime       TEXT    NOT NULL,
+        end_datetime         TEXT,
+        all_day              INTEGER NOT NULL DEFAULT 0,
+        location             TEXT,
+        color                TEXT    NOT NULL DEFAULT '#007AFF',
+        assigned_to          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        external_calendar_id TEXT,
+        external_source      TEXT    NOT NULL DEFAULT 'local'
+                                     CHECK(external_source IN ('local', 'google', 'apple')),
+        recurrence_rule      TEXT,
+        created_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Pinnwand / Notizen
+      CREATE TABLE IF NOT EXISTS notes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        title      TEXT,
+        content    TEXT    NOT NULL,
+        color      TEXT    NOT NULL DEFAULT '#FFEB3B',
+        pinned     INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Kontakte
+      CREATE TABLE IF NOT EXISTS contacts (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL,
+        category   TEXT    NOT NULL DEFAULT 'Sonstiges',
+        phone      TEXT,
+        email      TEXT,
+        address    TEXT,
+        notes      TEXT,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Budget
+      CREATE TABLE IF NOT EXISTS budget_entries (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        title           TEXT    NOT NULL,
+        amount          REAL    NOT NULL,
+        category        TEXT    NOT NULL DEFAULT 'Sonstiges',
+        date            TEXT    NOT NULL,
+        is_recurring    INTEGER NOT NULL DEFAULT 0,
+        recurrence_rule TEXT,
+        created_by      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- --------------------------------------------------------
+      -- updated_at Trigger (automatisch bei UPDATE setzen)
+      -- --------------------------------------------------------
+      CREATE TRIGGER IF NOT EXISTS trg_users_updated_at
+        AFTER UPDATE ON users FOR EACH ROW
+        BEGIN UPDATE users SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_tasks_updated_at
+        AFTER UPDATE ON tasks FOR EACH ROW
+        BEGIN UPDATE tasks SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_shopping_lists_updated_at
+        AFTER UPDATE ON shopping_lists FOR EACH ROW
+        BEGIN UPDATE shopping_lists SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_shopping_items_updated_at
+        AFTER UPDATE ON shopping_items FOR EACH ROW
+        BEGIN UPDATE shopping_items SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_meals_updated_at
+        AFTER UPDATE ON meals FOR EACH ROW
+        BEGIN UPDATE meals SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_meal_ingredients_updated_at
+        AFTER UPDATE ON meal_ingredients FOR EACH ROW
+        BEGIN UPDATE meal_ingredients SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_calendar_events_updated_at
+        AFTER UPDATE ON calendar_events FOR EACH ROW
+        BEGIN UPDATE calendar_events SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_notes_updated_at
+        AFTER UPDATE ON notes FOR EACH ROW
+        BEGIN UPDATE notes SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_contacts_updated_at
+        AFTER UPDATE ON contacts FOR EACH ROW
+        BEGIN UPDATE contacts SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_budget_entries_updated_at
+        AFTER UPDATE ON budget_entries FOR EACH ROW
+        BEGIN UPDATE budget_entries SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      -- --------------------------------------------------------
+      -- Indizes
+      -- --------------------------------------------------------
+      CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to    ON tasks(assigned_to);
+      CREATE INDEX IF NOT EXISTS idx_tasks_due_date       ON tasks(due_date);
+      CREATE INDEX IF NOT EXISTS idx_tasks_status         ON tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_parent         ON tasks(parent_task_id);
+      CREATE INDEX IF NOT EXISTS idx_shopping_items_list  ON shopping_items(list_id);
+      CREATE INDEX IF NOT EXISTS idx_meals_date           ON meals(date);
+      CREATE INDEX IF NOT EXISTS idx_calendar_start       ON calendar_events(start_datetime);
+      CREATE INDEX IF NOT EXISTS idx_calendar_assigned    ON calendar_events(assigned_to);
+      CREATE INDEX IF NOT EXISTS idx_notes_pinned         ON notes(pinned);
+      CREATE INDEX IF NOT EXISTS idx_budget_date          ON budget_entries(date);
+      CREATE INDEX IF NOT EXISTS idx_budget_created_by    ON budget_entries(created_by);
+    `,
+  },
+  {
+    version: 2,
+    description: 'Sync configuration table for Google/Apple Calendar',
+    up: `
+      CREATE TABLE IF NOT EXISTS sync_config (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_calendar_external_id ON calendar_events(external_calendar_id);
+    `,
+  },
+  {
+    version: 3,
+    description: 'Recurring budget entries: parent reference and skip table',
+    up: `
+      ALTER TABLE budget_entries ADD COLUMN recurrence_parent_id INTEGER
+        REFERENCES budget_entries(id) ON DELETE SET NULL;
+
+      CREATE TABLE IF NOT EXISTS budget_recurrence_skipped (
+        parent_id INTEGER NOT NULL REFERENCES budget_entries(id) ON DELETE CASCADE,
+        month     TEXT    NOT NULL,
+        PRIMARY KEY (parent_id, month)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_budget_parent ON budget_entries(recurrence_parent_id);
+    `,
+  },
+  {
+    version: 4,
+    description: 'Allow "none" priority and set it as default',
+    up: `
+      -- SQLite erlaubt kein ALTER CHECK, daher Tabelle neu erstellen
+      CREATE TABLE tasks_new (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        title           TEXT    NOT NULL,
+        description     TEXT,
+        category        TEXT    NOT NULL DEFAULT 'Sonstiges',
+        priority        TEXT    NOT NULL DEFAULT 'none'
+                                CHECK(priority IN ('none', 'low', 'medium', 'high', 'urgent')),
+        status          TEXT    NOT NULL DEFAULT 'open'
+                                CHECK(status IN ('open', 'in_progress', 'done')),
+        due_date        TEXT,
+        due_time        TEXT,
+        assigned_to     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        is_recurring    INTEGER NOT NULL DEFAULT 0,
+        recurrence_rule TEXT,
+        parent_task_id  INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT INTO tasks_new SELECT * FROM tasks;
+      DROP TABLE tasks;
+      ALTER TABLE tasks_new RENAME TO tasks;
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_status         ON tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_assigned       ON tasks(assigned_to);
+      CREATE INDEX IF NOT EXISTS idx_tasks_parent         ON tasks(parent_task_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_due            ON tasks(due_date);
+    `,
+  },
+  {
+    version: 5,
+    description: 'Shopping categories as a separate table (customizable, sortable)',
+    up: `
+      CREATE TABLE IF NOT EXISTS shopping_categories (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL UNIQUE,
+        icon       TEXT    NOT NULL DEFAULT 'tag',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT INTO shopping_categories (name, icon, sort_order) VALUES
+        ('Obst & Gemüse',   'apple',           0),
+        ('Backwaren',        'wheat',           1),
+        ('Milchprodukte',    'milk',            2),
+        ('Fleisch & Fisch',  'beef',            3),
+        ('Tiefkühl',         'snowflake',       4),
+        ('Getränke',         'cup-soda',        5),
+        ('Haushalt',         'spray-can',       6),
+        ('Drogerie',         'pill',            7),
+        ('Sonstiges',        'shopping-basket', 8);
+    `,
+  },
+  {
+    version: 6,
+    description: 'Recipe URL for meals',
+    up: `
+      ALTER TABLE meals ADD COLUMN recipe_url TEXT;
+    `,
+  },
+  {
+    version: 7,
+    description: 'Category per ingredient for shopping list transfer',
+    up: `
+      ALTER TABLE meal_ingredients ADD COLUMN category TEXT NOT NULL DEFAULT 'Sonstiges';
+    `,
+  },
+  {
+    version: 8,
+    description: 'Reminders for tasks and calendar events',
+    up: `
+      CREATE TABLE IF NOT EXISTS reminders (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT    NOT NULL CHECK(entity_type IN ('task', 'event')),
+        entity_id   INTEGER NOT NULL,
+        remind_at   TEXT    NOT NULL,
+        dismissed   INTEGER NOT NULL DEFAULT 0,
+        created_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_reminders_entity ON reminders(entity_type, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_reminders_remind ON reminders(remind_at);
+      CREATE INDEX IF NOT EXISTS idx_reminders_user   ON reminders(created_by);
+    `,
+  },
+  {
+    version: 9,
+    description: 'Migrate task categories to English keys',
+    up: `
+      UPDATE tasks SET category = CASE category
+        WHEN 'Haushalt'   THEN 'household'
+        WHEN 'Schule'     THEN 'school'
+        WHEN 'Einkauf'    THEN 'shopping'
+        WHEN 'Reparatur'  THEN 'repair'
+        WHEN 'Gesundheit' THEN 'health'
+        WHEN 'Finanzen'   THEN 'finance'
+        WHEN 'Freizeit'   THEN 'leisure'
+        WHEN 'Sonstiges'  THEN 'misc'
+        ELSE category
+      END;
+    `,
+  },
+  {
+    version: 10,
+    description: 'ICS subscriptions table',
+    up: `
+      CREATE TABLE IF NOT EXISTS ics_subscriptions (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        name          TEXT    NOT NULL,
+        url           TEXT    NOT NULL,
+        color         TEXT    NOT NULL DEFAULT '#6366f1',
+        shared        INTEGER NOT NULL DEFAULT 0,
+        created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        etag          TEXT,
+        last_modified TEXT,
+        last_sync     TEXT,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+    `,
+  },
+  {
+    version: 11,
+    description: 'calendar_events: external_source ICS, subscription_id, user_modified',
+    up: `
+      CREATE TABLE calendar_events_new (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        title                TEXT    NOT NULL,
+        description          TEXT,
+        start_datetime       TEXT    NOT NULL,
+        end_datetime         TEXT,
+        all_day              INTEGER NOT NULL DEFAULT 0,
+        location             TEXT,
+        color                TEXT    NOT NULL DEFAULT '#007AFF',
+        assigned_to          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        external_calendar_id TEXT,
+        external_source      TEXT    NOT NULL DEFAULT 'local'
+                                     CHECK(external_source IN ('local', 'google', 'apple', 'ics')),
+        recurrence_rule      TEXT,
+        subscription_id      INTEGER REFERENCES ics_subscriptions(id) ON DELETE CASCADE,
+        user_modified        INTEGER NOT NULL DEFAULT 0,
+        created_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT INTO calendar_events_new
+        (id, title, description, start_datetime, end_datetime, all_day, location, color,
+         assigned_to, created_by, external_calendar_id, external_source, recurrence_rule,
+         subscription_id, user_modified, created_at, updated_at)
+      SELECT id, title, description, start_datetime, end_datetime, all_day, location, color,
+             assigned_to, created_by, external_calendar_id, external_source, recurrence_rule,
+             NULL, 0, created_at, updated_at
+      FROM calendar_events;
+
+      DROP TRIGGER IF EXISTS trg_calendar_events_updated_at;
+      DROP TABLE calendar_events;
+      ALTER TABLE calendar_events_new RENAME TO calendar_events;
+
+      CREATE TRIGGER trg_calendar_events_updated_at
+        AFTER UPDATE ON calendar_events FOR EACH ROW
+        BEGIN UPDATE calendar_events SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_calendar_start       ON calendar_events(start_datetime);
+      CREATE INDEX IF NOT EXISTS idx_calendar_assigned    ON calendar_events(assigned_to);
+      CREATE INDEX IF NOT EXISTS idx_calendar_external_id ON calendar_events(external_calendar_id);
+      CREATE INDEX IF NOT EXISTS idx_calendar_sub         ON calendar_events(subscription_id);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_sub_extid
+        ON calendar_events (subscription_id, external_calendar_id)
+        WHERE subscription_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 12,
+    description: 'calendar_events: replace partial unique index with full index (ON CONFLICT support)',
+    up: `
+      DROP INDEX IF EXISTS idx_calendar_sub_extid;
+      CREATE UNIQUE INDEX idx_calendar_sub_extid
+        ON calendar_events (subscription_id, external_calendar_id);
+    `,
+  },
+  {
+    version: 13,
+    description: 'Recipes table and meal association',
+    up: `
+      CREATE TABLE IF NOT EXISTS recipes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        title      TEXT    NOT NULL,
+        notes      TEXT,
+        recipe_url TEXT,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS recipe_ingredients (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipe_id  INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+        name       TEXT    NOT NULL,
+        quantity   TEXT,
+        category   TEXT    NOT NULL DEFAULT 'Sonstiges',
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes(title);
+      CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe ON recipe_ingredients(recipe_id);
+
+      CREATE TRIGGER IF NOT EXISTS trg_recipes_updated_at
+        AFTER UPDATE ON recipes FOR EACH ROW
+        BEGIN UPDATE recipes SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_recipe_ingredients_updated_at
+        AFTER UPDATE ON recipe_ingredients FOR EACH ROW
+        BEGIN UPDATE recipe_ingredients SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      ALTER TABLE meals ADD COLUMN recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_meals_recipe_id ON meals(recipe_id);
+    `,
+  },
+  {
+    version: 14,
+    description: 'External calendar metadata (name, color) and event association',
+    up: `
+      CREATE TABLE IF NOT EXISTS external_calendars (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        source      TEXT    NOT NULL CHECK(source IN ('google', 'apple')),
+        external_id TEXT    NOT NULL,
+        name        TEXT    NOT NULL,
+        color       TEXT,
+        UNIQUE(source, external_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ext_cal_source ON external_calendars(source, external_id);
+
+      ALTER TABLE calendar_events ADD COLUMN calendar_ref_id INTEGER
+        REFERENCES external_calendars(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_cal_events_ref ON calendar_events(calendar_ref_id);
+    `,
+  },
+  {
+    version: 15,
+    description: 'Budget expense categories as stable keys with subcategories',
+    up: `
+      ALTER TABLE budget_entries ADD COLUMN subcategory TEXT NOT NULL DEFAULT '';
+
+      UPDATE budget_entries
+      SET category = CASE category
+        WHEN 'Lebensmittel' THEN 'food'
+        WHEN 'Miete' THEN 'housing'
+        WHEN 'Versicherung' THEN 'financial_other'
+        WHEN 'Mobilität' THEN 'transport'
+        WHEN 'Freizeit' THEN 'leisure'
+        WHEN 'Kleidung' THEN 'shopping_clothing'
+        WHEN 'Gesundheit' THEN 'personal_health'
+        WHEN 'Bildung' THEN 'education'
+        WHEN 'Sonstiges' THEN 'financial_other'
+        ELSE category
+      END
+      WHERE amount < 0;
+
+      UPDATE budget_entries
+      SET subcategory = CASE category
+        WHEN 'housing' THEN 'rent_mortgage'
+        WHEN 'food' THEN 'groceries'
+        WHEN 'transport' THEN 'fuel'
+        WHEN 'personal_health' THEN 'pharmacy'
+        WHEN 'leisure' THEN 'events'
+        WHEN 'shopping_clothing' THEN 'clothes_shoes'
+        WHEN 'education' THEN 'courses_college'
+        WHEN 'financial_other' THEN 'insurance_other'
+        ELSE ''
+      END
+      WHERE amount < 0 AND subcategory = '';
+
+      UPDATE budget_entries
+      SET category = 'Sonstiges Einkommen'
+      WHERE amount > 0 AND category = 'Sonstiges';
+    `,
+  },
+  {
+    version: 16,
+    description: 'Move budget categories and subcategories to separate tables',
+    up: `
+      CREATE TABLE IF NOT EXISTS budget_categories (
+        key        TEXT PRIMARY KEY,
+        name       TEXT    NOT NULL,
+        type       TEXT    NOT NULL CHECK(type IN ('expense', 'income')),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS budget_subcategories (
+        key          TEXT PRIMARY KEY,
+        category_key TEXT    NOT NULL REFERENCES budget_categories(key) ON DELETE CASCADE,
+        name         TEXT    NOT NULL,
+        sort_order   INTEGER NOT NULL DEFAULT 0,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(category_key, name)
+      );
+
+      INSERT OR IGNORE INTO budget_categories (key, name, type, sort_order) VALUES
+        ('housing', 'Housing / Home', 'expense', 0),
+        ('food', 'Food', 'expense', 1),
+        ('transport', 'Transport', 'expense', 2),
+        ('personal_health', 'Personal Care / Health', 'expense', 3),
+        ('leisure', 'Leisure and Entertainment', 'expense', 4),
+        ('shopping_clothing', 'Shopping and Clothing', 'expense', 5),
+        ('education', 'Education', 'expense', 6),
+        ('financial_other', 'Financial Services and Other', 'expense', 7),
+        ('Erwerbseinkommen', 'Erwerbseinkommen', 'income', 0),
+        ('Kapitalerträge', 'Kapitalerträge', 'income', 1),
+        ('Geschenke & Transfers', 'Geschenke & Transfers', 'income', 2),
+        ('Sozialleistungen', 'Sozialleistungen', 'income', 3),
+        ('Sonstiges Einkommen', 'Sonstiges Einkommen', 'income', 4);
+
+      INSERT OR IGNORE INTO budget_subcategories (key, category_key, name, sort_order) VALUES
+        ('rent_mortgage', 'housing', 'Rent / Mortgage', 0),
+        ('condominium', 'housing', 'Condominium fees', 1),
+        ('utilities', 'housing', 'Electricity / Water / Gas', 2),
+        ('internet_tv_phone', 'housing', 'Internet / TV / Phone', 3),
+        ('renovation_maintenance', 'housing', 'Renovation / Maintenance', 4),
+        ('cleaning', 'housing', 'Cleaning', 5),
+        ('groceries', 'food', 'Groceries', 0),
+        ('restaurants_bars', 'food', 'Restaurants / Bars', 1),
+        ('snacks_fast_food', 'food', 'Snacks / Fast Food', 2),
+        ('bakery', 'food', 'Bakery', 3),
+        ('fuel', 'transport', 'Fuel', 0),
+        ('parking_tolls', 'transport', 'Parking / Tolls', 1),
+        ('public_transport', 'transport', 'Public transport', 2),
+        ('apps_taxi', 'transport', 'Apps / Taxi', 3),
+        ('maintenance_insurance', 'transport', 'Maintenance / Insurance', 4),
+        ('pharmacy', 'personal_health', 'Pharmacy', 0),
+        ('health_insurance', 'personal_health', 'Health insurance', 1),
+        ('gym_sports', 'personal_health', 'Gym / Sports', 2),
+        ('beauty_cosmetics', 'personal_health', 'Beauty / Cosmetics', 3),
+        ('travel', 'leisure', 'Travel', 0),
+        ('streaming', 'leisure', 'Streaming', 1),
+        ('events', 'leisure', 'Events', 2),
+        ('hobbies', 'leisure', 'Hobbies', 3),
+        ('clothes_shoes', 'shopping_clothing', 'Clothes / Shoes', 0),
+        ('electronics', 'shopping_clothing', 'Electronics', 1),
+        ('gifts', 'shopping_clothing', 'Gifts', 2),
+        ('courses_college', 'education', 'Courses / College', 0),
+        ('school_supplies', 'education', 'School supplies', 1),
+        ('languages', 'education', 'Languages', 2),
+        ('loans_interest', 'financial_other', 'Loans / Interest', 0),
+        ('bank_fees', 'financial_other', 'Bank fees', 1),
+        ('insurance_other', 'financial_other', 'Insurance', 2),
+        ('investments', 'financial_other', 'Investments', 3),
+        ('taxes', 'financial_other', 'Taxes', 4);
+
+      INSERT OR IGNORE INTO budget_categories (key, name, type, sort_order)
+      SELECT category, category, CASE WHEN amount < 0 THEN 'expense' ELSE 'income' END, 1000
+      FROM budget_entries
+      WHERE category NOT IN (SELECT key FROM budget_categories)
+      GROUP BY category;
+
+      INSERT OR IGNORE INTO budget_subcategories (key, category_key, name, sort_order)
+      SELECT subcategory, category, subcategory, 1000
+      FROM budget_entries
+      WHERE subcategory != ''
+        AND subcategory NOT IN (SELECT key FROM budget_subcategories)
+        AND category IN (SELECT key FROM budget_categories WHERE type = 'expense')
+      GROUP BY category, subcategory;
+    `,
+  },
+  {
+    version: 17,
+    description: 'API tokens for non-interactive authentication',
+    up: `
+      CREATE TABLE IF NOT EXISTS api_tokens (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT    NOT NULL,
+        token_hash   TEXT    NOT NULL UNIQUE,
+        token_prefix TEXT    NOT NULL,
+        created_by   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at   TEXT,
+        revoked_at   TEXT,
+        last_used_at TEXT,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
+      CREATE INDEX IF NOT EXISTS idx_api_tokens_created_by ON api_tokens(created_by);
+    `,
+  },
+  {
+    version: 18,
+    description: 'Birthdays with calendar integration',
+    up: `
+      CREATE TABLE IF NOT EXISTS birthdays (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        name              TEXT    NOT NULL,
+        birth_date        TEXT    NOT NULL,
+        notes             TEXT,
+        photo_data        TEXT,
+        calendar_event_id INTEGER REFERENCES calendar_events(id) ON DELETE SET NULL,
+        created_by        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_birthdays_updated_at
+        AFTER UPDATE ON birthdays FOR EACH ROW
+        BEGIN UPDATE birthdays SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_birthdays_name         ON birthdays(name);
+      CREATE INDEX IF NOT EXISTS idx_birthdays_birth_date   ON birthdays(birth_date);
+      CREATE INDEX IF NOT EXISTS idx_birthdays_created_by   ON birthdays(created_by);
+      CREATE INDEX IF NOT EXISTS idx_birthdays_calendar_ref ON birthdays(calendar_event_id);
+    `,
+  },
+  {
+    version: 19,
+    description: 'Separate family member role from system access role',
+    up: `
+      ALTER TABLE users ADD COLUMN family_role TEXT NOT NULL DEFAULT 'other'
+        CHECK(family_role IN ('dad', 'mom', 'parent', 'child', 'grandparent', 'relative', 'other'));
+
+      CREATE INDEX IF NOT EXISTS idx_users_family_role ON users(family_role);
+    `,
+  },
+  {
+    version: 20,
+    description: 'User profile pictures',
+    up: `
+      ALTER TABLE users ADD COLUMN avatar_data TEXT;
+    `,
+  },
+  {
+    version: 21,
+    description: 'Calendar event icons',
+    up: `
+      ALTER TABLE calendar_events ADD COLUMN icon TEXT NOT NULL DEFAULT 'calendar';
+    `,
+  },
+  {
+    version: 22,
+    description: 'Normalize calendar dentist icon',
+    up: `
+      UPDATE calendar_events SET icon = 'drill' WHERE icon = 'tooth';
+    `,
+  },
+  {
+    version: 23,
+    description: 'Link family members with contacts and birthdays',
+    up: `
+      ALTER TABLE contacts ADD COLUMN family_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_family_user
+        ON contacts(family_user_id) WHERE family_user_id IS NOT NULL;
+
+      ALTER TABLE birthdays ADD COLUMN family_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_birthdays_family_user
+        ON birthdays(family_user_id) WHERE family_user_id IS NOT NULL;
+
+      INSERT INTO contacts (name, category, family_user_id)
+      SELECT display_name, 'Sonstiges', id
+      FROM users
+      WHERE NOT EXISTS (
+        SELECT 1 FROM contacts WHERE contacts.family_user_id = users.id
+      );
+    `,
+  },
+  {
+    version: 24,
+    description: 'Use tooth icon for dentist calendar events',
+    up: `
+      UPDATE calendar_events SET icon = 'tooth' WHERE icon = 'drill';
+    `,
+  },
+  {
+    version: 25,
+    description: 'Allow archived status for tasks',
+    up: `
+      CREATE TABLE tasks_new (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        title           TEXT    NOT NULL,
+        description     TEXT,
+        category        TEXT    NOT NULL DEFAULT 'Sonstiges',
+        priority        TEXT    NOT NULL DEFAULT 'none'
+                                CHECK(priority IN ('none', 'low', 'medium', 'high', 'urgent')),
+        status          TEXT    NOT NULL DEFAULT 'open'
+                                CHECK(status IN ('open', 'in_progress', 'done', 'archived')),
+        due_date        TEXT,
+        due_time        TEXT,
+        assigned_to     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        is_recurring    INTEGER NOT NULL DEFAULT 0,
+        recurrence_rule TEXT,
+        parent_task_id  INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT INTO tasks_new
+      SELECT * FROM tasks;
+
+      DROP TABLE tasks;
+      ALTER TABLE tasks_new RENAME TO tasks;
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_status         ON tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_assigned       ON tasks(assigned_to);
+      CREATE INDEX IF NOT EXISTS idx_tasks_parent         ON tasks(parent_task_id);
+    `,
+  },
+  {
+    version: 26,
+    description: 'Family documents with local storage metadata and visibility ACL',
+    up: `
+      CREATE TABLE IF NOT EXISTS family_documents (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        name             TEXT    NOT NULL,
+        description      TEXT,
+        category         TEXT    NOT NULL DEFAULT 'other'
+                                  CHECK(category IN ('medical', 'school', 'identity', 'insurance', 'finance', 'home', 'vehicle', 'legal', 'travel', 'pets', 'warranty', 'taxes', 'work', 'other')),
+        status           TEXT    NOT NULL DEFAULT 'active'
+                                  CHECK(status IN ('active', 'archived')),
+        visibility       TEXT    NOT NULL DEFAULT 'family'
+                                  CHECK(visibility IN ('family', 'restricted', 'private')),
+        original_name    TEXT    NOT NULL,
+        mime_type        TEXT    NOT NULL,
+        file_size        INTEGER NOT NULL,
+        content_data     TEXT    NOT NULL,
+        storage_provider TEXT    NOT NULL DEFAULT 'local'
+                                  CHECK(storage_provider IN ('local', 'external')),
+        storage_key      TEXT,
+        created_by       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS family_document_access (
+        document_id INTEGER NOT NULL REFERENCES family_documents(id) ON DELETE CASCADE,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        PRIMARY KEY (document_id, user_id)
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_family_documents_updated_at
+        AFTER UPDATE ON family_documents FOR EACH ROW
+        BEGIN UPDATE family_documents SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_family_documents_status     ON family_documents(status);
+      CREATE INDEX IF NOT EXISTS idx_family_documents_category   ON family_documents(category);
+      CREATE INDEX IF NOT EXISTS idx_family_documents_created_by ON family_documents(created_by);
+      CREATE INDEX IF NOT EXISTS idx_family_document_access_user ON family_document_access(user_id);
+    `,
+  },
+  {
+    version: 27,
+    description: 'Calendar event attachments',
+    up: `
+      ALTER TABLE calendar_events ADD COLUMN attachment_name TEXT;
+      ALTER TABLE calendar_events ADD COLUMN attachment_mime TEXT;
+      ALTER TABLE calendar_events ADD COLUMN attachment_size INTEGER;
+      ALTER TABLE calendar_events ADD COLUMN attachment_data TEXT;
+    `,
+  },
+  {
+    version: 28,
+    description: 'Budget loans and installment payments',
+    up: `
+      CREATE TABLE IF NOT EXISTS budget_loans (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        title             TEXT    NOT NULL,
+        borrower          TEXT    NOT NULL,
+        total_amount      REAL    NOT NULL CHECK(total_amount > 0),
+        installment_count INTEGER NOT NULL CHECK(installment_count > 0),
+        start_month       TEXT    NOT NULL,
+        notes             TEXT,
+        status            TEXT    NOT NULL DEFAULT 'active'
+                                  CHECK(status IN ('active', 'paid')),
+        created_by        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS budget_loan_payments (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        loan_id            INTEGER NOT NULL REFERENCES budget_loans(id) ON DELETE CASCADE,
+        installment_number INTEGER NOT NULL CHECK(installment_number > 0),
+        amount             REAL    NOT NULL CHECK(amount > 0),
+        paid_date          TEXT    NOT NULL,
+        budget_entry_id    INTEGER REFERENCES budget_entries(id) ON DELETE SET NULL,
+        created_by         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(loan_id, installment_number)
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_budget_loans_updated_at
+        AFTER UPDATE ON budget_loans FOR EACH ROW
+        BEGIN UPDATE budget_loans SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_budget_loans_status ON budget_loans(status);
+      CREATE INDEX IF NOT EXISTS idx_budget_loans_start_month ON budget_loans(start_month);
+      CREATE INDEX IF NOT EXISTS idx_budget_loan_payments_loan ON budget_loan_payments(loan_id);
+      CREATE INDEX IF NOT EXISTS idx_budget_loan_payments_paid_date ON budget_loan_payments(paid_date);
+    `,
+  },
+  {
+    version: 29,
+    description: 'Generic CalDAV multi-account support',
+    up: (db) => {
+      // Create caldav_accounts table
+      db.exec(`
+        CREATE TABLE caldav_accounts (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          name            TEXT NOT NULL,
+          caldav_url      TEXT NOT NULL,
+          username        TEXT NOT NULL,
+          password        TEXT NOT NULL,
+          created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+          last_sync       TEXT,
+          UNIQUE(caldav_url, username)
+        )
+      `);
+
+      // Create caldav_calendar_selection table
+      db.exec(`
+        CREATE TABLE caldav_calendar_selection (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          account_id      INTEGER NOT NULL,
+          calendar_url    TEXT NOT NULL,
+          calendar_name   TEXT NOT NULL,
+          calendar_color  TEXT,
+          enabled         INTEGER NOT NULL DEFAULT 1,
+          created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+          FOREIGN KEY (account_id) REFERENCES caldav_accounts(id) ON DELETE CASCADE,
+          UNIQUE(account_id, calendar_url)
+        )
+      `);
+
+      // Create index for performance
+      db.exec(`
+        CREATE INDEX idx_caldav_selection_enabled
+          ON caldav_calendar_selection(account_id, enabled)
+      `);
+
+      // Update external_calendars to allow 'caldav' source
+      db.exec(`
+        CREATE TABLE external_calendars_new (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          source      TEXT    NOT NULL CHECK(source IN ('google', 'apple', 'caldav')),
+          external_id TEXT    NOT NULL,
+          name        TEXT    NOT NULL,
+          color       TEXT,
+          UNIQUE(source, external_id)
+        )
+      `);
+
+      db.exec(`
+        INSERT INTO external_calendars_new (id, source, external_id, name, color)
+        SELECT id, source, external_id, name, color
+        FROM external_calendars
+      `);
+
+      db.exec(`DROP TABLE external_calendars`);
+      db.exec(`ALTER TABLE external_calendars_new RENAME TO external_calendars`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_ext_cal_source ON external_calendars(source, external_id)`);
+
+      // Migrate existing Apple data
+      const appleUrl = db.prepare("SELECT value FROM sync_config WHERE key='apple_caldav_url'").get()?.value;
+      const appleUser = db.prepare("SELECT value FROM sync_config WHERE key='apple_username'").get()?.value;
+      const applePwd = db.prepare("SELECT value FROM sync_config WHERE key='apple_app_password'").get()?.value;
+      const appleLastSync = db.prepare("SELECT value FROM sync_config WHERE key='apple_last_sync'").get()?.value;
+
+      if (appleUrl && appleUser && applePwd) {
+        // Insert migrated Apple account
+        const result = db.prepare(`
+          INSERT INTO caldav_accounts (name, caldav_url, username, password, last_sync)
+          VALUES (?, ?, ?, ?, ?)
+        `).run('Apple Calendar (migriert)', appleUrl, appleUser, applePwd, appleLastSync);
+
+        const accountId = result.lastInsertRowid;
+
+        // Migrate Apple calendars from external_calendars
+        const appleCalendars = db.prepare(`
+          SELECT external_id, name, color FROM external_calendars WHERE source='apple'
+        `).all();
+
+        for (const cal of appleCalendars) {
+          db.prepare(`
+            INSERT INTO caldav_calendar_selection
+              (account_id, calendar_url, calendar_name, calendar_color, enabled)
+            VALUES (?, ?, ?, ?, 1)
+          `).run(accountId, cal.external_id, cal.name, cal.color);
+        }
+
+        // Update external_calendars source
+        db.prepare(`UPDATE external_calendars SET source='caldav' WHERE source='apple'`).run();
+
+      }
+
+      // Add caldav to external_source CHECK constraint by recreating table
+      db.exec(`
+        CREATE TABLE calendar_events_new (
+          id                           INTEGER PRIMARY KEY AUTOINCREMENT,
+          title                        TEXT    NOT NULL,
+          description                  TEXT,
+          start_datetime               TEXT    NOT NULL,
+          end_datetime                 TEXT,
+          all_day                      INTEGER NOT NULL DEFAULT 0,
+          location                     TEXT,
+          color                        TEXT    NOT NULL DEFAULT '#007AFF',
+          assigned_to                  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          created_by                   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          external_calendar_id         TEXT,
+          external_source              TEXT    NOT NULL DEFAULT 'local'
+                                               CHECK(external_source IN ('local', 'google', 'apple', 'ics', 'caldav')),
+          recurrence_rule              TEXT,
+          subscription_id              INTEGER REFERENCES ics_subscriptions(id) ON DELETE CASCADE,
+          user_modified                INTEGER NOT NULL DEFAULT 0,
+          calendar_ref_id              INTEGER REFERENCES external_calendars(id) ON DELETE SET NULL,
+          icon                         TEXT    NOT NULL DEFAULT 'calendar',
+          attachment_name              TEXT,
+          attachment_mime              TEXT,
+          attachment_size              INTEGER,
+          attachment_data              TEXT,
+          target_caldav_account_id     INTEGER,
+          target_caldav_calendar_url   TEXT,
+          created_at                   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+          updated_at                   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        )
+      `);
+
+      db.exec(`
+        INSERT INTO calendar_events_new
+          (id, title, description, start_datetime, end_datetime, all_day, location, color,
+           assigned_to, created_by, external_calendar_id, external_source, recurrence_rule,
+           subscription_id, user_modified, calendar_ref_id, icon,
+           attachment_name, attachment_mime, attachment_size, attachment_data,
+           created_at, updated_at)
+        SELECT id, title, description, start_datetime, end_datetime, all_day, location, color,
+               assigned_to, created_by, external_calendar_id,
+               CASE WHEN external_source = 'apple' THEN 'caldav' ELSE external_source END,
+               recurrence_rule, subscription_id, user_modified, calendar_ref_id, icon,
+               attachment_name, attachment_mime, attachment_size, attachment_data,
+               created_at, updated_at
+        FROM calendar_events
+      `);
+
+      db.exec(`DROP TRIGGER IF EXISTS trg_calendar_events_updated_at`);
+      db.exec(`DROP TABLE calendar_events`);
+      db.exec(`ALTER TABLE calendar_events_new RENAME TO calendar_events`);
+
+      db.exec(`
+        CREATE TRIGGER trg_calendar_events_updated_at
+          AFTER UPDATE ON calendar_events FOR EACH ROW
+          BEGIN UPDATE calendar_events SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END
+      `);
+
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_calendar_start ON calendar_events(start_datetime)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_calendar_assigned ON calendar_events(assigned_to)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_calendar_external_id ON calendar_events(external_calendar_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_calendar_sub ON calendar_events(subscription_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_cal_events_ref ON calendar_events(calendar_ref_id)`);
+      db.exec(`CREATE UNIQUE INDEX idx_calendar_sub_extid ON calendar_events (subscription_id, external_calendar_id)`);
+    },
+  },
+  {
+    version: 30,
+    description: 'CardDAV multi-account contacts sync',
+    up: `
+      -- ========================================
+      -- CardDAV Accounts
+      -- ========================================
+      CREATE TABLE carddav_accounts (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        carddav_url TEXT NOT NULL,
+        username    TEXT NOT NULL,
+        password    TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        last_sync   TEXT,
+        UNIQUE(carddav_url, username)
+      );
+
+      -- ========================================
+      -- CardDAV Addressbook Selection
+      -- ========================================
+      CREATE TABLE carddav_addressbook_selection (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id       INTEGER NOT NULL,
+        addressbook_url  TEXT NOT NULL,
+        addressbook_name TEXT NOT NULL,
+        enabled          INTEGER NOT NULL DEFAULT 1,
+        created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(account_id, addressbook_url),
+        FOREIGN KEY(account_id) REFERENCES carddav_accounts(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_carddav_addressbook_account
+        ON carddav_addressbook_selection(account_id, enabled);
+
+      -- ========================================
+      -- Extend Contacts Table for CardDAV
+      -- ========================================
+      ALTER TABLE contacts ADD COLUMN organization TEXT;
+      ALTER TABLE contacts ADD COLUMN job_title TEXT;
+      ALTER TABLE contacts ADD COLUMN birthday TEXT;
+      ALTER TABLE contacts ADD COLUMN website TEXT;
+      ALTER TABLE contacts ADD COLUMN photo TEXT;
+      ALTER TABLE contacts ADD COLUMN nickname TEXT;
+      ALTER TABLE contacts ADD COLUMN carddav_account_id INTEGER
+        REFERENCES carddav_accounts(id) ON DELETE SET NULL;
+      ALTER TABLE contacts ADD COLUMN carddav_uid TEXT;
+      ALTER TABLE contacts ADD COLUMN carddav_addressbook_url TEXT;
+
+      CREATE INDEX idx_contacts_carddav_uid ON contacts(carddav_uid);
+      CREATE INDEX idx_contacts_email ON contacts(email);
+
+      -- UNIQUE constraint for CardDAV UIDs (prevents duplicates per account+addressbook)
+      CREATE UNIQUE INDEX idx_contacts_carddav_uid_unique
+        ON contacts(carddav_account_id, carddav_addressbook_url, carddav_uid)
+        WHERE carddav_uid IS NOT NULL;
+
+      -- ========================================
+      -- Contact Phones (Multiple per Contact)
+      -- ========================================
+      CREATE TABLE contact_phones (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_id INTEGER NOT NULL,
+        label      TEXT,
+        value      TEXT NOT NULL,
+        is_primary INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_contact_phones_contact ON contact_phones(contact_id);
+      CREATE INDEX idx_contact_phones_value ON contact_phones(value);
+
+      -- ========================================
+      -- Contact Emails (Multiple per Contact)
+      -- ========================================
+      CREATE TABLE contact_emails (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_id INTEGER NOT NULL,
+        label      TEXT,
+        value      TEXT NOT NULL,
+        is_primary INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_contact_emails_contact ON contact_emails(contact_id);
+      CREATE INDEX idx_contact_emails_value ON contact_emails(value);
+
+      -- ========================================
+      -- Contact Addresses (Multiple per Contact)
+      -- ========================================
+      CREATE TABLE contact_addresses (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_id  INTEGER NOT NULL,
+        label       TEXT,
+        street      TEXT,
+        city        TEXT,
+        state       TEXT,
+        postal_code TEXT,
+        country     TEXT,
+        is_primary  INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_contact_addresses_contact ON contact_addresses(contact_id);
+    `,
+  },
+  {
+    version: 31,
+    description: 'Advanced reminder options for birthdays',
+    up: `
+      ALTER TABLE birthdays ADD COLUMN reminder_offset TEXT;
+      ALTER TABLE birthdays ADD COLUMN reminder_custom_amount INTEGER;
+      ALTER TABLE birthdays ADD COLUMN reminder_custom_unit TEXT;
+    `,
+  },
+  {
+    version: 32,
+    description: 'Multi-person assignment for tasks and calendar events',
+    up: `
+      CREATE TABLE IF NOT EXISTS task_assignments (
+        task_id  INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (task_id, user_id)
+      );
+      CREATE TABLE IF NOT EXISTS event_assignments (
+        event_id INTEGER NOT NULL REFERENCES calendar_events(id) ON DELETE CASCADE,
+        user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (event_id, user_id)
+      );
+      INSERT OR IGNORE INTO task_assignments (task_id, user_id)
+        SELECT id, assigned_to FROM tasks WHERE assigned_to IS NOT NULL;
+      INSERT OR IGNORE INTO event_assignments (event_id, user_id)
+        SELECT id, assigned_to FROM calendar_events WHERE assigned_to IS NOT NULL;
+    `,
+  },
+  {
+    version: 33,
+    description: 'Housekeeping work sessions, decay tasks, supply requests, and maintenance log',
+    up: `
+      CREATE TABLE IF NOT EXISTS housekeeping_work_sessions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        check_in   TEXT    NOT NULL,
+        check_out  TEXT,
+        daily_rate REAL    NOT NULL DEFAULT 0 CHECK(daily_rate >= 0),
+        extras     REAL    NOT NULL DEFAULT 0 CHECK(extras >= 0),
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS housekeeping_decay_tasks (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        name           TEXT    NOT NULL,
+        area           TEXT    NOT NULL,
+        frequency_days INTEGER NOT NULL CHECK(frequency_days > 0),
+        last_completed TEXT,
+        created_by     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS housekeeping_supply_requests (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        name             TEXT    NOT NULL,
+        quantity         TEXT,
+        shopping_item_id INTEGER REFERENCES shopping_items(id) ON DELETE SET NULL,
+        created_by       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS housekeeping_maintenance_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        description TEXT    NOT NULL,
+        photo_url   TEXT,
+        created_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_housekeeping_work_sessions_updated_at
+        AFTER UPDATE ON housekeeping_work_sessions FOR EACH ROW
+        BEGIN UPDATE housekeeping_work_sessions SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_housekeeping_decay_tasks_updated_at
+        AFTER UPDATE ON housekeeping_decay_tasks FOR EACH ROW
+        BEGIN UPDATE housekeeping_decay_tasks SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_housekeeping_maintenance_log_updated_at
+        AFTER UPDATE ON housekeeping_maintenance_log FOR EACH ROW
+        BEGIN UPDATE housekeeping_maintenance_log SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_sessions_check_in ON housekeeping_work_sessions(check_in);
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_sessions_open ON housekeeping_work_sessions(check_out);
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_decay_area ON housekeeping_decay_tasks(area);
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_decay_completed ON housekeeping_decay_tasks(last_completed);
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_supply_created ON housekeeping_supply_requests(created_at);
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_maintenance_created ON housekeeping_maintenance_log(created_at);
+    `,
+  },
+  {
+    version: 34,
+    description: 'Housekeeping worker profile and payment tracking',
+    up: `
+      CREATE TABLE IF NOT EXISTS housekeeping_workers (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id          INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        daily_rate       REAL    NOT NULL DEFAULT 0 CHECK(daily_rate >= 0),
+        payment_schedule TEXT    NOT NULL DEFAULT 'monthly'
+                                  CHECK(payment_schedule IN ('daily', 'twice_monthly', 'monthly')),
+        notes            TEXT,
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      ALTER TABLE housekeeping_work_sessions ADD COLUMN paid_at TEXT;
+
+      CREATE TRIGGER IF NOT EXISTS trg_housekeeping_workers_updated_at
+        AFTER UPDATE ON housekeeping_workers FOR EACH ROW
+        BEGIN UPDATE housekeeping_workers SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_workers_user ON housekeeping_workers(user_id);
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_sessions_paid ON housekeeping_work_sessions(paid_at);
+    `,
+  },
+  {
+    version: 35,
+    description: 'Housekeeping per-worker sessions and calendar linkage',
+    up: `
+      ALTER TABLE housekeeping_workers ADD COLUMN calendar_color TEXT NOT NULL DEFAULT '#7C3AED';
+      ALTER TABLE housekeeping_work_sessions ADD COLUMN worker_id INTEGER REFERENCES housekeeping_workers(id) ON DELETE SET NULL;
+      ALTER TABLE housekeeping_work_sessions ADD COLUMN calendar_event_id INTEGER REFERENCES calendar_events(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_sessions_worker ON housekeeping_work_sessions(worker_id);
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_sessions_calendar ON housekeeping_work_sessions(calendar_event_id);
+    `,
+  },
+  {
+    version: 36,
+    description: 'Housekeeping payment task linkage',
+    up: `
+      ALTER TABLE housekeeping_work_sessions ADD COLUMN payment_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_sessions_payment_task ON housekeeping_work_sessions(payment_task_id);
+    `,
+  },
+  {
+    version: 37,
+    description: 'Document folders and housekeeping receipt linkage',
+    up: `
+      CREATE TABLE IF NOT EXISTS family_document_folders (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT    NOT NULL UNIQUE,
+        created_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_family_document_folders_updated_at
+        AFTER UPDATE ON family_document_folders FOR EACH ROW
+        BEGIN UPDATE family_document_folders SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      ALTER TABLE family_documents ADD COLUMN folder_id INTEGER REFERENCES family_document_folders(id) ON DELETE SET NULL;
+      ALTER TABLE housekeeping_work_sessions ADD COLUMN receipt_document_id INTEGER REFERENCES family_documents(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_family_documents_folder ON family_documents(folder_id);
+      CREATE INDEX IF NOT EXISTS idx_housekeeping_sessions_receipt ON housekeeping_work_sessions(receipt_document_id);
+    `,
+  },
+  {
+    version: 38,
+    description: 'Calendar attachment document linkage',
+    up: `
+      ALTER TABLE calendar_events ADD COLUMN attachment_document_id INTEGER REFERENCES family_documents(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_calendar_attachment_document ON calendar_events(attachment_document_id);
+    `,
+  },
+  {
+    version: 39,
+    description: 'Split expense groups, immutable ledger, settlements, recurring expenses, and activity',
+    up: `
+      CREATE TABLE IF NOT EXISTS expense_groups (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        name                TEXT    NOT NULL,
+        description         TEXT,
+        type                TEXT    NOT NULL DEFAULT 'general'
+                                    CHECK(type IN ('household', 'couple', 'travel', 'event', 'shopping', 'general')),
+        avatar_color        TEXT    NOT NULL DEFAULT '#0F766E',
+        avatar_document_id  INTEGER REFERENCES family_documents(id) ON DELETE SET NULL,
+        default_currency    TEXT    NOT NULL DEFAULT 'EUR',
+        status              TEXT    NOT NULL DEFAULT 'active'
+                                    CHECK(status IN ('active', 'archived')),
+        created_by          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        archived_at         TEXT,
+        created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS expense_group_members (
+        group_id    INTEGER NOT NULL REFERENCES expense_groups(id) ON DELETE CASCADE,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role        TEXT    NOT NULL DEFAULT 'guest'
+                            CHECK(role IN ('owner', 'admin', 'guest')),
+        invited_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        joined_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        PRIMARY KEY (group_id, user_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS expenses (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id                INTEGER NOT NULL REFERENCES expense_groups(id) ON DELETE CASCADE,
+        title                   TEXT    NOT NULL,
+        description             TEXT,
+        amount_minor            INTEGER NOT NULL CHECK(amount_minor > 0),
+        currency                TEXT    NOT NULL,
+        converted_amount_minor  INTEGER NOT NULL CHECK(converted_amount_minor > 0),
+        converted_currency      TEXT    NOT NULL,
+        exchange_rate_num       INTEGER NOT NULL DEFAULT 1 CHECK(exchange_rate_num > 0),
+        exchange_rate_den       INTEGER NOT NULL DEFAULT 1 CHECK(exchange_rate_den > 0),
+        exchange_snapshot       TEXT,
+        payer_id                INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        category                TEXT    NOT NULL DEFAULT 'general',
+        split_method            TEXT    NOT NULL DEFAULT 'equal'
+                                      CHECK(split_method IN ('equal', 'exact', 'percentage', 'shares')),
+        status                  TEXT    NOT NULL DEFAULT 'active'
+                                      CHECK(status IN ('active', 'deleted')),
+        expense_date            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d', 'now')),
+        recurring_rule_id       INTEGER,
+        created_by              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        deleted_at              TEXT,
+        created_at              TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at              TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS expense_splits (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        expense_id    INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        amount_minor  INTEGER NOT NULL CHECK(amount_minor >= 0),
+        currency      TEXT    NOT NULL,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(expense_id, user_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS expense_comments (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        expense_id  INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        comment     TEXT    NOT NULL,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS expense_attachments (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        expense_id   INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+        document_id  INTEGER NOT NULL REFERENCES family_documents(id) ON DELETE CASCADE,
+        kind         TEXT    NOT NULL DEFAULT 'receipt' CHECK(kind IN ('receipt', 'proof', 'other')),
+        created_by   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(expense_id, document_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS expense_ledger_entries (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id      INTEGER NOT NULL REFERENCES expense_groups(id) ON DELETE CASCADE,
+        source_type   TEXT    NOT NULL CHECK(source_type IN ('expense', 'expense_reversal', 'settlement', 'settlement_reversal')),
+        source_id     INTEGER NOT NULL,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        counterparty_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        amount_minor  INTEGER NOT NULL,
+        currency      TEXT    NOT NULL,
+        memo          TEXT,
+        created_by    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS settlements (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id      INTEGER NOT NULL REFERENCES expense_groups(id) ON DELETE CASCADE,
+        payer_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        payee_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        amount_minor  INTEGER NOT NULL CHECK(amount_minor > 0),
+        currency      TEXT    NOT NULL,
+        notes         TEXT,
+        proof_document_id INTEGER REFERENCES family_documents(id) ON DELETE SET NULL,
+        status        TEXT    NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'deleted')),
+        paid_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        created_by    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        deleted_at    TEXT,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS settlement_entries (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        settlement_id  INTEGER NOT NULL REFERENCES settlements(id) ON DELETE CASCADE,
+        from_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        to_user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        amount_minor   INTEGER NOT NULL CHECK(amount_minor > 0),
+        currency       TEXT    NOT NULL,
+        created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS recurring_expenses (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id        INTEGER NOT NULL REFERENCES expense_groups(id) ON DELETE CASCADE,
+        title           TEXT    NOT NULL,
+        description     TEXT,
+        amount_minor    INTEGER NOT NULL CHECK(amount_minor > 0),
+        currency        TEXT    NOT NULL,
+        payer_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        category        TEXT    NOT NULL DEFAULT 'general',
+        split_method    TEXT    NOT NULL DEFAULT 'equal',
+        split_snapshot  TEXT    NOT NULL,
+        frequency       TEXT    NOT NULL CHECK(frequency IN ('weekly', 'monthly', 'yearly')),
+        next_run_date   TEXT    NOT NULL,
+        paused_at       TEXT,
+        created_by      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS expense_activity (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id    INTEGER NOT NULL REFERENCES expense_groups(id) ON DELETE CASCADE,
+        actor_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        type        TEXT    NOT NULL,
+        entity_type TEXT    NOT NULL,
+        entity_id   INTEGER,
+        metadata    TEXT,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_expense_groups_updated_at
+        AFTER UPDATE ON expense_groups FOR EACH ROW
+        BEGIN UPDATE expense_groups SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+      CREATE TRIGGER IF NOT EXISTS trg_expenses_updated_at
+        AFTER UPDATE ON expenses FOR EACH ROW
+        BEGIN UPDATE expenses SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+      CREATE TRIGGER IF NOT EXISTS trg_settlements_updated_at
+        AFTER UPDATE ON settlements FOR EACH ROW
+        BEGIN UPDATE settlements SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+      CREATE TRIGGER IF NOT EXISTS trg_recurring_expenses_updated_at
+        AFTER UPDATE ON recurring_expenses FOR EACH ROW
+        BEGIN UPDATE recurring_expenses SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_expense_groups_status ON expense_groups(status);
+      CREATE INDEX IF NOT EXISTS idx_expense_group_members_user ON expense_group_members(user_id);
+      CREATE INDEX IF NOT EXISTS idx_expenses_group_date ON expenses(group_id, expense_date DESC);
+      CREATE INDEX IF NOT EXISTS idx_expenses_payer ON expenses(payer_id);
+      CREATE INDEX IF NOT EXISTS idx_expense_splits_user ON expense_splits(user_id);
+      CREATE INDEX IF NOT EXISTS idx_expense_ledger_group_currency_user ON expense_ledger_entries(group_id, currency, user_id);
+      CREATE INDEX IF NOT EXISTS idx_expense_ledger_source ON expense_ledger_entries(source_type, source_id);
+      CREATE INDEX IF NOT EXISTS idx_settlements_group_paid ON settlements(group_id, paid_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_recurring_expenses_next_run ON recurring_expenses(next_run_date, paused_at);
+      CREATE INDEX IF NOT EXISTS idx_expense_activity_group_created ON expense_activity(group_id, created_at DESC);
+    `,
+  },
+  {
+    version: 40,
+    description: 'Restricted Split guest accounts',
+    up: `
+      CREATE TABLE IF NOT EXISTS split_expense_guest_users (
+        user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        group_id   INTEGER REFERENCES expense_groups(id) ON DELETE CASCADE,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT OR IGNORE INTO split_expense_guest_users (user_id, group_id, created_by, created_at)
+      SELECT a.entity_id, a.group_id, a.actor_id, a.created_at
+      FROM expense_activity a
+      WHERE a.type = 'guest_created'
+        AND a.entity_type = 'member'
+        AND a.entity_id IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_split_guest_group ON split_expense_guest_users(group_id);
+    `,
+  },
+  {
+    version: 41,
+    description: 'Start date for tasks (scheduled / future tasks)',
+    up: `
+      ALTER TABLE tasks ADD COLUMN start_date TEXT;
+      CREATE INDEX IF NOT EXISTS idx_tasks_start_date ON tasks(start_date);
+    `,
+  },
+  {
+    version: 42,
+    description: 'OIDC/SSO: oidc_sub and oidc_provider columns on users',
+    up: `
+      ALTER TABLE users ADD COLUMN oidc_sub      TEXT;
+      ALTER TABLE users ADD COLUMN oidc_provider TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc_sub
+        ON users(oidc_sub) WHERE oidc_sub IS NOT NULL;
+    `,
+  },
+  {
+    version: 43,
+    description: 'Performance indexes: assignment lookups by user, loan-payment entries, recurring events',
+    up: `
+      -- "assigned to me" lookups: the PKs are (event_id|task_id, user_id),
+      -- so a user_id-leading index is missing for filtering by assignee.
+      CREATE INDEX IF NOT EXISTS idx_event_assignments_user
+        ON event_assignments(user_id);
+      CREATE INDEX IF NOT EXISTS idx_task_assignments_user
+        ON task_assignments(user_id);
+
+      -- budget month list LEFT JOINs loan payments on budget_entry_id (only
+      -- loan_id and paid_date were indexed) -> probed with a scan per row.
+      CREATE INDEX IF NOT EXISTS idx_budget_loan_payments_entry
+        ON budget_loan_payments(budget_entry_id);
+
+      -- calendar GET expands all recurring events; partial index keeps that
+      -- scan to just the recurring rows instead of the full events table.
+      CREATE INDEX IF NOT EXISTS idx_calendar_recurring
+        ON calendar_events(start_datetime) WHERE recurrence_rule IS NOT NULL;
+
+    `,
+  },
+  {
+    version: 44,
+    description: 'FTS5 full-text search index across tasks, calendar events, notes, contacts, and shopping items',
+    up: `
+      CREATE VIRTUAL TABLE search_index USING fts5(
+        entity UNINDEXED,
+        entity_id UNINDEXED,
+        title,
+        body,
+        tokenize = 'unicode61'
+      );
+
+      -- ---- tasks ----
+      CREATE TRIGGER trg_search_tasks_ai AFTER INSERT ON tasks BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('task', NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.description, ''));
+      END;
+      CREATE TRIGGER trg_search_tasks_ad AFTER DELETE ON tasks BEGIN
+        DELETE FROM search_index WHERE entity = 'task' AND entity_id = OLD.id;
+      END;
+      CREATE TRIGGER trg_search_tasks_au AFTER UPDATE ON tasks BEGIN
+        DELETE FROM search_index WHERE entity = 'task' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('task', NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.description, ''));
+      END;
+
+      -- ---- calendar_events ----
+      CREATE TRIGGER trg_search_events_ai AFTER INSERT ON calendar_events BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('event', NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.description, ''));
+      END;
+      CREATE TRIGGER trg_search_events_ad AFTER DELETE ON calendar_events BEGIN
+        DELETE FROM search_index WHERE entity = 'event' AND entity_id = OLD.id;
+      END;
+      CREATE TRIGGER trg_search_events_au AFTER UPDATE ON calendar_events BEGIN
+        DELETE FROM search_index WHERE entity = 'event' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('event', NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.description, ''));
+      END;
+
+      -- ---- notes ----
+      CREATE TRIGGER trg_search_notes_ai AFTER INSERT ON notes BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('note', NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.content, ''));
+      END;
+      CREATE TRIGGER trg_search_notes_ad AFTER DELETE ON notes BEGIN
+        DELETE FROM search_index WHERE entity = 'note' AND entity_id = OLD.id;
+      END;
+      CREATE TRIGGER trg_search_notes_au AFTER UPDATE ON notes BEGIN
+        DELETE FROM search_index WHERE entity = 'note' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('note', NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.content, ''));
+      END;
+
+      -- ---- contacts ----
+      CREATE TRIGGER trg_search_contacts_ai AFTER INSERT ON contacts BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('contact', NEW.id, COALESCE(NEW.name, ''),
+                COALESCE(NEW.phone, '') || ' ' || COALESCE(NEW.email, ''));
+      END;
+      CREATE TRIGGER trg_search_contacts_ad AFTER DELETE ON contacts BEGIN
+        DELETE FROM search_index WHERE entity = 'contact' AND entity_id = OLD.id;
+      END;
+      CREATE TRIGGER trg_search_contacts_au AFTER UPDATE ON contacts BEGIN
+        DELETE FROM search_index WHERE entity = 'contact' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('contact', NEW.id, COALESCE(NEW.name, ''),
+                COALESCE(NEW.phone, '') || ' ' || COALESCE(NEW.email, ''));
+      END;
+
+      -- ---- shopping_items ----
+      CREATE TRIGGER trg_search_items_ai AFTER INSERT ON shopping_items BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('item', NEW.id, COALESCE(NEW.name, ''), '');
+      END;
+      CREATE TRIGGER trg_search_items_ad AFTER DELETE ON shopping_items BEGIN
+        DELETE FROM search_index WHERE entity = 'item' AND entity_id = OLD.id;
+      END;
+      CREATE TRIGGER trg_search_items_au AFTER UPDATE ON shopping_items BEGIN
+        DELETE FROM search_index WHERE entity = 'item' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('item', NEW.id, COALESCE(NEW.name, ''), '');
+      END;
+
+      -- Backfill from existing rows.
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'task', id, COALESCE(title, ''), COALESCE(description, '') FROM tasks;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'event', id, COALESCE(title, ''), COALESCE(description, '') FROM calendar_events;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'note', id, COALESCE(title, ''), COALESCE(content, '') FROM notes;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'contact', id, COALESCE(name, ''),
+               COALESCE(phone, '') || ' ' || COALESCE(email, '') FROM contacts;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'item', id, COALESCE(name, ''), '' FROM shopping_items;
+    `,
+  },
+  {
+    version: 45,
+    description: 'CalDAV reminder (VTODO) sync: list selection + external linkage on tasks and shopping_items',
+    up: `
+      -- Reminder-list selection per CalDAV account (Apple Reminders = VTODO collections).
+      -- Reused caldav_accounts; each list maps to the tasks or shopping module.
+      CREATE TABLE caldav_reminder_selection (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id     INTEGER NOT NULL REFERENCES caldav_accounts(id) ON DELETE CASCADE,
+        list_url       TEXT    NOT NULL,
+        list_name      TEXT    NOT NULL,
+        target_module  TEXT    NOT NULL DEFAULT 'tasks'
+                               CHECK(target_module IN ('tasks', 'shopping')),
+        target_list_id INTEGER REFERENCES shopping_lists(id) ON DELETE SET NULL,
+        enabled        INTEGER NOT NULL DEFAULT 0,
+        created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(account_id, list_url)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_caldav_reminder_selection_enabled
+        ON caldav_reminder_selection(account_id, enabled);
+
+      -- External linkage for read-only mirroring of remote VTODOs.
+      ALTER TABLE tasks ADD COLUMN external_uid        TEXT;
+      ALTER TABLE tasks ADD COLUMN external_source     TEXT NOT NULL DEFAULT 'local';
+      ALTER TABLE tasks ADD COLUMN external_account_id INTEGER;
+
+      ALTER TABLE shopping_items ADD COLUMN external_uid        TEXT;
+      ALTER TABLE shopping_items ADD COLUMN external_source     TEXT NOT NULL DEFAULT 'local';
+      ALTER TABLE shopping_items ADD COLUMN external_account_id INTEGER;
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_external
+        ON tasks(external_source, external_account_id, external_uid);
+      CREATE INDEX IF NOT EXISTS idx_shopping_items_external
+        ON shopping_items(external_source, external_account_id, external_uid);
+    `,
+  },
+  {
+    version: 46,
+    description: 'Budget recurring entries: interval (monthly/half_year/yearly) + virtual (smoothed) budgeting',
+    up: `
+      -- Intervall einer wiederkehrenden Serie. Bestand = monatlich (rückwärtskompatibel).
+      ALTER TABLE budget_entries ADD COLUMN recurrence_interval TEXT NOT NULL DEFAULT 'monthly';
+      -- 1 = virtuelles Budget: der Periodenbetrag wird gleichmäßig auf Monate verteilt.
+      ALTER TABLE budget_entries ADD COLUMN recurrence_virtual INTEGER NOT NULL DEFAULT 0;
+      -- Bei virtuellen Serien der vom Nutzer eingegebene Periodenbetrag (amount hält dann den Monatsanteil).
+      ALTER TABLE budget_entries ADD COLUMN recurrence_full_amount REAL;
+    `,
+  },
+  {
+    version: 47,
+    description: 'Multiple Google calendars: per-calendar selection + sync token, per-event Google target',
+    up: `
+      CREATE TABLE IF NOT EXISTS google_calendar_selection (
+        calendar_id  TEXT PRIMARY KEY,
+        name         TEXT NOT NULL,
+        color        TEXT,
+        enabled      INTEGER NOT NULL DEFAULT 1,
+        sync_token   TEXT,
+        last_sync    TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_google_selection_enabled
+        ON google_calendar_selection(enabled);
+
+      ALTER TABLE calendar_events ADD COLUMN target_google_calendar_id TEXT;
+    `,
+    // Data migration: carry the single selected Google calendar (Issue #220)
+    // into the new selection table so existing installs keep syncing it.
+    afterUp: (database) => {
+      const calId = database.prepare(
+        "SELECT value FROM sync_config WHERE key = 'google_calendar_id'"
+      ).get()?.value;
+      const connected = database.prepare(
+        "SELECT value FROM sync_config WHERE key = 'google_access_token'"
+      ).get()?.value;
+      if (!connected) return; // not connected → nothing to migrate
+
+      const id = calId || 'primary';
+      const meta = database.prepare(
+        "SELECT name, color FROM external_calendars WHERE source = 'google' AND external_id = ?"
+      ).get(id);
+      const syncToken = database.prepare(
+        "SELECT value FROM sync_config WHERE key = 'google_sync_token'"
+      ).get()?.value || null;
+
+      database.prepare(`
+        INSERT OR IGNORE INTO google_calendar_selection
+          (calendar_id, name, color, enabled, sync_token)
+        VALUES (?, ?, ?, 1, ?)
+      `).run(id, meta?.name || id, meta?.color || null, syncToken);
+    },
+  },
+  {
+    version: 48,
+    description: 'Housekeeping hourly billing: rate_type, hourly_rate, minutes_worked',
+    up: `
+      ALTER TABLE housekeeping_workers ADD COLUMN rate_type TEXT NOT NULL DEFAULT 'daily'
+        CHECK(rate_type IN ('daily', 'hourly'));
+      ALTER TABLE housekeeping_workers ADD COLUMN hourly_rate REAL NOT NULL DEFAULT 0 CHECK(hourly_rate >= 0);
+
+      ALTER TABLE housekeeping_work_sessions ADD COLUMN rate_type TEXT NOT NULL DEFAULT 'daily';
+      ALTER TABLE housekeeping_work_sessions ADD COLUMN hourly_rate REAL NOT NULL DEFAULT 0;
+      ALTER TABLE housekeeping_work_sessions ADD COLUMN minutes_worked INTEGER;
+    `,
+  },
+  {
+    version: 49,
+    description: 'Holiday cache for public holidays and school holidays',
+    up: `
+      CREATE TABLE IF NOT EXISTS holiday_cache (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        type        TEXT    NOT NULL CHECK(type IN ('public', 'school')),
+        country     TEXT    NOT NULL,
+        subdivision TEXT,
+        start_date  TEXT    NOT NULL,
+        end_date    TEXT    NOT NULL,
+        name        TEXT    NOT NULL,
+        year        INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_holiday_cache_dates
+        ON holiday_cache(start_date, end_date);
+      CREATE INDEX IF NOT EXISTS idx_holiday_cache_lookup
+        ON holiday_cache(type, country, subdivision, year);
+    `,
+  },
+  {
+    version: 50,
+    description: 'DMS integration: dms_accounts table + external document reference columns',
+    up: `
+      CREATE TABLE IF NOT EXISTS dms_accounts (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider    TEXT    NOT NULL DEFAULT 'paperless'
+                              CHECK(provider IN ('paperless')),
+        name        TEXT    NOT NULL,
+        base_url    TEXT    NOT NULL,
+        api_token   TEXT    NOT NULL,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        last_check  TEXT,
+        UNIQUE(base_url)  -- one DMS account per server (intentional)
+      );
+
+      ALTER TABLE family_documents ADD COLUMN dms_account_id INTEGER
+        REFERENCES dms_accounts(id) ON DELETE SET NULL;
+      ALTER TABLE family_documents ADD COLUMN external_url TEXT;
+      -- external_meta: JSON { correspondent, tags } mirrored from the DMS for display only (not queried)
+      ALTER TABLE family_documents ADD COLUMN external_meta TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_family_documents_dms ON family_documents(dms_account_id);
+    `,
+  },
+  {
+    version: 51,
+    description: 'Document storage backend discriminator and consistency constraints',
+    up: `
+      ALTER TABLE family_documents ADD COLUMN storage_backend TEXT NOT NULL DEFAULT 'local'
+        CHECK(storage_backend IN ('local', 'webdav', 'dms'));
+
+      UPDATE family_documents
+      SET storage_backend = CASE storage_provider
+        WHEN 'external' THEN 'dms'
+        ELSE 'local'
+      END;
+
+      UPDATE family_documents
+      SET dms_account_id = NULL
+      WHERE storage_backend != 'dms' AND dms_account_id IS NOT NULL;
+
+      CREATE TRIGGER IF NOT EXISTS trg_family_documents_storage_insert
+        BEFORE INSERT ON family_documents
+        FOR EACH ROW
+        BEGIN
+          SELECT CASE
+            WHEN NOT (
+              (NEW.storage_provider = 'local' AND NEW.storage_backend = 'local')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'webdav')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'dms')
+            )
+            THEN RAISE(ABORT, 'invalid document storage provider/backend combination')
+          END;
+          SELECT CASE
+            WHEN NEW.storage_backend != 'dms' AND NEW.dms_account_id IS NOT NULL
+            THEN RAISE(ABORT, 'dms_account_id requires dms storage backend')
+          END;
+        END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_family_documents_storage_update
+        BEFORE UPDATE OF storage_provider, storage_backend, dms_account_id ON family_documents
+        FOR EACH ROW
+        BEGIN
+          SELECT CASE
+            WHEN NOT (
+              (NEW.storage_provider = 'local' AND NEW.storage_backend = 'local')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'webdav')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'dms')
+            )
+            THEN RAISE(ABORT, 'invalid document storage provider/backend combination')
+          END;
+          SELECT CASE
+            WHEN NEW.storage_backend != 'dms' AND NEW.dms_account_id IS NOT NULL
+            THEN RAISE(ABORT, 'dms_account_id requires dms storage backend')
+          END;
+        END;
+    `,
+  },
+  {
+    version: 52,
+    description: 'DMS: add papra provider, org_id column, updated unique constraint',
+    up(db) {
+      // SQLite fires ON DELETE SET NULL when the referenced parent table is dropped
+      // (even via DROP TABLE, not just individual DELETE statements). Save and restore
+      // dms_account_id values around the table rebuild so existing DMS-linked documents
+      // keep their account references after the migration.
+      db.exec(`
+        CREATE TEMP TABLE _m52_refs AS
+          SELECT id, dms_account_id FROM family_documents WHERE dms_account_id IS NOT NULL;
+        UPDATE family_documents SET dms_account_id = NULL WHERE dms_account_id IS NOT NULL;
+
+        CREATE TABLE dms_accounts_new (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          provider    TEXT    NOT NULL DEFAULT 'paperless'
+                                CHECK(provider IN ('paperless', 'papra')),
+          name        TEXT    NOT NULL,
+          base_url    TEXT    NOT NULL,
+          org_id      TEXT    NOT NULL DEFAULT '',
+          api_token   TEXT    NOT NULL,
+          created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+          last_check  TEXT,
+          UNIQUE(base_url, org_id)
+        );
+        INSERT INTO dms_accounts_new (id, provider, name, base_url, org_id, api_token, created_at, last_check)
+          SELECT id, provider, name, base_url, '', api_token, created_at, last_check FROM dms_accounts;
+        DROP TABLE dms_accounts;
+        ALTER TABLE dms_accounts_new RENAME TO dms_accounts;
+        CREATE INDEX IF NOT EXISTS idx_family_documents_dms ON family_documents(dms_account_id);
+
+        UPDATE family_documents
+          SET dms_account_id = (SELECT dms_account_id FROM _m52_refs r WHERE r.id = family_documents.id)
+          WHERE id IN (SELECT id FROM _m52_refs);
+        DROP TABLE _m52_refs;
+      `);
+    },
+  },
+  {
+    version: 53,
+    description: 'Repair HTML-entity-encoded external calendar names (e.g. "&amp;")',
+    up(db) {
+      // Provider-Namen wurden bisher verbatim gespeichert; Google liefert für
+      // Import-Kalender HTML-entity-encodierte Namen ("Termine &amp; …"), die
+      // im UI doppelt escaped als literales "&amp;" erscheinen. Der Ingest
+      // normalisiert ab jetzt zu Klartext — Bestandszeilen hier nachziehen.
+      const rows = db.prepare('SELECT id, name FROM external_calendars').all();
+      const update = db.prepare('UPDATE external_calendars SET name = ? WHERE id = ?');
+      for (const { id, name } of rows) {
+        const decoded = decodeHtmlEntities(name);
+        if (decoded !== name) update.run(decoded, id);
+      }
+    },
+  },
+  {
+    version: 54,
+    description: 'Web Push: push_subscriptions table + reminders.pushed_at column',
+    up(db) {
+      db.exec(`
+        CREATE TABLE push_subscriptions (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          endpoint     TEXT    NOT NULL UNIQUE,
+          p256dh       TEXT    NOT NULL,
+          auth         TEXT    NOT NULL,
+          user_agent   TEXT,
+          created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+          last_used_at TEXT
+        );
+        CREATE INDEX idx_push_subs_user ON push_subscriptions(user_id);
+        ALTER TABLE reminders ADD COLUMN pushed_at TEXT;
+      `);
+    },
+  },
+  {
+    version: 55,
+    description: 'Password reset tokens table',
+    up: `
+      CREATE TABLE password_resets (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT    NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+      );
+      CREATE UNIQUE INDEX idx_password_resets_hash ON password_resets(token_hash);
+      CREATE INDEX idx_password_resets_user ON password_resets(user_id);
+    `,
+  },
+  {
+    version: 56,
+    description: 'Budget subscription tracker with categories, payment methods, settings, and exchange-rate cache',
+    up: `
+      CREATE TABLE IF NOT EXISTS subscription_categories (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL COLLATE NOCASE UNIQUE,
+        color      TEXT    NOT NULL DEFAULT '#0F766E',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT OR IGNORE INTO subscription_categories (name, color, sort_order) VALUES
+        ('Entertainment', '#7C3AED', 0),
+        ('Productivity',  '#2563EB', 1),
+        ('Utilities',     '#0F766E', 2),
+        ('Health',        '#DC2626', 3),
+        ('Education',     '#D97706', 4),
+        ('Other',         '#64748B', 5);
+
+      CREATE TABLE IF NOT EXISTS subscription_payment_methods (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL COLLATE NOCASE UNIQUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT OR IGNORE INTO subscription_payment_methods (name, sort_order) VALUES
+        ('Credit Card', 0),
+        ('Debit Card',  1),
+        ('PayPal',      2),
+        ('Apple Pay',   3),
+        ('Google Pay',  4),
+        ('Bank Transfer', 5),
+        ('Other',       6);
+
+      CREATE TABLE IF NOT EXISTS budget_subscriptions (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        name              TEXT    NOT NULL,
+        description       TEXT,
+        amount            REAL    NOT NULL CHECK(amount >= 0),
+        currency          TEXT    NOT NULL,
+        billing_cycle     TEXT    NOT NULL CHECK(billing_cycle IN ('daily', 'weekly', 'monthly', 'yearly')),
+        cycle_interval    INTEGER NOT NULL DEFAULT 1 CHECK(cycle_interval BETWEEN 1 AND 365),
+        next_payment_date TEXT    NOT NULL,
+        category_id       INTEGER REFERENCES subscription_categories(id) ON DELETE SET NULL,
+        payment_method_id INTEGER REFERENCES subscription_payment_methods(id) ON DELETE SET NULL,
+        reminder_days     INTEGER NOT NULL DEFAULT 3 CHECK(reminder_days BETWEEN 0 AND 365),
+        enabled           INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+        website_url       TEXT,
+        logo_data         TEXT,
+        brand_color       TEXT,
+        notes             TEXT,
+        created_by        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS subscription_settings (
+        id             INTEGER PRIMARY KEY CHECK(id = 1),
+        monthly_budget REAL    NOT NULL DEFAULT 0 CHECK(monthly_budget >= 0),
+        base_currency  TEXT    NOT NULL DEFAULT 'EUR',
+        updated_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      INSERT OR IGNORE INTO subscription_settings (id) VALUES (1);
+
+      CREATE TABLE IF NOT EXISTS subscription_exchange_rates (
+        base_currency TEXT NOT NULL,
+        quote_currency TEXT NOT NULL,
+        rate          REAL NOT NULL CHECK(rate > 0),
+        fetched_at    TEXT NOT NULL,
+        PRIMARY KEY(base_currency, quote_currency)
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_budget_subscriptions_updated_at
+        AFTER UPDATE ON budget_subscriptions FOR EACH ROW
+        BEGIN UPDATE budget_subscriptions SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_subscription_settings_updated_at
+        AFTER UPDATE ON subscription_settings FOR EACH ROW
+        BEGIN UPDATE subscription_settings SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = 1; END;
+
+      CREATE INDEX IF NOT EXISTS idx_budget_subscriptions_next_payment
+        ON budget_subscriptions(enabled, next_payment_date);
+      CREATE INDEX IF NOT EXISTS idx_budget_subscriptions_category
+        ON budget_subscriptions(category_id);
+      CREATE INDEX IF NOT EXISTS idx_budget_subscriptions_payment_method
+        ON budget_subscriptions(payment_method_id);
+    `,
+  },
+  {
+    version: 57,
+    description: 'Allow subscription entities in the existing reminder center',
+    up: `
+      CREATE TABLE reminders_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT    NOT NULL CHECK(entity_type IN ('task', 'event', 'subscription')),
+        entity_id   INTEGER NOT NULL,
+        remind_at   TEXT    NOT NULL,
+        dismissed   INTEGER NOT NULL DEFAULT 0,
+        created_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      INSERT INTO reminders_new (id, entity_type, entity_id, remind_at, dismissed, created_by, created_at)
+        SELECT id, entity_type, entity_id, remind_at, dismissed, created_by, created_at FROM reminders;
+      DROP TABLE reminders;
+      ALTER TABLE reminders_new RENAME TO reminders;
+      CREATE INDEX idx_reminders_entity ON reminders(entity_type, entity_id);
+      CREATE INDEX idx_reminders_remind ON reminders(remind_at);
+      CREATE INDEX idx_reminders_user ON reminders(created_by);
+    `,
+  },
+  {
+    version: 58,
+    description: 'Link each active subscription renewal to its pending Budget expense',
+    up: `
+      ALTER TABLE budget_subscriptions ADD COLUMN budget_entry_id INTEGER
+        REFERENCES budget_entries(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_budget_subscriptions_budget_entry
+        ON budget_subscriptions(budget_entry_id);
+    `,
+    afterUp: (database) => {
+      const subscriptions = database.prepare(`
+        SELECT * FROM budget_subscriptions
+        WHERE enabled = 1 AND budget_entry_id IS NULL
+      `).all();
+      const insert = database.prepare(`
+        INSERT INTO budget_entries
+          (title, amount, category, subcategory, date, is_recurring, created_by)
+        VALUES (?, ?, 'financial_other', 'bank_fees', ?, 0, ?)
+      `);
+      const link = database.prepare(`
+        UPDATE budget_subscriptions SET budget_entry_id = ? WHERE id = ?
+      `);
+      for (const subscription of subscriptions) {
+        const entry = insert.run(
+          subscription.name,
+          -Math.abs(subscription.amount),
+          subscription.next_payment_date,
+          subscription.created_by,
+        );
+        link.run(entry.lastInsertRowid, subscription.id);
+      }
+    },
+  },
+  {
+    version: 59,
+    description: 'Mirror subscription categories into Budget and recategorize linked expenses',
+    up: `
+      ALTER TABLE subscription_categories ADD COLUMN budget_subcategory_key TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_categories_budget_subcategory
+        ON subscription_categories(budget_subcategory_key)
+        WHERE budget_subcategory_key IS NOT NULL;
+    `,
+    afterUp: (database) => {
+      const nextOrder = database.prepare(`
+        SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM budget_categories WHERE type = 'expense'
+      `).get().n;
+      database.prepare(`
+        INSERT OR IGNORE INTO budget_categories (key, name, type, sort_order)
+        VALUES ('subscriptions', 'Subscription', 'expense', ?)
+      `).run(nextOrder);
+
+      const defaultKeys = new Map([
+        ['entertainment', 'subscription_entertainment'],
+        ['productivity', 'subscription_productivity'],
+        ['utilities', 'subscription_utilities'],
+        ['health', 'subscription_health'],
+        ['education', 'subscription_education'],
+        ['other', 'subscription_other'],
+      ]);
+      const categories = database.prepare(`
+        SELECT id, name, sort_order FROM subscription_categories ORDER BY sort_order, id
+      `).all();
+      const updateCategory = database.prepare(`
+        UPDATE subscription_categories SET budget_subcategory_key = ? WHERE id = ?
+      `);
+      const upsertSubcategory = database.prepare(`
+        INSERT INTO budget_subcategories (key, category_key, name, sort_order)
+        VALUES (?, 'subscriptions', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+          category_key = excluded.category_key,
+          name = excluded.name,
+          sort_order = excluded.sort_order
+      `);
+      for (const category of categories) {
+        const key = defaultKeys.get(category.name.toLowerCase()) || `subscription_category_${category.id}`;
+        updateCategory.run(key, category.id);
+        upsertSubcategory.run(key, category.name, category.sort_order);
+      }
+
+      database.prepare(`
+        UPDATE budget_entries
+        SET category = 'subscriptions',
+            subcategory = COALESCE((
+              SELECT c.budget_subcategory_key
+              FROM budget_subscriptions s
+              LEFT JOIN subscription_categories c ON c.id = s.category_id
+              WHERE s.budget_entry_id = budget_entries.id
+            ), '')
+        WHERE id IN (
+          SELECT budget_entry_id FROM budget_subscriptions WHERE budget_entry_id IS NOT NULL
+        )
+      `).run();
+    },
+  },
+  {
+    version: 60,
+    description: 'add notification channel delivery tracking',
+    up: `
+      CREATE TABLE IF NOT EXISTS notification_channels (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider        TEXT    NOT NULL,
+        name            TEXT    NOT NULL,
+        enabled         INTEGER NOT NULL DEFAULT 0,
+        scope           TEXT    NOT NULL DEFAULT 'household',
+        user_id         INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        config_json     TEXT    NOT NULL DEFAULT '{}',
+        secret_json     TEXT    NOT NULL DEFAULT '{}',
+        last_test_at    TEXT,
+        last_success_at TEXT,
+        last_error      TEXT,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notification_channels_provider
+        ON notification_channels(provider);
+
+      CREATE INDEX IF NOT EXISTS idx_notification_channels_enabled
+        ON notification_channels(enabled);
+
+      CREATE INDEX IF NOT EXISTS idx_notification_channels_user
+        ON notification_channels(user_id);
+
+      CREATE TABLE IF NOT EXISTS notification_deliveries (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        reminder_id     INTEGER NOT NULL REFERENCES reminders(id) ON DELETE CASCADE,
+        provider        TEXT    NOT NULL,
+        channel_id      INTEGER REFERENCES notification_channels(id) ON DELETE SET NULL,
+        target_key      TEXT    NOT NULL,
+        status          TEXT    NOT NULL DEFAULT 'pending'
+                                  CHECK(status IN ('pending', 'sent', 'failed', 'skipped')),
+        attempt_count   INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at TEXT,
+        last_attempt_at TEXT,
+        sent_at         TEXT,
+        error           TEXT,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(reminder_id, provider, target_key)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notification_deliveries_reminder
+        ON notification_deliveries(reminder_id);
+
+      CREATE INDEX IF NOT EXISTS idx_notification_deliveries_retry
+        ON notification_deliveries(status, next_attempt_at);
+    `,
+  },
+  {
+    version: 61,
+    description: 'add per-user read-only calendar feed token',
+    up: `
+      ALTER TABLE users ADD COLUMN calendar_feed_token TEXT;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_feed_token
+        ON users(calendar_feed_token)
+        WHERE calendar_feed_token IS NOT NULL;
+    `,
+  },
+  {
+    version: 62,
+    description: 'restore reminders.pushed_at dropped by the migration 57 table rebuild',
+    up: `
+      ALTER TABLE reminders ADD COLUMN pushed_at TEXT;
+    `,
+  },
+  {
+    version: 63,
+    description: 'Remove existing family members incorrectly added to split_expense_guest_users',
+    up: `
+      DELETE FROM split_expense_guest_users
+      WHERE user_id NOT IN (
+        SELECT DISTINCT entity_id FROM expense_activity
+        WHERE type = 'guest_created' AND entity_type = 'member' AND entity_id IS NOT NULL
+      );
+    `,
+  },
+  {
+    version: 64,
+    description: 'add recurring meal templates',
+    up: `
+      CREATE TABLE IF NOT EXISTS meal_recurrence_templates (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        start_date TEXT    NOT NULL,
+        weekday    INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+        meal_type  TEXT    NOT NULL
+                           CHECK(meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
+        title      TEXT    NOT NULL,
+        notes      TEXT,
+        recipe_url TEXT,
+        recipe_id  INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS meal_recurrence_ingredients (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        template_id INTEGER NOT NULL REFERENCES meal_recurrence_templates(id) ON DELETE CASCADE,
+        name        TEXT    NOT NULL,
+        quantity    TEXT,
+        category    TEXT    NOT NULL DEFAULT 'Sonstiges',
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS meal_recurrence_exceptions (
+        template_id INTEGER NOT NULL REFERENCES meal_recurrence_templates(id) ON DELETE CASCADE,
+        date        TEXT    NOT NULL,
+        created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        PRIMARY KEY (template_id, date)
+      );
+
+      ALTER TABLE meals ADD COLUMN recurrence_template_id INTEGER REFERENCES meal_recurrence_templates(id) ON DELETE SET NULL;
+
+      CREATE TRIGGER IF NOT EXISTS trg_meal_recurrence_templates_updated_at
+        AFTER UPDATE ON meal_recurrence_templates FOR EACH ROW
+        BEGIN UPDATE meal_recurrence_templates SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_meal_recurrence_ingredients_updated_at
+        AFTER UPDATE ON meal_recurrence_ingredients FOR EACH ROW
+        BEGIN UPDATE meal_recurrence_ingredients SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_meal_recurrence_templates_weekday
+        ON meal_recurrence_templates(weekday, start_date);
+      CREATE INDEX IF NOT EXISTS idx_meal_recurrence_ingredients_template
+        ON meal_recurrence_ingredients(template_id);
+      CREATE INDEX IF NOT EXISTS idx_meals_recurrence_template
+        ON meals(recurrence_template_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_meals_recurrence_occurrence
+        ON meals(recurrence_template_id, date)
+        WHERE recurrence_template_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 65,
+    description: 'add health module: vitals, medications, schedules, logs, lab reports/results, activities',
+    up: `
+      -- Vitalwerte (eine Zeile = eine Messung)
+      CREATE TABLE IF NOT EXISTS health_vitals (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type        TEXT    NOT NULL,
+        value_num   REAL,
+        value_num2  REAL,
+        value_num3  REAL,
+        unit        TEXT,
+        measured_at TEXT    NOT NULL,
+        note        TEXT,
+        visibility  TEXT    NOT NULL DEFAULT 'private'
+                            CHECK(visibility IN ('private', 'family')),
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Medikamente (Stammdaten)
+      CREATE TABLE IF NOT EXISTS medications (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name             TEXT    NOT NULL,
+        dosage_text      TEXT,
+        form             TEXT,
+        active           INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+        prn              INTEGER NOT NULL DEFAULT 0 CHECK(prn IN (0, 1)),
+        stock_qty        REAL,
+        stock_unit       TEXT,
+        refill_threshold REAL,
+        note             TEXT,
+        visibility       TEXT    NOT NULL DEFAULT 'private'
+                                 CHECK(visibility IN ('private', 'family')),
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Einnahmeplan (1 Med : n Zeitfenster)
+      CREATE TABLE IF NOT EXISTS medication_schedules (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        medication_id INTEGER NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
+        time_of_day   TEXT    NOT NULL,
+        days_mask     INTEGER CHECK(days_mask IS NULL OR (days_mask BETWEEN 0 AND 127)),
+        dose_qty      REAL,
+        start_date    TEXT,
+        end_date      TEXT,
+        active        INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Dosis-Ereignisse (Log)
+      CREATE TABLE IF NOT EXISTS medication_logs (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        medication_id INTEGER NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
+        schedule_id   INTEGER REFERENCES medication_schedules(id) ON DELETE SET NULL,
+        scheduled_at  TEXT,
+        status        TEXT    NOT NULL DEFAULT 'pending'
+                              CHECK(status IN ('taken', 'skipped', 'pending')),
+        taken_at      TEXT,
+        dose_qty      REAL,
+        note          TEXT,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Laborbefund (Kopf)
+      CREATE TABLE IF NOT EXISTS health_lab_reports (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        report_date TEXT    NOT NULL,
+        lab_name    TEXT,
+        note        TEXT,
+        visibility  TEXT    NOT NULL DEFAULT 'private'
+                            CHECK(visibility IN ('private', 'family')),
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Analyt-Werte je Befund
+      CREATE TABLE IF NOT EXISTS health_lab_results (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_id  INTEGER NOT NULL REFERENCES health_lab_reports(id) ON DELETE CASCADE,
+        analyte    TEXT    NOT NULL,
+        value_num  REAL,
+        unit       TEXT,
+        ref_low    REAL,
+        ref_high   REAL,
+        flag       TEXT    CHECK(flag IS NULL OR flag IN ('low', 'normal', 'high')),
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Aktivität/Training
+      CREATE TABLE IF NOT EXISTS health_activities (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type         TEXT    NOT NULL,
+        duration_min REAL,
+        distance_km  REAL,
+        intensity    TEXT,
+        calories     REAL,
+        performed_at TEXT    NOT NULL,
+        note         TEXT,
+        visibility   TEXT    NOT NULL DEFAULT 'private'
+                             CHECK(visibility IN ('private', 'family')),
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- updated_at-Trigger (je Tabelle mit updated_at)
+      CREATE TRIGGER IF NOT EXISTS trg_health_vitals_updated_at
+        AFTER UPDATE ON health_vitals FOR EACH ROW
+        BEGIN UPDATE health_vitals SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_medications_updated_at
+        AFTER UPDATE ON medications FOR EACH ROW
+        BEGIN UPDATE medications SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_medication_schedules_updated_at
+        AFTER UPDATE ON medication_schedules FOR EACH ROW
+        BEGIN UPDATE medication_schedules SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_health_lab_reports_updated_at
+        AFTER UPDATE ON health_lab_reports FOR EACH ROW
+        BEGIN UPDATE health_lab_reports SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_health_activities_updated_at
+        AFTER UPDATE ON health_activities FOR EACH ROW
+        BEGIN UPDATE health_activities SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      -- Indizes
+      CREATE INDEX IF NOT EXISTS idx_health_vitals_user_measured
+        ON health_vitals(user_id, measured_at);
+      CREATE INDEX IF NOT EXISTS idx_health_activities_user_performed
+        ON health_activities(user_id, performed_at);
+      CREATE INDEX IF NOT EXISTS idx_health_lab_reports_user_date
+        ON health_lab_reports(user_id, report_date);
+      CREATE INDEX IF NOT EXISTS idx_health_lab_results_report
+        ON health_lab_results(report_id);
+      CREATE INDEX IF NOT EXISTS idx_medications_user
+        ON medications(user_id);
+      CREATE INDEX IF NOT EXISTS idx_medication_logs_med_scheduled
+        ON medication_logs(medication_id, scheduled_at);
+      CREATE INDEX IF NOT EXISTS idx_medication_schedules_med_active
+        ON medication_schedules(medication_id, active);
+    `,
+  },
+  {
+    version: 66,
+    description: 'index medications and health activities in the FTS5 search_index (visibility scoping applied at query time)',
+    up: `
+      -- ---- medications ----
+      CREATE TRIGGER trg_search_meds_ai AFTER INSERT ON medications BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('medication', NEW.id, COALESCE(NEW.name, ''), COALESCE(NEW.dosage_text, ''));
+      END;
+      CREATE TRIGGER trg_search_meds_ad AFTER DELETE ON medications BEGIN
+        DELETE FROM search_index WHERE entity = 'medication' AND entity_id = OLD.id;
+      END;
+      CREATE TRIGGER trg_search_meds_au AFTER UPDATE ON medications BEGIN
+        DELETE FROM search_index WHERE entity = 'medication' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('medication', NEW.id, COALESCE(NEW.name, ''), COALESCE(NEW.dosage_text, ''));
+      END;
+
+      -- ---- health_activities ----
+      CREATE TRIGGER trg_search_activities_ai AFTER INSERT ON health_activities BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('activity', NEW.id, COALESCE(NEW.type, ''), COALESCE(NEW.note, ''));
+      END;
+      CREATE TRIGGER trg_search_activities_ad AFTER DELETE ON health_activities BEGIN
+        DELETE FROM search_index WHERE entity = 'activity' AND entity_id = OLD.id;
+      END;
+      CREATE TRIGGER trg_search_activities_au AFTER UPDATE ON health_activities BEGIN
+        DELETE FROM search_index WHERE entity = 'activity' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('activity', NEW.id, COALESCE(NEW.type, ''), COALESCE(NEW.note, ''));
+      END;
+
+      -- Backfill from existing rows.
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'medication', id, COALESCE(name, ''), COALESCE(dosage_text, '') FROM medications;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'activity', id, COALESCE(type, ''), COALESCE(note, '') FROM health_activities;
+    `,
+  },
+  {
+    version: 67,
+    description: 'Store local family_documents.content_data as binary BLOB instead of base64 TEXT (#332)',
+    // Reine Datenmigration ohne DDL: Die Spalte behält TEXT-Affinität, SQLite
+    // speichert gebundene Buffer aber als BLOB (TEXT-Affinität konvertiert nur
+    // Numerik zu Text, niemals BLOB). Ergebnis: ~25 % weniger Speicher pro lokal
+    // gespeichertem Dokument und kein base64-En-/Decode mehr beim Lesen/Schreiben.
+    // RAM-schonend für kleine Geräte (Raspberry Pi): erst nur die IDs sammeln,
+    // dann Dokument für Dokument einzeln laden, dekodieren und zurückschreiben.
+    // Idempotent (bereits binäre Werte werden übersprungen); WebDAV-/DMS-Zeilen
+    // (content_data = '') bleiben unberührt.
+    up: (database) => {
+      const ids = database.prepare(`
+        SELECT id FROM family_documents
+        WHERE storage_backend = 'local'
+          AND content_data IS NOT NULL
+          AND content_data <> ''
+      `).all().map((row) => row.id);
+      const read = database.prepare('SELECT content_data FROM family_documents WHERE id = ?');
+      const write = database.prepare('UPDATE family_documents SET content_data = ? WHERE id = ?');
+      for (const id of ids) {
+        const value = read.get(id)?.content_data;
+        if (value === null || value === undefined || Buffer.isBuffer(value)) continue;
+        write.run(Buffer.from(String(value), 'base64'), id);
+      }
+    },
+  },
+  {
+    version: 68,
+    description: 'Shopping items: optionale notes/url-Attribute; notes im FTS-Suchindex',
+    up: `
+      ALTER TABLE shopping_items ADD COLUMN notes TEXT;
+      ALTER TABLE shopping_items ADD COLUMN url   TEXT;
+
+      -- Item-Suche: title bleibt der Name, body nimmt jetzt die Notizen auf,
+      -- damit Artikel auch über ihre Notiz gefunden werden. Trigger neu aufbauen
+      -- (Trigger sind nicht ALTER-bar) und bestehende Item-Zeilen backfillen.
+      DROP TRIGGER IF EXISTS trg_search_items_ai;
+      DROP TRIGGER IF EXISTS trg_search_items_au;
+
+      CREATE TRIGGER trg_search_items_ai AFTER INSERT ON shopping_items BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('item', NEW.id, COALESCE(NEW.name, ''), COALESCE(NEW.notes, ''));
+      END;
+      CREATE TRIGGER trg_search_items_au AFTER UPDATE ON shopping_items BEGIN
+        DELETE FROM search_index WHERE entity = 'item' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('item', NEW.id, COALESCE(NEW.name, ''), COALESCE(NEW.notes, ''));
+      END;
+
+      DELETE FROM search_index WHERE entity = 'item';
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'item', id, COALESCE(name, ''), COALESCE(notes, '') FROM shopping_items;
+    `,
+  },
+  {
+    version: 69,
+    description: 'Reward-System: optionaler Punktewert je Aufgabe',
+    up: `
+      ALTER TABLE tasks ADD COLUMN points INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 70,
+    description: 'Reward-System: Teilnehmer, Prämien-Katalog, Einlösungen, Punkte-Ledger',
+    up: `
+      -- Wer nimmt am Punkte-System teil (opt-in je Mitglied). Zeile vorhanden =
+      -- verwaltet; enabled steuert aktive Teilnahme, ohne die Historie zu verlieren.
+      CREATE TABLE reward_participants (
+        user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        enabled    INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Prämien-Katalog (haushaltsweit, von Eltern/Admin gepflegt).
+      CREATE TABLE reward_catalog (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT    NOT NULL,
+        cost        INTEGER NOT NULL,
+        icon        TEXT,
+        description TEXT,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        sort_order  INTEGER NOT NULL DEFAULT 0,
+        created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Einlöse-Anfragen. Beim Anlegen werden die Punkte per Ledger-Buchung
+      -- reserviert; bei Ablehnung/Storno bucht eine Gegenbuchung zurück.
+      -- Name/Icon/Kosten werden als Snapshot gehalten, damit spätere
+      -- Katalogänderungen die Historie nicht verfälschen.
+      CREATE TABLE reward_redemptions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        catalog_id   INTEGER REFERENCES reward_catalog(id) ON DELETE SET NULL,
+        reward_name  TEXT    NOT NULL,
+        reward_icon  TEXT,
+        cost         INTEGER NOT NULL,
+        status       TEXT    NOT NULL DEFAULT 'pending'
+                             CHECK(status IN ('pending', 'fulfilled', 'rejected', 'cancelled')),
+        note         TEXT,
+        requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        decided_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        decided_at   TEXT,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Einzige Quelle der Wahrheit: der Punktestand eines Mitglieds ist die
+      -- Summe aller delta-Werte. Positive delta = verdient/Bonus, negative =
+      -- eingelöst/Korrektur. Jede Zeile ist unveränderlich und nachvollziehbar.
+      CREATE TABLE reward_ledger (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        delta         INTEGER NOT NULL,
+        type          TEXT    NOT NULL
+                              CHECK(type IN ('earn', 'bonus', 'redeem', 'adjust', 'reversal')),
+        reason        TEXT,
+        task_id       INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+        redemption_id INTEGER REFERENCES reward_redemptions(id) ON DELETE SET NULL,
+        created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Doppelvergabe pro Aufgabe/Mitglied verhindern (Idempotenz-Netz für die
+      -- Vergabe bei Statuswechsel nach 'done').
+      CREATE UNIQUE INDEX uniq_reward_earn ON reward_ledger(task_id, user_id) WHERE type = 'earn';
+      CREATE INDEX idx_reward_ledger_user ON reward_ledger(user_id);
+      CREATE INDEX idx_reward_ledger_redemption ON reward_ledger(redemption_id);
+      CREATE INDEX idx_reward_redemptions_status ON reward_redemptions(status);
+    `,
+  },
+  {
+    version: 71,
+    description: 'add menstrual cycle tracking to health module: periods, day logs, per-user settings',
+    up: `
+      -- Perioden-Episoden (eine Zeile = eine Menstruation). end_date bleibt NULL,
+      -- solange die Blutung andauert. Scoping/Visibility wie im übrigen Health-Modul
+      -- (Eigentümer + optional 'family' für den Personen-Umschalter). Zyklusdaten
+      -- sind sensibel → Default 'private'.
+      CREATE TABLE IF NOT EXISTS cycle_periods (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        start_date TEXT    NOT NULL,
+        end_date   TEXT,
+        note       TEXT,
+        visibility TEXT    NOT NULL DEFAULT 'private'
+                           CHECK(visibility IN ('private', 'family')),
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Tages-Log (Blutungsstärke, Symptome, Stimmung, Notiz) — genau ein Eintrag
+      -- je Person und Kalendertag (UNIQUE → Upsert). symptoms hält eine Komma-Liste
+      -- stabiler Symptom-Schlüssel (kein lokalisierter Text).
+      CREATE TABLE IF NOT EXISTS cycle_day_logs (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        log_date   TEXT    NOT NULL,
+        flow       TEXT    CHECK(flow IS NULL OR flow IN ('spotting', 'light', 'medium', 'heavy')),
+        symptoms   TEXT,
+        mood       TEXT,
+        note       TEXT,
+        visibility TEXT    NOT NULL DEFAULT 'private'
+                           CHECK(visibility IN ('private', 'family')),
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(user_id, log_date)
+      );
+
+      -- Zyklus-Einstellungen je Person (überschreiben die aus der Historie
+      -- abgeleiteten Mittelwerte). NULL = automatisch aus Historie ableiten.
+      CREATE TABLE IF NOT EXISTS cycle_settings (
+        user_id           INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        cycle_length_avg  INTEGER,
+        period_length_avg INTEGER,
+        luteal_length     INTEGER NOT NULL DEFAULT 14,
+        track_fertility   INTEGER NOT NULL DEFAULT 1 CHECK(track_fertility IN (0, 1)),
+        created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_cycle_periods_updated_at
+        AFTER UPDATE ON cycle_periods FOR EACH ROW
+        BEGIN UPDATE cycle_periods SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_cycle_day_logs_updated_at
+        AFTER UPDATE ON cycle_day_logs FOR EACH ROW
+        BEGIN UPDATE cycle_day_logs SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER IF NOT EXISTS trg_cycle_settings_updated_at
+        AFTER UPDATE ON cycle_settings FOR EACH ROW
+        BEGIN UPDATE cycle_settings SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE user_id = OLD.user_id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_cycle_periods_user_start
+        ON cycle_periods(user_id, start_date);
+      CREATE INDEX IF NOT EXISTS idx_cycle_day_logs_user_date
+        ON cycle_day_logs(user_id, log_date);
+    `,
+  },
+  {
+    version: 72,
+    description: 'add per-scope permissions to api_tokens (module:read/module:write allow-list)',
+    up: `
+      -- Scopes für API-/MCP-Tokens: JSON-Array aus "modul:read"/"modul:write".
+      -- NULL bedeutet bewusst „kein Scoping" → voller rollenbasierter Zugriff, damit
+      -- alle vor dieser Migration erstellten Tokens unverändert weiterfunktionieren.
+      -- Ein gesetztes (auch leeres) Array schränkt den Token auf die gelisteten
+      -- Modul-/Zugriffs-Kombinationen ein (Least Privilege für an LLM-Clients
+      -- ausgehändigte MCP-Tokens, siehe Discussion #455).
+      ALTER TABLE api_tokens ADD COLUMN scopes TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 73,
+    description: 'recipe meal type suitability for planner integrations',
+    up: `
+      ALTER TABLE recipes ADD COLUMN meal_types TEXT NOT NULL DEFAULT 'breakfast,lunch,dinner,snack';
+    `,
+  },
+  {
+    version: 74,
+    description: 'role- and member-based access permissions for modules and widgets (#467)',
+    up: `
+      -- Zugriffsrechte pro Subjekt (Familienrolle ODER einzelnes Mitglied) auf
+      -- Module und Dashboard-Widgets. Bewusst SPARSE: nur Zeilen, die vom
+      -- Standard (voller Zugriff) abweichen, werden gespeichert. Fehlt eine Zeile,
+      -- gilt für Module 'write' und für Widgets 'allow' — dadurch verhalten sich
+      -- alle Bestands-Installationen nach der Migration unverändert (kein
+      -- Zwangs-Lockout). Admins umgehen dieses System vollständig (Bypass in der
+      -- Auflösungslogik), damit sich niemand selbst aussperren kann. Siehe #467.
+      --
+      --   subject_type  'role'  → subject_id = users.family_role
+      --                 'user'  → subject_id = users.id (als Text)
+      --   resource_type 'module'→ resource_key = Permissions-Modulschlüssel
+      --                 'widget'→ resource_key = Dashboard-Widget-ID
+      --   access        Module : 'none' | 'read' | 'write'
+      --                 Widget : 'none' (gesperrt) | 'allow' (verfügbar)
+      CREATE TABLE IF NOT EXISTS access_permissions (
+        subject_type  TEXT NOT NULL CHECK(subject_type IN ('role', 'user')),
+        subject_id    TEXT NOT NULL,
+        resource_type TEXT NOT NULL CHECK(resource_type IN ('module', 'widget')),
+        resource_key  TEXT NOT NULL,
+        access        TEXT NOT NULL CHECK(access IN ('none', 'read', 'write', 'allow')),
+        updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        PRIMARY KEY (subject_type, subject_id, resource_type, resource_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_access_permissions_subject
+        ON access_permissions(subject_type, subject_id);
+    `,
+  },
+  {
+    version: 75,
+    description: 'planned/estimated budget: per-category monthly caps + monthly savings goal (#468)',
+    up: `
+      -- Geplantes Budget je Ausgabenkategorie und ein Monats-Sparziel (Discussion #468).
+      -- Bewusst als „stetiger" Monatsplan modelliert: EIN Betrag pro Kategorie, der für
+      -- jeden Monat gilt — das ist der 80/20-Fall („mein Lebensmittelbudget sind 400/Monat")
+      -- und vermeidet eine Pro-Monat-Pflege. Der Ist-Wert variiert pro Monat, der Plan bleibt.
+      --
+      --   category  = Ausgabenkategorie-Schlüssel (budget_categories.key, type='expense')
+      --               ODER der reservierte Sentinel '__savings__' für das Monats-Sparziel.
+      --   amount    = geplanter Monatsbetrag, immer positiv (Deckel bzw. Sparziel), 2 Nachkommastellen.
+      --
+      -- Kein FK auf budget_categories: Kategorien können umbenannt/gelöscht werden; ein
+      -- verwaister Plan schadet nicht (wird bei GET einfach ohne Ist-Bezug geführt) und die
+      -- Validierung beim Schreiben stellt gültige Ziele sicher. Append-only.
+      CREATE TABLE IF NOT EXISTS budget_plans (
+        category    TEXT NOT NULL PRIMARY KEY,
+        amount      REAL NOT NULL,
+        created_by  TEXT,
+        updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+    `,
+  },
+  {
+    version: 76,
+    description: 'Kalender-Events: Ort (location) zusätzlich im FTS-Suchindex (#471)',
+    up: `
+      -- Termin-Suche: title bleibt der Titel, body nimmt jetzt neben der
+      -- Beschreibung auch den Ort auf, damit Termine bei unbekanntem Datum auch
+      -- über Adresse/Ortsstichwort gefunden werden (Discussion #471). Trigger sind
+      -- nicht ALTER-bar → ai/au neu aufbauen und Bestandstermine backfillen.
+      -- (trg_search_events_ad bleibt unverändert: löscht nur.)
+      DROP TRIGGER IF EXISTS trg_search_events_ai;
+      DROP TRIGGER IF EXISTS trg_search_events_au;
+
+      CREATE TRIGGER trg_search_events_ai AFTER INSERT ON calendar_events BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('event', NEW.id,
+                COALESCE(NEW.title, ''),
+                TRIM(COALESCE(NEW.description, '') || ' ' || COALESCE(NEW.location, '')));
+      END;
+      CREATE TRIGGER trg_search_events_au AFTER UPDATE ON calendar_events BEGIN
+        DELETE FROM search_index WHERE entity = 'event' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('event', NEW.id,
+                COALESCE(NEW.title, ''),
+                TRIM(COALESCE(NEW.description, '') || ' ' || COALESCE(NEW.location, '')));
+      END;
+
+      DELETE FROM search_index WHERE entity = 'event';
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'event', id,
+               COALESCE(title, ''),
+               TRIM(COALESCE(description, '') || ' ' || COALESCE(location, ''))
+        FROM calendar_events;
+    `,
+  },
+  {
+    version: 77,
+    description: 'FTS-Suchindex diakritik-insensitiv neu aufbauen (unicode61 remove_diacritics 2, #471)',
+    up: `
+      -- „Muller" soll „Müller", „strasse" soll „Straße" finden — bei Orten/Namen
+      -- (Adressen, Personen) der Normalfall. Der FTS5-Tokenizer ist nicht ALTER-bar,
+      -- also die virtuelle Tabelle mit remove_diacritics neu anlegen. Die AFTER-Trigger
+      -- hängen an den Quelltabellen (nicht an search_index) und bleiben bestehen —
+      -- sie schreiben nach dem Neuaufbau unverändert weiter. Nur der Bestand wird
+      -- index-weit neu eingelesen (Reihenfolge = Trigger-Bodies der jeweiligen Module).
+      DROP TABLE IF EXISTS search_index;
+      CREATE VIRTUAL TABLE search_index USING fts5(
+        entity UNINDEXED,
+        entity_id UNINDEXED,
+        title,
+        body,
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'task', id, COALESCE(title, ''), COALESCE(description, '') FROM tasks;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'event', id, COALESCE(title, ''),
+               TRIM(COALESCE(description, '') || ' ' || COALESCE(location, '')) FROM calendar_events;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'note', id, COALESCE(title, ''), COALESCE(content, '') FROM notes;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'contact', id, COALESCE(name, ''),
+               COALESCE(phone, '') || ' ' || COALESCE(email, '') FROM contacts;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'item', id, COALESCE(name, ''), COALESCE(notes, '') FROM shopping_items;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'medication', id, COALESCE(name, ''), COALESCE(dosage_text, '') FROM medications;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'activity', id, COALESCE(type, ''), COALESCE(note, '') FROM health_activities;
+    `,
+  },
+  {
+    version: 78,
+    description: 'Sichtbarkeit pro Aufgabe/Termin: all | assignees | private (#474)',
+    up: `
+      -- Standard 'all' = bisheriges Verhalten (für alle Familienmitglieder sichtbar);
+      -- Bestandsdaten bleiben damit unverändert sichtbar. Durchsetzung erfolgt
+      -- serverseitig auf allen Lesepfaden (Liste, Detail, Dashboard, Suche, Reminder).
+      ALTER TABLE tasks           ADD COLUMN visibility TEXT NOT NULL DEFAULT 'all';
+      ALTER TABLE calendar_events ADD COLUMN visibility TEXT NOT NULL DEFAULT 'all';
+    `,
+  },
+  {
+    version: 79,
+    description: 'Standard-Zuweisung pro Kalender-Sync-Ziel (#459)',
+    up: `
+      -- Optionale Standard-Person je Sync-Ziel: neu importierte Termine werden ihr
+      -- automatisch zugewiesen. NULL = keine Zuweisung (bisheriges Verhalten).
+      -- ON DELETE ist nicht per ALTER setzbar; Aufräumen bei Nutzer-Löschung
+      -- übernimmt server/services/sync-assignment.js beim nächsten Zugriff.
+      ALTER TABLE external_calendars ADD COLUMN default_assignee_user_id INTEGER;
+      ALTER TABLE ics_subscriptions  ADD COLUMN default_assignee_user_id INTEGER;
+    `,
+  },
+  {
+    version: 80,
+    description: 'Opt-in: zugewiesene Personen im Kalender-Feed-Titel anzeigen (#482)',
+    up: `
+      -- 0 = aus (bisheriges Verhalten, unveränderte Titel für Bestands-Abonnenten);
+      -- 1 = SUMMARY im read-only ICS-Feed erhält Suffix "(Name, Name)".
+      ALTER TABLE users ADD COLUMN calendar_feed_show_assignees INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 81,
+    description: 'Budget-Konten mit Startsaldo + optionale Konto-Zuordnung je Eintrag (#495)',
+    up: `
+      -- Getrennte Konten (Giro, Sparen, Bar …) mit fortlaufendem Saldo.
+      -- Der aktuelle Kontostand = starting_balance + Summe der zugeordneten Einträge.
+      CREATE TABLE IF NOT EXISTS budget_accounts (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        name             TEXT    NOT NULL,
+        type             TEXT    NOT NULL DEFAULT 'checking',
+        starting_balance REAL    NOT NULL DEFAULT 0,
+        currency         TEXT,
+        color            TEXT,
+        archived         INTEGER NOT NULL DEFAULT 0,
+        sort_order       INTEGER NOT NULL DEFAULT 0,
+        created_by       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_budget_accounts_updated_at
+        AFTER UPDATE ON budget_accounts FOR EACH ROW
+        BEGIN UPDATE budget_accounts SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      -- Optionale Konto-Zuordnung je Eintrag; NULL = keinem Konto zugeordnet
+      -- (bisheriges Verhalten, Bestandsdaten bleiben unverändert). Beim Löschen
+      -- eines Kontos bleiben die Einträge erhalten (Zuordnung wird geleert; die
+      -- DELETE-Route setzt account_id zusätzlich explizit auf NULL).
+      ALTER TABLE budget_entries ADD COLUMN account_id INTEGER
+        REFERENCES budget_accounts(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_budget_account ON budget_entries(account_id);
+    `,
+  },
+  {
+    version: 82,
+    description: 'Schwangerschafts-Modus im Zyklus-Tab: pausiert Vorhersagen, optionaler Entbindungstermin (#450)',
+    up: `
+      -- 0 = aus (bisheriges Verhalten). 1 = Schwangerschaft aktiv → alle Zyklus-
+      -- Vorhersagen (nächste Periode, Eisprung, fruchtbares Fenster, Ring/Kalender-
+      -- Projektion) werden angehalten; stattdessen wird der Schwangerschafts-Status
+      -- angezeigt. Perioden-/Tages-Logging bleibt unberührt.
+      ALTER TABLE cycle_settings ADD COLUMN pregnancy_mode INTEGER NOT NULL DEFAULT 0
+        CHECK(pregnancy_mode IN (0, 1));
+      -- Optionaler errechneter Entbindungstermin (YYYY-MM-DD); NULL = ohne Termin,
+      -- dann wird nur der Schwangerschafts-Zustand ohne SSW/Countdown gezeigt.
+      ALTER TABLE cycle_settings ADD COLUMN pregnancy_due_date TEXT;
+    `,
+  },
+  {
+    version: 83,
+    description: 'Task categories as a customizable, sortable table (#494, #357)',
+    up: `
+      -- Aufgaben-Kategorien werden verwaltbar (hinzufügen/umbenennen/ordnen/löschen),
+      -- analog zu Budget/Shopping. Bestands-Keys behalten ihren i18n-Wert über
+      -- label_key (name = NULL → lokalisiert); Custom-Kategorien tragen name, label_key NULL.
+      CREATE TABLE IF NOT EXISTS task_categories (
+        key        TEXT    PRIMARY KEY,
+        name       TEXT,
+        label_key  TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT OR IGNORE INTO task_categories (key, name, label_key, sort_order) VALUES
+        ('household', NULL, 'tasks.categoryHousehold', 0),
+        ('school',    NULL, 'tasks.categorySchool',    1),
+        ('shopping',  NULL, 'tasks.categoryShopping',  2),
+        ('repair',    NULL, 'tasks.categoryRepair',    3),
+        ('health',    NULL, 'tasks.categoryHealth',    4),
+        ('finance',   NULL, 'tasks.categoryFinance',   5),
+        ('leisure',   NULL, 'tasks.categoryLeisure',   6),
+        ('misc',      NULL, 'tasks.categoryMisc',      7);
+
+      -- Legacy-Default 'Sonstiges' auf den kanonischen Key 'misc' ziehen.
+      UPDATE tasks SET category = 'misc' WHERE category = 'Sonstiges' OR category IS NULL OR category = '';
+
+      -- Vorhandene freie Kategorie-Werte als Custom-Kategorien übernehmen (Daten erhalten).
+      INSERT OR IGNORE INTO task_categories (key, name, label_key, sort_order)
+      SELECT category, category, NULL, 1000
+      FROM tasks
+      WHERE category IS NOT NULL AND category != ''
+        AND category NOT IN (SELECT key FROM task_categories)
+      GROUP BY category;
+    `,
+  },
+  {
+    version: 84,
+    description: 'Contact categories as a customizable, sortable table with icons (#357)',
+    up: `
+      -- Kontakt-Kategorien werden verwaltbar. Bestands-Kategorien wechseln von
+      -- deutschen Namens-Strings ('Arzt') zu stabilen Keys ('doctor'), die zugleich
+      -- den CSS-Farb-Slug (.contact-group--doctor) und (über label_key) die
+      -- Lokalisierung tragen. icon speichert das Lucide-Icon je Kategorie.
+      CREATE TABLE IF NOT EXISTS contact_categories (
+        key        TEXT    PRIMARY KEY,
+        name       TEXT,
+        label_key  TEXT,
+        icon       TEXT    NOT NULL DEFAULT 'tag',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT OR IGNORE INTO contact_categories (key, name, label_key, icon, sort_order) VALUES
+        ('doctor',    NULL, 'contacts.categoryDoctor',    'stethoscope',    0),
+        ('school',    NULL, 'contacts.categorySchool',    'graduation-cap', 1),
+        ('authority', NULL, 'contacts.categoryAuthority', 'landmark',       2),
+        ('insurance', NULL, 'contacts.categoryInsurance', 'shield',         3),
+        ('craftsman', NULL, 'contacts.categoryCraftsman', 'wrench',         4),
+        ('emergency', NULL, 'contacts.categoryEmergency', 'siren',          5),
+        ('misc',      NULL, 'contacts.categoryOther',     'tag',            6);
+
+      -- Bestandswerte (deutsche Namen) auf stabile Keys migrieren.
+      UPDATE contacts SET category = CASE category
+        WHEN 'Arzt'         THEN 'doctor'
+        WHEN 'Schule/Kita'  THEN 'school'
+        WHEN 'Behörde'      THEN 'authority'
+        WHEN 'Versicherung' THEN 'insurance'
+        WHEN 'Handwerker'   THEN 'craftsman'
+        WHEN 'Notfall'      THEN 'emergency'
+        WHEN 'Sonstiges'    THEN 'misc'
+        ELSE category
+      END;
+      UPDATE contacts SET category = 'misc' WHERE category IS NULL OR category = '';
+
+      -- Verbliebene freie Werte als Custom-Kategorien übernehmen (Daten erhalten).
+      INSERT OR IGNORE INTO contact_categories (key, name, label_key, icon, sort_order)
+      SELECT category, category, NULL, 'tag', 1000
+      FROM contacts
+      WHERE category IS NOT NULL AND category != ''
+        AND category NOT IN (SELECT key FROM contact_categories)
+      GROUP BY category;
+    `,
+  },
+  {
+    version: 85,
+    description: 'Single-occurrence exceptions for recurring calendar events (EXDATE, #489)',
+    up: `
+      -- Ausnahmen einzelner Vorkommen einer wiederkehrenden Serie (EXDATE).
+      -- Spiegelt das Muster von budget_recurrence_skipped: eine Zeile je
+      -- ausgenommenem Instanz-Datum. ON DELETE CASCADE entfernt die Ausnahmen,
+      -- wenn die ganze Serie gelöscht wird.
+      CREATE TABLE IF NOT EXISTS calendar_event_exceptions (
+        event_id       INTEGER NOT NULL REFERENCES calendar_events(id) ON DELETE CASCADE,
+        exception_date TEXT    NOT NULL,
+        created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        PRIMARY KEY (event_id, exception_date)
+      );
+    `,
+  },
+  {
+    version: 86,
+    description: 'Link family documents to tasks (#503)',
+    up: `
+      -- Verknüpft Dokumente aus dem Dokumente-Modul mit Aufgaben (n:m, #503).
+      -- ON DELETE CASCADE auf beiden Seiten: löscht die Verknüpfung, wenn entweder
+      -- die Aufgabe oder das Dokument entfernt wird (das jeweils andere bleibt
+      -- bestehen). created_by hält fest, wer verknüpft hat.
+      CREATE TABLE IF NOT EXISTS task_documents (
+        task_id     INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        document_id INTEGER NOT NULL REFERENCES family_documents(id) ON DELETE CASCADE,
+        created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        PRIMARY KEY (task_id, document_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_task_documents_document ON task_documents(document_id);
+    `,
+  },
+  {
+    version: 87,
+    description: 'School-holiday group code for multilingual cantons (#434)',
+    up: `
+      -- OpenHolidays modelliert innerhalb EINER Subdivision teils mehrere
+      -- Schulferien-Regime (z. B. Kanton Bern: deutschsprachige Region CH-BE-VS
+      -- vs. französischsprachiger Berner Jura CH-BE-EO), unterschieden nur über
+      -- das "groups"-Feld. group_code hält diesen Gruppen-Code je Cache-Zeile,
+      -- damit die konfigurierte Ferien-Gruppe lese-seitig gefiltert werden kann
+      -- (NULL = gilt für die gesamte Subdivision, z. B. Feiertage). (#434)
+      ALTER TABLE holiday_cache ADD COLUMN group_code TEXT;
+    `,
+  },
+  {
+    version: 88,
+    description: 'Budget personal/shared: owner_id + visibility on entries, loans, subscriptions (#476/#505)',
+    up: `
+      -- Persönliche vs. geteilte Budget-Objekte (Lean, #476/#505). Jedes Objekt
+      -- bekommt eine:n Eigentümer:in (owner_id, fix = Ersteller:in) und eine
+      -- Sichtbarkeit (private/shared). Bestand → shared = bisheriges Haushalts-
+      -- Verhalten, voll rückwärtskompatibel. owner_id ist ON DELETE SET NULL:
+      -- Löschen eines Mitglieds macht seine Objekte zu verwaisten (nur im
+      -- Shared-Modus sichtbaren) Haushalts-Objekten, statt sie mitzureißen.
+      ALTER TABLE budget_entries ADD COLUMN owner_id INTEGER
+        REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE budget_entries ADD COLUMN visibility TEXT NOT NULL DEFAULT 'shared'
+        CHECK (visibility IN ('private', 'shared'));
+      UPDATE budget_entries SET owner_id = created_by WHERE owner_id IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_budget_owner ON budget_entries(owner_id);
+
+      ALTER TABLE budget_loans ADD COLUMN owner_id INTEGER
+        REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE budget_loans ADD COLUMN visibility TEXT NOT NULL DEFAULT 'shared'
+        CHECK (visibility IN ('private', 'shared'));
+      UPDATE budget_loans SET owner_id = created_by WHERE owner_id IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_budget_loans_owner ON budget_loans(owner_id);
+
+      ALTER TABLE budget_subscriptions ADD COLUMN owner_id INTEGER
+        REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE budget_subscriptions ADD COLUMN visibility TEXT NOT NULL DEFAULT 'shared'
+        CHECK (visibility IN ('private', 'shared'));
+      UPDATE budget_subscriptions SET owner_id = created_by WHERE owner_id IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_budget_subs_owner ON budget_subscriptions(owner_id);
+    `,
+  },
+  {
+    version: 89,
+    description: 'CardDAV contact origin: distinguish remotely imported from locally adopted contacts',
+    up: `
+      -- Herkunft eines CardDAV-verknüpften Kontakts. Der Sync muss entscheiden
+      -- können, was passiert, wenn der Server einen Kontakt nicht mehr liefert:
+      --   'remote' = ausschließlich aus CardDAV importiert → darf gelöscht werden.
+      --   'merged' = ein bereits lokal vorhandener Kontakt, den die Smart-Merge-
+      --              Logik nur adoptiert hat (Treffer über E-Mail/Telefon). Er
+      --              trägt lokal gepflegte Daten, die remote nie existiert haben,
+      --              und wird deshalb nur entkoppelt statt gelöscht.
+      -- NULL = kein CardDAV-Bezug (rein lokaler Kontakt).
+      --
+      -- Bestand bekommt bewusst 'merged' und NICHT 'remote': für bereits
+      -- synchronisierte Kontakte ist die Herkunft nicht mehr rekonstruierbar. Die
+      -- konservative Annahme kostet höchstens einen Kontakt, der nach dem
+      -- Remote-Löschen als lokaler Kontakt zurückbleibt; die umgekehrte Annahme
+      -- würde beim ersten Sync Nutzerdaten vernichten. Ab dieser Migration frisch
+      -- importierte Kontakte tragen ihre echte Herkunft.
+      ALTER TABLE contacts ADD COLUMN carddav_origin TEXT
+        CHECK (carddav_origin IN ('remote', 'merged'));
+
+      UPDATE contacts SET carddav_origin = 'merged' WHERE carddav_uid IS NOT NULL;
+    `,
+  },
+  {
+    version: 90,
+    description: 'Link imported birthdays to their source contact',
+    up: `
+      -- Koppelt einen importierten Geburtstag an seinen Quell-Kontakt. Der
+      -- partielle Unique-Index erzwingt Idempotenz: ein Kontakt kann nur einmal
+      -- als Geburtstag im Haushalt landen (GET /birthdays ist haushaltsweit, nicht
+      -- pro Nutzer). ON DELETE SET NULL: wird der Kontakt gelöscht, bleibt der
+      -- Geburtstag als rein lokaler Eintrag bestehen.
+      ALTER TABLE birthdays ADD COLUMN contact_id INTEGER
+        REFERENCES contacts(id) ON DELETE SET NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_birthdays_contact_id
+        ON birthdays(contact_id) WHERE contact_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 91,
+    description: 'Heal CardDAV contacts synced with escaped names, missing details, wrong category (#531)',
+    up: `
+      -- Bereits per CardDAV synchronisierte Kontakte (carddav_uid IS NOT NULL)
+      -- heilen, die vor dem #531-Fix falsch abgelegt wurden. Nur Sync-Kontakte,
+      -- damit manuell angelegte Kontakte unberührt bleiben.
+
+      -- 1) Nicht abgebildete Kategorie 'Sonstiges' auf den stabilen Key 'misc'.
+      UPDATE contacts SET category = 'misc'
+        WHERE carddav_uid IS NOT NULL AND category = 'Sonstiges';
+
+      -- 2) Literale vCard-Escapes im Namen auflösen. Backslash ist in SQLite-LIKE
+      -- kein Metazeichen, daher matcht '%\\,%' die Sequenz Backslash+Komma direkt.
+      UPDATE contacts
+        SET name = REPLACE(REPLACE(REPLACE(name, '\\,', ','), '\\;', ';'), '\\\\', '\\')
+        WHERE carddav_uid IS NOT NULL
+          AND (name LIKE '%\\,%' OR name LIKE '%\\;%' OR name LIKE '%\\\\%');
+
+      -- 3) Fehlende Legacy-Skalarfelder aus den Multi-Value-Tabellen nachfüllen,
+      -- damit Liste und Bearbeiten-Dialog Telefon/E-Mail sofort zeigen (die Adresse
+      -- wird beim nächsten Sync ergänzt). Nur NULL-Spalten, keine manuellen Werte.
+      UPDATE contacts SET phone = (
+          SELECT value FROM contact_phones
+          WHERE contact_id = contacts.id ORDER BY is_primary DESC, id ASC LIMIT 1
+        )
+        WHERE carddav_uid IS NOT NULL AND phone IS NULL
+          AND EXISTS (SELECT 1 FROM contact_phones WHERE contact_id = contacts.id);
+
+      UPDATE contacts SET email = (
+          SELECT value FROM contact_emails
+          WHERE contact_id = contacts.id ORDER BY is_primary DESC, id ASC LIMIT 1
+        )
+        WHERE carddav_uid IS NOT NULL AND email IS NULL
+          AND EXISTS (SELECT 1 FROM contact_emails WHERE contact_id = contacts.id);
+    `,
+  },
+  {
+    version: 92,
+    description: 'Surface CardDAV sync errors in the UI instead of only the server log (#534)',
+    up: `
+      -- Bisher landete ein fehlgeschlagener Adressbuch-Abruf ausschließlich im
+      -- Server-Log ("501 Not Implemented" in #534). Das UI meldete weiterhin
+      -- "zuletzt synchronisiert", während die Hälfte der Kontakte fehlte.
+      -- Beide Spalten sind nullable: NULL heißt "letzter Lauf war sauber".
+      ALTER TABLE carddav_accounts ADD COLUMN last_error TEXT;
+      ALTER TABLE carddav_accounts ADD COLUMN last_error_at TEXT;
+    `,
+  },
+  {
+    version: 93,
+    description: 'Attach CardDAV sync errors to the failing address book, not just the account (#534)',
+    up: `
+      -- Der Konto-Fehler nennt zwar das Adressbuch im Text, aber als Fließtext:
+      -- die Liste kann die betroffene Zeile damit nicht markieren, und der Name
+      -- im Fehler muss nicht mit dem Namen in der Liste übereinstimmen.
+      -- NULL heißt "dieses Adressbuch lief zuletzt sauber durch".
+      ALTER TABLE carddav_addressbook_selection ADD COLUMN last_error TEXT;
+    `,
+  },
+  {
+    version: 94,
+    description: 'Store structured vCard N name components for contacts (#535)',
+    up: `
+      -- Bisher trug ein Kontakt nur den kombinierten Anzeigenamen (aus FN).
+      -- Quellen formatieren FN unterschiedlich ("Given Family" vs. "Family, Given",
+      -- teils mit Titel oder Spitzname) - dadurch war weder Anzeige noch Sortierung
+      -- konsistent. Die vCard-Eigenschaft N trägt die Struktur; sie wird ab jetzt
+      -- gespeichert. name bleibt der Anzeigename und wird daraus abgeleitet.
+      -- Alle Spalten nullable: NULL heißt "keine Struktur bekannt" (Altbestand,
+      -- CardDAV-Kontakte füllen sie beim nächsten Sync nach).
+      ALTER TABLE contacts ADD COLUMN first_name TEXT;
+      ALTER TABLE contacts ADD COLUMN last_name TEXT;
+      ALTER TABLE contacts ADD COLUMN middle_name TEXT;
+      ALTER TABLE contacts ADD COLUMN name_prefix TEXT;
+      ALTER TABLE contacts ADD COLUMN name_suffix TEXT;
+    `,
+  },
+  {
+    version: 95,
+    description: 'Add additive value_e164 column to contact_phones for format-independent CardDAV matching (libphonenumber-js)',
+    up: `
+      -- STRIKT ADDITIV. value bleibt die Wahrheit (roher User-String) und wird nie
+      -- verändert. value_e164 ist eine reine Zusatzspalte fürs format-unabhängige
+      -- Kontakt-Matching beim CardDAV-Sync (verhindert Duplikate durch Format-
+      -- Varianz). Nullable: NULL heißt "nicht parsebar" → das Matching fällt auf den
+      -- exakten Rohwert-Vergleich zurück. Der Backfill läuft in afterUp() (JS/E.164).
+      ALTER TABLE contact_phones ADD COLUMN value_e164 TEXT;
+      CREATE INDEX idx_contact_phones_e164 ON contact_phones(value_e164);
+    `,
+    afterUp: (db) => {
+      // E.164 pro Zeile aus dem ROHWERT berechnen; value bleibt unangetastet.
+      // Default-Land aus der haushaltweiten Konfiguration; fehlt es, werden nur
+      // Nummern mit internationaler Vorwahl (+) normalisiert.
+      const defaultCountry = defaultCountryFromConfig(db);
+      const rows = db.prepare('SELECT id, value FROM contact_phones').all();
+      const upd = db.prepare('UPDATE contact_phones SET value_e164 = ? WHERE id = ?');
+      for (const row of rows) {
+        const e164 = toE164(row.value, defaultCountry);
+        if (e164) upd.run(e164, row.id); // nur wo parsebar; sonst bleibt NULL
+      }
+    },
+  },
+  {
+    version: 96,
+    description: 'Add default_visibility to cycle_settings so new cycle entries can default to family-visible',
+    up: `
+      -- Persönliche Voreinstellung für die Sichtbarkeit neu geloggter Zyklus-Daten
+      -- (Perioden + Tageslogs). Bestehende Zeilen bleiben unberührt; 'private' hält
+      -- das bisherige Verhalten als Default bei. Das UI wählt diesen Wert nur vor -
+      -- pro Event bleibt die Sichtbarkeit weiterhin einzeln überschreibbar.
+      ALTER TABLE cycle_settings ADD COLUMN default_visibility TEXT NOT NULL DEFAULT 'private'
+        CHECK(default_visibility IN ('private', 'family'));
+    `,
+  },
+  {
+    version: 97,
+    description: 'Add tzid to calendar_events for DST-correct recurrence expansion (#549)',
+    up: `
+      -- IANA-Zeitzone (z.B. Europe/Berlin) des Serien-Starts. Nur für zeitgebundene
+      -- CalDAV/Apple-Wiederholungen relevant, die am Anzeige-Zeitpunkt expandiert
+      -- werden: ohne die Zone behält jede Instanz den festen UTC-Zeit-Suffix des
+      -- Masters, sodass die lokale Uhrzeit über die Sommer-/Winterzeit-Grenze um
+      -- eine Stunde driftet (#549). NULL = wie bisher (floating/UTC, kein DST-Bezug).
+      ALTER TABLE calendar_events ADD COLUMN tzid TEXT;
+    `,
+  },
+  {
+    version: 98,
+    description: 'Add Google Drive as a document storage backend',
+    foreignKeysOff: true,
+    up: `
+      CREATE TABLE family_documents_new (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        name             TEXT    NOT NULL,
+        description      TEXT,
+        category         TEXT    NOT NULL DEFAULT 'other'
+                                  CHECK(category IN ('medical', 'school', 'identity', 'insurance', 'finance', 'home', 'vehicle', 'legal', 'travel', 'pets', 'warranty', 'taxes', 'work', 'other')),
+        status           TEXT    NOT NULL DEFAULT 'active'
+                                  CHECK(status IN ('active', 'archived')),
+        visibility       TEXT    NOT NULL DEFAULT 'family'
+                                  CHECK(visibility IN ('family', 'restricted', 'private')),
+        original_name    TEXT    NOT NULL,
+        mime_type        TEXT    NOT NULL,
+        file_size        INTEGER NOT NULL,
+        content_data     TEXT    NOT NULL,
+        storage_provider TEXT    NOT NULL DEFAULT 'local'
+                                  CHECK(storage_provider IN ('local', 'external')),
+        storage_key      TEXT,
+        created_by       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        folder_id        INTEGER REFERENCES family_document_folders(id) ON DELETE SET NULL,
+        dms_account_id   INTEGER REFERENCES dms_accounts(id) ON DELETE SET NULL,
+        external_url     TEXT,
+        external_meta    TEXT,
+        storage_backend  TEXT    NOT NULL DEFAULT 'local'
+                                  CHECK(storage_backend IN ('local', 'webdav', 'dms', 'google_drive'))
+      );
+
+      INSERT INTO family_documents_new (
+        id, name, description, category, status, visibility, original_name,
+        mime_type, file_size, content_data, storage_provider, storage_key,
+        created_by, created_at, updated_at, folder_id, dms_account_id,
+        external_url, external_meta, storage_backend
+      )
+      SELECT
+        id, name, description, category, status, visibility, original_name,
+        mime_type, file_size, content_data, storage_provider, storage_key,
+        created_by, created_at, updated_at, folder_id, dms_account_id,
+        external_url, external_meta, storage_backend
+      FROM family_documents;
+
+      DROP TABLE family_documents;
+      ALTER TABLE family_documents_new RENAME TO family_documents;
+
+      UPDATE family_documents
+      SET visibility = CASE
+        WHEN EXISTS (
+          SELECT 1 FROM calendar_events e
+          WHERE e.attachment_document_id = family_documents.id
+            AND e.visibility = 'all'
+        ) THEN 'family'
+        WHEN EXISTS (
+          SELECT 1 FROM calendar_events e
+          WHERE e.attachment_document_id = family_documents.id
+            AND e.visibility = 'assignees'
+        ) THEN 'restricted'
+        ELSE 'private'
+      END
+      WHERE EXISTS (
+        SELECT 1 FROM calendar_events e
+        WHERE e.attachment_document_id = family_documents.id
+      );
+
+      DELETE FROM family_document_access
+      WHERE document_id IN (
+        SELECT attachment_document_id
+        FROM calendar_events
+        WHERE attachment_document_id IS NOT NULL
+      );
+
+      INSERT OR IGNORE INTO family_document_access (document_id, user_id)
+      SELECT e.attachment_document_id, ea.user_id
+      FROM calendar_events e
+      JOIN event_assignments ea ON ea.event_id = e.id
+      WHERE e.attachment_document_id IS NOT NULL
+        AND e.visibility = 'assignees'
+        AND NOT EXISTS (
+          SELECT 1 FROM calendar_events family_event
+          WHERE family_event.attachment_document_id = e.attachment_document_id
+            AND family_event.visibility = 'all'
+        );
+
+      CREATE TRIGGER trg_family_documents_updated_at
+        AFTER UPDATE ON family_documents FOR EACH ROW
+        BEGIN UPDATE family_documents SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE TRIGGER trg_family_documents_storage_insert
+        BEFORE INSERT ON family_documents
+        FOR EACH ROW
+        BEGIN
+          SELECT CASE
+            WHEN NOT (
+              (NEW.storage_provider = 'local' AND NEW.storage_backend = 'local')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'webdav')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'dms')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'google_drive')
+            )
+            THEN RAISE(ABORT, 'invalid document storage provider/backend combination')
+          END;
+          SELECT CASE
+            WHEN NEW.storage_backend != 'dms' AND NEW.dms_account_id IS NOT NULL
+            THEN RAISE(ABORT, 'dms_account_id requires dms storage backend')
+          END;
+        END;
+
+      CREATE TRIGGER trg_family_documents_storage_update
+        BEFORE UPDATE OF storage_provider, storage_backend, dms_account_id ON family_documents
+        FOR EACH ROW
+        BEGIN
+          SELECT CASE
+            WHEN NOT (
+              (NEW.storage_provider = 'local' AND NEW.storage_backend = 'local')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'webdav')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'dms')
+              OR (NEW.storage_provider = 'external' AND NEW.storage_backend = 'google_drive')
+            )
+            THEN RAISE(ABORT, 'invalid document storage provider/backend combination')
+          END;
+          SELECT CASE
+            WHEN NEW.storage_backend != 'dms' AND NEW.dms_account_id IS NOT NULL
+            THEN RAISE(ABORT, 'dms_account_id requires dms storage backend')
+          END;
+        END;
+
+      CREATE INDEX idx_family_documents_status     ON family_documents(status);
+      CREATE INDEX idx_family_documents_category   ON family_documents(category);
+      CREATE INDEX idx_family_documents_created_by ON family_documents(created_by);
+      CREATE INDEX idx_family_documents_folder     ON family_documents(folder_id);
+      CREATE INDEX idx_family_documents_dms        ON family_documents(dms_account_id);
+    `,
+  },
+  {
+    version: 99,
+    description: 'Add per-group default split method and config for shared expenses (#517)',
+    up: `
+      -- Persistente Standard-Aufteilung pro Ausgaben-Gruppe (#517): neue Ausgaben
+      -- übernehmen Methode und - bei percentage/shares - die pro-Mitglied-Werte,
+      -- statt jedes Mal auf 'equal' zu starten. default_split_config ist JSON
+      -- ([{ user_id, percentage }] bzw. [{ user_id, shares }]) oder NULL bei
+      -- equal/exact. Reine UI-Vorbelegung: die harte Split-Validierung bleibt pro
+      -- Ausgabe (buildSplits), daher hier bewusst keine Summen-/FK-Constraints.
+      ALTER TABLE expense_groups ADD COLUMN default_split_method TEXT NOT NULL DEFAULT 'equal'
+        CHECK(default_split_method IN ('equal', 'exact', 'percentage', 'shares'));
+      ALTER TABLE expense_groups ADD COLUMN default_split_config TEXT;
+    `,
+  },
+  {
+    version: 100,
+    description: 'Loans: optional interest phases (fixed rate + forecast follow-up rate, #569)',
+    up: `
+      -- Zins-Darlehen (#569): Bisher waren Darlehen zinsfrei (total_amount fest,
+      -- installment_count manuell). Optional wird jetzt ein Annuitätendarlehen
+      -- nach deutschem Muster abgebildet: Sollzins (fixed_rate) + Anfangstilgung
+      -- (initial_repayment_rate) auf die Kreditsumme (principal) ergeben die
+      -- konstante Monatsrate; die Laufzeit wird daraus berechnet. Nach der
+      -- Zinsbindung (fixed_period_months) rechnet der Prognose-Anschlusszins
+      -- (followup_rate) weiter. Der Server leitet daraus total_amount +
+      -- installment_count ab, sodass die bestehende Raten-/Status-Logik
+      -- unverändert weiterläuft. interest_mode='none' = bisheriges Verhalten.
+      -- Validierung bewusst in der Route (wie #517), daher hier nur der Enum-CHECK.
+      ALTER TABLE budget_loans ADD COLUMN interest_mode TEXT NOT NULL DEFAULT 'none'
+        CHECK(interest_mode IN ('none', 'fixed', 'fixed_then_variable'));
+      ALTER TABLE budget_loans ADD COLUMN principal REAL;
+      ALTER TABLE budget_loans ADD COLUMN fixed_rate REAL;
+      ALTER TABLE budget_loans ADD COLUMN initial_repayment_rate REAL;
+      ALTER TABLE budget_loans ADD COLUMN fixed_period_months INTEGER;
+      ALTER TABLE budget_loans ADD COLUMN followup_rate REAL;
+    `,
+  },
+  {
+    version: 101,
+    description: 'Loans: allow a purely variable interest rate (#569 follow-up)',
+    foreignKeysOff: true,
+    up: `
+      -- Rein variables Darlehen (#569-Nachtrag): interest_mode kannte bisher nur
+      -- 'fixed' (Sollzins über die ganze Laufzeit) und 'fixed_then_variable'
+      -- (Zinsbindung, danach Prognosezins). Ein Darlehen ohne jede Zinsbindung
+      -- ließ sich nur als "fester Zins" anlegen - die Anzeige behauptete dann
+      -- eine Bindung, die es nicht gibt. 'variable' rechnet identisch zu 'fixed'
+      -- (ein Zinssatz, keine Phasen), deklariert ihn aber als aktuellen
+      -- Prognosewert ohne Bindung.
+      --
+      -- SQLite kann einen Spalten-CHECK nicht per ALTER erweitern, daher Tabelle
+      -- neu erstellen (Muster wie v98). foreignKeysOff ist Pflicht: mit aktiver
+      -- FK-Durchsetzung würde DROP TABLE die gekoppelten Ratenzahlungen
+      -- (budget_loan_payments ... ON DELETE CASCADE) mitlöschen.
+      CREATE TABLE budget_loans_new (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        title             TEXT    NOT NULL,
+        borrower          TEXT    NOT NULL,
+        total_amount      REAL    NOT NULL CHECK(total_amount > 0),
+        installment_count INTEGER NOT NULL CHECK(installment_count > 0),
+        start_month       TEXT    NOT NULL,
+        notes             TEXT,
+        status            TEXT    NOT NULL DEFAULT 'active'
+                                  CHECK(status IN ('active', 'paid')),
+        created_by        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        owner_id          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        visibility        TEXT    NOT NULL DEFAULT 'shared'
+                                  CHECK (visibility IN ('private', 'shared')),
+        interest_mode     TEXT    NOT NULL DEFAULT 'none'
+                                  CHECK(interest_mode IN ('none', 'fixed', 'variable', 'fixed_then_variable')),
+        principal              REAL,
+        fixed_rate             REAL,
+        initial_repayment_rate REAL,
+        fixed_period_months    INTEGER,
+        followup_rate          REAL
+      );
+
+      INSERT INTO budget_loans_new (
+        id, title, borrower, total_amount, installment_count, start_month, notes,
+        status, created_by, created_at, updated_at, owner_id, visibility,
+        interest_mode, principal, fixed_rate, initial_repayment_rate,
+        fixed_period_months, followup_rate
+      )
+      SELECT
+        id, title, borrower, total_amount, installment_count, start_month, notes,
+        status, created_by, created_at, updated_at, owner_id, visibility,
+        interest_mode, principal, fixed_rate, initial_repayment_rate,
+        fixed_period_months, followup_rate
+      FROM budget_loans;
+
+      DROP TABLE budget_loans;
+      ALTER TABLE budget_loans_new RENAME TO budget_loans;
+
+      CREATE TRIGGER IF NOT EXISTS trg_budget_loans_updated_at
+        AFTER UPDATE ON budget_loans FOR EACH ROW
+        BEGIN UPDATE budget_loans SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      CREATE INDEX IF NOT EXISTS idx_budget_loans_status ON budget_loans(status);
+      CREATE INDEX IF NOT EXISTS idx_budget_loans_start_month ON budget_loans(start_month);
+      CREATE INDEX IF NOT EXISTS idx_budget_loans_owner ON budget_loans(owner_id);
+    `,
+  },
+  {
+    version: 102,
+    description: 'Loans: own currency per loan with a fixed conversion rate (#582)',
+    up: `
+      -- Eigene Währung je Darlehen (#582): Ein Auslandskredit läuft in einer
+      -- anderen Währung als das Budget. Alle Geldfelder des Darlehens
+      -- (total_amount, principal, budget_loan_payments.amount) bleiben in DIESER
+      -- Währung gespeichert - nur so bleiben Tilgungsplan und Restschuld exakt.
+      --
+      -- currency = NULL bedeutet "Budget-Währung" (Altbestand und der Normalfall);
+      -- die Route löst das gegen sync_config.currency auf, statt hier einen
+      -- Default einzubrennen, der bei einer Währungsumstellung falsch würde.
+      --
+      -- exchange_rate ist ein FESTER, manuell gepflegter Kurs statt eines
+      -- Tageskurses: ein Tilgungsplan über 30 Jahre darf seine Restschuld nicht
+      -- täglich ändern, und der Live-Kurs-Pfad des Abo-Moduls braucht einen
+      -- FIXER_API_KEY, den die meisten Installationen nicht setzen.
+      -- Semantik: 1 Einheit Darlehenswährung = exchange_rate Einheiten
+      -- Budget-Währung, also budget_amount = loan_amount * exchange_rate.
+      -- Nur die Budget-Buchung der Rate und die währungsübergreifende
+      -- Summenkarte rechnen damit um; das Darlehen selbst rechnet ungewandelt.
+      ALTER TABLE budget_loans ADD COLUMN currency TEXT;
+      ALTER TABLE budget_loans ADD COLUMN exchange_rate REAL NOT NULL DEFAULT 1;
+    `,
+  },
+  {
+    version: 103,
+    description: 'Calendar: tombstones for events deleted locally but still remote (#593)',
+    up: `
+      -- Lokales Löschen eines gespiegelten Termins muss auch beim Provider löschen
+      -- (#593). Die Route kann das nicht selbst tun: der Provider-Call ist async
+      -- und darf weder die 204-Antwort verzögern noch bei Netzfehlern den lokalen
+      -- Löschvorgang scheitern lassen. Deshalb ein Tombstone - die Zeile überlebt
+      -- das gelöschte Event und wird vom Sync abgearbeitet (at-least-once).
+      --
+      -- Bewusst NICHT als Trigger auf calendar_events: der Inbound-Sync löscht
+      -- lokale Zeilen ebenfalls (cancelled-Events, Kalender-Abwahl). Ein Trigger
+      -- würde daraus Löschbefehle an den Provider machen und fremde Termine
+      -- vernichten. Tombstones entstehen nur im expliziten User-Delete.
+      --
+      -- source ist von Anfang an vorhanden, damit CalDAV/Apple dieselbe Tabelle
+      -- nutzen können; aktuell schreibt nur 'google'.
+      CREATE TABLE IF NOT EXISTS calendar_pending_deletions (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        source               TEXT NOT NULL,
+        calendar_external_id TEXT NOT NULL,
+        event_external_id    TEXT NOT NULL,
+        attempts             INTEGER NOT NULL DEFAULT 0,
+        last_error           TEXT,
+        created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(source, calendar_external_id, event_external_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_cal_pending_del_event
+        ON calendar_pending_deletions(source, event_external_id);
+    `,
+  },
+  {
+    version: 104,
+    description: 'Calendar: mark locally edited mirrored events for outbound push (#593)',
+    up: `
+      -- Gegenstück zu v103 für Änderungen: ein bereits nach Google gespiegelter
+      -- Termin wurde nach dem ersten Push nie wieder ausgehend angefasst, weil der
+      -- Outbound-Zweig nur external_source='local' selektiert. Titel-, Zeit- oder
+      -- Farbänderungen blieben damit in Yuvomi hängen.
+      --
+      -- outbound_dirty ist bewusst NICHT user_modified: das Flag bedeutet
+      -- dauerhaft "lokal angefasst, Farbe nicht überschreiben" und würde als
+      -- Push-Signal jeden Sync-Lauf ein Update an Google schicken. outbound_dirty
+      -- ist eine Warteschlange - gesetzt beim Bearbeiten, gelöscht nach dem Push.
+      --
+      -- outbound_attempts begrenzt Fehlversuche analog zu den Tombstones, damit
+      -- ein dauerhaft unschreibbares Event nicht jeden Lauf blockiert.
+      ALTER TABLE calendar_events ADD COLUMN outbound_dirty INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE calendar_events ADD COLUMN outbound_attempts INTEGER NOT NULL DEFAULT 0;
+
+      CREATE INDEX IF NOT EXISTS idx_calendar_outbound_dirty
+        ON calendar_events(outbound_dirty) WHERE outbound_dirty = 1;
+    `,
+  },
+  {
+    version: 105,
+    description: 'Calendar: queue a pending calendar move for mirrored Google events (#593)',
+    up: `
+      -- Wechselt der Zielkalender eines bereits gespiegelten Termins, muss er in
+      -- Google per events.move umziehen; ein Patch im alten Kalender würde ihn
+      -- dort belassen.
+      --
+      -- Der anstehende Umzug wird als eigener Wert vorgemerkt statt beim Sync aus
+      -- target_google_calendar_id != calendar_ref_id abgeleitet. Bestandsdaten
+      -- können diese Abweichung längst enthalten: target_google_calendar_id ließ
+      -- sich immer setzen, blieb für bereits gespiegelte Termine aber folgenlos.
+      -- Ein Zustandsvergleich würde daraus beim ersten Sync nach dem Update eine
+      -- stille Umzugswelle in fremden Google-Kalendern machen. So zieht nur um,
+      -- was ein Nutzer nach dem Update ausdrücklich umstellt.
+      ALTER TABLE calendar_events ADD COLUMN outbound_move_to TEXT;
+    `,
+  },
+  {
+    version: 106,
+    description: 'Calendar: remember the CalDAV object URL so edits and deletes can reach the server (#593)',
+    up: `
+      -- CalDAV/Apple kennen keinen Aufruf "ändere Event X in Kalender Y": ein
+      -- Kalenderobjekt wird über SEINE eigene URL per PUT/DELETE angefasst. Bisher
+      -- verwarf der Inbound diese URL (obj.url) und der Outbound-Push speicherte
+      -- sie nicht, weshalb dort ausgehend nur Anlegen möglich war.
+      --
+      -- Nullable und ohne Backfill: für Bestandstermine ist die URL schlicht noch
+      -- nicht bekannt. Der Sync füllt sie beim nächsten Inbound-Lauf nach, und bis
+      -- dahin löst die Löschung die URL über die UID des laufenden Fetches auf -
+      -- ein Backfill bräuchte ohnehin genau denselben Netzabruf.
+      ALTER TABLE calendar_events ADD COLUMN external_object_url TEXT;
+
+      -- Die Objekt-URL wandert in den Tombstone mit: nach dem lokalen Löschen ist
+      -- die Zeile weg, aus der sie sonst zu holen wäre.
+      ALTER TABLE calendar_pending_deletions ADD COLUMN object_url TEXT;
+    `,
+  },
+  {
+    version: 107,
+    description: 'Subscriptions: optional end condition (never / on date / after N payments) (#594)',
+    up: `
+      -- Abos sind oft befristet (Leasing, Ratenkauf, Miete bis zum Umzug). Ohne
+      -- Ende laufen sie in der Verlängerungsprognose unbegrenzt weiter, und man
+      -- muss selbst daran denken, sie zu deaktivieren.
+      --
+      -- end_type steuert die drei Modi; end_date bzw. occurrence_count tragen den
+      -- jeweiligen Grenzwert. Bestandsabos bekommen 'never' und verhalten sich
+      -- unverändert.
+      ALTER TABLE budget_subscriptions
+        ADD COLUMN end_type TEXT NOT NULL DEFAULT 'never'
+        CHECK(end_type IN ('never', 'on_date', 'after_count'));
+      ALTER TABLE budget_subscriptions ADD COLUMN end_date TEXT;
+      ALTER TABLE budget_subscriptions ADD COLUMN occurrence_count INTEGER;
+
+      -- Zählt die bereits verbuchten Zahlungen mit, damit 'after_count' beim
+      -- Verlängern gegen occurrence_count laufen kann. Die aktuell anstehende
+      -- Zahlung ist immer Nummer occurrences_done + 1.
+      ALTER TABLE budget_subscriptions
+        ADD COLUMN occurrences_done INTEGER NOT NULL DEFAULT 0;
+
+      -- Gesetzt, sobald die letzte Zahlung durch ist: das Abo gilt als
+      -- abgeschlossen (zusätzlich enabled = 0), unterscheidbar vom manuellen
+      -- Pausieren.
+      ALTER TABLE budget_subscriptions ADD COLUMN completed_at TEXT;
+    `,
+  },
+  {
+    version: 108,
+    description: 'Pantry: food inventory with quantity, storage location and expiry date (#596)',
+    up: `
+      -- Der Küchen-Kreislauf hatte bisher drei Seiten - planen (Mahlzeiten),
+      -- kochen (Rezepte), einkaufen (Einkauf) - und keine vierte: was tatsächlich
+      -- im Haus ist. Ohne Bestand beantwortet die App weder "wie viel Mehl noch?"
+      -- noch "was läuft bald ab?" (#596).
+
+      -- Lagerorte analog shopping_categories: eigene Tabelle, sortierbar,
+      -- umbenennbar. Deutsche Seed-Namen, die Anzeige übersetzt über
+      -- DEFAULT_LOCATION_I18N - umbenannte Orte behalten ihren Klartext.
+      CREATE TABLE IF NOT EXISTS pantry_locations (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL UNIQUE,
+        icon       TEXT    NOT NULL DEFAULT 'package',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT INTO pantry_locations (name, icon, sort_order) VALUES
+        ('Vorratsschrank', 'archive',      0),
+        ('Kühlschrank',    'refrigerator', 1),
+        ('Gefrierschrank', 'snowflake',    2),
+        ('Keller',         'warehouse',    3),
+        ('Sonstiges',      'package',      4);
+
+      CREATE TABLE IF NOT EXISTS pantry_items (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT    NOT NULL,
+        -- REAL statt des Freitexts von recipe_ingredients.quantity: nur eine Zahl
+        -- lässt sich per Stepper verringern, gegen min_quantity prüfen und beim
+        -- Einkaufs-Import zusammenzählen. Der Vorrat ist die einzige Küchen-
+        -- Tabelle, die rechnen muss.
+        quantity     REAL    NOT NULL DEFAULT 1,
+        -- Bewusst OHNE CHECK-Constraint: eine zusätzliche Einheit wäre in SQLite
+        -- sonst ein Tabellen-Rebuild. Gültigkeit erzwingt der Router gegen die
+        -- geteilte Liste in public/utils/pantry-units.js.
+        unit         TEXT    NOT NULL DEFAULT 'pcs',
+        -- ON DELETE SET NULL: einen Lagerort zu löschen darf nie Bestand
+        -- vernichten. Ortlose Zeilen sammelt die Seite unter "Ohne Lagerort".
+        location_id  INTEGER REFERENCES pantry_locations(id) ON DELETE SET NULL,
+        category     TEXT    NOT NULL DEFAULT 'Sonstiges',
+        -- YYYY-MM-DD; NULL = unbegrenzt haltbar (Salz, Reis, Konserven ohne MHD).
+        expires_on   TEXT,
+        -- NULL = kein Mindestbestand überwacht. Ist er gesetzt, meldet die Zeile
+        -- "fast leer", sobald quantity <= min_quantity.
+        min_quantity REAL,
+        notes        TEXT,
+        created_by   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Eine Zeile = eine Charge. Zwei Packungen Milch mit verschiedenem MHD
+      -- sind zwei Zeilen; eine Chargen-Hierarchie unter dem Produkt kostet
+      -- Komplexität, die eine Familienküche nicht braucht.
+
+      CREATE INDEX IF NOT EXISTS idx_pantry_items_expires  ON pantry_items(expires_on);
+      CREATE INDEX IF NOT EXISTS idx_pantry_items_location ON pantry_items(location_id);
+      CREATE INDEX IF NOT EXISTS idx_pantry_items_name     ON pantry_items(name);
+
+      CREATE TRIGGER IF NOT EXISTS trg_pantry_items_updated_at
+        AFTER UPDATE ON pantry_items FOR EACH ROW
+        BEGIN UPDATE pantry_items SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+    `,
+  },
+  {
+    version: 109,
+    description: 'Pantry: keep household stock when the member who entered it is deleted (#596 follow-up)',
+    up: `
+      -- v108 gab pantry_items.created_by ein ON DELETE CASCADE - übernommen aus
+      -- den Modulen, in denen ein Eintrag WIRKLICH seinem Ersteller gehört
+      -- (Rezepte, Notizen). Der Vorrat ist aber ausdrücklich Haushaltsbesitz:
+      -- server/routes/pantry.js kennt bewusst kein Eigentümer-Gate, weil jeder
+      -- die Milch ausbuchen darf, egal wer sie eingetragen hat.
+      --
+      -- Mit CASCADE hätte das Löschen eines Mitglieds jeden von ihm erfassten
+      -- Artikel mitgerissen und damit den Bestand des ganzen Haushalts
+      -- vernichtet. created_by wird zum reinen Herkunftsnachweis: nullable und
+      -- ON DELETE SET NULL.
+      --
+      -- SQLite kann eine FK nicht ändern, deshalb der kanonische Zwölf-Schritte-
+      -- Rebuild (Tabelle neu, Daten kopieren, tauschen). Indizes und Trigger
+      -- hängen an der alten Tabelle und werden danach neu angelegt.
+      CREATE TABLE pantry_items_new (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT    NOT NULL,
+        quantity     REAL    NOT NULL DEFAULT 1,
+        unit         TEXT    NOT NULL DEFAULT 'pcs',
+        location_id  INTEGER REFERENCES pantry_locations(id) ON DELETE SET NULL,
+        category     TEXT    NOT NULL DEFAULT 'Sonstiges',
+        expires_on   TEXT,
+        min_quantity REAL,
+        notes        TEXT,
+        created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT INTO pantry_items_new
+        (id, name, quantity, unit, location_id, category, expires_on, min_quantity, notes, created_by, created_at, updated_at)
+        SELECT id, name, quantity, unit, location_id, category, expires_on, min_quantity, notes, created_by, created_at, updated_at
+        FROM pantry_items;
+
+      DROP TABLE pantry_items;
+      ALTER TABLE pantry_items_new RENAME TO pantry_items;
+
+      CREATE INDEX IF NOT EXISTS idx_pantry_items_expires  ON pantry_items(expires_on);
+      CREATE INDEX IF NOT EXISTS idx_pantry_items_location ON pantry_items(location_id);
+      CREATE INDEX IF NOT EXISTS idx_pantry_items_name     ON pantry_items(name);
+
+      CREATE TRIGGER IF NOT EXISTS trg_pantry_items_updated_at
+        AFTER UPDATE ON pantry_items FOR EACH ROW
+        BEGIN UPDATE pantry_items SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+    `,
+  },
+  {
+    version: 110,
+    description: 'Google Calendar: force one full resync so series arrive as masters (#593)',
+    up: `
+      -- Der Google-Abruf stellt von singleEvents:true auf false um: eine Serie
+      -- kommt künftig als EIN Master mit ihrer Wiederholungsregel statt als
+      -- hunderte Einzelvorkommen, so wie CalDAV und ICS sie liefern und wie
+      -- Yuvomi Serien lokal führt.
+      --
+      -- Der gespeicherte syncToken gehört zu den alten Abrufparametern. Google
+      -- beantwortet ihn nach der Umstellung mit 410 GONE, was der Sync zwar
+      -- abfängt, aber erst nach einem vergeblichen Request. Ihn hier zu leeren
+      -- macht den ersten Lauf deterministisch - und dieser Full-Resync ist es,
+      -- der die alten Einzelvorkommen in ihre Serie zurückführt.
+      --
+      -- Nur der Token wird angefasst, keine Termine: das Zusammenführen passiert
+      -- im Sync gegen die echten Google-Daten, nicht per Rateschluss über
+      -- ID-Muster. Termine, die dabei lokale Anpassungen tragen, bleiben als
+      -- eigenständige Einträge erhalten.
+      UPDATE google_calendar_selection SET sync_token = NULL;
+    `,
+  },
+  {
+    version: 111,
+    description: 'meal recurrence: optional end date (#619)',
+    up: `
+      -- Eine wöchentliche Mahlzeit lief bisher ohne Horizont: jede aufgeschlagene
+      -- Woche materialisierte eine weitere Instanz, ohne dass die Serie je hätte
+      -- enden können (#619). end_date ist die Grenze; NULL bleibt bewusst
+      -- „unbegrenzt", damit bestehende Serien unverändert weiterlaufen.
+      ALTER TABLE meal_recurrence_templates ADD COLUMN end_date TEXT;
+    `,
+  },
+  {
+    version: 112,
+    description: 'budget entries: receipt/document attachments (#583)',
+    up: `
+      -- Belege an Buchungen (#583). Eigene Tabelle statt einer Spalte auf
+      -- budget_entries, weil ein Kauf mehr als einen Beleg tragen kann
+      -- (Kassenbon + Rechnung + Garantie). Spiegelt bewusst expense_attachments,
+      -- damit Split-Expenses und Budget dieselbe Form haben.
+      --
+      -- Kein kind-Feld: expense_attachments führt eines, das dort nie gesetzt
+      -- wird. Eine Spalte, die immer denselben Wert hätte, bleibt hier weg.
+      --
+      -- ON DELETE CASCADE auf beiden Seiten: verschwindet die Buchung, ist die
+      -- Verknüpfung sinnlos; verschwindet das Dokument, zeigt sie ins Leere. Das
+      -- Dokument selbst bleibt beim Löschen der Buchung erhalten - es lebt im
+      -- Dokumenten-Modul weiter und kann dort an anderer Stelle hängen.
+      CREATE TABLE IF NOT EXISTS budget_entry_attachments (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_id    INTEGER NOT NULL REFERENCES budget_entries(id) ON DELETE CASCADE,
+        document_id INTEGER NOT NULL REFERENCES family_documents(id) ON DELETE CASCADE,
+        created_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(entry_id, document_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_budget_entry_attachments_entry
+        ON budget_entry_attachments(entry_id);
+      CREATE INDEX IF NOT EXISTS idx_budget_entry_attachments_document
+        ON budget_entry_attachments(document_id);
+    `,
+  },
+  {
+    version: 113,
+    description: 'CalDAV VTODO: push local changes and deletions back to the server (#617)',
+    up: `
+      -- Der VTODO-Spiegel war einseitig: eine hier abgehakte, umbenannte oder
+      -- gelöschte Aufgabe blieb auf dem CalDAV-Server unverändert stehen, und der
+      -- nächste Inbound-Lauf machte die lokale Änderung wieder rückgängig. Die
+      -- Rückrichtung braucht dieselben drei Dinge wie die Termine (#593):
+      --
+      --   Weg zum Objekt  → external_object_url
+      --   Absicht merken  → outbound_dirty
+      --   Aufgeben können → outbound_attempts
+      --
+      -- Nullable und ohne Backfill: für bereits gespiegelte Einträge ist die URL
+      -- noch nicht bekannt. Der nächste Inbound-Lauf trägt sie nach, und bis dahin
+      -- löst der Sync das Objekt über die UID des laufenden Abrufs auf.
+      ALTER TABLE tasks ADD COLUMN external_object_url TEXT;
+      ALTER TABLE tasks ADD COLUMN outbound_dirty      INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE tasks ADD COLUMN outbound_attempts   INTEGER NOT NULL DEFAULT 0;
+
+      ALTER TABLE shopping_items ADD COLUMN external_object_url TEXT;
+      ALTER TABLE shopping_items ADD COLUMN outbound_dirty      INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE shopping_items ADD COLUMN outbound_attempts   INTEGER NOT NULL DEFAULT 0;
+
+      -- Eigene Tombstone-Tabelle statt calendar_pending_deletions: dort ist der
+      -- Schlüssel (source, calendar_external_id, event_external_id) auf Kalender
+      -- und Termin zugeschnitten, während eine VTODO-Löschung ihr Konto und ihr
+      -- Modul kennen muss - tasks und shopping_items sind getrennte Ziele mit
+      -- eigenen UID-Räumen. Die Fehler- und Aufgeberegeln bleiben trotzdem
+      -- geteilt (calendar-outbound.js: outboundFailureAction).
+      --
+      -- Die Zeile überlebt bewusst den gelöschten Eintrag: danach ist die Zeile
+      -- weg, aus der UID und Objekt-URL sonst zu holen wären.
+      CREATE TABLE IF NOT EXISTS caldav_todo_pending_deletions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL REFERENCES caldav_accounts(id) ON DELETE CASCADE,
+        module     TEXT    NOT NULL CHECK(module IN ('tasks', 'shopping')),
+        uid        TEXT    NOT NULL,
+        object_url TEXT,
+        attempts   INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(account_id, module, uid)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_caldav_todo_deletions_account
+        ON caldav_todo_pending_deletions(account_id);
+    `,
+  },
+  {
+    version: 114,
+    description: 'Tasks: repair the category default left behind by v83 (#586)',
+    // Der Rebuild droppt `tasks` und nimmt dabei alle Indizes und die drei
+    // Suchindex-Trigger mit - beide werden unten vollständig neu angelegt. Ohne
+    // Fremdschlüssel-Pause würde das DROP die referenzierenden Zeilen
+    // (task_assignments, task_documents, reward_ledger, Unteraufgaben) per
+    // CASCADE mitreißen.
+    foreignKeysOff: true,
+    up: `
+      -- v83 hat die Kategorien in eine eigene Tabelle überführt und den Bestand
+      -- von 'Sonstiges' auf den Key 'misc' gezogen, den Spalten-Default der
+      -- Tabelle aber stehen lassen. Seitdem trägt jede Zeile, die ohne
+      -- ausdrückliche Kategorie entsteht, einen Key, den es in task_categories
+      -- nicht gibt. Über den CalDAV-Spiegel passiert genau das bei jeder
+      -- eingespielten Aufgabe (#586): sie landet in einer Kategorie, die in
+      -- keinem Dropdown und keinem Filter auftaucht, und springt beim ersten
+      -- Speichern im Modal still auf die erste echte Kategorie.
+      CREATE TABLE tasks_new (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        title               TEXT    NOT NULL,
+        description         TEXT,
+        category            TEXT    NOT NULL DEFAULT 'misc',
+        priority            TEXT    NOT NULL DEFAULT 'none'
+                                    CHECK(priority IN ('none', 'low', 'medium', 'high', 'urgent')),
+        status              TEXT    NOT NULL DEFAULT 'open'
+                                    CHECK(status IN ('open', 'in_progress', 'done', 'archived')),
+        due_date            TEXT,
+        due_time            TEXT,
+        assigned_to         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        is_recurring        INTEGER NOT NULL DEFAULT 0,
+        recurrence_rule     TEXT,
+        parent_task_id      INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+        created_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        start_date          TEXT,
+        external_uid        TEXT,
+        external_source     TEXT    NOT NULL DEFAULT 'local',
+        external_account_id INTEGER,
+        points              INTEGER NOT NULL DEFAULT 0,
+        visibility          TEXT    NOT NULL DEFAULT 'all',
+        external_object_url TEXT,
+        outbound_dirty      INTEGER NOT NULL DEFAULT 0,
+        outbound_attempts   INTEGER NOT NULL DEFAULT 0
+      );
+
+      INSERT INTO tasks_new (
+        id, title, description, category, priority, status, due_date, due_time,
+        assigned_to, created_by, is_recurring, recurrence_rule, parent_task_id,
+        created_at, updated_at, start_date, external_uid, external_source,
+        external_account_id, points, visibility, external_object_url,
+        outbound_dirty, outbound_attempts
+      )
+      SELECT
+        id, title, description, category, priority, status, due_date, due_time,
+        assigned_to, created_by, is_recurring, recurrence_rule, parent_task_id,
+        created_at, updated_at, start_date, external_uid, external_source,
+        external_account_id, points, visibility, external_object_url,
+        outbound_dirty, outbound_attempts
+      FROM tasks;
+
+      -- Den AUTOINCREMENT-Hochstand mitnehmen. Ein Rebuild kopiert nur die
+      -- überlebenden Zeilen, also fällt sqlite_sequence auf deren höchste ID
+      -- zurück. Wurde vor dem Upgrade die höchste Aufgabe gelöscht, vergäbe die
+      -- nächste Aufgabe eine schon einmal benutzte ID. Die Tabelle reminders zeigt
+      -- entity_type/entity_id auf Aufgaben, ohne Fremdschlüssel und ohne
+      -- Aufräumen beim Löschen - eine verwaiste Erinnerung fiele damit einer
+      -- fremden neuen Aufgabe zu.
+      CREATE TEMP TABLE _tasks_seq AS
+        SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'tasks'), 0) AS seq;
+
+      DROP TABLE tasks;
+      ALTER TABLE tasks_new RENAME TO tasks;
+
+      -- Auch wenn keine einzige Aufgabe überlebt, greift das: eine Kopie mit
+      -- null Zeilen legt für tasks_new trotzdem einen sqlite_sequence-Eintrag
+      -- an (seq = 0), den das RENAME mitnimmt. Das UPDATE hebt ihn dann an.
+      UPDATE sqlite_sequence
+         SET seq = (SELECT seq FROM _tasks_seq)
+       WHERE name = 'tasks' AND seq < (SELECT seq FROM _tasks_seq);
+
+      DROP TABLE _tasks_seq;
+
+      -- Bestand einsammeln: nicht nur 'Sonstiges', sondern jeden Key, für den es
+      -- keine Kategorie (mehr) gibt. Nach v83 konnten weitere entstehen.
+      UPDATE tasks SET category = 'misc'
+      WHERE category NOT IN (SELECT key FROM task_categories);
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_status     ON tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_assigned   ON tasks(assigned_to);
+      CREATE INDEX IF NOT EXISTS idx_tasks_parent     ON tasks(parent_task_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_start_date ON tasks(start_date);
+      CREATE INDEX IF NOT EXISTS idx_tasks_external
+        ON tasks(external_source, external_account_id, external_uid);
+
+      -- Die Suchindex-Trigger hingen an der gedroppten Tabelle. Fehlen sie, läuft
+      -- die Suche still auf einem einfrierenden Index weiter.
+      DROP TRIGGER IF EXISTS trg_search_tasks_ai;
+      DROP TRIGGER IF EXISTS trg_search_tasks_au;
+      DROP TRIGGER IF EXISTS trg_search_tasks_ad;
+
+      CREATE TRIGGER trg_search_tasks_ai AFTER INSERT ON tasks BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('task', NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.description, ''));
+      END;
+
+      CREATE TRIGGER trg_search_tasks_au AFTER UPDATE ON tasks BEGIN
+        DELETE FROM search_index WHERE entity = 'task' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('task', NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.description, ''));
+      END;
+
+      CREATE TRIGGER trg_search_tasks_ad AFTER DELETE ON tasks BEGIN
+        DELETE FROM search_index WHERE entity = 'task' AND entity_id = OLD.id;
+      END;
+    `,
+  },
+  {
+    version: 115,
+    description: 'Tasks: free-form tags, mirrored from VTODO CATEGORIES (#586)',
+    up: `
+      -- Tags sind das Gegenstück zu VTODO CATEGORIES und bewusst NICHT die
+      -- Kategorie: eine Aufgabe liegt in genau einer Kategorie (einer Schublade),
+      -- trägt aber beliebig viele Tags (Etiketten). CATEGORIES auf category
+      -- abzubilden hieße, alle Werte ab dem zweiten zu verlieren und beim Push
+      -- die Tags zu löschen, die der Server kennt und Yuvomi nie gesehen hat.
+      --
+      -- Freitext statt verwalteter Liste: die Werte kommen von fremden Servern,
+      -- eine Registry würde sich bei jedem Sync mit Fremdwerten füllen und in
+      -- jedem Kategorie-Dropdown auftauchen.
+      -- Die Spalte tag ist die Schreibweise für die Anzeige, tag_key der
+      -- Vergleichsschlüssel (NFC + kleingeschrieben, gebildet in JS). Der
+      -- Schlüssel ist keine Bequemlichkeit: SQLites COLLATE NOCASE faltet nur
+      -- ASCII, "Äpfel" wäre über "äpfel" nicht auffindbar. Der Primärschlüssel
+      -- hängt am Schlüssel, damit dieselbe Aufgabe ein Etikett nicht in zwei
+      -- Schreibweisen tragen kann.
+      CREATE TABLE IF NOT EXISTS task_tags (
+        task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        tag     TEXT    NOT NULL,
+        tag_key TEXT    NOT NULL,
+        PRIMARY KEY (task_id, tag_key)
+      );
+
+      -- Für den ?tag=-Filter und die Vorschlagsliste.
+      CREATE INDEX IF NOT EXISTS idx_task_tags_key ON task_tags(tag_key);
+    `,
+  },
+  {
+    version: 116,
+    description: 'Shopping items: tags mirrored from VTODO CATEGORIES (#586)',
+    up: `
+      -- Einkaufsposten spiegeln dieselbe VTODO-Eigenschaft wie Aufgaben: eine
+      -- CalDAV-Erinnerungsliste kann auf beide Module zeigen (#617), und bis
+      -- hierher fielen die CATEGORIES eines Einkaufspostens stillschweigend weg.
+      --
+      -- Bewusst NICHT auf shopping_items.category abgebildet: die Kategorie ist
+      -- hier der Gang im Laden, eine verwaltete Liste mit Icon und Sortierung.
+      -- Fremdwerte hineinzuspülen hieße, diese Liste bei jedem Sync wachsen zu
+      -- lassen - derselbe Fehler, den v115 für Aufgaben vermeidet.
+      CREATE TABLE IF NOT EXISTS shopping_item_tags (
+        item_id INTEGER NOT NULL REFERENCES shopping_items(id) ON DELETE CASCADE,
+        tag     TEXT    NOT NULL,
+        tag_key TEXT    NOT NULL,
+        PRIMARY KEY (item_id, tag_key)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_shopping_item_tags_key ON shopping_item_tags(tag_key);
+    `,
+  },
+  {
+    version: 117,
+    description: 'Search index: tags belong to the searchable text (#586)',
+    up: `
+      -- Ein Tag ist Freitext und damit Inhalt. Die Aufgabenliste filtert danach,
+      -- die globale Suche fand ihn bisher nicht - dasselbe Wort führte je nach
+      -- Eingabefeld zu einem Treffer oder zu keinem.
+      --
+      -- Die Tags liegen in eigenen Tabellen, die bestehenden Trigger hängen aber
+      -- an tasks bzw. shopping_items und sehen nur die Zeile. Es braucht deshalb
+      -- beides: erweiterte Trigger auf der Hauptzeile UND eigene Trigger auf den
+      -- Tag-Tabellen, sonst bliebe eine reine Tag-Änderung unindiziert.
+      --
+      -- Alle Neuaufnahmen laufen als INSERT ... SELECT über die Haupttabelle.
+      -- Das ist kein Stil, sondern der Schutz gegen das Löschen: beim Entfernen
+      -- einer Aufgabe räumt CASCADE die Tag-Zeilen ab und feuert den
+      -- Tag-Trigger. Ein VALUES-INSERT legte dann eine Karteileiche für eine
+      -- Aufgabe an, die es nicht mehr gibt; das SELECT findet nichts und fügt
+      -- folgerichtig nichts ein.
+
+      DROP TRIGGER IF EXISTS trg_search_tasks_ai;
+      DROP TRIGGER IF EXISTS trg_search_tasks_au;
+      DROP TRIGGER IF EXISTS trg_search_tasks_ad;
+      DROP TRIGGER IF EXISTS trg_search_items_ai;
+      DROP TRIGGER IF EXISTS trg_search_items_au;
+      DROP TRIGGER IF EXISTS trg_search_items_ad;
+
+      CREATE TRIGGER trg_search_tasks_ai AFTER INSERT ON tasks BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'task', t.id, COALESCE(t.title, ''),
+               TRIM(COALESCE(t.description, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM task_tags WHERE task_id = t.id), ''))
+        FROM tasks t WHERE t.id = NEW.id;
+      END;
+
+      CREATE TRIGGER trg_search_tasks_au AFTER UPDATE ON tasks BEGIN
+        DELETE FROM search_index WHERE entity = 'task' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'task', t.id, COALESCE(t.title, ''),
+               TRIM(COALESCE(t.description, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM task_tags WHERE task_id = t.id), ''))
+        FROM tasks t WHERE t.id = NEW.id;
+      END;
+
+      CREATE TRIGGER trg_search_tasks_ad AFTER DELETE ON tasks BEGIN
+        DELETE FROM search_index WHERE entity = 'task' AND entity_id = OLD.id;
+      END;
+
+      CREATE TRIGGER trg_search_task_tags_ai AFTER INSERT ON task_tags BEGIN
+        DELETE FROM search_index WHERE entity = 'task' AND entity_id = NEW.task_id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'task', t.id, COALESCE(t.title, ''),
+               TRIM(COALESCE(t.description, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM task_tags WHERE task_id = t.id), ''))
+        FROM tasks t WHERE t.id = NEW.task_id;
+      END;
+
+      CREATE TRIGGER trg_search_task_tags_ad AFTER DELETE ON task_tags BEGIN
+        DELETE FROM search_index WHERE entity = 'task' AND entity_id = OLD.task_id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'task', t.id, COALESCE(t.title, ''),
+               TRIM(COALESCE(t.description, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM task_tags WHERE task_id = t.id), ''))
+        FROM tasks t WHERE t.id = OLD.task_id;
+      END;
+
+      CREATE TRIGGER trg_search_items_ai AFTER INSERT ON shopping_items BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'item', i.id, COALESCE(i.name, ''),
+               TRIM(COALESCE(i.notes, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM shopping_item_tags WHERE item_id = i.id), ''))
+        FROM shopping_items i WHERE i.id = NEW.id;
+      END;
+
+      CREATE TRIGGER trg_search_items_au AFTER UPDATE ON shopping_items BEGIN
+        DELETE FROM search_index WHERE entity = 'item' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'item', i.id, COALESCE(i.name, ''),
+               TRIM(COALESCE(i.notes, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM shopping_item_tags WHERE item_id = i.id), ''))
+        FROM shopping_items i WHERE i.id = NEW.id;
+      END;
+
+      CREATE TRIGGER trg_search_items_ad AFTER DELETE ON shopping_items BEGIN
+        DELETE FROM search_index WHERE entity = 'item' AND entity_id = OLD.id;
+      END;
+
+      CREATE TRIGGER trg_search_item_tags_ai AFTER INSERT ON shopping_item_tags BEGIN
+        DELETE FROM search_index WHERE entity = 'item' AND entity_id = NEW.item_id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'item', i.id, COALESCE(i.name, ''),
+               TRIM(COALESCE(i.notes, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM shopping_item_tags WHERE item_id = i.id), ''))
+        FROM shopping_items i WHERE i.id = NEW.item_id;
+      END;
+
+      CREATE TRIGGER trg_search_item_tags_ad AFTER DELETE ON shopping_item_tags BEGIN
+        DELETE FROM search_index WHERE entity = 'item' AND entity_id = OLD.item_id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'item', i.id, COALESCE(i.name, ''),
+               TRIM(COALESCE(i.notes, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM shopping_item_tags WHERE item_id = i.id), ''))
+        FROM shopping_items i WHERE i.id = OLD.item_id;
+      END;
+
+      -- Bestand neu einlesen: die Tags der bereits gespiegelten Zeilen stehen
+      -- sonst erst nach der nächsten Bearbeitung im Index.
+      DELETE FROM search_index WHERE entity IN ('task', 'item');
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'task', id, COALESCE(title, ''),
+               TRIM(COALESCE(description, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM task_tags WHERE task_id = tasks.id), ''))
+        FROM tasks;
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'item', id, COALESCE(name, ''),
+               TRIM(COALESCE(notes, '') || ' ' ||
+                    COALESCE((SELECT group_concat(tag, ' ') FROM shopping_item_tags WHERE item_id = shopping_items.id), ''))
+        FROM shopping_items;
+    `,
+  },
+  {
+    version: 118,
+    description: 'Mealie integration: mealie_accounts table + recipe mirror columns',
+    up: `
+      CREATE TABLE IF NOT EXISTS mealie_accounts (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT    NOT NULL,
+        base_url    TEXT    NOT NULL,
+        api_token   TEXT    NOT NULL,
+        enabled     INTEGER NOT NULL DEFAULT 1,
+        created_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        last_sync   TEXT,
+        last_error  TEXT,
+        -- Eine Rezepttabelle je Mealie-Server: die UNIQUE-Bedingung verhindert,
+        -- dass derselbe Server zweimal angelegt wird und alle Rezepte doppelt
+        -- gespiegelt ankommen.
+        UNIQUE(base_url)
+      );
+
+      CREATE TRIGGER IF NOT EXISTS trg_mealie_accounts_updated_at
+        AFTER UPDATE ON mealie_accounts FOR EACH ROW
+        BEGIN UPDATE mealie_accounts SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = OLD.id; END;
+
+      -- mealie_account_id NULL = eigenes Rezept; gesetzt = Spiegel dieses Kontos.
+      ALTER TABLE recipes ADD COLUMN mealie_account_id INTEGER
+        REFERENCES mealie_accounts(id) ON DELETE CASCADE;
+      -- Mealies eigener Slug/Id, Schlüssel für den Upsert bei jedem Sync-Lauf.
+      ALTER TABLE recipes ADD COLUMN mealie_recipe_id TEXT;
+      -- Mealies updatedAt: unveränderte Rezepte überspringt der Sync damit.
+      ALTER TABLE recipes ADD COLUMN mealie_updated_at TEXT;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_recipes_mealie_unique
+        ON recipes(mealie_account_id, mealie_recipe_id) WHERE mealie_account_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 119,
+    description: 'Mealie integration: separate public link URL from the server-reachable sync URL',
+    up: `
+      -- base_url muss vom Server aus erreichbar sein (oft ein Docker-internes
+      -- Compose-Hostname) und ist damit für den Browser des Nutzers meist tot.
+      -- external_url trägt die von außen erreichbare Adresse für die Deep-Links.
+      ALTER TABLE mealie_accounts ADD COLUMN external_url TEXT;
+    `,
+  },
+  {
+    version: 120,
+    description: 'Mealie integration: store recipe slug and image flag for link rebuild and thumbnails',
+    up: `
+      -- Slug persistieren: recipe_url wird bei jedem Sync neu daraus gebaut, ohne
+      -- erneuten Abruf. Sonst erreichte eine geänderte external_url nur Rezepte,
+      -- die sich in Mealie selbst wieder ändern.
+      ALTER TABLE recipes ADD COLUMN mealie_slug TEXT;
+      ALTER TABLE recipes ADD COLUMN mealie_has_image INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 121,
+    description: 'Invite links: admins invite members instead of setting their password',
+    up: `
+      -- Bauplan wie password_resets: nur der Hash liegt in der DB, der Klartext-
+      -- Token verlässt den Server genau einmal. Anders als beim Reset wird der
+      -- Datensatz beim Einlösen NICHT gelöscht, sondern markiert: das hält die
+      -- Spur "wer hat wen eingeladen" und trägt den Zustand fürs Admin-UI.
+      CREATE TABLE IF NOT EXISTS invites (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_hash       TEXT    NOT NULL,
+        email            TEXT,
+        username         TEXT,
+        display_name     TEXT,
+        role             TEXT    NOT NULL DEFAULT 'member'
+                                 CHECK(role IN ('admin', 'member')),
+        -- kein CHECK: FAMILY_ROLES wächst, eine append-only-Migration darf das
+        -- nicht einfrieren. Validierung passiert in der Route.
+        family_role      TEXT    NOT NULL DEFAULT 'other',
+        created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        expires_at       INTEGER NOT NULL,
+        accepted_at      TEXT,
+        accepted_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        revoked_at       TEXT,
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_invites_hash ON invites(token_hash);
+      CREATE INDEX IF NOT EXISTS idx_invites_open ON invites(expires_at)
+        WHERE accepted_at IS NULL AND revoked_at IS NULL;
+    `,
+  },
+  {
+    version: 122,
+    description: 'Tasks: link a recurring follow-up instance to the completion that created it (#650)',
+    up: `
+      -- Ohne diese Spur ist das Abhaken einer Serie nicht umkehrbar: die beim
+      -- Erledigen erzeugte Folgeinstanz war von einer regulaeren Aufgabe nicht
+      -- zu unterscheiden, blieb beim Zuruecknehmen stehen und stand dann neben
+      -- der wieder geoeffneten Aufgabe (#650). parent_task_id kann das nicht
+      -- tragen, das bedeutet "Unteraufgabe".
+      ALTER TABLE tasks ADD COLUMN recurrence_origin_id INTEGER
+        REFERENCES tasks(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_recurrence_origin
+        ON tasks(recurrence_origin_id) WHERE recurrence_origin_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 123,
+    description: 'CalDAV: detach mirrored tasks and shopping items from deleted accounts (#617)',
+    up: `
+      -- tasks.external_account_id und shopping_items.external_account_id sind
+      -- bloße INTEGER-Spalten (v45): löscht jemand ein CalDAV-Konto, nimmt
+      -- CASCADE nur mit, was dem Konto selbst gehört - Kalender- und
+      -- Listenauswahl und die offenen VTODO-Löschungen. Die gespiegelten
+      -- Zeilen bleiben stehen, mit einer Kennung, die auf nichts mehr zeigt.
+      --
+      -- Das war nicht nur unsauber, sondern eine Sackgasse: beim Löschen so
+      -- einer Zeile merkt queueTodoDeletion() sie in
+      -- caldav_todo_pending_deletions vor - und DIE Tabelle hat den
+      -- Fremdschlüssel sehr wohl. Der INSERT scheiterte, der Eintrag ließ sich
+      -- lokal gar nicht mehr löschen, während die entfernte Kopie ohne Konto
+      -- ohnehin unerreichbar ist.
+      --
+      -- Der Fremdschlüssel lässt sich in SQLite nicht nachträglich an eine
+      -- bestehende Spalte hängen; das hieße beide Tabellen samt Indizes,
+      -- Suchtriggern und den auf sie zeigenden Tabellen neu bauen. Diese
+      -- Migration räumt darum den Bestand, und caldavSync.deleteAccount
+      -- entkoppelt künftig selbst, bevor das Konto verschwindet.
+      --
+      -- Entkoppelt heißt lokal, nicht halb-extern: ohne Konto gibt es keine
+      -- Liste, in die etwas zurückginge, keinen Inbound, der die Zeile noch
+      -- anfasst, und keine UID, die noch etwas bedeutet. Was bleibt, ist eine
+      -- gewöhnliche Aufgabe bzw. ein gewöhnlicher Einkaufsposten.
+      UPDATE tasks
+         SET external_source     = 'local',
+             external_uid        = NULL,
+             external_account_id = NULL,
+             external_object_url = NULL,
+             outbound_dirty      = 0,
+             outbound_attempts   = 0
+       WHERE external_account_id IS NOT NULL
+         AND external_account_id NOT IN (SELECT id FROM caldav_accounts);
+
+      UPDATE shopping_items
+         SET external_source     = 'local',
+             external_uid        = NULL,
+             external_account_id = NULL,
+             external_object_url = NULL,
+             outbound_dirty      = 0,
+             outbound_attempts   = 0
+       WHERE external_account_id IS NOT NULL
+         AND external_account_id NOT IN (SELECT id FROM caldav_accounts);
+    `,
+  },
+  {
+    version: 124,
+    description: 'Split guests stay confined when their group is deleted (group_id ON DELETE SET NULL)',
+    up: `
+      -- Rechteausweitung: split_expense_guest_users traegt zwei Aussagen in
+      -- einer Zeile - DASS ein Konto beschraenkt ist (die Existenz der Zeile,
+      -- die server/index.js abfragt) und WORAUF (group_id). Das CASCADE aus
+      -- v40 hat beim Loeschen der Gruppe die ganze Zeile mitgenommen und damit
+      -- auch die erste Aussage geloescht. Der zugehoerige users-Eintrag blieb
+      -- unveraendert bestehen: aus einem Gast wurde ein haushaltsweit
+      -- berechtigtes Konto, das die uebrige API erreicht. Eine Gruppe ohne
+      -- Ausgaben und Ausgleiche laesst sich loeschen (409-Guard in
+      -- routes/split-expenses.js), der Weg dorthin stand also jedem
+      -- Gruppen-Owner offen.
+      --
+      -- SET NULL loescht nur noch die Zuordnung. Der Gast bleibt ein Gast und
+      -- sieht nichts mehr - die Routen behandeln group_id IS NULL als "keine
+      -- Gruppe", nicht als "keine Beschraenkung".
+      --
+      -- SQLite kann eine FK-Aktion nicht per ALTER aendern, daher der Rebuild.
+      -- Keine Tabelle referenziert split_expense_guest_users, das DROP zieht
+      -- also nichts mit sich; foreignKeysOff ist dafuer nicht noetig.
+      CREATE TABLE split_expense_guest_users_new (
+        user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        group_id   INTEGER REFERENCES expense_groups(id) ON DELETE SET NULL,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT INTO split_expense_guest_users_new (user_id, group_id, created_by, created_at)
+        SELECT user_id, group_id, created_by, created_at FROM split_expense_guest_users;
+
+      DROP TABLE split_expense_guest_users;
+      ALTER TABLE split_expense_guest_users_new RENAME TO split_expense_guest_users;
+
+      -- Der Index hing an der gedroppten Tabelle und muss neu angelegt werden.
+      CREATE INDEX IF NOT EXISTS idx_split_guest_group ON split_expense_guest_users(group_id);
+    `,
+  },
+  {
+    version: 125,
+    description: 'CalDAV: remember that a reminder-list discovery ran, even when it found nothing (#617)',
+    up: `
+      -- Die Aufgabenseite sucht beim ersten Oeffnen selbst nach Listen, statt
+      -- einen leeren Zustand zu zeigen. "Zum ersten Mal" liess sich bisher nur
+      -- daran ablesen, dass caldav_reminder_selection fuer das Konto leer ist -
+      -- fuer einen Server ohne VTODO-Sammlungen bleibt sie das aber fuer immer,
+      -- und jeder Aufruf der Seite haette erneut den Server befragt.
+      --
+      -- Der Zeitstempel trennt die beiden Faelle: NULL heisst "nie gesucht",
+      -- gesetzt heisst "gesucht, Ergebnis gilt". Bestandskonten starten auf NULL
+      -- und suchen damit genau einmal.
+      ALTER TABLE caldav_accounts ADD COLUMN reminders_discovered_at TEXT;
+    `,
+  },
+  {
+    version: 126,
+    description: 'Budget loans: lending direction (lent vs. borrowed) and an optional account for the installments (#638)',
+    up: `
+      -- Das Darlehensmodul wurde fuer verliehenes Geld gebaut: die Rate war immer
+      -- eine Einnahme (positiver Betrag, income-Kategorie). Mit den Zinsfeldern
+      -- aus #569 kam der aufgenommene Kredit dazu, ohne dass die Buchung nachzog -
+      -- eine Hypothekenrate erschien deshalb als Einnahme (#638).
+      --
+      -- 'lent'     = der Haushalt hat verliehen, die Rate kommt herein (Einnahme).
+      -- 'borrowed' = der Haushalt hat aufgenommen, die Rate geht raus (Ausgabe).
+      -- Default 'lent', damit Bestandsdaten ihr heutiges Verhalten behalten; wer
+      -- ein Darlehen auf 'borrowed' umstellt, bekommt die bereits gebuchten Raten
+      -- von der Route mit umgebucht.
+      ALTER TABLE budget_loans ADD COLUMN direction TEXT NOT NULL DEFAULT 'lent';
+
+      -- Bis hierher hatte der Raten-Eintrag nie eine Kontozuordnung, eine Rate
+      -- konnte also kein Konto belasten. Das Konto haengt am Darlehen und wird auf
+      -- neue Raten vererbt (rueckwirkend umbuchen wuerde historische Kontosalden
+      -- verfaelschen, ein Bankwechsel mitten in der Laufzeit ist legitim).
+      ALTER TABLE budget_loans ADD COLUMN account_id INTEGER REFERENCES budget_accounts(id) ON DELETE SET NULL;
+    `,
+  },
+  {
+    version: 127,
+    description: 'Tasks: repeat from the completion day instead of the due date (#658)',
+    up: `
+      -- Bis hierher rechnete die Serie ausschliesslich vom Faelligkeitsdatum:
+      -- eine woechentliche Aufgabe, faellig Samstag und erst Montag erledigt, war
+      -- wieder am Samstag faellig - also fuenf Tage spaeter, nicht sieben. Fuer
+      -- Termine ist das richtig (der Muellabfuhrtag verschiebt sich nicht, weil
+      -- man die Tonne spaeter rausstellt), fuer Pflegeintervalle ist es falsch
+      -- (der Filter haelt ab dem Wechsel, nicht ab dem geplanten Wechsel).
+      --
+      -- Beides ist legitim, also entscheidet es die Aufgabe selbst. Default 0:
+      -- Bestandsserien behalten ihre faelligkeitsverankerte Rechnung.
+      ALTER TABLE tasks ADD COLUMN recurrence_from_completion INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 128,
+    description: 'Budget: recurrence as unit + count, weekly included, skips keyed by day (#636)',
+    up: `
+      -- Das Intervall war eine Liste aus drei Rhythmen (monthly/half_year/yearly).
+      -- Alle zwei Wochen, alle drei Monate, alle zwei Jahre: nicht abbildbar,
+      -- obwohl genau solche Vertraege der Alltag sind (#636). Es wird deshalb zu
+      -- Einheit + Anzahl.
+      ALTER TABLE budget_entries ADD COLUMN recurrence_interval_count INTEGER NOT NULL DEFAULT 1;
+
+      -- 'half_year' faellt als eigener Schluessel weg: es IST monatlich x 6. Zwei
+      -- Schreibweisen fuer denselben Rhythmus haetten sonst dauerhaft
+      -- nebeneinander gestanden, und jede Auswertung muesste beide kennen.
+      -- Verlustfrei: derselbe Abstand, dieselbe Glaettung.
+      UPDATE budget_entries
+         SET recurrence_interval = 'monthly', recurrence_interval_count = 6
+       WHERE recurrence_interval = 'half_year';
+
+      -- Eine geloeschte Instanz wurde als uebersprungener MONAT vermerkt. Das war
+      -- richtig, solange eine Serie hoechstens ein Vorkommen pro Monat hatte -
+      -- bei einer Wochenserie haette das Loeschen eines Dienstags die drei
+      -- uebrigen Wochen gleich mit unterdrueckt. Der Vermerk haengt jetzt am
+      -- Faelligkeitstag, wie das Vorkommen selbst.
+      CREATE TABLE budget_recurrence_skipped_new (
+        parent_id INTEGER NOT NULL REFERENCES budget_entries(id) ON DELETE CASCADE,
+        date      TEXT    NOT NULL,
+        PRIMARY KEY (parent_id, date)
+      );
+
+      -- Bestand umrechnen: der Tag ergibt sich aus dem Starttag der Serie, am
+      -- Monatsende gekappt - dieselbe Regel, nach der die Instanz entstanden waere.
+      INSERT OR IGNORE INTO budget_recurrence_skipped_new (parent_id, date)
+      SELECT s.parent_id,
+             s.month || '-' || substr('0' || MIN(
+               CAST(strftime('%d', p.date) AS INTEGER),
+               CAST(strftime('%d', date(s.month || '-01', '+1 month', '-1 day')) AS INTEGER)
+             ), -2)
+        FROM budget_recurrence_skipped s
+        JOIN budget_entries p ON p.id = s.parent_id;
+
+      DROP TABLE budget_recurrence_skipped;
+      ALTER TABLE budget_recurrence_skipped_new RENAME TO budget_recurrence_skipped;
+    `,
+  },
+  {
+    version: 129,
+    description: 'Budget: recurring series can book only after confirmation (#637)',
+    up: `
+      -- Nicht jeder Dienst bucht am selben Tag und auf den Cent genau ab. Eine
+      -- Serie kann deshalb verlangen, dass jede erzeugte Buchung erst bestaetigt
+      -- wird - mit der Moeglichkeit, Betrag und Datum dabei zu korrigieren (#637).
+      ALTER TABLE budget_entries ADD COLUMN recurrence_confirm INTEGER NOT NULL DEFAULT 0;
+
+      -- 1 = erwartet, noch nicht gebucht. Solche Zeilen sind sichtbar, zaehlen
+      -- aber in keiner Summe mit: genau die Diskrepanz zum Kontoauszug, die den
+      -- Wunsch ausgeloest hat, entstuende sonst weiter.
+      --
+      -- Default 0 und die Zustimmung je Serie sind zusammen die Ruecksicht auf
+      -- den Bestand: ohne beides fielen bestehende Serien beim Update aus den
+      -- Summen, und jeder Haushalt saehe ueber Nacht andere Zahlen.
+      ALTER TABLE budget_entries ADD COLUMN is_pending INTEGER NOT NULL DEFAULT 0;
+
+      CREATE INDEX IF NOT EXISTS idx_budget_pending
+        ON budget_entries(is_pending) WHERE is_pending = 1;
+    `,
+  },
+  {
+    version: 130,
+    description: 'health: caregivers may record for a dependent member (#584)',
+    up: `
+      -- Fieber messen und Medikamente geben tut im Alltag ein Elternteil, nicht
+      -- das Kind selbst. Bis hierher war das unmoeglich: jedes INSERT im
+      -- Gesundheitsmodul setzte user_id hart auf den angemeldeten Nutzer, also
+      -- konnte jede Person ausschliesslich fuer sich selbst eintragen (#584).
+      --
+      -- Die Beziehung ist gerichtet und explizit: subject_id ist die betreute
+      -- Person, caregiver_id die eintragende. Sie wird NICHT aus family_role
+      -- abgeleitet ("dad/mom duerfen fuer alle child"), obwohl die Rollen es
+      -- hergaeben. Eine solche Automatik haette bestehenden Installationen beim
+      -- Update stillschweigend Mitleser fuer die privaten Gesundheitsdaten jeder
+      -- Person mit der Rolle 'child' gegeben - auch fuer den 17-Jaehrigen, der
+      -- die Rolle nur traegt, weil sie am besten passte. Wer fuer wen eintragen
+      -- darf, entscheidet ein Admin pro Person; ohne Eintrag aendert sich nichts.
+      --
+      -- Das Recht umfasst Lesen UND Schreiben der Daten der betreuten Person,
+      -- auch der als 'private' markierten. Nur schreiben zu duerfen waere
+      -- unbrauchbar: der eingetragene Fieberwert verschwaende fuer die
+      -- eintragende Person im selben Moment aus der Ansicht.
+      CREATE TABLE IF NOT EXISTS health_care_grants (
+        subject_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        caregiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        PRIMARY KEY (subject_id, caregiver_id),
+        -- Niemand ist sein eigener Betreuer: der Eigentuemer darf ohnehin alles,
+        -- und eine solche Zeile waere eine zweite Wahrheit ueber dasselbe Recht.
+        CHECK (subject_id <> caregiver_id)
+      );
+
+      -- Die haeufigste Abfrage ist "fuer wen darf ich eintragen?" (Sicht des
+      -- Betreuers); der Primaerschluessel deckt nur die Gegenrichtung ab.
+      CREATE INDEX IF NOT EXISTS idx_health_care_grants_caregiver
+        ON health_care_grants(caregiver_id);
+    `,
+  },
+  {
+    version: 131,
+    description: 'Budget: issuing bank and credit limit on credit-card accounts (#541)',
+    up: `
+      -- Nur die beiden Felder, die für sich stehen: die Bank als Beschriftung, das
+      -- Limit als Bezugsgröße für den verfügbaren Rahmen. Abrechnungs- und
+      -- Fälligkeitstag kommen mit der Abrechnungslogik, weil erst die festlegt,
+      -- welchen Zeitraum ein solcher Tag begrenzt.
+      ALTER TABLE budget_accounts ADD COLUMN credit_bank TEXT;
+      ALTER TABLE budget_accounts ADD COLUMN credit_limit REAL;
+    `,
+  },
+  {
+    version: 132,
+    description: 'Tasks: archive as its own axis instead of a status value (#688)',
+    up: `
+      -- Das Archiv lag bisher IM Statusfeld. Wer eine erledigte Aufgabe ablegte,
+      -- überschrieb damit ihr 'done' - die Aufgabe kam als unerledigt zurück, und
+      -- syncTaskRewards stornierte im selben Zug die Punkte-Gutschrift (#688).
+      -- Ablegen und Erledigen sind zwei Aussagen; sie brauchen zwei Felder.
+      ALTER TABLE tasks ADD COLUMN archived_at TEXT;
+
+      -- Bestandsdaten: der frühere Status ist nicht mehr rekonstruierbar. 'done'
+      -- ist die einzige belastbare Annahme - archiviert wird, was durch ist (so
+      -- beschreibt es auch docs/SPEC.md), und das Archiv blendet die Zeile ohnehin
+      -- aus. Ein Zurückholen zeigt sie dann als erledigt statt als offen, was der
+      -- gemeldeten Erwartung entspricht. Punkte werden bewusst NICHT nachgebucht:
+      -- reward_ledger hat für diese Aufgaben keine offene Buchung, und ein
+      -- nachträglicher Geldsegen aus einer Migration wäre die schlechtere Überraschung.
+      UPDATE tasks
+         SET archived_at = COALESCE(updated_at, created_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+             status      = 'done'
+       WHERE status = 'archived';
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived_at);
+    `,
+  },
+  {
+    version: 133,
+    description: 'Shopping: manual item order within a category (#678)',
+    up: `
+      -- Die Artikelreihenfolge war bisher die Eingabereihenfolge: die Liste
+      -- sortierte nach Kategorie, dann created_at. Wer seine Liste nach dem
+      -- Ladenlayout ordnen will, konnte bisher nur die KATEGORIEN umsortieren
+      -- (shopping_categories.sort_order) - innerhalb einer Kategorie gab es
+      -- keinen Griff. Diese Spalte ist dieser Griff.
+      ALTER TABLE shopping_items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+
+      -- Bestand durchnummerieren, damit die heute sichtbare Reihenfolge exakt
+      -- erhalten bleibt. Ab 1, weil 0 dem Trigger unten als Marke "noch nicht
+      -- eingeordnet" dient.
+      UPDATE shopping_items SET sort_order = (
+        SELECT COUNT(*) + 1 FROM shopping_items AS prev
+         WHERE prev.list_id  = shopping_items.list_id
+           AND prev.category = shopping_items.category
+           AND (prev.created_at < shopping_items.created_at
+                OR (prev.created_at = shopping_items.created_at AND prev.id < shopping_items.id))
+      );
+
+      -- Neue Artikel ans Ende ihrer Kategorie. Bewusst als Trigger und nicht in
+      -- den Insert-Aufrufen: es gibt NEUN Einfügewege (shopping, meals, recipes,
+      -- housekeeping, mcp/tools, caldav-reminders-sync). Als Regel an der Tabelle
+      -- gilt sie auch für den zehnten, der sie sonst vergessen hätte; ein Artikel
+      -- mit sort_order 0 wäre sonst still nach oben gesprungen.
+      CREATE TRIGGER IF NOT EXISTS trg_shopping_items_sort_order
+        AFTER INSERT ON shopping_items FOR EACH ROW WHEN NEW.sort_order = 0
+        BEGIN
+          UPDATE shopping_items SET sort_order = COALESCE((
+            SELECT MAX(sort_order) FROM shopping_items
+             WHERE list_id = NEW.list_id AND category = NEW.category AND id != NEW.id
+          ), 0) + 1 WHERE id = NEW.id;
+        END;
+
+      CREATE INDEX IF NOT EXISTS idx_shopping_items_sort
+        ON shopping_items(list_id, category, sort_order);
+    `,
+  },
+];
+
+/**
+ * Führt alle ausstehenden Migrations in einer Transaktion aus.
+ */
+function migrate() {
+  // Migrations-Versions-Tabelle sicherstellen (außerhalb der Haupt-Transaktion)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version     INTEGER PRIMARY KEY,
+      description TEXT    NOT NULL,
+      applied_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    );
+  `);
+
+  const applied = new Set(
+    db.prepare('SELECT version FROM schema_migrations').all().map((r) => r.version)
+  );
+
+  const pending = MIGRATIONS.filter((m) => !applied.has(m.version));
+
+  if (pending.length === 0) return;
+
+  const runMigration = db.transaction((migration) => {
+    if (typeof migration.up === 'function') {
+      migration.up(db);
+    } else {
+      db.exec(migration.up);
+    }
+    // Optionaler JS-Hook für Datenmigrationen, die nach dem Schema-DDL laufen.
+    if (typeof migration.afterUp === 'function') {
+      migration.afterUp(db);
+    }
+    if (migration.foreignKeysOff) {
+      const violations = db.pragma('foreign_key_check');
+      if (violations.length > 0) {
+        throw new Error(
+          `Migration ${migration.version} left ${violations.length} foreign key violation(s).`
+        );
+      }
+    }
+    db.prepare('INSERT INTO schema_migrations (version, description) VALUES (?, ?)')
+      .run(migration.version, migration.description);
+    log.info(`Migration ${migration.version} applied: ${migration.description}`);
+  });
+
+  for (const migration of pending) {
+    if (!migration.foreignKeysOff) {
+      runMigration(migration);
+      continue;
+    }
+
+    db.pragma('foreign_keys = OFF');
+    if (db.pragma('foreign_keys', { simple: true }) !== 0) {
+      throw new Error(`Migration ${migration.version} could not disable foreign key enforcement.`);
+    }
+    try {
+      runMigration(migration);
+    } finally {
+      db.pragma('foreign_keys = ON');
+      if (db.pragma('foreign_keys', { simple: true }) !== 1) {
+        throw new Error(`Migration ${migration.version} could not restore foreign key enforcement.`);
+      }
+    }
+  }
+}
+
+/**
+ * Kritische additive Spalten, die real vorhanden sein MÜSSEN, sobald ihre
+ * Migration als angewendet gilt. Jede Spalte ist eine gefahrlos wiederholbare
+ * `ADD COLUMN` (NULL-Default) - die einzige idempotente Reparaturform.
+ */
+const CRITICAL_COLUMNS = [
+  // #538: v54 trägt reminders.pushed_at nach; ohne die Spalte scheitert der
+  // Notification-/Push-Scheduler bei jedem Lauf still auf `no such column`.
+  { table: 'reminders', column: 'pushed_at', type: 'TEXT' },
+  // #549: v97 trägt calendar_events.tzid nach; ohne die Spalte scheitert der
+  // Sync-Upsert (schreibt tzid) still und die Kalender-Expansion driftet über DST.
+  { table: 'calendar_events', column: 'tzid', type: 'TEXT' },
+];
+
+/**
+ * Selbstheilung gegen Migrations-Drift (#538).
+ *
+ * In seltenen Fällen ist eine Migration in `schema_migrations` als angewendet
+ * vermerkt, ihr additiver Effekt fehlt real aber - etwa nach Restore aus einem
+ * zu einem inkonsistenten Zeitpunkt gezogenen Backup oder einem abgebrochenen
+ * Migrationslauf. Eine so fehlende Spalte lässt einen ganzen Hintergrund-Loop
+ * still auf `no such column` scheitern (der Push-/Notification-Scheduler auf
+ * `reminders.pushed_at`), ohne dass es in der UI sichtbar wird.
+ *
+ * Diese Funktion stellt die bekannten kritischen Spalten idempotent sicher und
+ * protokolliert jede Nachbesserung sichtbar. Sie ersetzt Migrationen NICHT -
+ * die bleiben die einzige Quelle für Schemaänderungen; dies ist nur ein
+ * Sicherheitsnetz für additive Drift.
+ */
+function reconcileCriticalSchema(database = db) {
+  if (!database) return;
+  for (const { table, column, type } of CRITICAL_COLUMNS) {
+    let columns;
+    try {
+      columns = database.prepare(`PRAGMA table_info(${table})`).all();
+    } catch {
+      continue; // Tabelle nicht lesbar - keine additive Reparatur möglich.
+    }
+    if (!columns.length) continue;                          // Tabelle existiert nicht
+    if (columns.some((c) => c.name === column)) continue;   // Spalte bereits vorhanden
+    try {
+      database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+      log.warn(`Schema-Drift behoben: ${table}.${column} fehlte trotz vermerkter Migration und wurde nachgetragen (#538).`);
+    } catch (err) {
+      log.error(`Schema-Reconciliation ${table}.${column} fehlgeschlagen:`, err?.message || err);
+    }
+  }
+}
+
+/**
+ * Aktuelle Schema-Version zurückgeben.
+ * @returns {number}
+ */
+function currentVersion() {
+  if (!db) return 0;
+  try {
+    const row = db.prepare('SELECT MAX(version) as v FROM schema_migrations').get();
+    return row?.v ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+function getPath() {
+  return DB_PATH;
+}
+
+async function backupToFile(destinationPath) {
+  const database = get();
+  await fs.mkdir(path.dirname(destinationPath), { recursive: true });
+
+  if (DB_KEY) {
+    // Die SQLite-Backup-API kann nicht von einer verschlüsselten Quelle in ein
+    // frisch angelegtes Ziel schreiben ("backup is not supported with
+    // incompatible source and target databases") — ohne diesen Zweig wäre bei
+    // gesetztem Key JEDES Backup kaputt. VACUUM INTO übernimmt Cipher und Key
+    // der Quelle, das Backup ist also ebenfalls verschlüsselt. Es verlangt
+    // allerdings ein noch nicht existierendes Ziel.
+    await unlinkIfExists(destinationPath);
+    database.prepare('VACUUM INTO ?').run(destinationPath);
+  } else if (typeof database.backup === 'function') {
+    await database.backup(destinationPath);
+  } else {
+    database.prepare('VACUUM INTO ?').run(destinationPath);
+  }
+
+  return destinationPath;
+}
+
+function validateBackupFile(sourcePath) {
+  // Backups, die vor der Verschlüsselungs-Umstellung entstanden sind, liegen im
+  // Klartext vor. Sie müssen einspielbar bleiben — würden wir ihnen den Key
+  // aufsetzen, läse SQLite sie als verschlüsselt und die Validierung schlüge
+  // fehl. Nach dem Restore verschlüsselt init() sie ohnehin.
+  const encrypted = !isPlaintextDatabase(sourcePath);
+  const candidate = new Database(sourcePath, { readonly: true, fileMustExist: true });
+  try {
+    if (encrypted) applyEncryptionKey(candidate);
+    assertReadable(candidate);
+    const row = candidate.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'schema_migrations'
+    `).get();
+    if (!row) {
+      throw new Error('Backup file is not a valid Yuvomi database.');
+    }
+    return candidate.prepare('SELECT MAX(version) AS version FROM schema_migrations').get()?.version ?? 0;
+  } finally {
+    candidate.close();
+  }
+}
+
+async function unlinkIfExists(filePath) {
+  try {
+    await fs.unlink(filePath);
+  } catch (err) {
+    if (err?.code !== 'ENOENT') throw err;
+  }
+}
+
+async function restoreFromFile(sourcePath) {
+  const backupVersion = validateBackupFile(sourcePath);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const rollbackPath = `${DB_PATH}.pre-restore-${timestamp}`;
+  let rollbackCreated = false;
+
+  try {
+    if (db) {
+      try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* best effort */ }
+      db.close();
+      db = null;
+    }
+
+    await fs.mkdir(path.dirname(DB_PATH), { recursive: true });
+    try {
+      await fs.copyFile(DB_PATH, rollbackPath);
+      rollbackCreated = true;
+    } catch (err) {
+      if (err?.code !== 'ENOENT') throw err;
+    }
+
+    await unlinkIfExists(`${DB_PATH}-wal`);
+    await unlinkIfExists(`${DB_PATH}-shm`);
+    await fs.copyFile(sourcePath, DB_PATH);
+
+    // Ohne Klartext-Sicherheitskopie: stammt das Backup aus der Zeit vor der
+    // Verschlüsselung, verschlüsselt init() es jetzt — die Sicherung dafür ist
+    // die Quelldatei selbst, plus `.pre-restore-*` für den Rollback. Eine
+    // zusätzliche unverschlüsselte Vollkopie im Datenverzeichnis würde sich bei
+    // jedem Restore erneut anhäufen und die Zusage „verschlüsselt at rest"
+    // unterlaufen, ohne dass die Backup-UI davon berichtet.
+    init({ plaintextBackup: false });
+    log.info(`Database restored from backup. Schema v${backupVersion}${rollbackCreated ? ` | rollback: ${rollbackPath}` : ''}`);
+
+    return {
+      schemaVersion: currentVersion(),
+      rollbackPath: rollbackCreated ? rollbackPath : null,
+    };
+  } catch (err) {
+    if (rollbackCreated) {
+      try {
+        if (db) {
+          db.close();
+          db = null;
+        }
+        await unlinkIfExists(`${DB_PATH}-wal`);
+        await unlinkIfExists(`${DB_PATH}-shm`);
+        await fs.copyFile(rollbackPath, DB_PATH);
+        init({ plaintextBackup: false });
+      } catch (rollbackErr) {
+        log.error('Rollback after failed restore also failed:', rollbackErr);
+      }
+    } else if (!db) {
+      try { init({ plaintextBackup: false }); } catch { /* preserve original restore error */ }
+    }
+    throw err;
+  }
+}
+
+// --------------------------------------------------------
+// Öffentliche API
+// --------------------------------------------------------
+
+/**
+ * Datenbankinstanz zurückgeben.
+ * @returns {import('better-sqlite3-multiple-ciphers').Database}
+ */
+function get() {
+  if (!db) throw new Error('[DB] Not initialized - call init() first.');
+  return db;
+}
+
+/**
+ * Transaktion-Helfer: Funktion wird atomar ausgeführt.
+ * Bei Fehler wird automatisch rollback ausgeführt.
+ * @param {Function} fn
+ * @returns {any}
+ */
+function transaction(fn) {
+  return get().transaction(fn)();
+}
+
+let _originalDb = null;
+
+/**
+ * ONLY FOR TESTING: Override the internal db instance
+ * @param {import('better-sqlite3-multiple-ciphers').Database} testDb
+ */
+function _setTestDatabase(testDb) {
+  if (!_originalDb) _originalDb = db;
+  db = testDb;
+}
+
+/**
+ * ONLY FOR TESTING: Restore the original db instance
+ */
+function _resetTestDatabase() {
+  if (_originalDb) {
+    db = _originalDb;
+    _originalDb = null;
+  }
+}
+
+init();   // auto-initialise when module is first imported
+
+export { init, get, transaction, currentVersion, getPath, backupToFile, restoreFromFile, MIGRATIONS, reconcileCriticalSchema, _setTestDatabase, _resetTestDatabase };

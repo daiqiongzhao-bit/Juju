@@ -1,0 +1,734 @@
+.housekeeping-page {
+  --module-accent: var(--module-housekeeping);
+  /* Full-bleed-Root (Issue #577): Content-Spalte über --page-inline-pad auf den
+   * direkten Kindern, damit das Chrome des Kopfes bis zur Shell-Kante läuft. */
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Gerüst (Shell + Titel) jetzt geteilt via .page-toolbar in layout.css.
+ * Die Tab-Reihe füllt die Restbreite und bleibt rechtsbündig (wie zuvor die
+ * 1fr-Grid-Spalte). */
+
+.housekeeping-check-small {
+  min-height: var(--target-lg);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+/* „Bereits erfasst" ist ein Status, kein deaktiviertes Steuerelement — daher
+ * lesbarer Sekundärton statt des kaum sichtbaren Disabled-Grau (Audit F9). */
+.housekeeping-check-small:disabled {
+  background: var(--color-surface-3);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  cursor: default;
+}
+
+.housekeeping-check-small:disabled i {
+  color: var(--color-success);
+}
+
+/* Schrumpfen, Scrollen und die Zeilenposition kommen aus der Shell-Regel
+ * „Tab-Leiste im Modulkopf" (layout.css); hier steht nur, was diese Leiste von
+ * anderen unterscheidet. */
+.housekeeping-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  gap: var(--space-1);
+  height: var(--kitchen-tabs-height, var(--sub-tabs-height));
+  padding: 0;
+  background: transparent;
+  border-bottom: 0;
+}
+
+/* Aktiv-Optik kommt vollstaendig aus der geteilten sub-tab-Grammatik
+ * (.sub-tab--active: Akzent-Tint + Ink + semibold) - keine Sonderfarbe hier. */
+.housekeeping-tab {
+  flex-shrink: 0;
+}
+
+.housekeeping-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-inline: var(--page-inline-pad);
+  padding-top: var(--space-4);
+  padding-bottom: calc(var(--space-16) + env(safe-area-inset-bottom));
+}
+
+/* HIG-Karte: randlos auf dem Grouped-Grund, opake Fläche, shadow-sm - dieselbe
+ * Bauart wie das Dashboard-Widget und .metric-card. Die Kante bleibt als
+ * transparenter Träger stehen, damit Zustände (Auswahl, Hover) sie einfärben
+ * können, ohne das Layout zu verschieben. */
+/* `.housekeeping-task` stand hier mit in der Reihe und ist herausgenommen: sie
+ * ist keine Karte mehr, sondern eine Zeile in einer Liste (siehe unten). */
+.housekeeping-card,
+.housekeeping-worker-strip,
+.housekeeping-metric {
+  background-color: var(--color-surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.housekeeping-card {
+  /* Die frühere modul-getönte Kante (24 % Akzent) war der einzige Ort der App,
+   * an dem eine Karte ihre Modulfarbe als Umriss trug. */
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+/* Zeilen INNERHALB einer Karte: Haarlinien statt eigener Kästen.
+ * „Letzte Besuche" und das Einsatz-Protokoll rahmten jede Zeile in einer schon
+ * gerahmten Karte - genestete umrandete Rows, die DESIGN.md ausdrücklich
+ * ausschließt (Inset-Grouped-Liste ist die Kernform). */
+.housekeeping-report-item {
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.housekeeping-report-item + .housekeeping-report-item {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.housekeeping-card h2 {
+  margin: 0 0 var(--space-3);
+}
+
+.housekeeping-worker-strip {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.housekeeping-worker-stack,
+.housekeeping-staff-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.housekeeping-worker-strip__identity {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* AN DIE IDENTITÄTSZEILE GEBUNDEN, nicht an die ganze Zeile. Als
+ * `.housekeeping-worker-strip span` griff die Regel als Nachfahren-Selektor
+ * (0-1-1) auch in den Handlungsknopf daneben und färbte dessen Label auf
+ * Sekundärtext: „Einchecken" stand mit 1.13:1 auf der gefüllten Kapsel
+ * (dark 1.29:1) - der primäre Knopf des Moduls war im Ruhezustand in beiden
+ * Themes praktisch unlesbar.
+ *
+ * KEIN VERSTÄRKTER BUTTON-SELEKTOR: der hätte den Fall repariert und die
+ * Ursache stehen lassen. Warum kein bestehender Guard das sah: der
+ * Token-Guard prüft PAARE aus tokens.css, und dieses Paar entsteht erst durch
+ * die Komposition zweier Regeln im Dokument. Die Antwort darauf ist Sonde 2
+ * in `npm run test:document-guards`. */
+.housekeeping-worker-strip__identity span,
+.housekeeping-muted {
+  color: var(--color-text-secondary);
+}
+
+.housekeeping-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  color: var(--color-text-on-accent);
+  display: grid;
+  place-items: center;
+  font-weight: var(--font-weight-bold);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  flex: 0 0 auto;
+}
+
+.housekeeping-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.housekeeping-avatar--lg {
+  width: 96px;
+  height: 96px;
+  border: 0;
+  font-size: var(--text-xl);
+}
+
+.housekeeping-worker-empty {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.housekeeping-worker-empty svg {
+  width: 32px;
+  height: 32px;
+  color: var(--module-accent);
+}
+
+.housekeeping-worker-empty p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.housekeeping-worker-empty__cta {
+  margin-top: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.housekeeping-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.housekeeping-metrics--compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--space-3);
+}
+
+.housekeeping-metric {
+  /* Inhaltshöhe statt fixer 104px: die feste Höhe erzeugte bei kurzen
+   * Werten große Leerflächen in den KPI-Karten (Audit A2-23). */
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.housekeeping-metric span,
+.housekeeping-section-heading span {
+  color: var(--color-text-secondary);
+}
+
+.housekeeping-metric strong {
+  font-size: var(--text-xl);
+  line-height: 1.15;
+  letter-spacing: var(--tracking-normal);
+}
+
+.housekeeping-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.housekeeping-section-heading h2 {
+  margin: 0;
+}
+
+.housekeeping-chart {
+  min-height: 126px;
+  display: flex;
+  align-items: end;
+  gap: var(--space-3);
+  overflow-x: auto;
+  padding-top: var(--space-3);
+}
+
+.housekeeping-chart__bar-wrap {
+  min-width: 44px;
+  display: grid;
+  justify-items: center;
+  align-content: end;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.housekeeping-chart__value {
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.housekeeping-chart__bar {
+  width: 24px;
+  border-radius: var(--radius-full) var(--radius-full) 0 0;
+  background: var(--module-accent);
+}
+
+.housekeeping-field {
+  display: grid;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+.housekeeping-field input,
+.housekeeping-field textarea,
+.housekeeping-field select {
+  width: 100%;
+  min-height: var(--target-lg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--text-base);
+  padding: 0 var(--space-3);
+}
+
+.housekeeping-field textarea {
+  min-height: 120px;
+  padding: var(--space-3);
+  resize: vertical;
+}
+
+.housekeeping-field--inline {
+  min-width: 180px;
+}
+
+.housekeeping-field--color input {
+  padding: var(--space-1);
+}
+
+.housekeeping-task-form,
+.housekeeping-report-form,
+.housekeeping-worker-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.housekeeping-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 132px;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.housekeeping-form-grid--wide {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.housekeeping-form-submit {
+  min-height: var(--target-lg);
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.housekeeping-template-list {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+}
+
+.housekeeping-template {
+  min-width: 180px;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  padding: var(--space-3);
+  text-align: left;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.housekeeping-template small {
+  color: var(--color-text-secondary);
+}
+
+/* Nur das Layout - die Trägergrammatik kommt aus `.row-carrier` (list-row.css).
+ * Vorher trug jede Aufgabe ihre eigene Fläche und wurde über das `gap`
+ * getrennt: acht Objekte, wo eine Gruppe gemeint ist. */
+.housekeeping-task-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.housekeeping-reports {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Eine ZEILE, keine Karte: KEINE eigene Fläche, KEIN Radius, KEINE Kante - das
+ * leistet der Träger (`.row-carrier`, list-row.css). Den Status trägt die
+ * Tönung allein; die frühere Vollborder wäre in einer Zeilenliste eine zweite
+ * Linie neben der Trennlinie gewesen.
+ *
+ * Und sie darf hier auch nicht auf `none` gesetzt werden: die Trennlinie des
+ * Trägers steht in `.row-carrier > * + *` mit GLEICHER Spezifität, und dieses
+ * Stylesheet lädt später - ein `border: none` hier hätte sie gelöscht. Gemessen
+ * im Dokument als `border-top-width: 0px` über alle Zeilen (der Budget-Plan lag
+ * genau so daneben). */
+.housekeeping-task {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 88px;
+  padding: var(--space-3);
+}
+
+/* BEIDE Zustände tragen ihre Tönung allein. Die früher zusätzliche
+ * `border-color` ist mit der Kante der Zeile entfallen - und sie war nicht nur
+ * wirkungslos geworden, sondern schädlich: die einzige Kante, die eine Zeile in
+ * einer Zeilenliste noch hat, ist die TRENNLINIE des Trägers
+ * (`.row-carrier > * + *`, list-row.css, gleiche Spezifität, später geladen).
+ * `border-color` hätte also die Trennlinie eingefärbt - gemessen im Dokument
+ * als orange Linie zwischen zwei Aufgaben. */
+.housekeeping-task--today {
+  background-color: color-mix(in srgb, var(--color-warning) var(--tint-wash), transparent);
+}
+
+.housekeeping-task--overdue {
+  background-color: color-mix(in srgb, var(--color-danger) var(--tint-wash), transparent);
+}
+
+.housekeeping-task__check {
+  width: 52px;
+  height: 52px;
+  border: 2px solid var(--module-accent);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface));
+  color: var(--module-accent);
+  display: grid;
+  place-items: center;
+}
+
+.housekeeping-task__body h2 {
+  margin: 0;
+}
+
+.housekeeping-task__body p {
+  margin: var(--space-1) 0;
+  color: var(--color-text-secondary);
+}
+
+.housekeeping-task__body span {
+  font-weight: var(--font-weight-bold);
+}
+
+.housekeeping-task__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.housekeeping-loading {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.housekeeping-photo {
+  min-height: 72px;
+  border: 1.5px dashed color-mix(in srgb, var(--module-accent) var(--tint-hint), var(--color-border));
+  border-radius: var(--radius-md);
+  color: var(--module-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+.housekeeping-photo input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.housekeeping-photo-preview {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.housekeeping-report-item {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+}
+
+.housekeeping-report-item--visit {
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+}
+
+.housekeeping-report-item--visit .housekeeping-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: transparent;
+}
+
+.housekeeping-report-item img,
+.housekeeping-report-item > svg {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface));
+}
+
+.housekeeping-report-item div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.housekeeping-report-item span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.housekeeping-report-modal {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.housekeeping-report-details {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.housekeeping-report-details div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.housekeeping-report-details dt {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.housekeeping-report-details dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  text-align: right;
+}
+
+.housekeeping-staff-row {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  /* Zeile in der Karte, kein eigener Kasten (siehe .housekeeping-report-item).
+   * Die Kante bleibt transparent, weil Auswahl und Hover sie einfärben. */
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background-color: transparent;
+}
+
+.housekeeping-staff-row[role="button"] {
+  cursor: pointer;
+}
+
+.housekeeping-staff-row[role="button"]:hover,
+.housekeeping-staff-row[role="button"]:focus-visible,
+.housekeeping-staff-row--active {
+  border-color: var(--module-accent);
+  background-color: color-mix(in srgb, var(--module-accent) var(--tint-state), var(--color-surface-hover));
+}
+
+.housekeeping-staff-row div:nth-child(2) {
+  display: grid;
+  gap: var(--space-0h);
+  min-width: 0;
+}
+
+.housekeeping-staff-row span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.housekeeping-profile-editor {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.housekeeping-profile-editor__fields {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.housekeeping-staff-log {
+  margin-top: var(--space-3);
+}
+
+.housekeeping-staff-log-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.housekeeping-staff-log-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  border: 0;
+  background-color: transparent;
+}
+
+.housekeeping-staff-log-row + .housekeeping-staff-log-row {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.housekeeping-staff-log-row > div:first-child {
+  display: grid;
+  gap: var(--space-0h);
+  min-width: 0;
+}
+
+.housekeeping-staff-log-row span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.housekeeping-staff-log-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.housekeeping-log-action {
+  min-height: var(--target-lg);
+  padding-inline: var(--space-3);
+  gap: var(--space-2);
+}
+
+.housekeeping-log-action svg {
+  width: 17px;
+  height: 17px;
+}
+
+.modal-panel .document-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 132px;
+  padding: var(--space-4);
+  border: 1.5px dashed color-mix(in srgb, var(--module-accent) var(--tint-hint), var(--color-border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-wash), var(--color-surface));
+  color: var(--color-text-secondary);
+  text-align: center;
+  cursor: pointer;
+}
+
+.modal-panel .document-dropzone__icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--module-accent);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.modal-panel .document-dropzone__title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.modal-panel .document-dropzone__hint,
+.modal-panel .document-dropzone__file {
+  max-width: 100%;
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.modal-panel .document-dropzone__file {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (max-width: 767px) {
+  /* Der Kopf hatte hier `flex-direction: column`, die Tabs `flex: none`. Beides
+   * ist mit der Shell-Regel entfallen (layout.css, „Tab-Leiste im Modulkopf"):
+   * eine `.page-toolbar` bleibt in Zeilenrichtung, und die Leiste bekommt ihre
+   * eigene, scrollende Zeile von der Shell. Die Spaltenrichtung war die Hälfte
+   * eines gemessenen 79px-Überlaufs (uk 129px, vi 117px). */
+
+  /* Stat-Kacheln bleiben mehrspaltig (kompakte Bento-Dichte statt vier
+   * vollbreiter Einzelwert-Karten, Audit F5). Nur die Formular-Raster fallen
+   * auf eine Spalte. */
+  .housekeeping-form-grid,
+  .housekeeping-form-grid--wide,
+  .housekeeping-profile-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .housekeeping-metrics--compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .housekeeping-avatar--lg {
+    width: 84px;
+    height: 84px;
+  }
+
+  .housekeeping-worker-strip {
+    grid-template-columns: 48px 1fr;
+  }
+
+  .housekeeping-worker-strip .housekeeping-check-small {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .housekeeping-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .housekeeping-staff-log-row {
+    grid-template-columns: 1fr;
+  }
+
+  .housekeeping-staff-log-row__actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Der Button ist mobil vollbreit (grid-column: 1 / -1) — das Label bleibt
+   * sichtbar, statt eine leere Pille mit nacktem Icon zu zeigen (Audit F9). */
+  .housekeeping-check-small {
+    gap: var(--space-2);
+  }
+}

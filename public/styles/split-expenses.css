@@ -1,0 +1,541 @@
+.split-page {
+  /* Eigenständige Gast-Route: Split-Blau. Eingebettet im Budget übernimmt der
+   * Parent-Akzent (Teal), siehe .budget-page-Override unten (Sub-Domain-Regel). */
+  --module-accent: var(--module-split-expenses);
+  min-height: 100%;
+  /* Achsen getrennt: --page-gutter steigt ab 1024px auf --space-8 (Issue #577).
+   * Als Shorthand hätte das auch den vertikalen Rand mit verdoppelt, was mit der
+   * Kopf-Fluchtlinie nichts zu tun hat. */
+  padding-block: var(--space-4);
+  padding-inline: var(--page-gutter);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* Die Raster reflowen nach EIGENEM Platz, nicht nach Viewport-Breite: als
+   * Budget-Tab zieht die ausgeklappte Sidebar rund 345px ab, eine Query bei
+   * 1023px hielte .split-layout dort fälschlich zweispaltig. */
+  container: split-page / inline-size;
+  /* Die frühere modul-getönte Kopfwäsche (9 % über 280px) kannten nur zwei der
+   * 17 Module - ein Alt-Welt-Rest. Der Seitengrund ist überall derselbe. */
+  background: var(--color-bg);
+}
+
+.split-topbar,
+.split-panel-head,
+.split-card-head,
+.split-group-header,
+.split-header-actions,
+.split-form-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.split-topbar {
+  justify-content: space-between;
+}
+
+.split-title,
+.split-group-header h2,
+.split-card h3 {
+  margin: 0;
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-text-primary);
+}
+
+/* Eingebettet im Budget-Tab: Sub-Domain erbt den Parent-Akzent und der Kopf
+ * sinkt von Seitentitel- auf Sektionsebene - der Modulkopf ist bereits "Budget".
+ * Seitenfläche und Rand gehören dem Panel, nicht dem Sub-Page-Wrapper: der
+ * eigene Gradient lief sonst als getönte Vollbreiten-Bahn innerhalb der
+ * Budget-Seite (Critique 2026-07-30). Gleiches Muster in subscriptions.css. */
+.budget-page .split-page {
+  --module-accent: var(--module-budget);
+  background: none;
+  padding-block: 0;
+  padding-inline: 0;
+  min-height: 0;
+}
+
+/* Eingebettet ist der Split-Titel eine Bereichsüberschrift, kein Seitentitel -
+ * der Modulkopf sagt bereits „Budget". Er stand bis Runde 3 in der Versal-
+ * Liste und las damit als Eyebrow über der Beschreibung; die Rolle ist jetzt
+ * die Bereichs-Überschrift (Satzschreibung, Label-Farbe, typography.css). */
+
+.split-subtitle,
+.split-group-header p,
+.split-muted,
+.split-card-head span {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+}
+
+/* Die Kennzahl-Zeile ist .metric-grid (budget.css). Die frühere eigene
+ * .split-summary-card war die dritte von fünf Kartenbauarten im selben Modul
+ * (Critique 2026-07-30, P0) - ersatzlos entfallen, das Markup trägt jetzt
+ * .metric-card. */
+
+/* Arbeitsflächen sind opak: Glass bleibt Overlays und Modals vorbehalten
+ * (Begründung an .metric-card in budget.css). Diese Datei setzte auf
+ * denselben Rollen --glass-bg-card und widersprach damit der Regel innerhalb
+ * des eigenen Moduls. */
+.split-card,
+.split-groups-panel {
+  background-color: var(--color-surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.split-layout {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.split-groups-panel {
+  padding: var(--space-3);
+  min-height: 0;
+  /* Träger der Zeilenliste (tokens.css): die Zeilen laufen bis an die Kante,
+   * also muss der Träger sie an seinem Radius beschneiden. */
+  overflow: hidden;
+  /* Grid-Item mit min-width:auto wächst sonst auf die Breite der breitesten
+   * Gruppenkarte (240px + Inhalt) und schiebt Suchfeld und Statusfilter im
+   * Einspalten-Layout aus dem Viewport. */
+  min-width: 0;
+}
+
+.split-panel-head {
+  justify-content: space-between;
+  padding: 0 var(--space-1) var(--space-2);
+}
+
+.split-panel-title {
+  font-weight: 800;
+}
+
+.split-search {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.split-search__label {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.split-search__control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  background: var(--color-surface-2);
+}
+
+.split-search input {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  /* Drop WebKit's native type=search magnifier; the explicit leading icon is
+   * the only magnifier this field should show. */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.split-search input::-webkit-search-decoration,
+.split-search input::-webkit-search-results-decoration,
+.split-search input::-webkit-search-results-button,
+.split-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+/* Statusfilter der Gruppenliste (Aktiv/Archiviert, #574). Teilt die
+ * .filter-chip-Vokabel mit Aufgaben/Dokumenten. */
+/* Optik kommt aus .segmented; hier bleibt nur, was die Seitenleiste
+ * braucht: volle Breite statt inline-flex, damit die zwei Zustände die Spalte
+ * ausfüllen. */
+.split-status-filter {
+  display: flex;
+  margin-top: var(--space-2);
+}
+
+.split-status-filter .segmented__item {
+  flex: 1;
+}
+
+/* Zeilenliste im Panel (Zeilenlisten-Regel, tokens.css): das Panel ist der
+ * Träger, die Zeilen trennen sich per Haarlinie. Der Aktivzustand trug vorher
+ * Fläche UND Kante in einer bereits randlosen Karte - ein Kasten im Kasten.
+ * Jetzt trägt ihn die Fläche allein, wie die Sidebar-Pille. */
+.split-groups {
+  margin-top: var(--space-3);
+}
+
+.split-group {
+  /* Die Zeile läuft bis an die Trägerkante: das Panel trägt --space-3 Polster,
+   * und eine Zeile ohne Radius, die davor stehenbleibt, wäre ein rechtwinkliges
+   * Farbrechteck in einer runden Karte - der Kasten im Kasten in neuer Form.
+   * Das Textpolster kommt deshalb aus der Zeile selbst zurück. */
+  width: calc(100% + var(--space-3) * 2);
+  margin-inline: calc(var(--space-3) * -1);
+  min-height: 64px;
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.split-group + .split-group {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.split-group--active,
+.split-group:hover {
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), var(--color-surface));
+}
+
+.split-group__avatar,
+.split-expense__icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface-2));
+  color: var(--module-accent);
+}
+
+.split-group__body,
+.split-expense__body,
+.split-activity-item div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0h);
+}
+
+/* Aktivitätstexte kommen aus den Locales und werden nicht per Ellipsis gekürzt
+ * (anders als Gruppen- und Ausgabentitel). Ein einzelnes langes Wort - etwa ein
+ * roher Key, wenn eine Übersetzung fehlt - würde die Karte sonst aufspreizen. */
+.split-activity-item div {
+  overflow-wrap: anywhere;
+}
+
+.split-group__name,
+.split-expense__body strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.split-group__meta,
+.split-expense__body span,
+.split-activity-item span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Beleg-Marke in der Metazeile (#583): gleiche Größe wie der Text daneben,
+ * damit sie mitläuft statt die Zeilenhöhe aufzureißen. */
+.split-expense__receipt {
+  display: inline-flex;
+  vertical-align: text-bottom;
+  color: var(--module-accent);
+}
+
+.split-expense__receipt svg {
+  width: 14px;
+  height: 14px;
+}
+
+.split-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* Eigener Container: .split-content-grid steht hinter dem Gruppen-Panel und
+   * hat dadurch deutlich weniger Platz als .split-page. Ohne diese Ebene
+   * bliebe das Kartenraster zweispaltig, bis die ganze Seite schmal wird. */
+  container: split-main / inline-size;
+}
+
+.split-group-header {
+  justify-content: space-between;
+  padding: var(--space-4);
+  /* Arbeitsfläche, also opak - dieselbe Regel wie .split-card darüber. */
+  background-color: var(--color-surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+}
+
+/* Archiv-Marker im Gruppenkopf: sagt beim Direkteinstieg (Deep-Link, Suche),
+ * warum alle schreibenden Aktionen fehlen. */
+.split-archived-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  padding: var(--space-0h) var(--space-2);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface-2));
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Der Gruppentyp stand bis zum HIG-Rollout als Versal-Kicker ÜBER dem Namen -
+ * das verbotene Eyebrow-Muster, dazu mit --module-accent auf 13px unter AA
+ * (~3.5:1). Er ist jetzt Untertitel unter dem Namen: dieselbe Information,
+ * in der Sekundaerrolle, ohne Sonderformat. */
+.split-group-type {
+  margin: var(--space-0h) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-secondary);
+}
+
+.split-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.split-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+  gap: var(--space-4);
+}
+
+.split-card {
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.split-card:nth-child(2) {
+  grid-row: span 2;
+}
+
+.split-card-head {
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  /* Titel und Zusatz („vereinfachte Schulden") sind zwei eigenständige Zeilen,
+   * sobald sie nebeneinander nicht mehr passen - ohne Umbruch schiebt der
+   * Zusatz über den Kartenrand in die Nachbarkarte. */
+  flex-wrap: wrap;
+}
+
+.split-card-head > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.split-debt,
+.split-expense,
+.split-activity-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.split-debt:first-child,
+.split-expense:first-child,
+.split-activity-item:first-child {
+  border-top: 0;
+}
+
+.split-debt {
+  justify-content: space-between;
+}
+
+.split-debt strong,
+.split-expense__amount {
+  flex: 0 0 auto;
+  font-weight: 900;
+  color: var(--color-text-primary);
+}
+
+.split-expense__body {
+  flex: 1 1 auto;
+}
+
+button.split-expense {
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+button.split-expense:hover {
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+}
+
+.split-activity-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 50%;
+  background: var(--module-accent);
+}
+
+.split-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.split-form label,
+.split-participants,
+.split-defaults {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.split-form-row > label {
+  flex: 1 1 0;
+}
+
+/* Formular-Gruppen im Sheet: Inset-Well statt Kasten (tokens.css). */
+.split-participants,
+.split-defaults {
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--color-fill-well);
+}
+
+.split-check {
+  flex-direction: row !important;
+  align-items: center;
+  font-weight: 600 !important;
+}
+
+.split-participant-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, 140px);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.split-split-value[hidden],
+.split-default-value[hidden] {
+  display: none;
+}
+
+.split-empty-inline {
+  padding: var(--space-4) var(--space-2);
+}
+
+.split-main-empty {
+  min-height: 360px;
+}
+
+/* --------------------------------------------------------
+ * Reflow — Container-Queries statt Viewport-Breakpoints
+ *
+ * Container-Queries erhöhen die Spezifität nicht: diese Blöcke MÜSSEN nach
+ * den Basisregeln stehen, sonst gewinnt bei Gleichstand die spätere
+ * Basisdeklaration und die Kompaktstufe bleibt wirkungslos.
+ *
+ * Zwei Ebenen, weil die beiden Raster verschieden viel Platz haben:
+ *   split-page  → .split-layout (Gruppen-Panel neben dem Hauptbereich)
+ *   split-main  → .split-content-grid (Karten hinter dem Gruppen-Panel)
+ * -------------------------------------------------------- */
+
+/* Zweispaltig braucht das Panel (max. 320px) + Gap + rund 380px Rest. */
+@container split-page (max-width: 719px) {
+  .split-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* HIER STAND EINE HORIZONTALE GRUPPEN-LEISTE (flex-direction: row,
+     overflow-x, min-width: 240px). Sie war die Antwort der alten Welt auf die
+     schmale Spalte. Seit die Gruppen eine Zeilenliste im Panel sind, ist die
+     Basisregel kein Flex-Container mehr - `flex-direction` lief damit ins
+     Leere, und die 240px-Mindestbreite haette die Zeilen mit ihren negativen
+     Aussenraendern ueber die Panelkante geschoben. Ausgeliefert (und in den
+     Screenshots belegt) ist die vertikale Liste; die Regeln beschrieben ein
+     Layout, das es nicht mehr gibt. */
+}
+
+@container split-page (max-width: 639px) {
+  /* Die Kennzahl-Zeile bricht über .metric-grid (budget.css) um; die frühere
+     2+1-Reihe ließ die dritte Karte auf halber Breite mit einem Loch daneben. */
+
+  .split-group-header,
+  .split-topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .split-header-actions {
+    justify-content: stretch;
+  }
+
+  .split-header-actions .btn {
+    flex: 1;
+  }
+}
+
+/* Die zweite Spalte hat min-width 300px; darunter plus Gap plus einer
+ * lesbaren ersten Spalte bleibt nur noch Stapeln. */
+@container split-main (max-width: 639px) {
+  .split-content-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .split-card:nth-child(2) {
+    grid-row: auto;
+  }
+}
+
+/* Formularzeilen leben im Modal und richten sich nach dessen Container. */
+@container modal-body (max-width: 480px) {
+  .split-form-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .split-participant-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Echte Geräte-Entscheidungen: Seitengutter und die Freihaltung für die
+ * Bottom-Nav samt FAB hängen am Viewport, nicht an der Spaltenbreite. */
+@media (max-width: 767px) {
+  .split-page {
+    padding: var(--space-3);
+    padding-bottom: calc(var(--space-8) + 72px);
+  }
+
+  .split-topbar > .btn {
+    display: none;
+  }
+}

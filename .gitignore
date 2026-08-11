@@ -1,0 +1,117 @@
+# Dependencies
+node_modules/
+
+# External/customized modules
+modules/*
+!modules/.gitkeep
+
+# Environment variables (NEVER commit)
+.env
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+logs/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Build artifacts & test coverage
+dist/
+.cache/
+coverage/
+
+# Local Docker volume
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI dev tooling — local only, never published (Claude Code, Codex, agent skills)
+.claude/
+.codex/
+.agents/
+.github/skills/
+# Hook descriptor for the local Impeccable skill. It points into .github/skills/,
+# which is ignored above, so published it would only be a broken path for cloners.
+.github/hooks/
+AGENTS.md
+CLAUDE.md
+PRODUCT.md
+# DESIGN.md steht bewusst NICHT hier: 42 Kommentare in 30 versionierten Dateien
+# verweisen darauf als verbindliche Quelle ("DESIGN.md §6", "Canonical Page
+# Head"). Ignoriert war es ein Paragraphenverweis auf ein Dokument, das niemand
+# ausser dem Autor hat. Es beschreibt das Produkt, nicht die Arbeitsweise mit
+# einem Werkzeug - im Unterschied zu den Eintraegen darueber.
+
+# graphify knowledge graph — the generated artifact plus the tooling that only
+# ever runs against it. Regenerated locally, never published.
+graphify-out/
+.graphifyignore
+scripts/graphify-labels.json
+scripts/graphify-labels.mjs
+
+# Git worktrees
+.worktrees/
+
+# Local tooling (session state, design context — not for contributors)
+.superpowers/
+.interface-design/
+.impeccable/
+
+# Claude Code work documents (internal plans/specs, not for contributors)
+docs/superpowers/
+docs/archive/superpowers/
+docs/plans/
+docs/integrations/
+docs/design/
+docs/health-module-plan.md
+REBRANDING.md
+
+# Audit reports (generated per-session, not for version control)
+docs/audit-report-*.md
+docs/claude-md-audit.md
+docs/repo-audit-*.md
+docs/legal-audit/
+docs/ux-audit/
+SECURITY_RESEARCH.md
+
+# Installer modernization working docs (internal audit/plan/prompts, not for contributors)
+docs/installer-audit.md
+docs/installer-modernization-plan.md
+docs/installer-phase-prompts.md
+
+# Text files with tokens/keys (safety net)
+*.txt
+!public/robots.txt
+
+# Screenshot generation scripts (dev tooling, not part of the app)
+create-screenshots*.js
+custom-screenshots.js
+seed-demo-simple.js
+seed-english-demo*.js
+# Ad-hoc Playwright shooters at the repo root - throwaway, one per audit session.
+.shoot*.mjs
+.measure.mjs
+# Leading slash: this is meant for a generator output folder at the repo root.
+# Without it the pattern also matched docs/screenshots/, which IS the website -
+# its PNGs only stayed versioned because they predate this rule, while anything
+# added later (the WebP variants, new locale folders) was silently dropped.
+/screenshots/
+
+# Database backup files
+*.db.backup-*
+
+# Duplicate GitHub Pages staging folder
+docs/github-pages/
+
+# macOS sync duplicates (" 2" suffix)
+* 2.*

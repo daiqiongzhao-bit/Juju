@@ -1,0 +1,93 @@
+manifestVersion: 1
+id: yuvomi
+category: files
+name: Yuvomi
+version: "1.77.0"
+tagline: Self-hosted family planner — calendar, tasks, shopping, meals & budget
+description: >-
+  Yuvomi is a self-hosted, privacy-focused family planner that bundles everything
+  a household needs into a single fast PWA — no cloud, no tracking, no ads.
+
+
+  Everything runs on your Umbrel and stays on your Umbrel.
+
+
+  ✨ FEATURES
+
+
+  - Shared family calendar with recurring events, reminders and birthdays
+
+  - CalDAV / Google Calendar / Apple iCloud / ICS subscription sync
+
+  - Tasks with multi-assignment and due dates
+
+  - Shopping lists and a kitchen/meal planner
+
+  - Notes, contacts (CardDAV) and a household budget with recurring entries &
+    split expenses
+
+  - Housekeeping: staff, chores and supplies
+
+  - Weather widget (Open-Meteo, no API key needed)
+
+  - Optional single sign-on via OIDC
+
+  - Full-text search across every module
+
+  - Installable PWA, mobile-first, dark mode, multi-language
+
+
+  🔒 PRIVACY
+
+
+  Yuvomi keeps all data in a local SQLite database (optionally encrypted with
+  SQLCipher). Nothing leaves your device unless you explicitly enable a calendar
+  or contacts sync to a provider you choose.
+
+
+  🛠️ SET-UP
+
+
+  Open Yuvomi from your Umbrel dashboard and create the first account — that
+  account becomes the family admin and can invite the rest of the household.
+releaseNotes: >-
+  Loans can now track whether your household borrowed or lent money, optionally
+  assign installments to an account, and book borrowed-money repayments as
+  expenses so mortgage-style payments no longer inflate the monthly balance.
+
+  CalDAV reminder sync now handles task-only collections correctly: reminder
+  lists are discovered on their own, task collections are no longer offered as
+  event calendars, and existing accounts clean up those task lists on the next
+  sync.
+
+  New Zealand dollar support is available in household, subscription, and
+  split-expense settings, and housekeeping task/report actions now show their
+  icons immediately after list updates.
+
+  The installer now keeps the full start log visible before offering retry when
+  setup fails.
+
+  Full release notes are available at
+  https://github.com/daiqiongzhao-bit/Juju/compare/v1.75.6...v1.77.0
+
+backupIgnore:
+  - data/app/yuvomi.db.plaintext-backup*
+  - data/backups/*.db
+
+developer: Ulas Kalayci
+website: https://github.com/daiqiongzhao-bit/Juju
+dependencies: []
+repo: https://github.com/daiqiongzhao-bit/Juju
+support: https://github.com/daiqiongzhao-bit/Juju/issues
+port: 8180
+gallery:
+  - 1.webp
+  - 2.webp
+  - 3.webp
+  - 4.webp
+  - 5.webp
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: Ulas Kalayci
+submission: https://github.com/getumbrel/umbrel-apps/pull/5732

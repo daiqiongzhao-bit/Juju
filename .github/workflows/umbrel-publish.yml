@@ -1,0 +1,235 @@
+name: Umbrel Catalog Publish
+
+# Opens/updates a PR to getumbrel/umbrel-apps bumping Yuvomi to the released
+# version with a freshly resolved, digest-pinned image. Umbrel has NO auto-bump
+# bot (unlike TrueNAS), so this is what keeps the store entry current.
+#
+# Requirements:
+#   - Secret UMBREL_FORK_TOKEN: a classic PAT with `repo` scope (push to the
+#     <owner>/umbrel-apps fork + open a cross-repo PR to getumbrel/umbrel-apps).
+#   - The fork <owner>/umbrel-apps must exist (created during the initial submission).
+#   - Only acts once Yuvomi is already in upstream master (after the initial
+#     submission PR is merged); before that it skips to avoid re-submitting.
+#
+# It edits the maintainers' upstream files IN PLACE (version, releaseNotes,
+# image digest) — it never overwrites them with our source, so any review tweaks
+# (port, gallery, category, …) are preserved across updates.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without leading v (e.g. 0.65.1). Defaults to the latest release."
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: umbrel-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve version
+        id: ver
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_VERSION" ]; then
+            V="$INPUT_VERSION"
+          elif [ -n "$RELEASE_TAG" ]; then
+            V="$RELEASE_TAG"
+          else
+            V="$(gh release view --repo "$REPO" --json tagName -q .tagName)"
+          fi
+          V="${V#v}"
+          # Validate: only a semver-like token may flow into later shell/sed/PR steps.
+          if ! printf '%s' "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.+-][0-9A-Za-z.]+)?$'; then
+            echo "::error::Refusing to proceed: '$V' is not a valid version string."
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $V"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve multi-arch image digest (wait for the image to publish)
+        id: digest
+        run: |
+          set -euo pipefail
+          IMG="ghcr.io/${{ github.repository_owner }}/yuvomi:${{ steps.ver.outputs.version }}"
+          for i in $(seq 1 40); do
+            # `|| true` keeps a not-yet-published image (pipefail makes inspect's
+            # failure propagate) from tripping `set -e` and aborting the retry loop.
+            D="$(docker buildx imagetools inspect "$IMG" --format '{{json .Manifest}}' 2>/dev/null | jq -r '.digest // empty' || true)"
+            if [ -n "$D" ]; then
+              echo "digest=$D" >> "$GITHUB_OUTPUT"
+              echo "✓ $IMG -> $D"
+              exit 0
+            fi
+            echo "waiting for $IMG to appear ($i/40)…"
+            sleep 30
+          done
+          echo "::error::image $IMG not found after ~20 min — did Docker Publish run?"
+          exit 1
+
+      - name: Open / update PR on getumbrel/umbrel-apps
+        env:
+          GH_TOKEN: ${{ secrets.UMBREL_FORK_TOKEN }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          OWNER: ${{ github.repository_owner }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          FORK="$OWNER/umbrel-apps"
+          UPSTREAM="getumbrel/umbrel-apps"
+          BRANCH="yuvomi-update"
+
+          git config --global user.name "$OWNER"
+          git config --global user.email "$ACTOR@users.noreply.github.com"
+
+          # Check the credential once, before anything uses it. `gh repo fork`
+          # below ends in `|| true`, so a bad token used to be swallowed there and
+          # surfaced two lines later as git's "URL rejected: Malformed input to a
+          # URL function" - which points at the clone URL, not at the secret
+          # (2026-08-05). Reporting the login also catches a token that is valid
+          # but belongs to the wrong account.
+          TOKEN_USER="$(gh api user --jq .login 2>/dev/null || true)"
+          if [ -z "$TOKEN_USER" ]; then
+            echo "::error::UMBREL_FORK_TOKEN was rejected by the API. A stray newline or space in the secret value is the usual cause (piping it through 'echo' adds one). Re-set it with: gh auth token | tr -d '[:space:]' | gh secret set UMBREL_FORK_TOKEN --repo $OWNER/yuvomi"
+            exit 1
+          fi
+          echo "UMBREL_FORK_TOKEN authenticates as: $TOKEN_USER"
+
+          gh repo fork "$UPSTREAM" --clone=false || true
+
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/$FORK.git" fork
+          cd fork
+          git remote add upstream "https://github.com/$UPSTREAM.git"
+          git fetch --depth 1 upstream master
+          git checkout -B "$BRANCH" upstream/master
+
+          # Guard: only update once Yuvomi is already in upstream master. Before the
+          # initial submission is merged there is nothing to edit — skip.
+          if [ ! -f yuvomi/umbrel-app.yml ]; then
+            echo "::notice::Yuvomi is not yet in upstream master (initial submission still pending). Skipping auto-update."
+            exit 0
+          fi
+
+          # Edit the maintainers' files IN PLACE — never overwrite them with our
+          # source, so their port / gallery / category / review tweaks are preserved.
+          sed -i -E "s|^version: .*|version: \"$VERSION\"|" yuvomi/umbrel-app.yml
+          sed -i -E "s|image: ghcr.io/$OWNER/yuvomi:[^@[:space:]]+@sha256:[0-9a-f]+|image: ghcr.io/$OWNER/yuvomi:$VERSION@$DIGEST|" yuvomi/docker-compose.yml
+          if [ -z "${RELEASE_BODY:-}" ]; then
+            RELEASE_BODY="$(gh release view "v$VERSION" --repo "$OWNER/yuvomi" --json body -q .body)"
+            export RELEASE_BODY
+          fi
+          # releaseNotes from the GitHub release body (JSON-encoded string is valid YAML)
+          python3 - <<'PY'
+          import json, os, re, sys
+          body = os.environ.get("RELEASE_BODY", "").strip()
+
+          # The upstream value is a BLOCK scalar spanning many indented lines:
+          #
+          #   releaseNotes: >-
+          #     Loans can now track whether …
+          #     assign installments to an account …
+          #
+          # Matching only "^releaseNotes:.*$" replaced its first line and left the
+          # indented continuation behind, so the file became invalid YAML and the
+          # PR carried a broken manifest (seen on the v1.79.0 release). Consume the
+          # whole block: up to the next line starting a top-level key, or EOF.
+          p = "yuvomi/umbrel-app.yml"
+          t = open(p).read()
+
+          # Markdown belongs in a changelog, not in an app-store field: strip the
+          # "### Added" headings and bullet markers so the store shows prose.
+          lines = []
+          for line in body.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+              if lines and lines[-1] != "":
+                lines.append("")
+              continue
+            lines.append(re.sub(r"^[-*]\s+", "", line))
+          notes = "\n".join(lines).strip()
+
+          t, n = re.subn(
+            r"^releaseNotes:.*?(?=^[A-Za-z]|\Z)",
+            lambda _: "releaseNotes: " + json.dumps(notes) + "\n",
+            t,
+            count=1,
+            flags=re.M | re.S,
+          )
+          if n != 1:
+            sys.exit("::error::releaseNotes block not found in yuvomi/umbrel-app.yml")
+          open(p, "w").write(t)
+          PY
+
+          echo "--- updated ---"
+          grep -E '^(version|releaseNotes):' yuvomi/umbrel-app.yml
+          grep 'image:' yuvomi/docker-compose.yml
+
+          # A malformed manifest must never reach the maintainers' PR: fail here
+          # instead. python3 on ubuntu-latest ships PyYAML.
+          python3 -c "import yaml,sys; yaml.safe_load(open('yuvomi/umbrel-app.yml')); yaml.safe_load(open('yuvomi/docker-compose.yml')); print('YAML OK')"
+
+          if git diff --quiet -- yuvomi/; then
+            echo "Catalog already at v$VERSION — nothing to do."
+            exit 0
+          fi
+
+          git add yuvomi/
+          git commit -m "yuvomi: update to v$VERSION"
+          git push --force origin "$BRANCH"
+
+          # An open PR is the NORMAL state here: the branch is long-lived and every
+          # release force-pushes onto it. Only the first release of a catalog cycle
+          # actually opens one.
+          #
+          # `gh pr list --head` matches the branch name alone. The "owner:branch"
+          # form that a cross-repo PR needs matches nothing there, so the open PR
+          # looked absent, `gh pr create` refused with "already exists" and turned a
+          # working run red - the manifest was on the branch and the PR carried it
+          # (v1.80.0, PR #5956). The REST endpoint does understand "owner:branch".
+          open_pr() {
+            gh api "repos/$UPSTREAM/pulls?head=$OWNER:$BRANCH&state=open" \
+              --jq '.[0].number // empty' 2>/dev/null || true
+          }
+
+          EXISTING="$(open_pr)"
+          if [ -n "$EXISTING" ]; then
+            echo "PR #$EXISTING already open - the force-push above updated it to v$VERSION."
+            gh pr edit "$EXISTING" --repo "$UPSTREAM" --title "yuvomi: update to v$VERSION" || true
+            exit 0
+          fi
+
+          gh pr create --repo "$UPSTREAM" --base master --head "$OWNER:$BRANCH" \
+            --title "yuvomi: update to v$VERSION" \
+            --body "Automated update of Yuvomi to v$VERSION (multi-arch image pinned by digest). Source: https://github.com/$OWNER/yuvomi/releases/tag/v$VERSION" \
+          || {
+            # A PR that appeared between the lookup and here is not a failure either:
+            # the update sits on the branch, so the PR carries it regardless.
+            AFTER="$(open_pr)"
+            if [ -z "$AFTER" ]; then
+              echo "::error::Could not open the catalog PR, and none is open."
+              exit 1
+            fi
+            echo "::notice::PR #$AFTER was opened concurrently; it carries v$VERSION."
+          }

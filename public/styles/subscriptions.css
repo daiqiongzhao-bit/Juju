@@ -1,0 +1,1073 @@
+.subscriptions-page {
+  /* Sub-Domain erbt den Parent-Akzent (DESIGN.md §2): Abos leben unter Budget
+   * und tragen Teal - nicht das globale Violett (Akzentregel „Modul-Akzent führt"). */
+  --module-accent: var(--module-budget);
+  min-height: 100%;
+  /* Achsen getrennt: --page-gutter steigt ab 1024px auf --space-8 (Issue #577).
+   * Als Shorthand hätte das auch den vertikalen Rand mit verdoppelt, was mit der
+   * Kopf-Fluchtlinie nichts zu tun hat. */
+  padding-block: var(--space-4);
+  padding-inline: var(--page-gutter);
+  /* Die frühere modul-getönte Kopfwäsche (9 % über 280px) kannten nur zwei der
+   * 17 Module - ein Alt-Welt-Rest. Der Seitengrund ist überall derselbe. */
+  background: var(--color-bg);
+}
+
+/* Eingebettet als Budget-Tab: Seitenfläche und Rand gehören dem Panel, nicht
+ * dem Sub-Page-Wrapper. Der eigene Gradient lief sonst als getönte Vollbreiten-
+ * Bahn innerhalb der Budget-Seite und brach an deren Container-Kante ab - beim
+ * Tabwechsel registrierte das Auge einen Ortswechsel, den die Navigation nicht
+ * angekündigt hatte (Critique 2026-07-30). Gleiches Muster in split-expenses.css. */
+.budget-page .subscriptions-page {
+  background: none;
+  padding-block: 0;
+  padding-inline: 0;
+  min-height: 0;
+}
+
+.subscriptions-toolbar {
+  display: grid;
+  /* Suche · 4 beschriftete Filter · Zurücksetzen · 2 Icon-Aktionen
+   * Die Filterspalten stehen auf minmax(0, …): mit `auto` wuchsen sie auf die
+   * längste Option und schoben die Leiste bei 1280px über die Content-Breite.
+   * Die Anteile sind aber NICHT gleich - die drei Neutral-Filter zeigen „Alle"
+   * und ein paar Kategorienamen, die Sortierung „Nächstes Fälligkeitsdatum".
+   * Gleiche Anteile hätten den einzigen Wert gekappt, der Platz braucht. */
+  grid-template-columns:
+    minmax(160px, 1.3fr) repeat(3, minmax(0, 0.85fr)) minmax(0, 1.7fr) auto auto auto;
+  gap: var(--space-2);
+  /* An der Unterkante ausrichten: die Filterfelder tragen jetzt eine Labelzeile
+   * über dem Select, die Suche nicht — sonst stünden die Eingaben versetzt. */
+  align-items: end;
+  margin-bottom: var(--space-3);
+}
+
+/* Sichtbares Label statt reinem aria-label: vier gleich aussehende Selects sind
+ * ohne Beschriftung nicht auseinanderzuhalten, sobald ein Wert gewählt ist. */
+.subscriptions-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.subscriptions-filter-field__label {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.subscriptions-filter-reset {
+  min-height: var(--target-base);
+  white-space: nowrap;
+}
+
+/* Desktop: Wrapper ist transparent — die beiden Icon-Buttons bleiben direkte
+ * Grid-Items in den letzten zwei auto-Spalten. */
+.subscriptions-toolbar__actions {
+  display: contents;
+}
+
+.subscriptions-search {
+  position: relative;
+}
+
+.subscriptions-search svg {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  width: 18px;
+  transform: translateY(-50%);
+  color: var(--color-text-secondary);
+}
+
+.subscriptions-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3) 0 calc(var(--space-3) + 26px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  /* Eingabefelder sind opak: Glass auf einem Feld, in das getippt wird, lässt
+   * den Text über den durchscheinenden Untergrund laufen (DESIGN.md §6). */
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  /* Drop WebKit's native type=search magnifier; the explicit leading icon is
+   * the only magnifier this field should show. */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.subscriptions-search input::-webkit-search-decoration,
+.subscriptions-search input::-webkit-search-results-decoration,
+.subscriptions-search input::-webkit-search-results-button,
+.subscriptions-search input::-webkit-search-cancel-button,
+.subscriptions-combobox__control .form-input::-webkit-search-decoration,
+.subscriptions-combobox__control .form-input::-webkit-search-results-decoration,
+.subscriptions-combobox__control .form-input::-webkit-search-results-button,
+.subscriptions-combobox__control .form-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+.subscriptions-filter {
+  min-height: 44px;
+  margin: 0;
+}
+
+/* Die Kennzahl-Zeile ist .metric-grid (budget.css) mit --summary-cards: 4.
+ * Die frühere eigene .subscriptions-summary-card war die zweite von fünf
+ * Kartenbauarten im selben Modul (Critique 2026-07-30, P0) - sie ist ersatzlos
+ * entfallen, das Markup trägt jetzt .metric-card. */
+
+/* Arbeitsflächen sind opak, auch hier: Glass bleibt Overlays und Modals
+ * vorbehalten (Begründung an .metric-card in budget.css). Diese Datei
+ * setzte auf denselben Rollen --glass-bg-card und widersprach damit der Regel
+ * innerhalb des eigenen Moduls. */
+.subscriptions-chart,
+.subscriptions-list-section {
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* .subscriptions-budget-progress ist entfallen: der Balken in der Kennzahlkarte
+ * ist jetzt .metric-card__progress (budget.css) und färbt sich bei
+ * Überschreitung um, statt stumm bei voller Breite stehen zu bleiben. */
+
+.subscriptions-analytics {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.1fr) minmax(220px, 0.85fr) minmax(240px, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.subscriptions-chart {
+  padding: var(--space-3);
+}
+
+.subscriptions-chart__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  align-items: baseline;
+  margin-bottom: var(--space-2);
+}
+
+.subscriptions-chart__head strong {
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.subscriptions-chart h2,
+.subscriptions-section-head h2 {
+  margin: 0;
+}
+
+.subscriptions-area-chart {
+  display: block;
+  width: 100%;
+  height: 72px;
+  margin-top: var(--space-1);
+}
+
+.subscriptions-area-chart polygon {
+  fill: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+}
+
+.subscriptions-area-chart polyline {
+  fill: none;
+  stroke: var(--module-accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.subscriptions-chart-axis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.subscriptions-pie-layout {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.subscriptions-pie {
+  width: 96px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 10px color-mix(in srgb, var(--color-surface) 78%, transparent);
+}
+
+.subscriptions-pie-legend {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.subscriptions-pie-legend span {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subscriptions-pie-legend i {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.subscriptions-chart-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.8fr) minmax(100px, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.subscriptions-chart-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subscriptions-chart-row > div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-3);
+}
+
+.subscriptions-chart-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--module-accent);
+}
+
+.subscriptions-list-section {
+  padding: var(--space-3);
+}
+
+.subscriptions-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.subscriptions-section-head > div {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.subscriptions-section-head span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* `--color-warning-text` gab es nie (Audit 2026-08-08, P2-3). Ein var() ohne
+ * Fallback auf ein undefiniertes Token ist ungueltig: die Deklaration fiel weg,
+ * und „Wechselkurse nicht verfuegbar" las sich wie normaler Text - der Zustand
+ * fiel nicht auf, den er melden soll. `--color-warning` haelt 4.9:1 auf weiss. */
+.subscriptions-rate-status--warning {
+  color: var(--color-warning);
+}
+
+/* Nur das Layout - die Trägergrammatik kommt aus `.row-carrier` (list-row.css).
+ * Die `.swipe-row` dazwischen bleibt eine Bühne und trägt weder Form noch
+ * Abstand; die Trennlinie sitzt deshalb am Träger, nicht an ihr (`> * + *` ist
+ * gegen solche Zwischenebenen immun). */
+.subscriptions-list {
+  display: grid;
+}
+
+/* KEINE eigene Flaeche, KEIN Radius: das leistet der Traeger. Waehrend der Geste
+ * bekommt die Zeile ihre Flaeche zurueck (`.swipe-row--swiping > :first-child`,
+ * layout.css) - sonst laege ihr Text ueber dem aufgedeckten Reveal-Panel. */
+.subscription-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2);
+  background: transparent;
+}
+
+/* Der Zeilenkörper ist ein echter `<button>` und trägt die Grammatik der
+ * app-weiten klickbaren Zeile (.list-row__main--interactive, list-row.css):
+ * Fokusring, Zielgröße, kein Knopf-Aussehen. Er öffnet das Bearbeiten, das
+ * vorher ein eigener Icon-Knopf in der Zeile war.
+ *
+ * Die Spalten der Karte sind damit auf ihn gewandert - vier Icon-Knöpfe je
+ * Zeile waren die lauteste Stelle des Bildschirms, und ein Tap-Handler auf dem
+ * `<article>` hätte den Knopf entfernt, ohne einen Tastaturweg an seine Stelle
+ * zu setzen. */
+.subscription-card__main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.subscription-card--disabled {
+  opacity: 0.62;
+}
+
+/* Monogramm: die Marke trägt Fläche und Rahmen, die Schrift kommt aus dem
+ * Text-Token. Vorher kamen Vorder- und Hintergrund aus DERSELBEN Markenfarbe
+ * (Vollton auf aufgehelltem Ton desselben Tons) — damit hing das Kontrast-
+ * verhältnis vollständig an der Datenlage: gemessen 10 AA-Verstöße über 7 Marken
+ * im Seed, bis hinunter auf 1.83:1 (Critique 2026-07-30, P1). Jede helle oder
+ * gesättigte Marke (Amazon-Orange, Spotify-Grün) fiel automatisch durch, und
+ * kein Nutzer konnte das umgehen, außer indem er die Markenfarbe änderte. */
+.subscription-card__brand {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--subscription-color) var(--tint-hint), transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--subscription-color) var(--tint-surface), var(--color-surface));
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-bold);
+}
+
+.subscription-card__brand img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.subscription-card__title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* Name und Beschreibung sind SPANs, keine Überschrift und kein Absatz: der
+ * Zeilenkörper ist ein `<button>`, dessen Content-Model Phrasing Content ist -
+ * dieselbe Angleichung, die `pantry.js` und `contacts.js` schon tragen. */
+.subscription-card__name,
+.subscription-card__desc {
+  display: block;
+  margin: 0;
+}
+
+.subscription-card__desc,
+.subscription-card__cost span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.subscription-status {
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-3);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.subscription-status--active {
+  background: var(--color-success-light);
+  color: var(--color-success-ink);
+}
+
+/* Abgeschlossen (#594): abgesetzt vom Pausiert-Grau über den Modul-Akzent. */
+.subscription-card--completed {
+  opacity: 0.78;
+}
+
+.subscription-status--completed {
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface));
+  color: color-mix(in srgb, var(--module-accent) var(--tint-ink), var(--color-text-primary));
+}
+
+.subscription-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.subscription-card__meta span {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.subscription-card__meta svg {
+  width: 14px;
+  height: 14px;
+}
+
+.subscription-card__cost {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.subscription-card__actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* Hier stand `width/min-height: var(--target-md)` - 40px fest, also auch am
+ * FINGER, wo das Minimum 48px ist. Die Größe gehört der Shell (layout.css,
+ * .btn--icon auf --target-base); ein Modul, das sie neu beantwortet, gibt eine
+ * zweite Antwort auf eine Shell-Frage. */
+
+.subscriptions-enabled-row,
+.subscriptions-metadata-add,
+.subscriptions-logo-search,
+.subscriptions-settings-section {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.subscriptions-logo-search .form-input {
+  flex: 1;
+}
+
+.subscriptions-logo-search .btn {
+  flex: 0 0 auto;
+}
+
+.subscriptions-logo-search .btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.subscription-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Formularabschnitt im Sheet: Inset-Well statt Kasten (tokens.css). */
+.subscription-form__section {
+  padding: var(--space-4);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-fill-well);
+}
+
+.subscription-form__section > h3 {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.subscription-form__section > h3 svg {
+  width: 17px;
+  height: 17px;
+  color: var(--module-budget);
+}
+
+.subscription-form__identity {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.subscription-form__identity-fields {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.subscription-logo-picker {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  cursor: pointer;
+}
+
+.subscription-logo-tools {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: stretch;
+}
+
+.subscription-logo-picker > span {
+  display: grid;
+  width: 84px;
+  height: 84px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--module-budget);
+  font-size: var(--text-xl);
+}
+
+.subscription-logo-picker img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.subscription-logo-picker small {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.subscription-logo-picker small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.subscription-logo-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.subscription-find-logo-btn {
+  justify-content: center;
+  min-height: 38px;
+  padding-inline: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.subscription-find-logo-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.subscription-form__billing-grid {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(180px, 1.3fr) minmax(130px, 1fr) minmax(90px, 0.65fr);
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.subscription-form__organization-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 90px;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.subscription-form__color .form-input--color {
+  width: 100%;
+}
+
+.subscriptions-combobox {
+  position: relative;
+}
+
+.subscriptions-combobox__control {
+  position: relative;
+}
+
+.subscriptions-combobox__control > svg {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: var(--space-3);
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
+.subscriptions-combobox__control .form-input {
+  padding-left: calc(var(--space-3) + 22px);
+  /* Drop WebKit's native type=search magnifier; the explicit leading icon is
+   * the only magnifier this field should show. */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.subscriptions-combobox__options {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.subscriptions-combobox__options button {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-primary);
+  text-align: start;
+  cursor: pointer;
+}
+
+.subscriptions-combobox__options button:hover,
+.subscriptions-combobox__options button:focus,
+.subscriptions-combobox__options button[aria-selected="true"] {
+  outline: none;
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+  color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-ink), var(--color-text-primary));
+}
+
+/* Tastatur-Fokus zusätzlich mit Inset-Ring markieren (Audit F-16): die reine
+ * Flächenfarbe unterscheidet Fokus nicht von Hover/aria-selected. */
+.subscriptions-combobox__options button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+
+.subscriptions-enabled-row > div {
+  display: grid;
+  gap: var(--space-0h);
+}
+
+.subscriptions-enabled-row small {
+  color: var(--color-text-secondary);
+}
+
+/* Abschnitt in der Einstellungskarte: Inset-Well statt Kasten (tokens.css). */
+.subscriptions-settings-section {
+  justify-content: space-between;
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-fill-well);
+}
+
+.subscriptions-settings-section > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.subscriptions-enabled-row {
+  justify-content: space-between;
+  min-height: 44px;
+}
+
+.subscriptions-modal-footer {
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+  padding: var(--space-3) 0 0;
+  border: 0;
+  gap: var(--space-2);
+}
+
+.subscriptions-logo-picker-modal {
+  position: fixed;
+  z-index: calc(var(--z-modal) + 1);
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-overlay) 84%, transparent);
+}
+
+.subscriptions-logo-picker-panel {
+  width: min(720px, 100%);
+  max-height: min(720px, calc(100dvh - (2 * var(--space-4))));
+  overflow: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-glass-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xl);
+}
+
+.subscriptions-logo-picker-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.subscriptions-logo-picker-head h3 {
+  margin: 0;
+}
+
+.subscriptions-logo-search-form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.subscriptions-logo-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.subscriptions-logo-option {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
+.subscriptions-logo-option:hover,
+.subscriptions-logo-option:focus-visible {
+  outline: none;
+  border-color: var(--module-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--module-accent) var(--tint-shadow), transparent);
+}
+
+.subscriptions-logo-option img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.subscriptions-logo-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.subscriptions-metadata {
+  display: grid;
+  /* auto-fit: zwei Spalten nur, wenn jede breit genug für Name + vier Icon-Buttons
+   * ist (>= 24rem), sonst eine Spalte. Verhindert das Quetschen im schmalen Modal
+   * auf Tablet/Phone; min(100%, ...) schützt vor Overflow unter 24rem. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: var(--space-4);
+}
+
+.subscriptions-metadata ul {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-3) 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Listenzeile: Haarlinie statt Kasten (tokens.css). */
+.subscriptions-metadata li {
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  border: none;
+}
+
+.subscriptions-metadata li + li {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.subscriptions-metadata-row__view {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+}
+
+/* Name behält Vorrang; die vier Icon-Buttons rutschen bei Enge (schmales
+ * Mobile) in die nächste Zeile, statt den Namen auf wenige Zeichen zu quetschen. */
+.subscriptions-metadata-row__view > span {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+
+.subscriptions-metadata-row__view .subscriptions-metadata-row__actions {
+  margin-left: auto;
+}
+
+.subscriptions-metadata-row__edit {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 36px;
+}
+
+/* [hidden] hat gegenüber den display-Klassen zu geringe Spezifität - explizit übersteuern. */
+.subscriptions-metadata-row__view[hidden],
+.subscriptions-metadata-row__edit[hidden] {
+  display: none;
+}
+
+.subscriptions-metadata-edit-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.subscriptions-metadata-row__edit .form-input--color {
+  width: 44px;
+  flex: 0 0 44px;
+  padding: 2px;
+}
+
+.subscriptions-metadata-row__actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.subscriptions-metadata-row__view > i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.subscriptions-metadata-add {
+  align-items: stretch;
+}
+
+.subscriptions-metadata-add .form-input--color {
+  width: 52px;
+  flex: 0 0 52px;
+}
+
+.subscriptions-metadata > .subscriptions-modal-footer {
+  grid-column: 1 / -1;
+}
+
+.subscriptions-notifications ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+/* Listenzeile: Haarlinie statt Kasten (tokens.css). */
+.subscriptions-notifications li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) 0;
+  border: none;
+}
+
+.subscriptions-notifications li + li {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.subscriptions-notifications li > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.subscriptions-notifications li span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 1023px) {
+  .subscriptions-toolbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .subscriptions-search {
+    grid-column: 1 / -1;
+  }
+
+  /* Dritte Zeile: Zurücksetzen links, die beiden Icon-Aktionen rechts in ihrer
+   * natürlichen Breite — als Grid-Items würden sie sich sonst über je eine
+   * volle Spalte spannen und als überbreite leere Pillen erscheinen. */
+  .subscriptions-filter-reset {
+    grid-column: 1 / 3;
+    justify-self: start;
+  }
+
+  .subscriptions-toolbar__actions {
+    display: flex;
+    gap: var(--space-2);
+    grid-column: 3 / -1;
+    justify-content: flex-end;
+  }
+
+  /* Der Umbruch der Kennzahl-Zeile liegt jetzt an .metric-grid--quad
+     (budget.css) als Container-Query. */
+
+  .subscriptions-analytics {
+    grid-template-columns: 1fr;
+  }
+
+  /* Unter 1024px stapelt der Zeilenkörper Betrag und Text: die Spalten
+     gehören seit Runde 6 ihm, nicht der Karte - die trägt nur noch Körper
+     und Aktionen nebeneinander. */
+  .subscription-card__main {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .subscription-card__cost {
+    grid-column: 2 / -1;
+    align-items: flex-start;
+  }
+
+  .subscription-card__actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  .subscriptions-page {
+    padding: var(--space-3);
+  }
+
+  .subscriptions-toolbar,
+  .subscriptions-metadata {
+    grid-template-columns: 1fr;
+  }
+
+  /* Kennzahlen bleiben zweispaltig (kompakte Bento-Dichte statt vier
+   * vollbreiter Einzelwert-Karten, Audit F5) - jetzt über
+   * .metric-grid--quad in budget.css. */
+
+  .subscriptions-notifications li {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .subscriptions-notifications li .btn {
+    grid-column: span 1;
+  }
+
+  /* Mobile: die beiden Aktions-Icons teilen sich eine kompakte Zeile statt je
+   * eine vollbreite leere Pille zu bilden (Audit F8). */
+  .subscriptions-toolbar__actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .subscriptions-toolbar__actions .btn--icon {
+    flex: 1;
+  }
+
+  .subscription-card__actions .btn {
+    flex: 1;
+  }
+
+  .subscriptions-section-head {
+    align-items: flex-start;
+  }
+
+  .subscription-form__identity,
+  .subscription-form__billing-grid,
+  .subscription-form__organization-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .subscription-logo-tools {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    justify-items: stretch;
+  }
+
+  .subscription-logo-picker {
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: start;
+  }
+
+  .subscription-logo-picker > span {
+    grid-row: span 2;
+    width: 68px;
+    height: 68px;
+  }
+
+  .subscriptions-logo-search {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .subscriptions-logo-picker-modal {
+    align-items: end;
+    padding: var(--space-2);
+  }
+
+  .subscriptions-logo-picker-panel {
+    max-height: min(680px, calc(100dvh - (2 * var(--space-2))));
+  }
+
+  .subscriptions-logo-results {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Auf Touch tragen die Wischrichtungen die beiden Zeilenaktionen (Zahlung
+ * buchen am Zeilenanfang, löschen am Zeilenende) und die Knöpfe verschwinden -
+ * dasselbe Muster wie in den Geburtstagen und im Einkauf. Auf Zeigergeräten
+ * bleiben sie: dort gibt es keine Geste. Der Zeilenkörper ist davon nicht
+ * betroffen, er ist kein Icon-Knopf, sondern die Zeile selbst.
+ *
+ * STEHT BEWUSST GANZ UNTEN, nicht bei der Basisregel: `.subscription-card__actions`
+ * bekommt in zwei Media-Queries darüber `display`- und `justify-content`-Werte
+ * mit derselben Spezifität, und eine Regel davor verlöre allein durch die
+ * Reihenfolge (in birthdays.css genau so gemessen). */
+@media (hover: none) {
+  /* VERSTECKT, NICHT ENTFERNT - dieselbe Begruendung wie in birthdays.css:
+   * `display: none` nahm die Zeilenaktionen auch aus dem Fokus- und
+   * Screenreader-Baum, und die Wischgesten sind reine `touch*`-Handler. Aus dem
+   * Fluss genommen gibt die Zeile den Platz genauso frei; beim Fokus kommen sie
+   * zurueck. */
+  .subscription-card__actions {
+    position: absolute;
+    width: var(--space-px);
+    height: var(--space-px);
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .subscription-card__actions:focus-within {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  /* Die Reserve am Zeilenende gehört dann dem Wisch-Chevron
+     (.swipe-row::after, layout.css). */
+  .subscription-card {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline-end: calc(var(--space-2) + var(--space-3) + var(--space-2));
+  }
+}

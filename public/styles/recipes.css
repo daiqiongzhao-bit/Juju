@@ -1,0 +1,380 @@
+/**
+ * Modul: Rezepte (Recipes)
+ * Zweck: Styles fuer gespeicherte Rezepte und Aktionskarten
+ */
+
+.recipes-page {
+  /* Geteilter Küchen-Akzent, siehe --module-kitchen in tokens.css. */
+  --module-accent: var(--module-kitchen);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Full-bleed-Root (Issue #577): Content-Spalte über --page-inline-pad auf den
+   * direkten Kindern, fluchtend mit der Küchen-Tab-Leiste darüber. */
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .recipes-page {
+    height: 100%;
+  }
+}
+
+/* Scroller, Lesemaß, FAB-Auslauf und Gruppen-Abstand kommen aus .list-scroller
+ * (styles/list-row.css); die Klasse steht im Markup neben .recipes-list. Hier
+ * bleibt nur der Träger der Content-Spalte und der obere Auslauf.
+ *
+ * Das frühere Kartenraster (`repeat(auto-fit, minmax(320px, 1fr))`) ist weg. Es
+ * war der Grund für drei Befunde in einer Komponente: 408px gegen 360px Höhe in
+ * derselben Rasterzeile, dadurch 48px Versatz der CTA-Grundlinien (Tablet 56px),
+ * und bei 320px ein stiller 32px-Überlauf. Als Zeilenliste in der geteilten
+ * 720er-Lesespalte teilt der Tab jetzt Fläche und Rhythmus mit Einkauf und
+ * Vorrat, statt ein viertes Layout zu sein (Critique 2026-07-30). */
+.recipes-list {
+  padding-inline: var(--page-inline-pad);
+  padding-block-start: var(--space-4);
+}
+
+/* Der Stretch-und-Clip-Fix für lange, ungruppierte .list-rows-Listen sitzt
+ * jetzt in list-row.css selbst (align-self: start) - er galt hier zuerst
+ * nur für Rezepte, betrifft aber jede Küchenliste, deren Filter sie auf eine
+ * einzige flache Gruppe reduziert (z. B. Vorrat unter "fast leer"). Siehe
+ * dortigen Kommentar für die Messung. */
+
+/* --------------------------------------------------------
+ * Rezeptzeile
+ * -------------------------------------------------------- */
+
+/* Geometrie, Fläche, Trennlinie und Hover: .list-row. */
+
+.recipe-row__heading {
+  /* Die Überschrift ist der Flex-Slot, der Button füllt ihn. Ohne Reset brächte
+   * h2 seine Blockmargen und die eigene Schriftgröße mit. */
+  margin: 0;
+  font: inherit;
+  display: flex;
+  min-width: 0;
+}
+
+/* Der Button trägt die ganze Textspalte: Name, Zutatenzahl, Chevron. */
+.recipe-row__toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: start;
+}
+
+/* `flex-basis: 0` statt der ererbten `auto` (list-row.css): mit `auto`
+ * zieht der Browser für die Zeilenumbruch-Entscheidung die VOLLE, unumbrochene
+ * Textbreite als hypothetische Größe heran - bei einem langen Rezeptnamen
+ * passte die nicht neben das Vorschaubild, und statt NUR den Text intern
+ * umzubrechen, wanderte der GESAMTE Name in eine eigene Zeile (gemessen: „Alpha
+ * One Ingredient" blieb neben dem Bild, „Delta Twenty One Ingredients Recipe"
+ * fiel komplett darunter - zwei verschiedene Zeilenzahlen für dieselbe
+ * Zeilen-Vorlage, je nach Titellänge). Mit `flex-basis: 0` startet der Name bei
+ * null, „passt" also immer neben dem Bild, wächst danach in den Rest, und der
+ * Text bricht dort ganz normal per `overflow-wrap: anywhere` intern um. */
+.recipe-row__toggle .list-row__name {
+  flex-basis: 0;
+}
+
+/* Zutatenzahl und Chevron bleiben beim Namen, statt an die Zeilenkante zu
+ * wandern: sie beschriften, was das Aufklappen zeigt. */
+.recipe-row__toggle .list-row__meta {
+  flex-shrink: 0;
+  /* Ohne feste Mindestbreite verschiebt sich alles, was VOR ihr im Flex-Fluss
+   * steht (das Mealie-Badge), von Zeile zu Zeile: der Name wächst per
+   * flex-grow auf genau so viel Platz, wie die Geschwister danach übrig
+   * lassen, und „1 ingredient" gegen „21 ingredients" ändert diesen Rest um
+   * mehrere Zeichenbreiten. `text-align: end` + `tabular-nums` statt eines
+   * ausgeschriebenen Zeichen-Zählers: die Zahl bleibt bündig zum Chevron,
+   * unabhängig von Ziffernanzahl oder Singular/Plural-Wortlänge der
+   * jeweiligen Sprache. */
+  min-width: 15ch;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Unsichtbarer Slot um das Badge (siehe recipes.js): in der Breitfassung
+ * nimmt er per `display: contents` gar nicht am Flex-Layout teil, die Pille
+ * selbst ist dann das Flex-Item wie zuvor. Die Container-Query unten
+ * reaktiviert ihn als echtes Flex-Item mit eigener Zeile. */
+.recipe-row__badge-slot {
+  display: contents;
+}
+
+/* Vorschaubild aus Mealie (server/routes/recipes.js proxied die Bytes, siehe
+ * dortigen Kommentar - kein direkter <img src> auf Mealie möglich, der
+ * Bearer-Token darf den Client nie erreichen). Feste Größe statt intrinsischer:
+ * Mealie liefert Originalseitenverhältnisse, eine Zeile darf davon nicht
+ * abhängen. Der Slot ist ein <span>, das entweder ein <img> (echtes Bild) oder
+ * direkt den Platzhalter-Zustand trägt - Mealie liefert selbst KEIN
+ * generisches Platzhalterbild über die Medien-Route (die 404t bei fehlendem
+ * Bild, mealie-recipes/mealie#4804), das Icon kommt deshalb von uns. */
+.recipe-row__thumb {
+  width: var(--target-md);
+  height: var(--target-md);
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.recipe-row__thumb-img {
+  width: 100%;
+  height: 100%;
+  /* `object-fit: cover` schneidet statt zu verzerren. */
+  object-fit: cover;
+}
+
+.recipe-row__thumb--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-surface-2);
+  color: var(--color-text-tertiary);
+}
+
+/* Das Badge sitzt in derselben Flex-Zeile wie Name und Zutatenzahl - ohne
+ * eigenes flex-shrink würde ein langer Rezeptname es auf seine Buchstaben
+ * zusammendrücken, bevor der Name selbst umbricht (er trägt overflow-wrap
+ * bewusst, siehe .list-row__name). */
+.recipe-row__toggle .source-badge {
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------
+ * Schmale Zeile: Aktionen ins Menü, Zutatenzahl auf eine eigene Zeile
+ *
+ * GEMESSEN bei 320px (Critique 2026-07-30, P0): drei Zeilenaktionen belegten
+ * 3 × 48 + 2 × 8 = 152px der 262px Zeilenbreite. Für die Textspalte blieben 98px,
+ * und darin teilten sich Name, „6 Zutaten" (nicht schrumpfend, ~70px) und Chevron
+ * (16px) den Platz - für den Namen blieb nichts. Als Flex-Item mit
+ * `overflow-wrap: anywhere` fiel er auf min-content, also auf die Breite des
+ * breitesten Einzelzeichens: **8px**. „Chicken Tikka Masala" stand ein Zeichen pro
+ * Zeile, die Zeile war 448px hoch, auf den Bildschirm passte EIN Rezept.
+ *
+ * Zwei Züge, beide mit derselben Container-Query wie der Vorrats-Stepper - die
+ * maßgebliche Breite ist die der Zeile, nicht die des Fensters:
+ *   1. Die drei Sekundäraktionen wandern in das geteilte Überlaufmenü
+ *      (utils/popover-menu.js), MIT Labels. 152px → 48px.
+ *   2. Die Zutatenzahl rückt unter den Namen, damit er die Zeile allein hat.
+ *
+ * Danach: Textspalte 202px statt 98px, Namensbreite 186px statt 8px.
+ * -------------------------------------------------------- */
+
+/* Basiszustand ZUERST: `@container` erhöht die Spezifität nicht, es entscheidet die
+ * Quellreihenfolge. Standen diese beiden Regeln hinter der Query, gewannen sie -
+ * und die Aktionen blieben sichtbar, obwohl die Query griff (gemessen: Textspalte
+ * 46px statt 202px). */
+.recipe-row__inline-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.recipe-row__more {
+  display: none;
+}
+
+@container list-rows (max-width: 30rem) {
+  .recipe-row__inline-actions {
+    display: none;
+  }
+
+  .recipe-row__more {
+    display: flex;
+    align-items: center;
+  }
+
+  /* `order`, damit die Vorlesereihenfolge Name → Zutatenzahl → Chevron bleibt. */
+  .recipe-row__toggle {
+    flex-wrap: wrap;
+  }
+
+  /* Eigene Zeile fürs Mealie-Badge, direkt unter dem Namen und über der
+   * Zutatenzahl - konsistent auf jeder Zeile, unabhängig von Titellänge oder
+   * Zutatenzahl-Wortbreite (siehe .recipe-row__badge-slot in recipes.js: der
+   * SLOT trägt die volle Breite, nicht die Pille selbst). */
+  .recipe-row__badge-slot {
+    display: flex;
+    flex: 1 0 100%;
+    order: 1;
+  }
+
+  .recipe-row__toggle .list-row__meta {
+    flex: 1 0 100%;
+    order: 2;
+  }
+}
+
+
+.recipe-row__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+  transition: transform var(--transition-fast);
+}
+
+.recipe-row__toggle[aria-expanded="true"] .recipe-row__chevron {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recipe-row__chevron {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------
+ * Aufklapp-Detail
+ * -------------------------------------------------------- */
+
+/* Geschwister der Zeile, nicht ihr Kind: die Zeile bleibt beim Aufklappen in
+ * ihrer Höhe und behält ihre Bedienzone an derselben Stelle.
+ *
+ * Sichtbarkeit über `hidden`, nicht über eine max-height-Transition: ein per
+ * Transition versteckter Inhalt erscheint auf inaktiven Tabs und in
+ * headless-Renderern nie. */
+.recipe-detail {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3) var(--space-4);
+}
+
+.recipe-detail__ingredients {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.recipe-detail__ingredient {
+  font-size: var(--type-body);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.recipe-detail__notes {
+  margin: 0;
+  font-size: var(--type-body);
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+
+/* Die beiden Kreislauf-Ausgänge, beschriftet. Umbruchfähig, weil bei 320px drei
+ * beschriftete Buttons nicht in eine Zeile passen - und ein Label, das umbricht,
+ * ist besser als ein Glyph, den man erraten muss. */
+.recipe-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Die Suchzeile (Audit A1-21) ist jetzt der kanonische Kopf in der Variante
+ * .page-toolbar--in-group (layout.css); die frühere eigene .recipes-toolbar
+ * entfällt samt Padding-Regeln, die der Kopf schon mitbringt. */
+
+/* Nur Positionierung, wie .pantry-search: das Bedienelement liegt in
+ * page-search.css. Der frühere Nachbau hier trug kein `min-width: 0` und konnte
+ * damit nicht unter die Mindestbreite des Inputs schrumpfen; der geteilte
+ * Baustein bringt es mit. */
+.recipes-search {
+  flex: 1;
+  max-width: 420px;
+}
+
+/* Herkunfts-Filter (Alle/Nativ/Mealie): Trigger im __actions-Slot des Kopfs
+ * (nur sichtbar, wenn Mirror-Rezepte existieren, siehe renderSourceFilter()),
+ * Panel über das geteilte .popover-menu (utils/popover-menu.js) - dieselbe
+ * Behandlung wie „Lagerorte verwalten" im Vorrat, statt einer eigenen
+ * Chip-Reihe, die auf schmalen Bildschirmen für drei Optionen eine ganze
+ * Kopf-Zeile kostete (fast immer nur "Alle" aktiv). */
+.recipes-source-filter-menu {
+  /* Schmaler als die Standardbreite (200px): drei kurze Wörter brauchen sie nicht. */
+  min-width: 160px;
+}
+
+/* Häkchen nur bei der aktiven Option - `visibility: hidden` statt
+ * `display: none`, damit die Textspalte für alle drei Einträge an derselben
+ * Stelle beginnt, unabhängig davon, welcher gerade ausgewählt ist. */
+.popover-menu__item-check--hidden {
+  visibility: hidden;
+}
+
+/* ENTFERNT mit dem Kartenraster:
+ *   .recipes-search-empty  - der Suchtreffer-Leerzustand läuft jetzt über
+ *                            mountEmptyState({ variant: 'no-results' }), also
+ *                            mit Icon, <h2>, Suchbegriff und Reset-CTA wie im
+ *                            Vorrat. Es war die letzte Stelle im Modul, die den
+ *                            erzwingenden Renderer umging.
+ *   .recipe-read*          - das Nur-Lese-Modal; sein Inhalt ist jetzt das
+ *                            Aufklapp-Detail der Zeile (siehe .recipe-detail).
+ *   .recipe-card__title    - der Name kommt aus .list-row__name.
+ *   .recipe-card__notes    - jetzt .recipe-detail__notes.
+ *   .recipe-card__ingredients / __ingredient / __ingredient--more
+ *                          - jetzt .recipe-detail__ingredients / __ingredient;
+ *                            das „+N" ist ersatzlos weg, weil die Zutatenzahl in
+ *                            der Zeile steht und das Detail alle zeigt.
+ */
+
+.recipe-card__meal-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* ENTFERNT mit dem Kartenraster (Fortsetzung):
+ *   .recipe-card__link       - der Link ist jetzt ein regulärer btn--ghost in
+ *                              .recipe-detail__actions.
+ *   .recipe-card__actions / __primary / __to-shopping
+ *                            - die beiden Kreislauf-Ausgänge stehen im Detail
+ *                              und nutzen .btn--primary / .btn--secondary. Damit
+ *                              verschwindet der Eigenbau-Primärbutton, der neben
+ *                              dem soliden .btn--primary des Leerzustands ein
+ *                              zweites Erscheinungsbild für „primär" im selben
+ *                              Tab war (Critique 2026-07-30, P3).
+ *   .recipe-card__icon-actions
+ *                            - die drei Icon-Aktionen sitzen in der geteilten
+ *                              .list-row__actions und sind DAUERHAFT sichtbar.
+ *                              Das Hover-Reveal (`opacity: 0` + pointer-events)
+ *                              ist bewusst weg: es hat in diesem Repo zweimal
+ *                              dieselbe Defektklasse produziert, und der Vorrat
+ *                              und der Einkauf zeigten ihre Zeilenaktionen
+ *                              ohnehin immer. Ruhig bleibt die Zone über den
+ *                              Tertiär-Ton von .row-action, nicht über
+ *                              Unsichtbarkeit.
+ */
+
+/* Die Zeilen-Aktions-Buttons (Bearbeiten/Duplizieren/Löschen) nutzen die
+ * geteilte .row-action-Grammatik aus layout.css in der geteilten
+ * .list-row__actions. Kein eigenes Reveal-Layout mehr. */
+
+.recipe-ingredient-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* Zutaten-Zeilen (.ingredient-row*) sind global in layout.css definiert und
+ * werden mit dem Mahlzeiten-Modal geteilt. */
+
+.recipe-add-ingredient {
+  align-self: flex-start;
+}
+
+.recipe-meal-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Geometrie, Zielgröße und das eingekleidete Control kommen aus dem geteilten
+ * .form-check (layout.css) - vorher war das eine nackte System-Checkbox in
+ * System-Größe, während sechs andere Module ihre schon einkleiden (Critique
+ * 2026-07-30, P2). Der engere Abstand bleibt: hier stehen vier Optionen in einer
+ * Zeile, nicht eine Zeile mit einem Satz. */
+.recipe-meal-types__option {
+  gap: var(--space-1);
+}

@@ -1,0 +1,518 @@
+/**
+ * Modul: Pinnwand / Notizen (Notes)
+ * Zweck: Styles für Masonry-Grid, Sticky-Note-Karten, Modal
+ * Abhängigkeiten: tokens.css, layout.css
+ */
+
+/* --------------------------------------------------------
+ * Modul-Akzent
+ * -------------------------------------------------------- */
+.notes-page { --module-accent: var(--module-notes); }
+
+/* --------------------------------------------------------
+ * Seiten-Layout
+ * -------------------------------------------------------- */
+.notes-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Full-bleed-Root (Issue #577): die Content-Spalte entsteht über
+   * --page-inline-pad auf den direkten Kindern, damit der Akzentstreifen des
+   * Kopfes bis zur Shell-Kante läuft statt in der Fläche zu enden. */
+  /* overflow:clip inside overflow:auto (.app-content) triggers iOS WebKit blank-screen on scroll.
+   * overflow:hidden provides identical clipping without the compositor bug. */
+  overflow: hidden;
+}
+
+/* Scroll-Fläche zwischen Kopf und Grid.
+ *
+ * Trägt die Content-Spalte (--page-inline-pad) UND den Query-Container.
+ * Läge der Container weiter auf dem full-bleed Root, würde er die volle
+ * Shell-Breite messen und viel zu früh auf mehr Spalten schalten (Issue #577).
+ *
+ * Der Container misst seit #577 die tatsächliche Rasterbreite: früher saß er
+ * auf .notes-page (ohne Padding), während das Grid darunter 16px je Seite
+ * abzog — die Breakpoints wurden also gegen einen um 32px zu großen Wert
+ * geprüft und schalteten eine Stufe zu früh. Jetzt ist Container-Content ==
+ * Grid-Breite. Folge: knapp oberhalb eines Breakpoints kippt die Spaltenzahl
+ * eine Stufe nach unten (bei 900px Viewport 3 statt 4). Das ist die Korrektur
+ * des alten Fehlers, keine Regression — die Werte 520/720/900/1200 bleiben
+ * bewusst stehen und meinen jetzt echte Rasterbreite.
+ *
+ * Container für das Masonry-Grid: Spaltenzahl reflowt nach EIGENEM Platz
+ * (Sidebar-bewusst), nicht nach Viewport. Siehe tokens.css §11c. */
+.notes-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-inline: var(--page-inline-pad);
+  container: notes-page / inline-size;
+}
+
+@media (min-width: 1024px) {
+  .notes-page { height: 100%; }
+}
+
+/* --------------------------------------------------------
+ * Header / Toolbar
+ * -------------------------------------------------------- */
+/* Gerüst (Shell + Titel) jetzt geteilt via .page-toolbar in layout.css.
+ * margin-inline-start:auto drängt die Suche ans logische Zeilenende (ersetzt das frühere
+ * justify-content:space-between des bespoke Toolbars). */
+/* Layout only — control visual lives in page-search.css (shared). */
+.notes-toolbar__search {
+  flex: 1 1 0;
+  max-width: 280px;
+  margin-inline-start: auto;
+}
+
+.notes-toolbar .page-toolbar__title {
+  flex: 0 0 auto;
+}
+
+/* --------------------------------------------------------
+ * Masonry-Grid
+ * -------------------------------------------------------- */
+/* Ersteller-Filter: eigene Zeile zwischen Kopf und Raster, gleiche Grammatik
+ * wie .documents-filters. Erscheint nur ab zwei Autorinnen/Autoren (JS setzt
+ * [hidden]) — die Regel darunter sorgt dafür, dass das Attribut gegen den
+ * display:flex dieser Zeile gewinnt. */
+.notes-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  padding-inline: var(--page-inline-pad);
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-shrink: 0;
+}
+
+.notes-filters[hidden] {
+  display: none;
+}
+
+.notes-grid {
+  /* Scroll + Einrückung liegen jetzt auf .notes-scroll; hier bleibt nur das
+   * Raster selbst (Guard: bewusst CSS-Grid, keine CSS-Columns). */
+  padding-top: var(--space-4);
+  /* Der FAB schwebt über dieser scrollenden Fläche. Ohne eigene Reserve lag die
+   * letzte Kartenreihe dauerhaft darunter — .tasks-body rechnet denselben
+   * Freiraum bereits ein. */
+  padding-bottom: calc(var(--space-16) + var(--space-8));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+/* Abschnittsköpfe („Angepinnt" / „Weitere Notizen") spannen über alle Spalten,
+ * wie der Leerzustand. */
+.notes-group__title {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--type-section-title);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.notes-group__title:not(:first-child) {
+  margin-top: var(--space-4);
+}
+
+/* Lade-Zustand: Grid aufheben, damit die geteilte Skeleton-Liste
+ * (Flex-Spalte) full-width erscheint — eine Lade-Sprache über alle Module. */
+.notes-grid[aria-busy="true"] {
+  display: block;
+}
+
+@container notes-page (min-width: 520px) {
+  .notes-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container notes-page (min-width: 720px) {
+  .notes-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@container notes-page (min-width: 900px) {
+  .notes-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@container notes-page (min-width: 1200px) {
+  .notes-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+.notes-grid > .empty-state {
+  grid-column: 1 / -1;
+}
+
+/* Progressive Enhancement: echtes Masonry-Packing ohne ragged Zeilen-Lücken,
+ * sobald der Browser natives CSS-Masonry unterstützt. Baseline bleibt das
+ * getestete, overflow-sichere Grid (minmax(0,1fr)); nicht-unterstützende
+ * Browser sehen exakt das bisherige Verhalten — kein JS, kein Multicol,
+ * kein Intrinsic-Width-Risiko. */
+@supports (grid-template-rows: masonry) {
+  .notes-grid { grid-template-rows: masonry; }
+}
+
+/* --------------------------------------------------------
+ * Notiz-Karte
+ * -------------------------------------------------------- */
+/* Die Zettelfarbe ist eine frei gewählte NUTZERFARBE. Sie trug hier bis
+ * Runde 3 die ganze Karte als Vollfläche, mit einer zur Laufzeit gerechneten
+ * Textfarbe (getReadableTextColor) - die einzige Stelle der App, an der eine
+ * ungemessene Nutzerfarbe eine Inhaltsfläche trug, und im Dark-Theme ein Feld
+ * heller Pastellblöcke. Jetzt gilt das gemessene 16-%-Rezept (DESIGN.md,
+ * User-Farben-Regel): 16 % Zettelfarbe auf der Kartenfläche, Text immer
+ * --color-text-primary. Der Zettel bleibt unterscheidbar, die Lesbarkeit hängt
+ * nicht mehr an der gewählten Farbe - auch nicht bei Alt-Daten ausserhalb der
+ * Palette. Randlos wie jede Karte dieser Welt. */
+.note-card {
+  min-width: 0;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  cursor: pointer;
+  position: relative;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  background: color-mix(in srgb, var(--note-color, transparent) var(--tint-surface), var(--color-surface));
+  color: var(--color-text-primary);
+  border: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.note-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Gepinnt: voller Ring (kein Seitenstreifen) aus der eigenen Textfarbe —
+ * deutlich sichtbar auf jeder Zettelfarbe, zusätzlich zum stärkeren Schatten. */
+.note-card--pinned {
+  box-shadow: var(--shadow-md), 0 0 0 2px color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.note-card__pin {
+  position: absolute;
+  top: var(--space-2);
+  inset-inline-end: var(--space-2);
+  width: var(--target-base);
+  height: var(--target-base);
+  border-radius: var(--radius-full);
+  background: var(--color-overlay-light);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  /* Unsichtbar heisst auch unklickbar: ohne pointer-events bleibt hier ein
+   * volles Trefferziel stehen, das niemand sieht (Guard
+   * `verborgene Reveal-Aktionen sind nicht klickbar` in test-frontend-audit.js). */
+  pointer-events: none;
+  transition: opacity var(--transition-fast), background-color var(--transition-fast);
+  color: inherit;
+}
+
+.note-card__pin::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.note-card--pinned .note-card__pin {
+  opacity: 1;
+  pointer-events: auto;
+  background: var(--color-overlay-light);
+}
+
+.note-card:hover .note-card__pin {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.note-card__pin:hover,
+.note-card__pin:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  background: var(--color-overlay);
+}
+
+.note-card__title {
+  margin-bottom: var(--space-1);
+  color: inherit;
+  padding-inline-end: var(--target-base);
+  overflow-wrap: anywhere;
+}
+
+.note-card__title,
+.note-card__content {
+  unicode-bidi: plaintext;
+}
+
+.note-card__content {
+  font-size: var(--type-body);
+  line-height: var(--line-height-relaxed);
+  color: inherit;
+  word-break: break-word;
+  /* Renderer emittiert jetzt Blockstruktur (<p>/<ul>/<h*>) + explizite <br>,
+   * daher normal statt pre-wrap — sonst doppelte Umbrüche/Whitespace. */
+  white-space: normal;
+  /* Vorschau-Höhe deckeln: eine lange Notiz sprengte sonst das Raster und
+   * verdrängte alle anderen Zettel aus dem Blickfeld. Der volle Text steht
+   * einen Klick entfernt im Lese-Modus. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 12;
+  line-clamp: 12;
+  overflow: hidden;
+}
+
+.note-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.note-card__creator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Initialen sind Text, die Avatarfarbe ist eine Nutzerfarbe: die Fläche trägt
+ * das gemessene 16-%-Rezept, die Tinte ein TOKEN.
+ * NACHGEMESSEN (Runde 3): der 70-%-Ink-Mix der Akzent-auf-Tönung-Regel gilt
+ * für kuratierte Modultöne, nicht für frei gewählte Nutzerfarben. Er bricht an
+ * den Enden der Helligkeitsachse - weiss/light 1.92:1, schwarz/dark 1.97:1,
+ * und sogar der graue Fallback #8E8E93 landet bei 4.47:1 unter AA. Der
+ * Primärtext hält auf derselben Fläche 11.7-17.0:1 (light) und 9.3-15.9:1
+ * (dark), über die ganze Palette und über Extremfarben hinweg. */
+.note-card__avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  background: color-mix(in srgb, var(--avatar-color, var(--color-accent)) var(--tint-surface), var(--color-surface));
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.note-card__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.note-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.note-card__open,
+.note-card__delete {
+  width: var(--target-base);
+  height: var(--target-base);
+  border-radius: var(--radius-full);
+  background: var(--color-overlay-light);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: inherit;
+  opacity: 0;
+  /* Unsichtbar heisst auch unklickbar: ohne pointer-events bleibt hier ein
+   * volles Trefferziel stehen, das niemand sieht (Guard
+   * `verborgene Reveal-Aktionen bleiben nicht klickbar`, test-frontend-audit.js). */
+  pointer-events: none;
+  transition: opacity var(--transition-fast), background-color var(--transition-fast);
+}
+
+.note-card__open::before,
+.note-card__delete::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.note-card:hover .note-card__open,
+.note-card:hover .note-card__delete,
+.note-card__open:focus-visible,
+.note-card__delete:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.note-card__open:hover {
+  background: var(--color-overlay);
+}
+
+.note-card__delete:hover {
+  background: var(--color-danger-light);
+  color: var(--color-danger-ink);
+}
+
+@media (pointer: coarse) {
+  .note-card__pin,
+  .note-card__open,
+  .note-card__delete {
+    opacity: 1;
+  pointer-events: auto;
+  }
+}
+
+
+/* --------------------------------------------------------
+ * Notes-Modal Content-Styles (Overlay/Panel via shared modal.js)
+ * -------------------------------------------------------- */
+
+/* Reader/Editor-Umschalter (#507). Nutzt die geteilte .sub-tab-Grammatik
+ * (sub-tabs.css) — deren aktive Pille trägt bereits den Modul-Akzent. Hier nur
+ * der schlanke Wrapper, analog zu .budget-scope. */
+.note-mode-switch {
+  display: inline-flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+/* Leseansicht: gerendertes Markdown (.note-md-* aus typography.css) auf einer
+ * dezent mit der Notizfarbe getönten Fläche (--note-color am .note-modal),
+ * damit der Reader als „dieselbe Notiz, vergrößert" lesbar ist. Der Tint liegt
+ * über transparent → theme-agnostisch; Text bleibt --color-text-primary für
+ * durchgehend ≥4.5:1. Weiße Notizen ergeben keinen sichtbaren Tint. */
+.note-read-view {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--note-color, transparent) var(--tint-surface), transparent);
+  border: 1px solid color-mix(in srgb, var(--note-color, transparent) var(--tint-hint), transparent);
+}
+
+.note-read__body {
+  font-size: var(--type-body);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-primary);
+  word-break: break-word;
+  unicode-bidi: plaintext;
+}
+
+.note-read__empty {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+/* Sanfter Moduswechsel (Product-Motion: 150–250 ms Zustandswechsel). */
+@keyframes notePaneEnter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.note-pane--enter {
+  animation: notePaneEnter 160ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-pane--enter { animation: none; }
+}
+
+/* Farb-Auswahl */
+.note-color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.note-color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  position: relative;
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.note-color-swatch::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  border-radius: var(--radius-full);
+}
+
+.note-color-swatch:hover       { transform: scale(1.15); }
+.note-color-swatch--active     { border-color: var(--color-text-primary); transform: scale(1.1); }
+
+/* --------------------------------------------------------
+ * Formatierungs-Toolbar im Notiz-Editor
+ * -------------------------------------------------------- */
+.note-format-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1.5px solid var(--color-border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background-color: var(--color-surface-2);
+}
+
+.note-format-toolbar + .form-input {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.note-format-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Nicht schrumpfen: bei 12 Buttons in einem ~340px-Modal bricht die Leiste
+   * jetzt um (flex-wrap), statt die Buttons unter die Fingergröße zu quetschen. */
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  font-size: var(--text-sm);
+  padding: 0;
+}
+
+/* Touch: volle 44px-Targets (iOS-Minimum, --target-base) */
+@media (pointer: coarse) {
+  .note-format-btn {
+    width: var(--target-base);
+    height: var(--target-base);
+  }
+}
+
+.note-format-btn:hover {
+  background-color: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.note-format-btn--sep {
+  width: 1px;
+  background-color: var(--color-border);
+  margin: var(--space-1) var(--space-1);
+  cursor: default;
+}
+
+.note-format-btn--sep:hover {
+  background-color: var(--color-border);
+  color: var(--color-text-secondary);
+}

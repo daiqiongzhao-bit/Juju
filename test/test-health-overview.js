@@ -1,0 +1,146 @@
+/**
+ * Modul: Übersichts-/Export-Logik-Test
+ * Zweck: Reine Funktionen des Übersicht-Tabs — upcomingDoses() (heute noch offene
+ *        Zeitfenster) und computeAdherenceStreak() (Einnahme-Serie) — sowie die
+ *        server-seitige CSV-Serialisierung (health-export.js: Escaping, Header,
+ *        Analyt-Flattening). DOM-frei.
+ * Ausführen: node --loader ./test/test-browser-loader.mjs --test test/test-health-overview.js
+ */
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+const { upcomingDoses, computeAdherenceStreak } = await import('../public/utils/health-overview.js');
+const {
+  csvCell, toCsv, vitalsToCsv, activitiesToCsv, labsToCsv, medLogsToCsv,
+} = await import('../server/services/health-export.js');
+
+// Tägliche Einnahmepläne (days_mask null = jeden Tag).
+const dailyAt = (id, time) => ({ id, medication_id: 1, time_of_day: time, days_mask: null, active: 1, dose_qty: 1 });
+const TODAY = '2026-07-01'; // Mittwoch
+
+// --------------------------------------------------------
+// upcomingDoses
+// --------------------------------------------------------
+
+test('upcomingDoses: nur Zeitfenster ab nowTime, chronologisch', () => {
+  const schedules = [dailyAt(1, '08:00'), dailyAt(2, '20:00')];
+  const up = upcomingDoses(schedules, [], { today: TODAY, nowTime: '12:00' });
+  assert.equal(up.length, 1);
+  assert.equal(up[0].time, '20:00');
+});
+
+test('upcomingDoses: bereits genommene/übersprungene Dosen fallen raus', () => {
+  const schedules = [dailyAt(1, '08:00'), dailyAt(2, '20:00')];
+  const logs = [{ schedule_id: 1, scheduled_at: `${TODAY}T08:00`, status: 'taken' }];
+  const up = upcomingDoses(schedules, logs, { today: TODAY, nowTime: '07:00' });
+  assert.deepEqual(up.map((d) => d.time), ['20:00']);
+});
+
+test('upcomingDoses: pending-Log bleibt offen; limit greift', () => {
+  const schedules = [dailyAt(1, '08:00'), dailyAt(2, '12:00'), dailyAt(3, '20:00')];
+  const logs = [{ schedule_id: 1, scheduled_at: `${TODAY}T08:00`, status: 'pending' }];
+  const up = upcomingDoses(schedules, logs, { today: TODAY, nowTime: '00:00', limit: 2 });
+  assert.equal(up.length, 2);
+  assert.deepEqual(up.map((d) => d.time), ['08:00', '12:00']);
+});
+
+test('upcomingDoses: ohne today leer', () => {
+  assert.deepEqual(upcomingDoses([dailyAt(1, '08:00')], [], {}), []);
+});
+
+// --------------------------------------------------------
+// computeAdherenceStreak
+// --------------------------------------------------------
+
+const takenOn = (day) => ({ schedule_id: 1, scheduled_at: `${day}T08:00`, status: 'taken' });
+
+test('computeAdherenceStreak: aufeinanderfolgende volle Tage zählen', () => {
+  const schedules = [dailyAt(1, '08:00')];
+  const logs = [takenOn('2026-07-01'), takenOn('2026-06-30'), takenOn('2026-06-29')];
+  assert.equal(computeAdherenceStreak(schedules, logs, { today: TODAY }), 3);
+});
+
+test('computeAdherenceStreak: vergangener offener Tag beendet die Serie', () => {
+  const schedules = [dailyAt(1, '08:00')];
+  // 06-30 fehlt → Serie bricht dort ab, nur heute zählt.
+  const logs = [takenOn('2026-07-01'), takenOn('2026-06-29')];
+  assert.equal(computeAdherenceStreak(schedules, logs, { today: TODAY }), 1);
+});
+
+test('computeAdherenceStreak: heute noch offen bricht Serie nicht', () => {
+  const schedules = [dailyAt(1, '08:00')];
+  // heute keine Einnahme, aber gestern/vorgestern voll → Serie = 2.
+  const logs = [takenOn('2026-06-30'), takenOn('2026-06-29')];
+  assert.equal(computeAdherenceStreak(schedules, logs, { today: TODAY }), 2);
+});
+
+test('computeAdherenceStreak: keine Logs → 0', () => {
+  assert.equal(computeAdherenceStreak([dailyAt(1, '08:00')], [], { today: TODAY }), 0);
+});
+
+// --------------------------------------------------------
+// CSV-Serialisierung (health-export.js)
+// --------------------------------------------------------
+
+test('csvCell: quotet, verdoppelt Anführungszeichen, entschärft Formel-Injection', () => {
+  assert.equal(csvCell('abc'), '"abc"');
+  assert.equal(csvCell('a"b'), '"a""b"');
+  assert.equal(csvCell('=SUM(A1)'), `"'=SUM(A1)"`);
+  assert.equal(csvCell('+49'), `"'+49"`);
+  assert.equal(csvCell(null), '""');
+  assert.equal(csvCell(undefined), '""');
+  assert.equal(csvCell(120), '"120"');
+});
+
+test('toCsv: Header + Zeilen, nur Header ohne Zeilen', () => {
+  assert.equal(toCsv(['a', 'b'], []), '"a","b"');
+  assert.equal(toCsv(['a', 'b'], [[1, 2]]), '"a","b"\n"1","2"');
+});
+
+test('vitalsToCsv: Header-Reihenfolge + Werte', () => {
+  const csv = vitalsToCsv([{
+    measured_at: '2026-06-01T08:00', type: 'bp', value_num: 120, value_num2: 80,
+    value_num3: 60, unit: 'mmHg', note: 'ok', visibility: 'private',
+  }]);
+  const [head, row] = csv.split('\n');
+  assert.equal(head, '"measured_at","type","value_num","value_num2","value_num3","unit","note","visibility"');
+  assert.ok(row.startsWith('"2026-06-01T08:00","bp","120","80","60","mmHg","ok","private"'));
+});
+
+test('activitiesToCsv: Header + Zeile', () => {
+  const csv = activitiesToCsv([{
+    performed_at: '2026-07-01T07:00', type: 'running', duration_min: 30,
+    distance_km: 5, intensity: 'hoch', calories: 300, note: '', visibility: 'family',
+  }]);
+  const [head, row] = csv.split('\n');
+  assert.equal(head, '"performed_at","type","duration_min","distance_km","intensity","calories","note","visibility"');
+  assert.ok(row.includes('"running"') && row.includes('"5"'));
+});
+
+test('labsToCsv: eine Zeile je Analyt; Befund ohne Analyten → eine Kopfzeile', () => {
+  const csv = labsToCsv([
+    {
+      report_date: '2026-06-01', lab_name: 'Labor A', visibility: 'private', note: '',
+      results: [
+        { analyte: 'Hb', value_num: 14, unit: 'g/dL', ref_low: 13, ref_high: 17, flag: 'normal' },
+        { analyte: 'Glc', value_num: 110, unit: 'mg/dL', ref_low: 70, ref_high: 100, flag: 'high' },
+      ],
+    },
+    { report_date: '2026-05-01', lab_name: 'Labor B', visibility: 'family', note: 'leer', results: [] },
+  ]);
+  const lines = csv.split('\n');
+  assert.equal(lines[0], '"report_date","lab_name","analyte","value_num","unit","ref_low","ref_high","flag","visibility","note"');
+  assert.equal(lines.length, 4); // Header + 2 Analyten + 1 leerer Befund
+  assert.ok(lines[1].includes('"Hb"') && lines[1].includes('"Labor A"'));
+  assert.ok(lines[3].startsWith('"2026-05-01","Labor B","","","","","","","family","leer"'));
+});
+
+test('medLogsToCsv: Header + medication_name', () => {
+  const csv = medLogsToCsv([{
+    scheduled_at: '2026-07-01T08:00', medication_name: 'Aspirin', status: 'taken',
+    taken_at: '2026-07-01T08:05', dose_qty: 1, note: '',
+  }]);
+  const [head, row] = csv.split('\n');
+  assert.equal(head, '"scheduled_at","medication","status","taken_at","dose_qty","note"');
+  assert.ok(row.includes('"Aspirin"') && row.includes('"taken"'));
+});

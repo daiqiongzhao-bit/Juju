@@ -1,0 +1,482 @@
+/**
+ * Modul: Test-Infrastruktur - Harness der Dokument-Guards (Guard-Ebene 4)
+ *
+ * Zweck: einen echten Browser gegen eine echte Instanz fahren, damit Guards
+ *        messen koennen, was im gerenderten Dokument steht - nicht was im
+ *        Stylesheet geschrieben ist.
+ *
+ * WARUM EINE EIGENE EBENE (Redesign-Handoff §2, „vier Guard-Ebenen"):
+ * drei Befundklassen des Architektur-Audits 2026-08-07 sind im Quelltext
+ * unsichtbar und im Dokument offensichtlich.
+ *   - Ein Kontrastverstoss aus der KOMPOSITION zweier Regeln (ein
+ *     Nachfahren-Selektor greift in einen Knopf hinein) stand seit Runde 1
+ *     live bei 1.13:1. Der bestehende Token-Guard prueft Token-PAARE und kann
+ *     ihn prinzipiell nicht sehen.
+ *   - Ein Kopf-Ueberlauf von 79px war nur durch `overflow-x: hidden` verdeckt.
+ *   - Zielgroessen misst keine Textsuche.
+ * Alle drei fand ein Reviewer. Beim naechsten Mal ist kein Reviewer da.
+ *
+ * ABGRENZUNG ZU `npm test`: diese Suite haengt bewusst NICHT in der
+ * netzfreien Kette. Sie braucht einen Serverprozess und einen Browser; die
+ * uebrige Testinfrastruktur importiert Route-Handler direkt gegen
+ * In-Memory-SQLite und soll das bleiben. Der Suite-Registry-Guard
+ * (test-suite-chain.js) kennt diese Zweiteilung als REGEL: eine Suite, deren
+ * Datei `puppeteer` importiert, haengt in `test:document-guards` statt in
+ * `test`. Keine Namensausnahme.
+ *
+ * KEIN NETZZUGRIFF: der Server laeuft auf localhost gegen eine temporaere
+ * SQLite-Datei, der Service Worker wird im Testkontext abgeschaltet (sonst
+ * misst man den Shell-Cache statt der Aenderung).
+ *
+ * Aufruf ueber test/test-document-guards.js. Waehrend der Entwicklung kann
+ * `DOCUMENT_GUARDS_BASE_URL` auf einen bereits laufenden Preview-Server
+ * zeigen; dann entfaellt das Hochfahren samt Seed.
+ */
+
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import puppeteer from 'puppeteer';
+import { SETTINGS_LEAVES } from '../public/settings/registry.js';
+
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/** Die 16 Hauptrouten - dieselbe Liste, die capture.mjs und head-audit belegen. */
+export const ROUTES = {
+  dashboard: '/',
+  tasks: '/tasks',
+  calendar: '/calendar',
+  shopping: '/shopping',
+  meals: '/meals',
+  recipes: '/recipes',
+  pantry: '/pantry',
+  notes: '/notes',
+  contacts: '/contacts',
+  birthdays: '/birthdays',
+  budget: '/budget',
+  documents: '/documents',
+  health: '/health',
+  rewards: '/rewards',
+  housekeeping: '/housekeeping',
+  settings: '/settings',
+};
+
+/**
+ * Die Settings-Blaetter - ABGELEITET, nicht aufgezaehlt.
+ *
+ * `ROUTES` oben faehrt `/settings` und landet damit auf der Domaenen-Uebersicht.
+ * Dahinter liegen 23 Blaetter mit eigener Route, und keines davon hatte je eine
+ * Sonde gesehen: die Rechtevergabe, die Familienverwaltung, die API-Token, die
+ * Backup-Wiederherstellung und jedes Sync-Konto. Elf Sonden massen 16 Module und
+ * ein Uebersichtsraster.
+ *
+ * DIE QUELLE IST DIE REGISTRY, WEIL SIE DIE ROUTEN AUCH ERZEUGT: `router.js:84`
+ * baut die Routentabelle aus genau diesem Array. Eine Handliste hier wuerde beim
+ * naechsten IA-Umbau still veralten - und zwar in die falsche Richtung: ein neu
+ * dazugekommenes Blatt fiele lautlos aus jeder Messung, so wie es diese 23 zwoelf
+ * Sessions lang getan haben. Der Preis dafuer ist ein Import aus `public/` in den
+ * Testbaum, und den zahlt `test-settings-navigation.js` fuer dieselbe Quelle
+ * bereits.
+ *
+ * ES SIND ALLE 23, NICHT DIE OEFFENTLICHEN SIEBEN: der Harness meldet sich als
+ * `linda` an, und die ist im Seed `admin` (scripts/seed-demo.js:279). Ein
+ * nicht-administrativer Aufruf wuerde von `findSettingsLeaf` auf
+ * `/settings/personal/account` umgeleitet, und die Sonde maesse sechzehnmal
+ * dasselbe Konto-Formular, ohne es zu merken.
+ */
+export const SETTINGS_ROUTES = Object.freeze(Object.fromEntries(
+  SETTINGS_LEAVES.map((leaf) => [`settings/${leaf.id}`, leaf.path]),
+));
+
+/**
+ * Die Seiten VOR der Anmeldung.
+ *
+ * WARUM SIE EIGENS STEHEN: `ROUTES` oben sind angemeldete Zustaende, und
+ * `openPage` reicht dafuer ein Sitzungs-Cookie durch. Alle vier Guard-Ebenen
+ * und alle Sonden massen deshalb ausschliesslich die App hinter dem Login -
+ * der Erstkontakt und der Weg jedes neuen Familienmitglieds hatte nie eine
+ * Sonde gesehen (Audit 2026-08-08, P2-5).
+ *
+ * `offline.html` gehoert dazu: sie ist die Service-Worker-Huelle, laedt kein
+ * App-Stylesheet und faellt damit aus jeder anderen Pruefung heraus.
+ *
+ * Die Tokens sind Attrappen - beide Seiten rendern ihr Formular auch mit einem
+ * ungueltigen Token; geprueft wird die Struktur, nicht der Einloeseweg.
+ */
+export const ANON_ROUTES = {
+  login: '/login',
+  'forgot-password': '/forgot-password',
+  'reset-password': '/reset-password?token=demo-token-for-audit',
+  join: '/join?token=demo-token-for-audit',
+  setup: '/setup',
+  offline: '/offline.html',
+};
+
+export const DEVICES = {
+  desktop: { width: 1280, height: 900, deviceScaleFactor: 1, isMobile: false, hasTouch: false },
+  mobile: { width: 375, height: 812, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
+};
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function freePort() {
+  return new Promise((res, rej) => {
+    const srv = createServer();
+    srv.on('error', rej);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => res(port));
+    });
+  });
+}
+
+function run(cmd, args, env) {
+  return new Promise((res, rej) => {
+    const child = spawn(cmd, args, { cwd: REPO, env: { ...process.env, ...env }, stdio: 'ignore' });
+    child.on('error', rej);
+    child.on('exit', (code) => (code === 0 ? res() : rej(new Error(`${args[0]} exit ${code}`))));
+  });
+}
+
+async function waitForHttp(baseUrl, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const r = await fetch(`${baseUrl}/login`, { redirect: 'manual' });
+      if (r.status < 500) return;
+    } catch {
+      /* noch nicht oben */
+    }
+    await wait(200);
+  }
+  throw new Error(`Server auf ${baseUrl} kam nicht hoch`);
+}
+
+function startServer(dbPath, port) {
+  const child = spawn(process.execPath, ['server/index.js'], {
+    cwd: REPO,
+    env: {
+      ...process.env,
+      NODE_ENV: 'development',
+      DB_PATH: dbPath,
+      PORT: String(port),
+      BASE_URL: `http://127.0.0.1:${port}`,
+      SESSION_SECRET: 'document-guards-secret-0123456789abcdef',
+      // Der Login-Limiter laesst fuenf Versuche pro Minute zu. Das ist fuer die
+      // App richtig und fuer eine Suite, die mehrfach hintereinander laeuft,
+      // eine Fehlerquelle, die wie ein fehlender Seed aussieht.
+      RATE_LIMIT_MAX_ATTEMPTS: '1000',
+      // Hintergrundarbeit aus dem Messfenster halten.
+      DISABLE_BACKUP_SCHEDULER: '1',
+    },
+    stdio: 'ignore',
+  });
+  return child;
+}
+
+async function stopServer(child) {
+  if (!child || child.exitCode !== null) return;
+  await new Promise((res) => {
+    child.once('exit', res);
+    child.kill('SIGTERM');
+    setTimeout(() => {
+      child.kill('SIGKILL');
+      res();
+    }, 5000).unref?.();
+  });
+}
+
+/** Meldet sich einmal an und liefert die Session-Cookies als puppeteer-Objekte. */
+async function loginCookies(baseUrl) {
+  let res;
+  // Ein 429 ist hier kein Fehler der Suite, sondern der Nachhall eines
+  // vorherigen Laufs im selben Minutenfenster (fuenf Versuche pro IP). Beim
+  // eigenen Server ist der Limiter per Env hochgesetzt; gegen einen externen
+  // Preview-Server hilft nur kurz warten.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    res = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'linda', password: 'demo1234' }),
+    });
+    if (res.status !== 429) break;
+    await wait(8000);
+  }
+  if (!res.ok) {
+    throw new Error(
+      `Login als linda/demo1234 fehlgeschlagen (${res.status}) - ` +
+        `${res.status === 429 ? 'Login-Limiter, eine Minute warten' : 'Seed vorhanden?'}`,
+    );
+  }
+  const { hostname } = new URL(baseUrl);
+  return res.headers.getSetCookie().map((raw) => {
+    const [pair] = raw.split(';');
+    const idx = pair.indexOf('=');
+    return {
+      name: pair.slice(0, idx).trim(),
+      value: pair.slice(idx + 1).trim(),
+      domain: hostname,
+      path: '/',
+    };
+  });
+}
+
+/**
+ * Faehrt Server (falls noetig) und Browser hoch.
+ * @returns {Promise<{baseUrl: string, browser: import('puppeteer').Browser, close: () => Promise<void>}>}
+ */
+export async function startHarness() {
+  const external = process.env.DOCUMENT_GUARDS_BASE_URL;
+  let server = null;
+  let tmpDir = null;
+  let baseUrl = external;
+
+  if (!external) {
+    tmpDir = mkdtempSync(join(tmpdir(), 'yuvomi-document-guards-'));
+    const dbPath = join(tmpDir, 'guards.db');
+    const port = await freePort();
+    baseUrl = `http://127.0.0.1:${port}`;
+
+    // Erster Start migriert das leere Schema. Der Seed laeuft danach als
+    // eigener Prozess auf derselben Datei - deshalb muss der Server dafuer
+    // aus dem Weg sein, statt parallel auf die WAL zu schreiben.
+    const migrator = startServer(dbPath, port);
+    await waitForHttp(baseUrl);
+    await stopServer(migrator);
+
+    await run(process.execPath, ['scripts/seed-demo.js', '--db', dbPath, '--locale', 'de']);
+
+    server = startServer(dbPath, port);
+    await waitForHttp(baseUrl);
+  }
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  });
+
+  // EINMAL anmelden, Cookie an alle Seiten weiterreichen.
+  //
+  // WARUM NICHT PRO SEITE: `/api/v1/auth/login` haengt hinter einem Limiter mit
+  // fuenf Versuchen pro Minute. Eine Suite, die pro Sprache und pro
+  // Geraet-Theme-Paar neu anmeldet, faellt beim zweiten Lauf hintereinander in
+  // ihn hinein - und der Fehler sieht dann aus wie ein fehlender Seed.
+  const cookies = await loginCookies(baseUrl);
+
+  return {
+    baseUrl,
+    browser,
+    cookies,
+    async close() {
+      await browser.close();
+      await stopServer(server);
+      if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
+    },
+  };
+}
+
+/**
+ * Oeffnet eine angemeldete Seite in der gewuenschten Groessenklasse, Sprache
+ * und Farbwelt.
+ */
+export async function openPage(harness, { device = 'mobile', theme = 'light', locale = 'de' } = {}) {
+  const page = await harness.browser.newPage();
+  await page.setViewport(DEVICES[device]);
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
+
+  // Der Service Worker cacht die Shell. Ohne diese Abschaltung misst der Guard
+  // den Stand des letzten Laufs statt den der Arbeitskopie (Handoff §6).
+  //
+  // ABGESCHNITTEN, NICHT WEGDEFINIERT: ein `navigator.serviceWorker`, das
+  // `undefined` liefert, laesst die App beim Aufbau abstuerzen (sie haengt
+  // Listener daran) - die Seite blieb dann leer und die Sonden massen ein
+  // Dokument ohne Modul. Hier wird stattdessen die Datei nicht ausgeliefert;
+  // `register()` scheitert, und die App faengt das selbst ab.
+  await page.setRequestInterception(true);
+  page.on('request', (req) => {
+    if (new URL(req.url()).pathname === '/sw.js') req.abort();
+    else req.continue();
+  });
+
+  await page.setCookie(...harness.cookies);
+  // Nicht ueber `/login`: die angemeldete App leitet von dort sofort weiter, und
+  // die Weiterleitung zerreisst den Ausfuehrungskontext des naechsten
+  // `evaluate` („Execution context was destroyed"). Der Einstieg ist deshalb
+  // eine Route, die stehen bleibt.
+  await page.goto(`${harness.baseUrl}/`, { waitUntil: 'domcontentloaded' });
+  await page.evaluate(
+    ({ t, l }) => {
+      localStorage.setItem('yuvomi-locale', l);
+      localStorage.setItem('yuvomi-onboarded', '1');
+      localStorage.setItem('yuvomi-install-dismissed', String(Date.now()));
+      localStorage.setItem('yuvomi-theme', t);
+    },
+    { t: theme, l: locale },
+  );
+
+  page.__yuvomiBase = harness.baseUrl;
+  page.__yuvomiTheme = theme;
+  await gotoRoute(page, '/');
+  return page;
+}
+
+/** Wartet, bis die Route wirklich aufgebaut ist - nicht nur, bis der Pfad passt. */
+export async function settle(page) {
+  try {
+    await page.waitForFunction(
+      () => {
+        const loading = document.getElementById('app-loading');
+        const gone = !loading || loading.hidden || getComputedStyle(loading).display === 'none';
+        const main = document.getElementById('main-content');
+        return gone && main && main.children.length > 0;
+      },
+      { timeout: 15000 },
+    );
+  } catch {
+    /* Die Sonden melden ohnehin, wenn nichts zu messen war. */
+  }
+  // `main.children.length > 0` ist erfuellt, sobald der Modulkopf steht - die
+  // LISTEN holt das Modul danach per API nach. Wer nur darauf wartet, misst
+  // ein halbes Dokument: in einem Volllauf fehlten so die Einkaufszeilen, die
+  // Kalendertage und die Notizkarten, waehrend Kopf und Navigation da waren.
+  // Das ist kein Stale-Problem einer Ausnahmeliste, sondern eine Sonde, die
+  // einen Verstoss uebersehen kann (Session 11).
+  // Das Zeitbudget ist knapp bemessen, und zwar gemessen: mit 8000ms lief die
+  // Suite von 15s auf 153s je Locale, weil mindestens ein Modul dauerhaft
+  // pollt und die Ruhe nie eintritt - der Timeout wurde zur Regel statt zur
+  // Ausnahme. 2000ms kosten den Polling-Fall zwei Sekunden und geben allen
+  // anderen ihre Liste.
+  try {
+    await page.waitForNetworkIdle({ idleTime: 400, timeout: 2000 });
+  } catch {
+    /* Ein Modul mit dauerndem Polling erreicht nie Ruhe - dann zaehlt wait(). */
+  }
+  await wait(700);
+  // Der Aufruf faellt gelegentlich in eine Weiterleitung, die die App selbst
+  // ausloest („Execution context was destroyed"). Das ist kein Messfehler,
+  // sondern ein Rennen - der naechste Aufruf misst dieselbe Seite.
+  try {
+    await page.evaluate(() => document.querySelector('yuvomi-install-prompt')?.remove());
+  } catch {
+    await wait(500);
+  }
+}
+
+/**
+ * Navigiert auf eine Route und wartet den Aufbau ab.
+ *
+ * HART statt per pushState: die App legt keinen Navigations-Einstieg auf
+ * `window`, und ein blosses `popstate` baute die Zielseite messbar NICHT auf -
+ * der Pfad stimmte, die `.page-toolbar` blieb aus. Ein Guard, der auf der
+ * falschen Seite misst, ist schlimmer als keiner; der SPA-Fallback des Servers
+ * macht den harten Weg verlaesslich.
+ */
+export async function gotoRoute(page, path) {
+  await page.goto(`${page.__yuvomiBase}${path}`, { waitUntil: 'domcontentloaded' });
+  // Ein harter Ladevorgang setzt das Attribut zurueck, das der Theme-Umschalter
+  // sonst aus localStorage schreibt - hier wird es explizit nachgezogen.
+  try {
+    await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), page.__yuvomiTheme);
+  } catch {
+    /* Weiterleitung mitten im Aufruf; settle() wartet den Aufbau ohnehin ab. */
+  }
+  await settle(page);
+  await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), page.__yuvomiTheme);
+}
+
+/**
+ * Oeffnet eine Seite OHNE Sitzung - fuer die Zustaende vor der Anmeldung.
+ *
+ * Kein Cookie, kein Einstieg ueber `/`: beides wuerde die App genau von den
+ * Seiten wegleiten, um die es hier geht. `settle()` entfaellt aus demselben
+ * Grund - es wartet auf `#main-content` mit Kindern, und `offline.html` ist
+ * kein SPA-Dokument. Stattdessen wird auf den ersten stabilen Aufbau gewartet.
+ */
+export async function openAnonPage(harness, { device = 'mobile', theme = 'light' } = {}) {
+  const page = await harness.browser.newPage();
+  await page.setViewport(DEVICES[device]);
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: theme }]);
+  await page.setRequestInterception(true);
+  page.on('request', (req) => {
+    if (new URL(req.url()).pathname === '/sw.js') req.abort();
+    else req.continue();
+  });
+  page.__yuvomiBase = harness.baseUrl;
+  page.__yuvomiTheme = theme;
+  return page;
+}
+
+/** Navigiert eine anonyme Seite an und wartet, bis sie steht. */
+export async function gotoAnonRoute(page, path) {
+  await page.goto(`${page.__yuvomiBase}${path}`, { waitUntil: 'domcontentloaded' });
+  try {
+    await page.waitForFunction(
+      () => document.querySelector('h1, [role="heading"]') !== null,
+      { timeout: 15000 },
+    );
+  } catch {
+    /* Die Sonde meldet selbst, wenn nichts zu messen war. */
+  }
+  await wait(400);
+}
+
+/**
+ * Farb-Parser fuer BEIDE Notationen, die Chromium liefert.
+ *
+ * FALLE, die das Architektur-Audit selbst getroffen hat: `color-mix()` rendert
+ * als `color(srgb 0.4 0.2 0.8 / 0.16)`, nicht als `rgba()`. Ein naiver
+ * rgba-Parser meldet daraufhin Fehltreffer - im ersten Auditlauf zwei falsche
+ * AA-Befunde. Wer hier etwas ergaenzt, ergaenzt beide Notationen.
+ *
+ * @returns {[number, number, number, number]} r,g,b in 0..255, alpha 0..1
+ */
+export function parseColor(value) {
+  if (!value) return [0, 0, 0, 0];
+  const srgbMatch = value.match(/^color\(srgb\s+([^)]+)\)$/i);
+  if (srgbMatch) {
+    const parts = srgbMatch[1].split('/');
+    const rgb = parts[0].trim().split(/\s+/).map(Number);
+    const alpha = parts[1] === undefined ? 1 : parseFloat(parts[1]);
+    return [rgb[0] * 255, rgb[1] * 255, rgb[2] * 255, Number.isFinite(alpha) ? alpha : 1];
+  }
+  const rgbMatch = value.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgbMatch) {
+    const parts = rgbMatch[1].split(/[,\s/]+/).filter(Boolean).map(Number);
+    return [parts[0], parts[1], parts[2], parts[3] === undefined ? 1 : parts[3]];
+  }
+  if (value === 'transparent') return [0, 0, 0, 0];
+  return [0, 0, 0, 1];
+}
+
+const channel = (c) => {
+  const v = c / 255;
+  return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+};
+
+export function luminance([r, g, b]) {
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+export function contrastRatio(fg, bg) {
+  const l1 = luminance(fg);
+  const l2 = luminance(bg);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+
+/** Alpha-Komposition eines Vordergrunds auf einen deckenden Untergrund. */
+export function composite([r, g, b, a], base) {
+  if (a >= 1) return [r, g, b];
+  return [
+    r * a + base[0] * (1 - a),
+    g * a + base[1] * (1 - a),
+    b * a + base[2] * (1 - a),
+  ];
+}
+
+export function toHex([r, g, b]) {
+  const h = (v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0');
+  return `#${h(r)}${h(g)}${h(b)}`.toUpperCase();
+}

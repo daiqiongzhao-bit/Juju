@@ -1,0 +1,137 @@
+/* ------------------------------------------------------------------ */
+/* Avatar-Stack (Mehrfach-Zuweisung Anzeige)                           */
+/* ------------------------------------------------------------------ */
+
+.avatar-stack {
+  display: inline-flex;
+  align-items: center;
+  flex-direction: row-reverse;
+}
+
+.avatar-stack__item {
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-on-accent);
+  border: 2px solid var(--color-surface);
+  flex-shrink: 0;
+  margin-left: -6px;
+  overflow: hidden;
+}
+
+.avatar-stack__item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-stack__item:last-child {
+  margin-left: 0;
+}
+
+/* Der Grund ist ein Textton und kippt daher mit dem Theme (Light #6C6B67,
+ * Dark #AEADB0). Das feste Weiß aus .avatar-stack__item erreichte im Dark nur
+ * 2.23:1; --color-surface schaltet als Gegenstück mit und bleibt in beiden
+ * Themes der invertierte Ton. */
+.avatar-stack__overflow {
+  background-color: var(--color-text-secondary);
+  color: var(--color-surface);
+}
+
+/* ------------------------------------------------------------------ */
+/* User Multi-Select Widget                                             */
+/* ------------------------------------------------------------------ */
+
+.user-ms {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.user-ms__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Kompakte, umbrechende Auswahl-Chips statt scrollender Liste:
+ * eine bis zwei Zeilen für eine Familie, kein verschachtelter Scrollbalken. */
+.user-ms__option {
+  /* position:relative macht dieses Label zum Containing-Block der visuell
+   * versteckten, absolut positionierten Checkbox. Ohne das positioniert sich
+   * die Checkbox relativ zum nächsten positionierten Vorfahren (dem
+   * overflow:hidden .modal-panel); beim Antippen scrollt der Browser dann das
+   * Panel statt des Modal-Bodys in die Checkbox — es entsteht ein großer leerer
+   * Block und die folgenden Felder werden unerreichbar (#483, nur mobil). */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  user-select: none;
+  min-height: var(--target-md);
+}
+
+.user-ms__option:hover {
+  border-color: var(--color-text-secondary);
+}
+
+/* Aktiver Chip: Modul-Akzent (Aufgaben-Grün bzw. Kalender-Indigo). In einem
+ * Modal außerhalb der Modul-Seite trägt der Router --active-module-accent auf
+ * <html>; darum diese Variable zuerst lesen. */
+.user-ms__option:has(.user-ms__checkbox:checked) {
+  border-color: var(--active-module-accent, var(--module-accent, var(--color-accent)));
+  background: color-mix(in srgb, var(--active-module-accent, var(--module-accent, var(--color-accent))) var(--tint-state), transparent);
+}
+
+.user-ms__option:has(.user-ms__checkbox:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Checkbox visuell entfernen, aber fokussierbar/zugänglich lassen. */
+.user-ms__checkbox {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.user-ms__avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-on-accent);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.user-ms__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-ms__avatar--none {
+  background-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.user-ms__name {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}

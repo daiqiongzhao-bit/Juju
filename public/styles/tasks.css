@@ -1,0 +1,1160 @@
+/**
+ * Modul: Aufgaben (Tasks)
+ * Zweck: Styles für Listenansicht, Task-Cards, Subtasks, Filter-Panel, Modal
+ * Abhängigkeiten: tokens.css, layout.css
+ */
+
+/* --------------------------------------------------------
+ * Modul-Akzent
+ * -------------------------------------------------------- */
+.tasks-page { --module-accent: var(--module-tasks); }
+
+.modal-panel__body--tasks-fit {
+  flex: 0 1 auto;
+}
+
+/* --------------------------------------------------------
+ * Seiten-Layout
+ * -------------------------------------------------------- */
+/* Full-bleed-Root (Issue #577): das frühere max-width/margin:auto lag um den
+ * Kopf herum, wodurch dessen Akzentstreifen in der Fläche endete. Die
+ * Content-Spalte entsteht jetzt über --page-inline-pad auf den direkten
+ * Kindern; das Chrome der Toolbar läuft bis zur Shell-Kante. */
+
+.tasks-body {
+  padding-inline: var(--page-inline-pad);
+  padding-top: var(--space-4);
+  /* Freiraum für den schwebenden FAB (52px + Abstand), damit die letzte
+   * Karte nicht darunter verschwindet. */
+  padding-bottom: calc(var(--space-16) + var(--space-8));
+}
+
+@media (min-width: 1024px) {
+  .tasks-body {
+    padding-top: var(--space-8);
+    padding-bottom: calc(var(--space-16) + var(--space-6));
+  }
+}
+
+/* --------------------------------------------------------
+ * Header + Toolbar
+ * -------------------------------------------------------- */
+/* Gerüst (Shell, Titel, Actions) jetzt geteilt via .page-toolbar in layout.css.
+ *
+ * Die Sekundär-Controls lagen bis v1.35 mobil hinter einem <details>-Overflow
+ * ("Filter-Slider"). Genau dieses Muster wurde in Dokumente (#506) verworfen:
+ * es versteckt die Ansichts- und Gruppierungswahl hinter einem Klick, ohne
+ * ihren Zustand zu zeigen. Aufgaben folgt jetzt derselben Grammatik wie
+ * Dokumente und Kontakte — umbrechender Kopf (.page-toolbar--wrap) plus eine
+ * eigene, immer sichtbare Filterzeile darunter. */
+.tasks-toolbar__search {
+  max-width: 320px;
+}
+
+/* Hier stand ein Override auf --target-base. Er hat die Shell repariert, nicht
+ * das Modul: .btn--icon schaltete seine Größe nach der Viewport-Breite statt
+ * nach der Zeigerfähigkeit. Seit Phase 3c steht die eine Antwort in
+ * layout.css. */
+
+/* Sichtbarkeit wird per [hidden] geschaltet (Kanban blendet Gruppierung und
+ * Mehrfachauswahl aus). Ohne diese Regel gewinnt display:flex/inline-flex der
+ * Komponente gegen das Attribut. */
+.tasks-toolbar [hidden],
+.tasks-filters-row [hidden] {
+  display: none;
+}
+
+/* Filterzeile: Chips links, Gruppierungswahl rechts — dieselbe Aufteilung wie
+ * .documents-filters (Chips + .documents-filters__end). */
+.tasks-filters-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.tasks-filters-row .tasks-filters {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.tasks-filters__end {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+
+@media (max-width: 640px) {
+  /* Kompakter Kopf (Finish-Review Fundament-Phase): die Toolbar schob die
+   * erste Aufgabe unter die Falz. Eine Stufe weniger Vertikalraum je Naht. */
+  .tasks-body {
+    padding-top: var(--space-3);
+  }
+
+  .tasks-filters-row {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+    margin-bottom: var(--space-3);
+  }
+
+  /* Chips in EINER seitlich scrollbaren Reihe statt zwei umbrochenen Zeilen -
+   * dieselbe versteckte Scroll-Leiste wie .sub-tabs-bar und .contacts-filters.
+   * Die Tap-Fläche der Chips (--target-lg aus filter-chip.css) bleibt
+   * unangetastet, kein Chip schrumpft in der nowrap-Reihe.
+   *
+   * Scroll-Affordanz (Finish-Verdict Fundament-Phase, Neubefund c): die Reihe
+   * clippte hart mitten im Wort am Rand. Eine Fade-Mask an der Endkante zeigt
+   * „hier geht es weiter"; das gleich große End-Padding sorgt dafür, dass am
+   * Scroll-Ende der letzte Chip VOR der Fade-Zone steht und voll lesbar ist.
+   * Startkante bewusst ohne Fade (iOS-Verhalten, Ruhelage bleibt bündig). */
+  .tasks-filters-row .tasks-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-inline-end: var(--space-6);
+    -webkit-mask-image: linear-gradient(to right, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+    mask-image: linear-gradient(to right, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+  }
+
+  /* Achse gespiegelt, Werte gleich - Begruendung an den Basisregeln in
+     filter-chip.css. Die Endkante liegt in `ar` und `fa` links. */
+  [dir="rtl"] .tasks-filters-row .tasks-filters {
+    -webkit-mask-image: linear-gradient(to left, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+    mask-image: linear-gradient(to left, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+  }
+
+  .tasks-filters-row .tasks-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tasks-filters-row .tasks-filters > * {
+    flex-shrink: 0;
+  }
+
+  .tasks-filters__end {
+    margin-inline-start: 0;
+  }
+
+  /* Icon-only-Segmente (Ansichts-Umschalter im Kopf) brauchen weniger
+   * Innenraum als Text-Segmente - schmaleres Padding, damit Titel + Aktionen
+   * bei 375px in EINE Zeile passen (zusammen mit den engeren
+   * .page-toolbar-Nähten aus layout.css; Finish-Verdict Fix 6). Eigene
+   * Variante statt Toolbar-Selektor: der #577-Rail-Guard verbietet
+   * horizontales Padding unter Rail-Aliassen pauschal. */
+  .group-toggle--icons .group-toggle__btn {
+    padding-inline: var(--space-2);
+  }
+}
+
+
+/* Gruppierungs-Toggle */
+.group-toggle {
+  display: flex;
+  background-color: var(--color-surface-2);
+  border-radius: var(--radius-sm);
+  padding: var(--space-0h);
+  gap: var(--space-0h);
+}
+
+.group-toggle__btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  min-height: var(--target-lg);
+  cursor: pointer;
+}
+
+.group-toggle__btn:hover:not(.group-toggle__btn--active) {
+  color: var(--color-text-primary);
+}
+
+/* Aktiv: Modul-Akzent gefüllt - dieselbe Segment-Sprache wie
+ * .cal-toolbar__view-btn--active und .budget-tab--active (eine Sprache
+ * shell-weit, Finish-Review Fundament-Phase). */
+.group-toggle__btn--active {
+  background-color: var(--module-accent, var(--color-accent));
+  color: var(--color-ink-on-vivid);
+}
+
+/* --------------------------------------------------------
+ * Filter-Leiste
+ * -------------------------------------------------------- */
+.tasks-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-1);
+}
+
+/* Basis, Aktiv-Zustand und Glass-Variante von .filter-chip leben in der geteilten
+ * styles/filter-chip.css (global eingebunden). Hier bleiben nur die
+ * Tasks-spezifischen Erweiterungen. */
+
+.filter-chip--recent {
+  border-style: dashed;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+.filter-chip--recent:hover {
+  opacity: 1;
+  border-color: var(--module-accent, var(--color-accent));
+  color: var(--module-accent, var(--color-accent));
+}
+
+.filter-chip__remove {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background-color: var(--module-accent, var(--color-accent));
+  color: var(--color-ink-on-vivid);
+}
+
+/* Filter-Toggle-Button */
+.filter-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+  min-height: var(--target-lg);
+  flex-shrink: 0;
+}
+
+.filter-toggle-btn:hover,
+.filter-toggle-btn--open {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+.filter-toggle-btn--active {
+  border-color: var(--module-accent, var(--color-accent));
+  color: var(--module-accent, var(--color-accent));
+}
+
+.filter-toggle-btn__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  background-color: var(--module-accent, var(--color-accent));
+  color: var(--color-ink-on-vivid);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+/* Filter-Panel */
+.filter-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background-color: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.filter-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.filter-panel__label {
+  /* Typografie via .nav-section-label-Schicht (Sentence-Case, Critique P2) */
+  color: var(--color-text-secondary);
+}
+
+.filter-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.filter-panel__clear {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: var(--space-1);
+}
+
+.filter-panel__clear:hover {
+  color: var(--color-text-primary);
+}
+
+/* --------------------------------------------------------
+ * Gruppen-Überschriften
+ * -------------------------------------------------------- */
+.task-group {
+  margin-bottom: var(--space-6);
+}
+
+/* Der Träger der Zeilenliste ist die geteilte Gruppe aus list-row.css - mit
+ * ihrem Lesemaß. Das ist EIN Wert app-weit (Guard „die Küchen-Listen teilen
+ * eine Zeilen-Grammatik"), und die Aufgabenliste stand bisher als einzige
+ * Zeilenliste ungekappt bei 996px. Der Gruppenkopf fluchtet deshalb mit dem
+ * Träger, sonst stünde die Beschriftung breiter als das, was sie benennt. */
+.task-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+  padding: 0 var(--space-1);
+  max-width: var(--content-max-width-narrow);
+}
+
+.task-group__title {
+  /* Typografie via .nav-section-label-Schicht (Sentence-Case, Critique P2) */
+  color: var(--color-text-secondary);
+}
+
+.task-group__count {
+  font-size: var(--text-xs);
+  /* AA-lesbar auf --color-surface-2 (disabled/neutral-300 fiel durch — Critique) */
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+}
+
+/* --------------------------------------------------------
+ * Swipe-Wrapper - Task-spezifische Styles
+ * Basis-Styles (.swipe-row, .swipe-reveal und alle drei Reveal-Rollen)
+ * liegen in layout.css
+ * -------------------------------------------------------- */
+
+/* KEIN eigener Radius, KEIN eigener Abstand: beides gehört dem Träger
+ * (.list-rows), der die Wischfläche mit seinem overflow: hidden klippt.
+ * Das Touch-Feedback während der Geste trägt die geteilte Bühne
+ * (.swipe-row--swiping > :first-child in layout.css).
+ *
+ * KEIN `will-change: transform` mehr - auch das Compositor-Versprechen ist
+ * geteilt und hängt an der Geste (.swipe-row--armed). Hier stand es dauerhaft:
+ * 11 Aufgabenkarten gleichzeitig, 54 Ebenen und ~15,2 MB Ebenen-Speicher auf
+ * /tasks im Ruhezustand (Audit 2026-08-08, P2-1). */
+.swipe-row .task-card {
+  position: relative;
+  z-index: 1;
+}
+
+/* Swipe-Affordanz: der geteilte Chevron-Hint aus layout.css (.swipe-row::after)
+ * trägt den Hinweis - wie beim Einkauf. Der frühere grüne Streifen (v0.20)
+ * überschrieb auf Touch dasselbe Pseudoelement, ließ aber dessen
+ * translateY(-50%) stehen: der "volle" Streifen hing zur Hälfte über der
+ * Kartenoberkante und stand als grauer Splitter an der rechten Kante
+ * (Finish-Review Fundament-Phase). */
+
+/* --------------------------------------------------------
+ * Task-Card
+ * -------------------------------------------------------- */
+/* Zeile, keine Karte: KEINE eigene Fläche, KEIN Radius, KEIN Schatten, KEIN
+ * eigener Abstand. Das leistet alles der Träger (.list-rows), die Trennung
+ * seine Haarlinie `.list-rows > * + *`. Vorher war jede Aufgabe eine weiße
+ * Karte auf dem Grouped-Grund - das Karten-Paradigma, das der Einkauf in
+ * Runde 3 abgelegt hat und die Aufgaben behielten, weil der Zeilenlisten-Guard
+ * nur fand, wer die Regel schon befolgt. */
+.task-card {
+  transition: background-color var(--transition-fast);
+}
+
+.task-card:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.task-card--done {
+  opacity: 0.6;
+  transition: opacity var(--transition-base);
+}
+
+/* Abgelegt (#688): zurückgenommen wie „erledigt", aber ohne den Durchstrich -
+   die Aufgabe ist aus dem Lauf, nicht zwingend fertig. Der linke Streifen bleibt
+   die Priorität, deshalb tritt hier nur die Fläche zurück. */
+.task-card--archived {
+  opacity: 0.55;
+  background-color: var(--color-surface-2);
+}
+
+.task-card__archived {
+  color: var(--color-text-tertiary);
+}
+
+.task-card__main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+/* Gasse für den Wisch-Chevron (.swipe-row::after, layout.css): 8px Abstand vom
+ * Rand + 12px Glyph + 8px Luft. Der Einkauf reservierte sie an .shopping-item
+ * schon immer, die Aufgaben nicht - dort lag der Chevron über dem Zeilenende.
+ * Unauffällig unter 640px (Inline-Aktionen sind dort ausgeblendet), sichtbar
+ * auf Touch-Tablets zwischen 641 und 1023px, wo Chevron UND Inline-Aktionen
+ * gleichzeitig da sind. Ab 1024px blendet layout.css den Chevron aus, die
+ * Reserve kostet dort nichts, weil (hover: none) am Zeigergerät nicht greift. */
+@media (hover: none) {
+  .task-card__main {
+    padding-inline-end: calc(var(--space-2) + var(--space-3) + var(--space-2));
+  }
+}
+
+/* Status-Checkbox */
+.task-status-btn {
+  width: var(--target-base);
+  height: var(--target-base);
+  border-radius: var(--radius-full);
+  border: none;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: calc((var(--target-base) - var(--space-5)) / -2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.task-status-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: var(--target-base);
+  height: var(--target-base);
+}
+
+.task-status-btn::after {
+  content: '';
+  width: var(--space-5);
+  height: var(--space-5);
+  border-radius: var(--radius-full);
+  /* Kräftigerer Ring: das meistgenutzte Steuerelement der Zeile darf nicht
+   * das blasseste sein (vorher --color-border, im Dark Mode kaum sichtbar). */
+  border: 2px solid var(--color-text-tertiary);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.task-status-btn:hover::after {
+  border-color: var(--module-accent, var(--color-accent));
+}
+
+/* Auf Mobile trägt die Kategorie-Section-Überschrift die Kategorie bereits —
+ * das Inline-Label je Zeile ist dort redundant und kostet Platz. */
+@media (max-width: 640px) {
+  .task-card .task-card__meta .task-card__category {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------
+   Tags (#586)
+   Gespiegelte VTODO-CATEGORIES und lokal vergebene Etiketten. Bewusst leiser
+   als die Prioritäts-Badges: Tags ordnen, sie warnen nicht.
+   -------------------------------------------------------- */
+
+.task-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0h) var(--space-2);
+  border: var(--space-px) solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  /* Ein sehr langer Fremd-Tag darf die Zeile nicht sprengen. */
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Auf den Karten ist das Chip ein Button (Klick filtert). Die Button-Herkunft
+ * abräumen, damit es wie ein Etikett aussieht und nicht wie eine Schaltfläche -
+ * es ordnet, es ruft nicht zur Handlung auf. */
+.task-tag--filter {
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.task-tag--filter:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+/* Die Zusammenfassung ab dem vierten Tag ist kein Ziel: sie benennt keinen
+ * einzelnen Tag, auf den ein Klick filtern könnte. */
+.task-tag--more {
+  cursor: default;
+}
+
+/* Im Editor entfernt der Klick das Chip - dieselbe Aufräumarbeit, andere
+ * Bedeutung, daher die abweichende Hover-Farbe. */
+.task-tag--editable {
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.task-tag--editable:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.task-tags-editor__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* Nur wenn Chips da sind Abstand halten — sonst klafft über dem leeren Feld
+ * eine Lücke. */
+.task-tags-editor__chips:not(:empty) {
+  margin-bottom: var(--space-2);
+}
+
+.task-status-btn--done {
+  animation: check-pop var(--duration-md) var(--ease-out);
+}
+
+/* Skalierungs-Pops unter reduzierter Bewegung abschalten (Audit F-07);
+ * der Farbwechsel trägt das Feedback allein. */
+@media (prefers-reduced-motion: reduce) {
+  .task-status-btn--done,
+  .subtask-item__checkbox--done {
+    animation: none;
+  }
+}
+
+.task-status-btn--done::after {
+  border-color: var(--color-success);
+  background-color: var(--color-success);
+}
+
+.task-status-btn--in_progress {
+  border-color: transparent;
+}
+
+.task-status-btn--in_progress::after {
+  border-color: var(--color-warning);
+}
+
+.task-status-btn__check {
+  width: 12px;
+  height: 12px;
+  color: var(--color-ink-on-vivid);
+  display: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.task-status-btn--done .task-status-btn__check { display: block; }
+
+.task-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-card__title {
+  /* Typografie via .u-card-title.
+   * Ist ein <button>: der Titel öffnet die Aufgabe und muss fokussierbar sein.
+   * Die Reset-Regeln (font/border/background) kommen aus reset.css, hier nur
+   * die Block-Geometrie, damit der Button wie der frühere Div fließt. */
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: start;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-1);
+  cursor: pointer;
+  text-decoration: line-through;
+  text-decoration-color: transparent;
+  transition:
+    color var(--transition-fast),
+    text-decoration-color var(--transition-base);
+}
+
+.task-card--done .task-card__title {
+  color: var(--color-text-secondary);
+  text-decoration-color: var(--color-text-secondary);
+}
+
+.task-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.task-card__inline-action {
+  width: var(--target-base);
+  height: var(--target-base);
+  min-width: var(--target-base);
+  min-height: var(--target-base);
+  color: var(--color-text-tertiary);
+}
+
+.task-card__inline-action:hover,
+.task-card__inline-action:focus-visible {
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 640px) {
+  .task-card__main {
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  /* HIG-Dichte (Reminders-Muster): auf Touch KEINE Inline-Action-Buttons -
+   * Tippen öffnet die Lese-Ansicht (mit allen Aktionen), Wischen erledigt/
+   * bearbeitet. Drei 44px-Buttons pro Zeile quetschten den Titel auf ~115px
+   * und brachen jede Aufgabe zweizeilig um. */
+  .task-card__inline-action {
+    display: none;
+  }
+}
+
+/* Prioritäts-Badge */
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.priority-badge--low     { color: var(--color-priority-low);    background-color: var(--color-priority-low-bg); }
+.priority-badge--medium  { color: var(--color-priority-medium); background-color: var(--color-priority-medium-bg); }
+.priority-badge--high    { color: var(--color-priority-high);   background-color: var(--color-priority-high-bg); }
+.priority-badge--urgent  { color: var(--color-priority-urgent); background-color: var(--color-priority-urgent-bg); }
+
+.priority-dot {
+  width: var(--space-1);
+  height: var(--space-1);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.priority-dot--low    { background-color: var(--color-priority-low); }
+.priority-dot--medium { background-color: var(--color-priority-medium); }
+.priority-dot--high   { background-color: var(--color-priority-high); }
+.priority-dot--urgent { background-color: var(--color-priority-urgent); }
+
+/* Fälligkeitsdatum */
+.due-date {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.due-date--overdue { color: var(--color-danger); font-weight: var(--font-weight-semibold); }
+.due-date--today   { color: var(--color-warning); font-weight: var(--font-weight-semibold); }
+
+/* Avatar */
+.task-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-on-accent);
+  flex-shrink: 0;
+}
+
+/* Subtask-Fortschrittsbalken */
+/* <button>: klappt die Unteraufgaben auf. Als Div war die Liste (display:none)
+ * per Tastatur unerreichbar — es gab keinen anderen Öffner. */
+.subtask-progress {
+  padding: 0 var(--space-3) var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: start;
+  cursor: pointer;
+}
+
+.subtask-progress__bar-wrap {
+  flex: 1;
+  height: 4px;
+  background-color: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.subtask-progress__bar-fill {
+  height: 100%;
+  background-color: var(--color-success);
+  border-radius: var(--radius-full);
+  transform-origin: left;
+  transform: scaleX(var(--progress-scale, 0));
+  transition: transform var(--transition-slow);
+}
+
+.subtask-progress__text {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* Subtask-Liste (eingeklappt/ausgeklappt) */
+.subtask-list {
+  border-top: 1px solid var(--color-border-subtle);
+  padding: var(--space-2) var(--space-3);
+  display: none;
+}
+
+.subtask-list--visible { display: block; }
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.subtask-item:last-child { border-bottom: none; }
+
+.subtask-item__checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-xs);
+  border: 1.5px solid var(--color-border);
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.subtask-item__checkbox::before {
+  content: '';
+  position: absolute;
+  inset: -15px;
+}
+
+.subtask-item__checkbox--done {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  animation: check-pop var(--duration-sm) var(--ease-out);
+}
+
+.subtask-item__checkbox-icon {
+  width: 10px;
+  height: 10px;
+  color: var(--color-ink-on-vivid);
+}
+
+.subtask-item__title {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  flex: 1;
+}
+
+.subtask-item--done .subtask-item__title {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
+.subtask-item__add {
+  width: 100%;
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  background: none;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  margin-top: var(--space-2);
+  min-height: var(--target-lg);
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.subtask-item__add:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* --------------------------------------------------------
+ * Kanban-Board
+ * -------------------------------------------------------- */
+.kanban-board {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-items: start;
+  min-height: 60vh;
+}
+
+@media (min-width: 640px) {
+  .kanban-board {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.kanban-col {
+  background-color: var(--color-surface-2);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+}
+
+.kanban-col__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1.5px solid var(--color-border);
+}
+
+/* .kanban-col__title — Typografie via .nav-section-label-Schicht (Sentence-Case, Critique P2); Farbe inline (Spalten-Accent) */
+
+.kanban-col__count {
+  /* AA-lesbar (disabled/neutral-300 fiel durch — Critique) */
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+}
+
+.kanban-col__body {
+  flex: 1;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 80px;
+  transition: background-color var(--transition-fast);
+}
+
+.kanban-col__body--over {
+  background-color: var(--color-accent-light);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.kanban-card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-3);
+  cursor: grab;
+  user-select: none;
+  transition: box-shadow var(--transition-fast), opacity var(--transition-fast),
+              transform var(--transition-fast);
+}
+
+.kanban-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.kanban-card--dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+  transform: rotate(1.5deg);
+}
+
+.kanban-card--ghost {
+  position: fixed;
+  z-index: var(--z-drag);
+  pointer-events: none;
+  opacity: 0.88;
+  box-shadow: var(--shadow-xl);
+  transform: rotate(2deg) scale(1.03);
+  transition: none;
+}
+
+.kanban-card--done {
+  opacity: 0.6;
+}
+
+.kanban-card__title {
+  /* Typografie via .u-card-title.u-compact.
+   * <button>: einziger Tastaturzugang zu den Kartendetails — die Karte selbst
+   * ist ein Drag-Div und damit nicht fokussierbar. */
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: start;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.kanban-card--done .kanban-card__title {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
+.kanban-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.kanban-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+}
+
+.kanban-card__status-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast),
+              border-color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.kanban-card__status-btn:hover {
+  background-color: var(--color-accent-light);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.kanban-card__status-btn svg {
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+
+.kanban-drop-placeholder {
+  height: 60px;
+  border: 2px dashed var(--color-accent);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-accent-light);
+  opacity: 0.5;
+}
+
+/* Leere Spalte: ruhiger Hinweis, dass hier (noch) nichts liegt - statt einer
+ * stummen Lücke (Audit P3). Beim Ziehen einer Karte wird die Spalte zur sichtbaren
+ * Ablagefläche ("Hierher ziehen"), damit auch leere Spalten als Ziel erkennbar
+ * sind - die icon-only-Statusbuttons bleiben die tastaturfreundliche Alternative. */
+.kanban-col__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 64px;
+  padding: var(--space-3);
+  border: var(--space-px) dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+  transition: border-color var(--transition-fast), color var(--transition-fast),
+              background-color var(--transition-fast);
+}
+
+.kanban-col__empty-drop {
+  display: none;
+}
+
+/* Während ein Karten-Drag läuft: leere Spalten laden aktiv zum Ablegen ein.
+ * Modul-Akzent (grün auf der Aufgaben-Seite), damit die Affordanz zur restlichen
+ * Modulfarbe passt statt zum globalen Akzent. */
+.kanban-board--dragging .kanban-col__empty {
+  border-color: var(--module-accent, var(--color-accent));
+  color: var(--module-accent, var(--color-accent));
+  background-color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-state), transparent);
+}
+
+.kanban-board--dragging .kanban-col__empty-idle {
+  display: none;
+}
+
+.kanban-board--dragging .kanban-col__empty-drop {
+  display: inline;
+}
+
+/* --------------------------------------------------------
+   Bulk selection
+   -------------------------------------------------------- */
+
+.task-bulk-checkbox {
+  width: var(--target-base);
+  height: var(--target-base);
+  min-width: var(--target-base);
+  min-height: var(--target-base);
+  margin-right: var(--space-2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.bulk-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.bulk-actions-bar[hidden] {
+  display: none;
+}
+
+.bulk-actions-bar--active {
+  border-color: var(--module-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.bulk-actions-bar__count {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.bulk-actions-bar__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.bulk-actions-bar__actions .btn {
+  min-height: var(--target-base);
+}
+
+@media (max-width: 640px) {
+  .bulk-actions-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulk-actions-bar__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Hinweistext unter Formularfeldern im Aufgaben-Modal (z. B. Punkte). */
+.task-field-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* Verknüpfte Dokumente im Aufgaben-Modal (#503). */
+.task-documents__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.task-documents__empty {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.task-doc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+}
+
+.task-doc-chip__icon {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+}
+
+.task-doc-chip__name {
+  overflow: hidden;
+  max-width: 16rem;
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.task-doc-chip__name:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.task-doc-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.375rem;
+  height: 1.375rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.task-doc-chip__remove:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-danger);
+}
+
+/* Büroklammer-Badge auf der Aufgabenkarte (Anzahl verknüpfter Dokumente). */
+.task-card__docs {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0h);
+}

@@ -1,0 +1,225 @@
+/* --------------------------------------------------------
+   Generischer Category-Manager (<yuvomi-category-manager>)
+   Wiederverwendbare Web-Component, eingesetzt in Budget, Contacts
+   und Tasks. Die Styles liegen bewusst global (in index.html
+   verlinkt), nicht page-scoped: der Router laedt pro Seite nur EIN
+   Page-CSS, daher wuerden die als <button> gerenderten Namen sonst
+   auf Browser-Default (schwarze Schrift, im Dark Mode unleserlich)
+   zurueckfallen, sobald die Component ausserhalb der Settings-Seite
+   geoeffnet wird.
+   -------------------------------------------------------- */
+
+.cat-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cat-row {
+  display: flex;
+  /* Umbruch erlauben: bei Gruppen mit Subkategorien (Budget-Ausgaben) hängt die
+     .cat-sublist als direktes Kind in dieser Flex-Zeile. Ohne wrap würde sie zum
+     Flex-Geschwister neben Name/Aktionen und den Namen auf 0px quetschen (der
+     ganze Zeileninhalt läuft dann horizontal aus dem Modal — #569). Mit wrap +
+     flex-basis:100% an der Sublist bricht diese sauber auf eine eigene, volle
+     Zeile unter den Zeileninhalt um (die beabsichtigte Einrückung). */
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.cat-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.cat-row__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.cat-row__name,
+.cat-subrow__name {
+  /* Als <button> gerendert (tastaturbedienbares Umbenennen) — auf Text zurücksetzen. */
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  text-align: start;
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cat-row__name:hover,
+.cat-subrow__name:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.cat-row__name:focus-visible,
+.cat-subrow__name:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-xs);
+}
+
+.cat-row__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* Häufigkeit im Tag-Manager (<yuvomi-tag-manager>). Leiser als der Name: sie
+   ordnet die Liste, sie ist nicht ihr Inhalt. */
+.cat-row__count {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.cat-add-form {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.cat-add-form .form-input {
+  flex: 1;
+}
+
+.cat-manager__title {
+  margin: 0 0 var(--space-1);
+}
+
+.cat-manager__hint {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+}
+
+.cat-group {
+  margin-bottom: var(--space-5);
+}
+
+.cat-group__title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.cat-sublist {
+  list-style: none;
+  margin: var(--space-1) 0 0 var(--space-6);
+  padding: 0;
+  /* Volle Zeilenbreite erzwingen, damit die Sublist im umbrechenden .cat-row
+     (flex-wrap:wrap) auf eine eigene Zeile unter Name/Aktionen fällt statt sie
+     seitlich zu verdrängen (#569). flex-shrink greift und passt sie inkl.
+     margin-left in die Modalbreite ein. */
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cat-subrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.cat-subrow:hover {
+  background: var(--color-surface-hover);
+}
+
+.cat-subadd-form {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 0 var(--space-6);
+}
+
+.cat-subadd-form .form-input {
+  flex: 1;
+}
+
+/* --------------------------------------------------------
+   Drag-and-Drop-Sortierung (SortableJS, /utils/sortable.js)
+   Drag ist nie der einzige Weg: die Auf/Ab-Buttons bleiben sichtbar und
+   tastaturbedienbar. Der Handle ist bewusst kein <button> (kein Tab-Stop,
+   keine Enter/Space-Aktion) - role="img" + aria-label machen ihn für
+   Screenreader-Nutzer:innen dennoch wahrnehmbar, ohne eine Aktion vorzutäuschen,
+   die Drag ohnehin nicht per Tastatur ausführen kann.
+   -------------------------------------------------------- */
+
+.cat-row__handle,
+.cat-subrow__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* Greifzone auf ein komfortables Touch-Ziel vergrößern: die Zeile ist durch die
+     48px-Icon-Buttons ohnehin hoch, align-self:stretch nutzt sie als volle
+     vertikale Greifhöhe (die Zieh-Achse) ohne Layout-Änderung; min-height sichert
+     ein 40px-Ziel auch in kürzeren Zeilen. Breiteres Inline-Padding gibt horizontal
+     Fläche, das negative Inline-Margin hält das Icon in Flucht mit dem Zeilenrand. */
+  align-self: stretch;
+  min-height: var(--target-md);
+  padding-inline: var(--space-2);
+  margin-inline: calc(var(--space-1) * -1);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-quaternary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.cat-row__handle:hover,
+.cat-subrow__handle:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-hover);
+}
+
+.cat-row.sortable-chosen .cat-row__handle,
+.cat-subrow.sortable-chosen .cat-subrow__handle {
+  cursor: grabbing;
+}
+
+.cat-row.sortable-ghost,
+.cat-subrow.sortable-ghost {
+  opacity: 0.4;
+  background: var(--glass-bg-card-hover);
+}
+
+.cat-row.sortable-chosen,
+.cat-subrow.sortable-chosen {
+  background: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-state), var(--color-surface));
+}
+
+.cat-row.sortable-drag,
+.cat-subrow.sortable-drag {
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-glass-inner);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cat-row,
+  .cat-subrow {
+    transition: none;
+  }
+}

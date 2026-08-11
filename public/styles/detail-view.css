@@ -1,0 +1,302 @@
+/* ================================================================
+ * Detail-/Vorschauansicht (components/detail-view.js)
+ *
+ * Die Leseansicht einer bestehenden Entität. Sie erfindet nichts: Der
+ * Farbstreifen kommt aus dem alten Termin-Popup, die Metazeile aus
+ * `.calendar-meta-item`, Fußzeile und Buttons sind die des Modals. Neu ist nur
+ * der Wechsel selbst - die Karte wächst von Inhalts- auf Formularhöhe, statt zu
+ * springen.
+ *
+ * Geteilte Komponente, also in der Shell (index.html) eingebunden: Der Router
+ * lädt genau ein Seiten-CSS pro Seite, und diese Ansicht gehört mehreren.
+ * ================================================================ */
+
+/* --------------------------------------------------------
+ * Lesekörper
+ * -------------------------------------------------------- */
+
+.detail-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Farbstreifen: die Kalender-/Modulfarbe als schmale Kante oben. Bewusst eine
+ * eigene Fläche und keine dicke Seitenlinie - die verbietet DESIGN.md, und sie
+ * würde die Zeilen einrücken, die darunter ohnehin eine Icon-Spalte führen. */
+.detail-view__accent {
+  height: var(--space-0h);
+  border-radius: var(--radius-full);
+  background-color: var(--detail-accent, var(--active-module-accent, var(--color-accent)));
+  flex-shrink: 0;
+}
+
+.detail-view__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* --------------------------------------------------------
+ * Metazeile: Icon · Label · Wert
+ * -------------------------------------------------------- */
+
+.detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.detail-row__icon {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+  /* Optische Grundlinie: das Icon sitzt auf der Höhe des Labels, nicht des
+   * Zeilenkastens - sonst hängt es bei mehrzeiligen Werten oben in der Luft. */
+  margin-top: var(--space-0h);
+}
+
+.detail-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  min-width: 0;
+  flex: 1;
+  /* Werte nehmen ihre eigene Breite, nicht die der Zeile: Ein Badge oder Chip
+   * würde sonst über die ganze Karte gezogen und läse sich wie ein Fortschritts-
+   * balken. Langer Text bleibt davon unberührt - er läuft bis zum Rand und
+   * bricht dort um. */
+  align-items: flex-start;
+}
+
+.detail-row__label {
+  font-size: var(--type-caption);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+}
+
+.detail-row__value {
+  font-size: var(--type-body);
+  color: var(--color-text-primary);
+  /* Lange Werte (Orte, URLs) brechen um, statt die Karte zu sprengen. */
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+/* Beschreibungen und andere Fließtexte: Zeilenumbrüche der Quelle behalten,
+ * damit eine notierte Adresse ihre Zeilen behält. */
+.detail-row--multiline .detail-row__value {
+  white-space: pre-wrap;
+  text-wrap: pretty;
+}
+
+/* Zeilen, die statt Text eine Gruppe tragen (Chips, Badges, Anhang). */
+.detail-chips.detail-row__value {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* --------------------------------------------------------
+ * Teilaufgaben
+ *
+ * Abhakbar, nicht nur lesbar (#671). Hier stand bis v1.78.0 die Annahme, die
+ * Leseansicht brauche keinen Schalter, weil "das die Liste tut, die sie ohnehin
+ * führt". Die Liste tut es - aber hinter einem eingeklappten Fortschrittsbalken,
+ * den ein Melder nicht als Zugang erkannt hat: er legte eine Teilaufgabe an, sah
+ * sie in der Detailansicht und kam nirgends mehr an sie heran. Ein Stand, der
+ * sichtbar ist, muss dort auch änderbar sein.
+ * -------------------------------------------------------- */
+
+.detail-subtasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.detail-subtask {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  /* Button-Reset: die Zeile ist ein <button>, damit Tastatur und Screenreader
+     denselben Weg haben wie der Zeigefinger. */
+  width: 100%;
+  min-height: var(--target-base);
+  padding: var(--space-1) var(--space-2);
+  margin-inline: calc(var(--space-2) * -1);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.detail-subtask:hover {
+  background: var(--color-surface-2);
+}
+
+.detail-subtask:focus-visible {
+  outline: var(--focus-ring-width) solid var(--active-module-accent, var(--color-accent));
+  outline-offset: var(--focus-ring-offset);
+}
+
+.detail-subtask:disabled {
+  cursor: progress;
+}
+
+.detail-subtask i {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.detail-subtask--done {
+  color: var(--color-text-tertiary);
+  text-decoration: line-through;
+}
+
+.detail-subtask--done i {
+  color: var(--color-success);
+}
+
+/* --------------------------------------------------------
+ * Anhang
+ * -------------------------------------------------------- */
+
+/* Die Bildvorschau ist die Ausnahme von der Inhaltsbreite oben: Sie nutzt die
+ * ganze Karte, sonst stünde ein kleines Bild verloren am linken Rand. */
+.detail-attachment--image {
+  align-self: stretch;
+}
+
+.detail-attachment--image img {
+  width: 100%;
+  max-height: calc(var(--space-16) * 3);
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: var(--space-px) solid var(--color-border-subtle);
+}
+
+.detail-attachment--file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-base);
+  color: var(--active-module-accent, var(--color-accent));
+}
+
+/* --------------------------------------------------------
+ * Fußzeile: Objektaktionen
+ * -------------------------------------------------------- */
+
+/* Eine Aktion, die links steht (Löschen), schiebt den Rest nach rechts -
+ * dasselbe Muster wie in den Formular-Fußzeilen der Module. */
+.detail-view__action--start {
+  margin-right: auto;
+}
+
+/* --------------------------------------------------------
+ * Pane-Wechsel Detail ↔ Formular
+ * -------------------------------------------------------- */
+
+/* Höhenübergang der Karte. Die Klasse setzt detail-view.js nur für die Dauer
+ * des Wechsels, damit `height` sonst frei bleibt und das Sheet weiterhin auf
+ * Inhaltshöhe schrumpft.
+ *
+ * ENTSCHIEDEN, bitte nicht neu aufmachen: Ja, das animiert eine Layout-
+ * Eigenschaft, und ja, Linter melden das. Hier ist es gewollt. Es ist genau EIN
+ * Element, genau einmal pro Moduswechsel, 200 ms lang. Die üblichen Auswege
+ * scheiden aus: `transform: scaleY()` verzerrt den Inhalt, und
+ * `grid-template-rows` verlangte einen Umbau von `.modal-panel` (Flex-Spalte mit
+ * scrollendem Body), der jedes Modal der App beträfe. Der Sprung ohne Übergang
+ * wäre die einzige echte Alternative, und er lässt den Moduswechsel wie einen
+ * Seitenwechsel aussehen statt wie zwei Seiten derselben Karte.
+ *
+ * Wer diesen Übergang trotzdem entfernen will, entfernt auch die Regel unten im
+ * prefers-reduced-motion-Block und `withHeightTransition` in detail-view.js -
+ * die Funktion misst sonst zweimal die Panelhöhe für nichts. */
+.modal-panel--resizing {
+  transition: height var(--duration-md) var(--ease-out);
+}
+
+@keyframes detail-pane-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.detail-pane--enter {
+  animation: detail-pane-enter var(--duration-md) var(--ease-out);
+}
+
+/* --------------------------------------------------------
+ * Popover-Variante (ab 768px, mit Anker)
+ * -------------------------------------------------------- */
+
+.detail-popover {
+  position: fixed;
+  z-index: calc(var(--z-modal) - 1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: calc(var(--space-16) * 4);
+  max-width: calc(var(--space-16) * 5);
+  /* Höhengrenze mit demselben Rand, den positionPopover() in detail-view.js
+   * einhält (POPOVER_MARGIN = 8px = --space-2). Die Leseansicht ist gegenüber
+   * dem alten Termin-Popup gewachsen - Wiederholung, Erinnerungen und
+   * Sichtbarkeit kamen hinzu. Ohne Grenze läuft die Karte auf einem kurzen
+   * Fenster unten aus dem Bild, und mit ihr die Fußzeile, in der „Bearbeiten"
+   * und „Löschen" stehen; es bliebe nur Escape. */
+  max-height: calc(100dvh - 2 * var(--space-2));
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border: var(--space-px) solid var(--glass-border-subtle);
+  border-radius: var(--radius-glass-card);
+  box-shadow: var(--glass-shadow-lg);
+  /* Dauer und Kurve einzeln, NICHT über --transition-*: Diese Tokens sind
+   * transition-Kurzformen („150ms ease") und brächten in einer animation-
+   * Kurzform eine zweite Timing-Funktion mit. Die Deklaration wäre ungültig und
+   * fiele stillschweigend auf animation: none zurück. */
+  animation: detail-pane-enter var(--duration-sm) var(--ease-out);
+}
+
+/* Nur die Zeilen scrollen; Titel und Fußzeile bleiben stehen. Dieselbe
+ * Aufteilung, die .modal-panel im Sheet-Modus ohnehin hat. */
+.detail-popover > .detail-view {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+
+.detail-popover__title {
+  font-size: var(--type-card-title);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  text-wrap: balance;
+}
+
+/* Im Popover trägt die Karte die Trennlinie schon selbst nicht - die Fußzeile
+ * bekommt ihre eigene, damit die Aktionen vom Inhalt abgesetzt sind. */
+.detail-popover__footer {
+  border-top: var(--space-px) solid var(--glass-border-subtle);
+  padding-top: var(--space-3);
+  margin-top: var(--space-1);
+  gap: var(--space-2);
+}
+
+/* --------------------------------------------------------
+ * Bewegungsreduktion
+ * -------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-popover,
+  .detail-pane--enter {
+    animation: none;
+  }
+
+  .modal-panel--resizing {
+    transition: none;
+  }
+}

@@ -1,0 +1,160 @@
+/**
+ * Module: Shared filter chips
+ * Purpose: One chip vocabulary for every module's filter row.
+ *
+ * Vorher definierten Tasks (.filter-chip), Kontakte (.contact-filter-chip) und
+ * Dokumente (.documents-filter-chip) drei nahezu identische Chips nebeneinander.
+ * Tasks und Dokumente teilen sich jetzt diese Datei. Kontakte behalten ihren
+ * eigenen Selektor (eigene Zeilen-Geometrie), fahren aber seit dem HIG-Rollout
+ * denselben Aktiv-Zustand: 18 % Fläche / 50 % Kante / 70 % Tinte. Ihre frühere
+ * deckende Füllung las sich wie ein aktives Segment, und die gefüllte Kapsel
+ * gehört seit Runde 1 den Segmenten.
+ *
+ * Reihenfolge-Hinweis: global NACH glass.css eingebunden, damit die bestehende
+ * Tasks-Darstellung unverändert bleibt.
+ */
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  /* Benannt statt `all`: der Chip wechselt auf Hover und im Aktivzustand genau
+   * diese drei. `all` zieht implizit auch Layout-Properties mit (Critique
+   * 2026-07-30). */
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  min-height: var(--target-lg);
+}
+
+.filter-chip:hover:not(.filter-chip--active) {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+/* Aktiv-Text nach der Konvention "Akzent-Text auf akzent-getöntem Grund"
+ * (dokumentiert in tokens.css, Abschnitt Modul-Akzente), nicht als roher
+ * Akzent: der Chip-Grund ist selbst eine Tönung derselben Farbe, dadurch hing
+ * der Kontrast allein an der Akzent-Helligkeit (tasks 3.60:1, notes 3.57:1).
+ * Füllung und Rahmen bleiben unberührt, der Chip behält seine Modulfarbe.
+ *
+ * Die Werte (18 % Fläche, 50 % Kante) standen bis zum HIG-Rollout in einem
+ * @supports-Zwilling, der zusätzlich blur-xs und einen Specular-Inset auflegte
+ * - Glas auf einem INHALTS-Element und damit gegen die Glas-ist-Chrome-Regel.
+ * Weil jeder Browser mit backdrop-filter ohnehin diesen Zweig sah, sind seine
+ * Farbwerte hier der Bestand; nur Blur und Specular sind weg. */
+.filter-chip--active {
+  background-color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-state), transparent);
+  border-color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-hint), transparent);
+  color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-ink), var(--color-text-primary));
+}
+
+/* Dichtere Variante für Filterzeilen mit vielen Chips (Dokumente). Das Touch-Maß
+ * hängt an (hover: none) statt an der Viewport-Breite: ein Tablet im Hochformat
+ * (768–1023px) ist Touch und bekam über eine reine max-width-Regel sonst
+ * 32px-Chips — unter dem 44pt-Minimum. */
+.filter-chip--sm {
+  min-height: var(--target-md);
+}
+
+@media (hover: none) {
+  .filter-chip--sm {
+    min-height: var(--target-base);
+  }
+}
+
+/* Trefferzahl im Chip: macht vor dem Klick sichtbar, ob sich der Filter lohnt. */
+.filter-chip__count {
+  min-width: 1.25em;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* --------------------------------------------------------
+ * Scroll-Affordanz für horizontal scrollende Leisten (Audit F-06)
+ *
+ * Geteilte Konvention: wireScrollFade (utils/ux.js) setzt has-fade-start/-end,
+ * solange links/rechts Inhalt verborgen liegt — der weiche Anriss ersetzt den
+ * bewusst versteckten Scrollbalken (Chip-Zeilen, Tab-Leisten, Personen-Chips).
+ * Vertikale Sonderfälle (Sidebar) überschreiben die Maske spezifischer.
+ *
+ * WARUM DIE LANGEN LISTEN KEINEN Y-FADE BEKOMMEN (geprüft 2026-07-30): Der
+ * Critique merkte an, dass die drei vertikalen Küchen-Scroller (#items-list,
+ * #pantry-list, die Rezeptliste) keinen Fade tragen, obwohl `wireScrollFade` einen
+ * `axis: 'y'`-Modus hat. Das ist Absicht.
+ *
+ * Der horizontale Fade existiert, weil horizontaler Überlauf NICHT erwartet wird
+ * und der Scrollbalken hier versteckt ist - ohne Anriss sieht eine Chip-Leiste aus
+ * wie eine vollständige Chip-Leiste. Vertikaler Überlauf ist die Grundannahme jeder
+ * Liste; die Geste ist dieselbe wie für die ganze Seite, und auf dem Desktop steht
+ * ein Scrollbalken daneben.
+ *
+ * Der Preis wäre real: die Maske dämpft die OBERSTE und UNTERSTE sichtbare Zeile -
+ * also genau die Artikelnamen, für deren Lesbarkeit dieser Umbau die
+ * Ellipsen abgeschafft und die FAB-Gasse zurückgebaut hat. Symmetrie der Mechanik
+ * ist kein Grund, Lesbarkeit einzutauschen.
+ * -------------------------------------------------------- */
+.has-fade-end {
+  mask-image: linear-gradient(to right, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+  -webkit-mask-image: linear-gradient(to right, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+}
+
+.has-fade-start {
+  mask-image: linear-gradient(to right, transparent, var(--mask-opaque) var(--space-6));
+  -webkit-mask-image: linear-gradient(to right, transparent, var(--mask-opaque) var(--space-6));
+}
+
+.has-fade-start.has-fade-end {
+  mask-image: linear-gradient(to right, transparent, var(--mask-opaque) var(--space-6), var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, var(--mask-opaque) var(--space-6), var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+}
+
+/* SPIEGELUNG FÜR RTL. `has-fade-start` heisst „am ANFANG geht es weiter" - in
+ * `ar` und `fa` (die App setzt `dir=rtl`) liegt der Anfang rechts. Ein
+ * Verlauf kennt keine logische Richtung: `to right` bleibt physisch, also
+ * fadete die Leiste dort die falsche Kante - sichtbare Chips wurden gedämpft,
+ * verborgene hart abgeschnitten. Die Werte sind dieselben, nur die Achse dreht.
+ * Nur `to left` statt einer eigenen Rezeptur, damit die beiden nicht driften. */
+[dir="rtl"] .has-fade-end {
+  mask-image: linear-gradient(to left, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+  -webkit-mask-image: linear-gradient(to left, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+}
+
+[dir="rtl"] .has-fade-start {
+  mask-image: linear-gradient(to left, transparent, var(--mask-opaque) var(--space-6));
+  -webkit-mask-image: linear-gradient(to left, transparent, var(--mask-opaque) var(--space-6));
+}
+
+[dir="rtl"] .has-fade-start.has-fade-end {
+  mask-image: linear-gradient(to left, transparent, var(--mask-opaque) var(--space-6), var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+  -webkit-mask-image: linear-gradient(to left, transparent, var(--mask-opaque) var(--space-6), var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+}
+
+/* --------------------------------------------------------
+ * Scroll-Polster für jede Leiste mit Rand-Fade (HIG-Rollout Runde 3).
+ *
+ * Die Maske sagt „hier geht es weiter"; sie sagt nicht, wo eine Leiste zum
+ * Stehen kommt. Ohne Polster hält `scrollIntoView({ inline: 'nearest' })` das
+ * angesteuerte Element bündig an der Kante und schneidet den Nachbarn
+ * wortmittig ab - genau das, was die Fade-Maske verdecken sollte (gefunden an
+ * der Personen-Chipreihe der Gesundheit, mobil).
+ *
+ * Der Marker `u-scroll-fade` kommt aus wireScrollFade (utils/ux.js), nicht aus
+ * dem Markup: so gilt diese Regel für JEDE Leiste, die den geteilten Helfer
+ * nutzt, statt für eine Liste von Modulen. Die Lehre der Küchen-
+ * Zusammenführung, wörtlich angewandt.
+ * -------------------------------------------------------- */
+.u-scroll-fade {
+  scroll-padding-inline: var(--space-6);
+}

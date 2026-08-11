@@ -1,0 +1,103 @@
+/* --------------------------------------------------------
+   Modul: Erinnerungen (Reminders)
+   Zweck: Bell-Badge in der Navigation, Reminder-Toast-Styling
+   -------------------------------------------------------- */
+
+/* Bell-Badge: Rote Zahl über dem Bell-Icon */
+.nav-item--reminder {
+  position: relative;
+}
+
+.reminder-bell-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-priority-urgent);
+  /* Dieselbe Falle wie beim Akzent: --color-priority-urgent ist im Light ein
+   * tiefes Rot, im Dark ein helles Rosé. Weiss trug dort 1,90:1 auf der Zahl
+   * im Badge. */
+  color: var(--color-ink-on-vivid);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Reminder-Toast: Bell-Icon + Textblock */
+.toast--reminder {
+  gap: var(--space-2, 8px);
+  cursor: pointer;
+  padding-right: var(--space-2, 8px);
+}
+
+.toast__reminder-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--module-reminders);
+}
+
+.toast__reminder-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--space-0h);
+  min-width: 0;
+}
+
+.toast__reminder-text strong {
+  font-size: var(--text-xs, 0.75rem);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  opacity: 0.7;
+}
+
+.toast__reminder-text span {
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Reminder-Abschnitt in Modals */
+.reminder-section {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4, 16px);
+  margin-top: var(--space-4, 16px);
+}
+
+.reminder-section__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin-bottom: var(--space-3, 12px);
+}
+
+.reminder-section__title {
+  color: var(--color-text-primary);
+}
+
+.reminder-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.reminder-fields .modal-grid {
+  align-items: end;
+}
+
+.reminder-custom {
+  margin-top: var(--space-3);
+}
+
+.reminder-custom[hidden] {
+  display: none !important;
+}

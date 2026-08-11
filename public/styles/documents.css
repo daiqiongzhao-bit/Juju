@@ -1,0 +1,1471 @@
+/**
+ * Module: Family Documents
+ * Purpose: Documents page layout, cards, list rows and upload modal controls.
+ */
+
+.documents-page {
+  --module-accent: var(--module-documents);
+  /* Full-bleed-Root (Issue #577): Content-Spalte über --page-inline-pad auf den
+   * direkten Kindern, damit das Chrome des Kopfes bis zur Shell-Kante läuft. */
+}
+
+/* Modale, Viewer und Popover rendern auf Body-Ebene — also AUSSERHALB von
+ * .documents-page. Dort war --module-accent leer, wodurch jede darauf gebaute
+ * Deklaration ungültig wurde: die Dropzone blieb grau, ihr Fokusring fiel ganz
+ * aus (ungültiges outline → outline-style: none), Icon-Flächen verloren ihre
+ * Tönung. Der Router hält den aktiven Akzent global auf :root vor; hier wird er
+ * für diese Flächen zurück auf den erwarteten Namen gelegt. */
+.document-form,
+.document-viewer,
+.dms-results,
+.dms-result,
+.documents-context-menu {
+  --module-accent: var(--active-module-accent, var(--module-documents));
+}
+
+/* Gerüst (Shell + Titel) jetzt geteilt via .page-toolbar in layout.css.
+ * Damit wird der Documents-Kopf wie alle anderen sticky und nutzt --color-bg. */
+/* Layout only — control visual lives in page-search.css (shared). */
+.documents-toolbar__search {
+  flex: 1;
+  min-width: 180px;
+}
+
+.documents-view-toggle {
+  display: inline-flex;
+  padding: var(--space-0h);
+  gap: var(--space-0h);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-work);
+}
+
+.documents-view-toggle__btn {
+  width: var(--target-base);
+  height: var(--target-base);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: calc(var(--radius-full) - 2px);
+  color: var(--color-text-secondary);
+}
+
+.documents-view-toggle__btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* Aktiv: Modul-Akzent gefüllt + --color-ink-on-vivid - die eine Segment-Sprache
+ * der Shell (DESIGN.md „Segmented Controls"). Vorher: erhabene Glas-Kachel mit
+ * Akzent-Glyph - Glas-Material auf einem Inhalts-Control und zugleich die
+ * zweite Segment-Optik neben der Tab-Leiste desselben Moduls. */
+.documents-view-toggle__btn--active {
+  color: var(--color-ink-on-vivid);
+  background: var(--module-accent, var(--color-accent));
+}
+
+/* Eigene Filterzeile unter dem Kopf (wie Kontakte): Status- + Kategorie-Chips
+ * scrollen gemeinsam horizontal, statt in die Kopfzeile gequetscht zu werden.
+ * Das behebt das Überlappen/Abschneiden auf Desktop (Issue #506). */
+/* Die Filterzeile selbst scrollt NICHT — nur ihre Kategorie-Facette tut das
+ * (siehe .documents-filter-chips). Ein einziger Scroller statt verschachtelter
+ * hält Status-Umschalter, Sortierung und Auswahl immer sichtbar. */
+.documents-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  padding-inline: var(--page-inline-pad);
+  border-bottom: 1px solid var(--color-border);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.documents-filter-group {
+  display: inline-flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* Die Kategorie-Facette scrollt horizontal in EINER Zeile — auf jedem Gerät.
+ * Vorher brach sie auf Desktop um und wuchs unbegrenzt: bei schmalem Fenster
+ * stapelten sich 15 Chips auf 8 Zeilen (461px), das erste Dokument lag unter der
+ * Falz. Eine Zeile plus Rand-Fade hält die Kopfzone konstant hoch. */
+.documents-filter-chips {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.documents-filter-chips::-webkit-scrollbar { display: none; }
+
+.documents-filters__end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.documents-sort {
+  width: auto;
+  min-height: var(--target-md);
+  font-size: var(--text-sm);
+}
+
+/* Rand-Fade für horizontal scrollende Leisten (Kategorie-Chips + Ordner-Chips):
+ * geteilte has-fade-*-Masken aus filter-chip.css, verdrahtet via wireScrollFade
+ * (utils/ux.js, Audit F-06) — die frühere lokale is-scrollable/is-at-end-
+ * Konvention ist darin aufgegangen. */
+
+/* --------------------------------------------------------
+ * Auswahl-Modus (Bulk)
+ * -------------------------------------------------------- */
+.documents-selectbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  padding-inline: var(--page-inline-pad);
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-wash), var(--color-bg));
+  flex-wrap: wrap;
+}
+
+/* `.btn`/`.documents-selectbar` setzen ein eigenes display und schlagen damit
+ * das UA-`[hidden] { display: none }`. Ohne diesen Guard blieb der DMS-Button
+ * sichtbar, obwohl gar kein DMS-Konto konfiguriert ist. */
+.documents-selectbar[hidden],
+.documents-dms-link-btn[hidden] {
+  display: none;
+}
+
+.documents-selectbar__count {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.documents-selectbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+  flex-wrap: wrap;
+}
+
+.document-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+  cursor: pointer;
+}
+
+.document-select input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--module-accent);
+  cursor: pointer;
+}
+
+/* Die RASTERKARTE traegt ihre Auswahl als Ring - sie ist ein eigenes Objekt mit
+ * eigener Kante. Die ZEILE hat beides nicht mehr und traegt sie als getoente
+ * Flaeche: dasselbe Vokabular wie jeder andere ausgewaehlte Zustand der App
+ * (§2, getoente Flaeche statt Kante). Ein Ring um eine Zeile in einer Liste
+ * malte ihr die Karte zurueck, die sie gerade abgegeben hat. */
+.document-card.is-selected {
+  border-color: var(--module-accent);
+  box-shadow: 0 0 0 1px var(--module-accent), var(--shadow-md);
+}
+
+.document-row.is-selected {
+  background-color: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface));
+}
+
+.documents-browser-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+  padding-inline: var(--page-inline-pad);
+  padding-bottom: calc(var(--nav-bottom-height) + var(--space-8));
+}
+
+.documents-folder-browser {
+  position: sticky;
+  top: var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.documents-folder-browser__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.documents-folder-browser__title {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Freistehendes Ziel im Kopf der Ordnerliste - kein gleichartiges Ziel engt es
+ * ein, also die volle Zielgröße (tokens.css, „Die Zielgrößen-Regel").
+ * --target-sm ist laut Token ausdrücklich „kein Touch-Target": 32x32 am Zeiger,
+ * beide Achsen unter dem Minimum. --target-base löst zugleich den Finger-Fall,
+ * den der @media-(hover:none)-Block unten bisher nachtragen musste. */
+.documents-folder-browser__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--target-base);
+  height: var(--target-base);
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  color: var(--module-accent);
+  transition: background-color var(--transition-fast);
+}
+
+.documents-folder-browser__add:hover {
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+}
+
+.documents-folder-browser__add svg {
+  width: 18px;
+  height: 18px;
+}
+
+.documents-folder-browser__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+.documents-folder-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.documents-folder-item__select {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-base);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.documents-folder-item:hover,
+.documents-folder-item--active {
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+}
+
+.documents-folder-item:hover .documents-folder-item__select,
+.documents-folder-item--active .documents-folder-item__select {
+  color: var(--module-accent);
+}
+
+/* Overflow-Kebab: dezent, erscheint bei Hover/Fokus; auf Touch stets sichtbar. */
+.documents-folder-item__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--target-sm);
+  height: var(--target-sm);
+  margin-right: var(--space-0h);
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  color: var(--color-text-tertiary);
+  opacity: 0;
+  /* Unsichtbar heisst auch unklickbar: ohne pointer-events bleibt hier ein
+   * volles Trefferziel stehen, das niemand sieht (Guard
+   * `verborgene Reveal-Aktionen bleiben nicht klickbar`, test-frontend-audit.js). */
+  pointer-events: none;
+  transition: opacity var(--transition-fast), color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.documents-folder-item__menu svg {
+  width: 16px;
+  height: 16px;
+}
+
+.documents-folder-item:hover .documents-folder-item__menu,
+.documents-folder-item:focus-within .documents-folder-item__menu {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.documents-folder-item__menu:hover {
+  color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+}
+
+/* Touch: den Kebab auf Finger-Maße heben. Er ist ein REIHEN-Ziel (je Ordnerzeile
+ * einer, 8px Abstand zum nächsten) und hält damit am Zeiger schon mit 32x32 die
+ * Regel - am Finger fehlt ihm die Fläche trotzdem. Der Ordner-Hinzufügen-Knopf
+ * steht hier nicht mehr: er trägt seit Phase 3c --target-base und bekommt seine
+ * 48px damit aus demselben Token wie alle anderen. */
+@media (hover: none) {
+  .documents-folder-item__menu {
+    opacity: 1;
+    pointer-events: auto;
+    width: var(--target-lg);
+    height: var(--target-lg);
+  }
+
+  .documents-context-menu__item {
+    min-height: var(--target-lg);
+  }
+
+  .document-member-option {
+    min-height: var(--target-base);
+  }
+}
+
+/* Natives Popover für Ordner- & Dokument-Aktionen: rendert im Top-Layer, daher
+ * kein Clipping durch Chip-Leiste oder Sidebar. inset/margin überschreiben die
+ * UA-Zentrierung, die Position setzt JS (positionContextMenu). */
+.documents-context-menu {
+  position: fixed;
+  margin: 0;
+  inset: auto;
+  z-index: var(--z-dropdown);
+  min-width: 184px;
+  flex-direction: column;
+  gap: var(--space-0h);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.documents-context-menu:popover-open {
+  display: flex;
+}
+
+.documents-context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target-md);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.documents-context-menu__item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.documents-context-menu__item:hover,
+.documents-context-menu__item:focus-visible {
+  background: var(--color-surface-2);
+}
+
+.documents-context-menu__item--danger,
+.documents-context-menu__item--danger svg {
+  color: var(--color-danger);
+}
+
+/* Auf der Tönung trägt --color-danger nur 4,45:1 - deshalb hier der Ink-Ton
+ * (5,69:1), wie auf jeder anderen -light-Fläche der App. Das svg braucht den
+ * eigenen Selektor, weil die Basisregel oben spezifischer ist. */
+.documents-context-menu__item--danger:hover,
+.documents-context-menu__item--danger:focus-visible {
+  background: var(--color-danger-light);
+  color: var(--color-danger-ink);
+}
+
+.documents-context-menu__item--danger:hover svg,
+.documents-context-menu__item--danger:focus-visible svg {
+  color: var(--color-danger-ink);
+}
+
+.documents-folder-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.documents-folder-item__icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.documents-folder-item__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documents-folder-item__count {
+  min-width: 24px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.documents-folder-item--active .documents-folder-item__count {
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), var(--color-surface));
+  color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-ink), var(--color-text-primary));
+}
+
+.documents-list {
+  min-width: 0;
+}
+
+.documents-empty-state {
+  min-height: calc(var(--target-lg) * 4);
+}
+
+.documents-empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* minmax so gewählt, dass jede Karte die schlanke Aktionszeile
+ * (Ansehen · Download · Kebab) ohne Umbruch trägt. */
+.documents-list--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: var(--space-4);
+}
+
+/* Lade-Zustand: Grid/Flex aufheben, damit die geteilte Skeleton-Liste
+ * full-width erscheint — eine Lade-Sprache über alle Module. */
+.documents-list[aria-busy="true"] {
+  display: block;
+}
+
+/* Die LISTENANSICHT ist eine Zeilenliste, keine Kartenspalte: der Träger ist die
+ * eine randlose Karte, die Zeilen darin sind flächenlos und trennen sich über
+ * den `+`-Kombinator. Die RASTERANSICHT darüber bleibt ein Raster aus Objekten
+ * mit eigenem Medium - das ist die benannte Ausnahme der Regel, und dieselbe
+ * Datei zeigt damit beide Antworten nebeneinander. */
+.documents-list--list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Hinweis: die glass-* Tokens lösen für diese Datenkarten bewusst zu OPAKEN
+ * Werten auf (--glass-bg-card == --color-surface im Basistheme). Der DESIGN.md-Ban
+ * „kein backdrop-filter auf Datenkarten" bleibt gewahrt — hier wird nur die
+ * geteilte Karten-Vokabel genutzt, KEIN Blur. Kein backdrop-filter ergänzen. */
+.document-card {
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+}
+
+/* `:not(.is-selected)` ist hier kein Feinschliff: beide Regeln setzen dieselbe
+ * Eigenschaft mit gleicher Spezifitaet, und diese steht spaeter - ohne den
+ * Ausschluss verschwaende der Hover die Auswahl, solange der Zeiger draufsteht. */
+.document-row:not(.is-selected):hover {
+  background-color: var(--color-surface-hover);
+}
+
+/* Inhaltsgetriebene Höhe statt fixer min-height: kompaktere Karten, weniger
+ * Leerraum. In mehrspaltigen Grids gleichen sich Karten je Reihe automatisch an
+ * (align-items: stretch); body { flex: 1 } hält die Aktionen unten bündig. */
+.document-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+}
+
+.document-card__icon,
+.document-row__icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+}
+
+.document-card__icon svg,
+.document-row__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* DMS-Thumbnail-Vorschau (Issue #533): das geladene Bild überlagert den
+   Kategorie-Glyph im Icon-Slot. Schlägt das Laden fehl, bleibt der Glyph. */
+.document-thumb {
+  position: relative;
+  overflow: hidden;
+}
+
+.document-thumb__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.document-thumb__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--color-surface-2);
+  transition: transform var(--transition-base);
+}
+
+/* Die ganze Karte ist bereits Klick-Ziel (cursor: pointer). Sobald ein Thumbnail
+   geladen ist, quittiert der Slot den Hover mit einem sanften Zoom - eine kleine
+   Bestätigung, dass diese Vorschau die Karte öffnet. Kein eigener Cursor nötig. */
+.document-thumb--ready:hover .document-thumb__img {
+  transform: scale(1.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .document-thumb__img {
+    transition: none;
+  }
+  .document-thumb--ready:hover .document-thumb__img {
+    transform: none;
+  }
+}
+
+.document-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.document-card__date {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.document-card__body {
+  flex: 1;
+  margin-top: var(--space-3);
+}
+
+.document-card__title,
+.document-row__title {
+  margin: 0;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.document-card__description {
+  min-height: 42px;
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.document-card__meta,
+.document-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.document-card__meta span,
+.document-row__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.document-card__meta svg,
+.document-row__meta svg {
+  width: 13px;
+  height: 13px;
+}
+
+.document-card__actions,
+.document-row__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Karten-Aktionen: zentriert, mit Trennlinie oben */
+.document-card__actions {
+  justify-content: center;
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* Vier Spalten: Icon, Titel/Meta, Datum+Größe, Aktionen. Die Stats-Spalte macht
+ * aus der Liste eine echte Liste — vorher trug sie weniger Information als die
+ * Rasterkarte (kein Datum) bei gleichzeitig viel totem Weißraum. */
+.document-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.document-row__body {
+  min-width: 0;
+}
+
+.document-row__stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.documents-danger {
+  color: var(--color-danger);
+}
+
+.document-form__hint {
+  margin-top: var(--space-1);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.document-member-picker {
+  margin-top: var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background-color: var(--color-surface);
+}
+
+.document-member-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.document-member-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Bis Tablet: Ordner-Browser als horizontale Chip-Leiste statt fixer Seitenspalte,
+ * damit das Dokument-Grid die volle Breite bekommt (zwei komfortable Spalten auf
+ * Tablet statt einer schmalen). Das Sekundär-Steuerungs-Dropdown bleibt davon
+ * unberührt — es klappt erst ab ≤767px zum Slider-Menü auf. */
+@media (max-width: 1023px) {
+  .documents-browser-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .documents-folder-browser {
+    position: static;
+    width: 100%;
+  }
+
+  .documents-folder-browser__list {
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .documents-folder-browser__list::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Rand-Fade übernehmen die geteilten has-fade-*-Masken (filter-chip.css). */
+  .documents-folder-item {
+    min-width: 160px;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Titel + Ansicht-Umschaltung teilen sich Zeile 1 (Aktionen rechtsbündig via
+   * page-toolbar__actions), die Suche rutscht über page-toolbar--wrap auf Zeile 2.
+   * Folgt dem page-toolbar-Muster: Titel links, Aktion rechts. */
+  .documents-toolbar .page-toolbar__title {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Chip-Höhe kommt aus .filter-chip--sm (an `hover: none` gekoppelt, nicht an
+   * der Breite) — deckt damit auch Tablets zwischen 768 und 1023px ab. */
+
+  /* Sortierung und Auswahl rutschen mobil unter die Chips, statt die Zeile zu
+   * sprengen; die Filterzeile darf dafür als einzige umbrechen. */
+  .documents-filters {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  .documents-filters__end {
+    margin-inline-start: 0;
+    padding-inline-start: 0;
+    border-inline-start: none;
+  }
+
+  .documents-filter-chips {
+    order: 3;
+    flex-basis: 100%;
+    padding-inline-start: 0;
+    border-inline-start: none;
+  }
+
+  .documents-selectbar__actions {
+    margin-inline-start: 0;
+    width: 100%;
+  }
+
+  /* „Aus DMS verknüpfen" fällt mobil zum kompakten Icon-Button zusammen
+   * (Text via aria-label/title erhalten), damit er die Kopfzeile nicht
+   * sprengt und neben der Ansicht-Umschaltung gleich groß sitzt (#523).
+   * Das ist der Musterfall der LABEL-VERLUST-REGEL (Runde 6, Phase 3b): Form
+   * der Familie, Zielgröße `--target-base`, Zustand über Fläche und Icon. */
+  .documents-dms-link-btn {
+    width: var(--target-base);
+    height: var(--target-base);
+    padding: 0;
+    flex-shrink: 0;
+    justify-content: center;
+  }
+
+  .documents-dms-link-btn__label {
+    display: none;
+  }
+
+  .document-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  /* Datum/Größe rücken neben den Titel-Block, die Aktionen in eine eigene Zeile. */
+  .document-row__stats {
+    grid-column: 2;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    justify-content: flex-start;
+  }
+
+  .document-row__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .documents-empty-state__actions {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
+  .documents-empty-state {
+    min-height: auto;
+    gap: var(--space-2);
+    padding-block: var(--space-4);
+  }
+
+  .documents-empty-state .empty-state__icon {
+    width: var(--target-lg);
+    height: var(--target-lg);
+  }
+
+  .documents-empty-state__actions {
+    margin-top: var(--space-2);
+  }
+
+  .documents-empty-state__actions .btn {
+    min-height: var(--target-base);
+    padding-inline: var(--space-2);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+}
+
+/* --------------------------------------------------------
+ * Document Card / Row – klickbar
+ * -------------------------------------------------------- */
+.document-card,
+.document-row {
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.document-card:hover {
+  background-color: var(--color-surface-hover);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.document-row:hover {
+  background-color: var(--color-surface-hover);
+  box-shadow: var(--shadow-md);
+}
+
+/* Buttons innerhalb von Karten/Zeilen: Cursor zurücksetzen */
+.document-card .btn,
+.document-row .btn,
+.document-card a,
+.document-row a {
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------
+ * Document Viewer
+ * -------------------------------------------------------- */
+.document-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  min-height: 0;
+}
+
+.document-viewer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.document-viewer__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.document-viewer__meta svg {
+  width: 13px;
+  height: 13px;
+}
+
+.document-viewer__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.document-viewer__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--space-4);
+}
+
+/* PDF-Canvas-Stapel scrollt über den Modal-Body (einziger Scroller); daher hier nicht
+   vertikal zentrieren, sondern von oben stapeln. */
+.document-viewer__body:has(.document-viewer__pdf-pages) {
+  display: block;
+  padding-top: var(--space-3);
+}
+
+.document-viewer__image {
+  display: block;
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  border-radius: var(--radius-glass-inner);
+  box-shadow: var(--glass-shadow-md);
+}
+
+.document-viewer__pdf {
+  width: 100%;
+  height: 65vh;
+  border: none;
+  border-radius: var(--radius-glass-inner);
+  background: var(--color-surface-2);
+}
+
+/* pdf.js-Canvas-Vorschau (mobile Browser ohne nativen Inline-PDF-Viewer): Seitenstapel, der
+   NICHT selbst scrollt (verschachtelte Scroller vermeiden) -> der Modal-Body ist der Scroller. */
+.document-viewer__pdf-pages {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1);
+  border-radius: var(--radius-glass-inner);
+  background: var(--color-surface-2);
+}
+
+.document-viewer__pdf-pages:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Sichtbarer Seitenindikator ("n von total"), klebt beim Scrollen oben am Modal-Body.
+   Rein visuell (aria-hidden); die vorlesbare Info liegt in der Live-Region. */
+.document-viewer__pdf-indicator {
+  position: sticky;
+  top: var(--space-2);
+  z-index: 1;
+  align-self: center;
+  margin-bottom: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-surface-2) 88%, transparent);
+  box-shadow: var(--glass-shadow-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* Blur nach der Architekturregel aus dem Kopf von glass.css: INNERHALB von
+ * @supports und zweizweigig. Er stand bis 2026-08-09 einzweigig und ohne
+ * Rahmen mitten in der Regel darüber - in Safari < 18 blieb der Indikator
+ * damit ohne Glas, und ausgerechnet dort ist er sticky über laufendem Text. */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .document-viewer__pdf-indicator {
+    backdrop-filter: var(--blur-xs);
+    -webkit-backdrop-filter: var(--blur-xs);
+  }
+}
+
+.document-viewer__pdf-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+/* Seiten-Wrapper: reserviert Höhe via aspect-ratio (inline gesetzt), trägt Rahmen/Schatten,
+   zeigt bis zum Lazy-Render einen dezenten Platzhalter. */
+.document-viewer__pdf-page {
+  width: 100%;
+  line-height: 0;
+  border-radius: var(--radius-glass-inner);
+  box-shadow: var(--glass-shadow-md);
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+
+.document-viewer__pdf-page:empty {
+  background: var(--color-surface-2);
+  animation: documents-pdf-placeholder 1.4s ease-in-out infinite;
+}
+
+@keyframes documents-pdf-placeholder {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .document-viewer__pdf-page:empty {
+    animation: none;
+  }
+}
+
+.document-viewer__pdf-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Inline-Fehlerzustand einer einzelnen Seite (statt endlosem Platzhalter-Puls). */
+.document-viewer__pdf-page-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.document-viewer__pdf-page-error svg {
+  width: 22px;
+  height: 22px;
+  color: var(--color-warning);
+}
+
+.document-viewer__text {
+  width: 100%;
+  max-height: 65vh;
+  overflow: auto;
+  padding: var(--space-4);
+  border-radius: var(--radius-glass-inner);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.document-viewer__unsupported {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.document-viewer__unsupported-icon {
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-glass-inner);
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+  color: var(--module-accent);
+  flex-shrink: 0;
+}
+
+.document-viewer__unsupported-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.document-viewer__unsupported-title {
+  color: var(--color-text-primary);
+}
+
+.document-viewer__unsupported-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  max-width: 320px;
+}
+
+.document-viewer__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.document-viewer__spinner {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  animation: documents-spin 800ms linear infinite;
+}
+
+@keyframes documents-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .document-viewer__spinner {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------
+   DMS Link Modal
+   -------------------------------------------------------- */
+
+.dms-account-select {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--space-3);
+}
+
+/* .form-hint ist nur in der page-scoped settings.css gestylt und fehlt hier
+   (Dokumente-Seite lädt sie nicht). Ohne diese Regel fielen der ASN-Hinweis und
+   die „Keine Treffer"-Meldungen im DMS-Modal auf den schwarzen Browser-Default
+   zurück. Kein display setzen, damit [hidden] am Hinweis weiter greift. */
+.dms-search-hint,
+.dms-results .form-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.dms-search-hint {
+  margin: var(--space-2) 0 0;
+}
+
+.dms-results {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.dms-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+/* Seitenformat statt Briefmarke (Issue #536): 40px zeigten nur einen grauen
+   Fleck. 72x96 im Papierverhältnis macht Kopfzeile, Logo und Betreff erkennbar,
+   ohne die Trefferliste aufzublähen. */
+.dms-result__media {
+  position: relative;
+  flex: 0 0 auto;
+  width: 72px;
+  height: 96px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+  color: var(--module-accent);
+}
+
+.dms-result__media svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Dokumente werden von oben gelesen: der Kopf der Seite bleibt sichtbar,
+   abgeschnitten wird unten. */
+.dms-result__thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--color-surface-2);
+}
+
+@media (max-width: 640px) {
+  .dms-result__media {
+    width: 56px;
+    height: 76px;
+  }
+}
+
+/* Ist die Vorschau ein Link ins DMS, taucht beim Hover/Fokus ein Öffnen-Symbol
+   über der Kachel auf - eine kleine Belohnung dafür, dass die Vorschau mehr kann
+   als nur zeigen (Issue #533). */
+.dms-result__media--link,
+.dms-result__media--action {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.dms-result__media--action:disabled {
+  cursor: default;
+}
+
+.dms-result__open {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  /* Unsichtbar heisst auch unklickbar: ohne pointer-events bleibt hier ein
+   * volles Trefferziel stehen, das niemand sieht (Guard
+   * `verborgene Reveal-Aktionen bleiben nicht klickbar`, test-frontend-audit.js). */
+  pointer-events: none;
+  color: var(--color-surface);
+  background: color-mix(in srgb, var(--color-text-primary) 52%, transparent);
+  transition: opacity var(--transition-fast);
+}
+
+.dms-result__open svg {
+  width: 20px;
+  height: 20px;
+}
+
+.dms-result__media--link:hover .dms-result__open,
+.dms-result__media--link:focus-visible .dms-result__open,
+.dms-result__media--action:not(:disabled):hover .dms-result__open,
+.dms-result__media--action:not(:disabled):focus-visible .dms-result__open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dms-result__media--link:focus-visible,
+.dms-result__media--action:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dms-result__open {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------
+   Große DMS-Vorschau über dem Auswahl-Modal (Issue #536)
+   -------------------------------------------------------- */
+
+.dms-preview {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-modal) + 1);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--color-overlay);
+}
+
+.dms-preview__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(560px, 100%);
+  max-height: 90vh;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.dms-preview__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dms-preview__title {
+  margin: 0;
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.dms-preview__close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.dms-preview__close:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+}
+
+.dms-preview__close svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Die Vorschau darf wachsen, aber nie über das Panel hinaus - deshalb scrollt
+   die Fläche selbst, statt das ganze Panel zu sprengen. */
+.dms-preview__figure {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.dms-preview__img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.dms-preview__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.dms-result__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dms-result__title {
+  display: block;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dms-result__sub {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------
+   DMS External Badge
+   -------------------------------------------------------- */
+
+.doc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+}
+
+.doc-badge--dms {
+  background: var(--color-info-light);
+  color: var(--color-info-ink);
+}
+
+.doc-badge--webdav {
+  background: var(--color-success-light);
+  color: var(--color-success-ink);
+}
+
+/* Google Drive: eigener Violett-Tint, klar getrennt vom Info-Blau des DMS-Badges,
+   damit "wo liegt diese Datei" auf einen Blick lesbar bleibt. */
+.doc-badge--google-drive {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.doc-badge--unavailable {
+  background: var(--color-danger-light);
+  color: var(--color-danger-ink);
+}
+
+/* Local folder storage: neutral, distinct from the semantic-colored backends. */
+.doc-badge--folder {
+  background: var(--color-border-subtle);
+  color: var(--color-text-primary);
+}
+
+.document-storage-target {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  flex-wrap: wrap;
+}
+
+/* Deep-Link in die (admin-only) Speicher-Einstellungen — bisher war das Ziel von
+ * der Dokumente-Seite aus überhaupt nicht verlinkt. */
+.document-storage-target__link {
+  color: var(--module-accent);
+  font-size: var(--text-xs);
+  text-decoration: underline;
+}
+
+/* Fehlerzeile der DMS-Suche: eigener Zustand mit Retry, klar getrennt von
+ * „keine Treffer" (das ist eine Antwort, kein Fehler). */
+.dms-results__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-light);
+  color: var(--color-danger-ink);
+  font-size: var(--text-sm);
+}
+
+/* --------------------------------------------------------
+   DMS Viewer Deep-Link
+   -------------------------------------------------------- */
+
+.doc-viewer__dms-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}

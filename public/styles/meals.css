@@ -1,0 +1,1140 @@
+/**
+ * Modul: Essensplan (Meals)
+ * Zweck: Styles für Wochenansicht, Mahlzeit-Karten, Zutaten-Liste, Modal
+ * Abhängigkeiten: tokens.css, layout.css
+ */
+
+/* --------------------------------------------------------
+ * Modul-Akzent
+ *
+ * --module-kitchen, nicht --module-meals: die vier Küchen-Tabs sind EIN Modul
+ * mit einem Sidebar-Eintrag und teilen deshalb einen Akzent (Begründung am
+ * Token in tokens.css). --module-meals bleibt für Dashboard-Widget und
+ * Nav-Icon bestehen.
+ * -------------------------------------------------------- */
+.meals-page { --module-accent: var(--module-kitchen); }
+
+/* --------------------------------------------------------
+ * Seiten-Layout
+ * -------------------------------------------------------- */
+.meals-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Full-bleed-Root (Issue #577): die Küchen-Tab-Leiste hängt außerhalb dieses
+   * Roots im Router-Wrapper und lief schon immer voll durch — der Inhalt
+   * darunter saß aber in einer 1280er-Insel und fluchtete nicht mit ihr.
+   * Beide teilen jetzt --page-inline-pad. */
+  overflow: hidden;
+}
+
+.meals-layout {
+  flex: 1;
+  min-height: 0;
+  padding-inline: var(--page-inline-pad);
+  /* Flex-Container, damit .week-grid { flex:1; overflow-y:auto } eine begrenzte
+   * Höhe bekommt und selbst scrollt. Ohne das läuft das Wochengitter auf volle
+   * Inhaltshöhe auf, wird von .meals-page { overflow:hidden } abgeschnitten und
+   * die Tage unter „heute" sind auf Mobil unerreichbar. Desktop (≥1024px)
+   * überschreibt das unten mit display:grid. */
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 1024px) {
+  .meals-page {
+    height: 100%;
+  }
+}
+
+/* --------------------------------------------------------
+ * Wochen-Navigation
+ *
+ * Sitzt im __center-Slot des kanonischen Kopfes (.page-toolbar--in-group).
+ * Padding, Trennlinie, Hintergrund und Sticky-Rolle kommen von dort; hier
+ * bleibt nur die Anordnung der drei Elemente „< Datumsbereich >".
+ * -------------------------------------------------------- */
+/* Die drei Elemente bleiben eine Gruppe: kein flex-grow, sonst dehnt der
+ * __center-Slot sie über die ganze Kopfbreite. Genau das trieb die beiden
+ * Chevrons auf Desktop 845px auseinander („<" bei x=272, „>" bei x=1117) und
+ * mobil auf 80px/705px - einhändig nie beide erreichbar (Critique 2026-07-29). */
+.week-nav {
+  gap: var(--space-1);
+  flex: 0 1 auto;
+}
+
+.week-nav__label {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  text-align: center;
+  /* Der Datumsbereich darf nicht zwischen den beiden Chevrons zerbrechen. */
+  white-space: nowrap;
+  /* KEINE Mindestbreite. Naheliegend wäre eine, damit die Chevrons beim
+   * Wochenwechsel nicht um die Breite eines Monatsübergangs wandern. Als feste
+   * 14rem sprengte sie bei 320px die Zeile, und als `min(14rem, 100%)` erzeugte
+   * sie eine zirkuläre Abhängigkeit im Flex-Container - das Prozent löst gegen
+   * den Elternteil auf, dessen Breite wiederum von den Kindern kommt: „>" ragte
+   * dann selbst bei 1440px 26px über die Gruppe (beides gemessen). Ein paar
+   * wandernde Pixel sind der geringere Preis. */
+  min-width: 0;
+}
+
+/* Der Leerzustand ist ein Kind des Wochen-Grids und braucht deshalb zwei
+ * Korrekturen gegen dessen Geometrie:
+ *
+ * 1. `grid-column: 1/-1` - sonst landet er in der schmalen Gutter-Spalte für
+ *    die Typ-Labels und der Text bricht auf ein bis zwei Wörter pro Zeile.
+ *    Gleiches Idiom wie beim Lade-Skelett.
+ * 2. `sticky` plus Container-Breite - sonst zentriert er im 1208px breiten
+ *    SCROLLTRACK statt in den 820px sichtbarer Fläche: gemessen 190px rechts
+ *    der Mitte (Critique 2026-07-30). So sitzt er dort, wo der Nutzer hinsieht,
+ *    ohne den Grid-Fluss zu verlassen. */
+.week-grid > .empty-state {
+  grid-column: 1 / -1;
+  position: sticky;
+  left: 0;
+  width: 100cqi;
+  box-sizing: border-box;
+  /* Oben ansetzen wie in den drei Geschwister-Tabs. `flex: 0 0 auto` aus
+   * layout.css greift hier nicht - das Wochen-Grid ist ein Grid-Container, und
+   * seine implizite Zeile füllt die Höhe, wodurch der Leerzustand vertikal
+   * zentriert wurde (gemessen y=411 statt 255). In Flex-Spalten wäre
+   * `align-self` die falsche Achse, deshalb steht es hier statt global. */
+  align-self: start;
+}
+
+.week-nav .btn--icon {
+  color: var(--module-accent);
+}
+
+/* „Heute" trägt .btn.btn--secondary - die Kapsel und die Outline-Grammatik, die
+ * auch „Aktuell" im Budget und „Heute" im Kalender führen. Vorher war es eine
+ * getönte Fläche mit --radius-sm: dieselbe Funktion in einer dritten Form, und
+ * auf getöntem Grund brauchte der Text zusätzlich einen eigenen Ink-Mix, um AA
+ * zu halten (#C2410C auf 12 % #C2410C ergab roh nur 3.92:1). Die transparente
+ * Kapsel stellt die Frage nicht mehr: der rohe Modulton steht auf dem
+ * Seitengrund und misst dort 4.64:1 light (#C2410C auf #F2F2F7) und 8.74:1 dark
+ * (#FB923C auf #0A0A0C). Die Zwillinge messen 4.90/10.63:1 (Budget) und
+ * 6.37/7.27:1 (Kalender). (Finish-Review Runde 4, Befund 4.) */
+.week-nav__today {
+  padding: var(--space-1) var(--space-3);
+  color: var(--module-accent);
+  /* Gemessen 57x29 und damit unter --target-md, der projekteigenen
+   * Desktop-Untergrenze (Critique 2026-07-29). */
+  min-height: var(--target-md);
+}
+
+.week-nav__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.week-nav__randomize {
+  min-height: var(--target-base);
+}
+
+/* --------------------------------------------------------
+ * Wochengitter (scroll horizontal auf Mobil)
+ * -------------------------------------------------------- */
+.week-grid {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Container für die Slot-Raster: reflowt nach eigenem Platz, nicht Viewport. */
+  container: week-grid / inline-size;
+}
+
+.recipe-sidebar {
+  display: none;
+}
+
+/* Lade-Feedback beim Wochenwechsel: dimmt das alte Raster, bis das neue steht. */
+.week-grid[aria-busy="true"] {
+  opacity: 0.55;
+  transition: opacity var(--transition-fast);
+}
+
+.day-column {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.day-column:last-child {
+  border-bottom: none;
+}
+
+/* Per-Tag-Add-Button: nur Mobile (Desktop behält die Per-Slot-Add-Affordanz). */
+.day-add {
+  display: none;
+}
+
+.day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  position: sticky;
+  top: 0;
+  background-color: var(--color-bg);
+  z-index: var(--z-sticky);
+}
+
+.day-header__name {
+  color: var(--color-text-secondary);
+}
+
+.day-header__date {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.day-header--today .day-header__name,
+.day-header--today .day-header__date {
+  color: var(--module-accent);
+}
+
+.day-slots {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+@container week-grid (min-width: 600px) {
+  .day-slots {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  /* Der geteilte Kopf schiebt seinen __center-Slot beim Umbruch nach UNTEN
+   * (order: 3 in layout.css), weil „center" in den meisten Modulen ein Suchfeld
+   * ist und damit nachrangig gegenüber Titel und Aktionen. Hier ist der
+   * __center-Slot die Datums-Navigation und damit das Wichtigste im Kopf: sie
+   * gehört auf die erste Zeile, „Heute"/Zufallsplan darunter. Deshalb genau
+   * diese Umkehrung - kein eigenes Kopf-Layout, nur eine andere Reihenfolge
+   * innerhalb der geteilten Grammatik. */
+  .meals-page .page-toolbar__center {
+    order: -1;
+  }
+
+  .week-grid {
+    /* FAB-Clearance: genug Raum, damit der schwebende FAB nicht den letzten
+     * „+ Mahlzeit"-Button des Wochenscrolls verdeckt (Audit F3). Das Token
+     * leitet sich aus der FAB-Geometrie ab (tokens.css) und ersetzt die frühere
+     * lokale Formel, die --nav-bottom-height nicht mitzählte. */
+  }
+
+  .day-header {
+    position: static;
+  }
+
+  .day-slots {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  /* Kernentschärfung: leere Slots nicht als große gestrichelte Boxen stapeln
+   * (7 Tage × 4 Typen = bis zu 28). Belegte Slots bleiben; pro Tag ein
+   * gesammelter Add-Button, der das Modal mit Typ-Auswahl öffnet. */
+  .meal-slot--empty {
+    display: none;
+  }
+
+  .day-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    width: calc(100% - 2 * var(--space-4));
+    margin: 0 var(--space-4) var(--space-3);
+    /* --target-lg, nicht --target-md: das ist der einzige Weg, mobil eine
+     * Mahlzeit zu einem Tag hinzuzufügen (die leeren Slots sind dort
+     * ausgeblendet), und 40px liegen unter der Fingergröße. */
+    min-height: var(--target-lg);
+    padding: var(--space-2);
+    border: 1.5px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+  }
+
+  .day-add:hover {
+    color: var(--module-accent);
+    border-color: var(--module-accent);
+  }
+
+  .meal-slot {
+    min-height: var(--target-lg);
+  }
+
+  /* .meal-card__actions braucht hier nichts mehr: die Einblendung hängt seit
+   * dem Audit an `@media (hover: hover)` statt an der Viewport-Breite. */
+  .meal-slot__add-more-btn {
+    opacity: 1;
+  pointer-events: auto;
+  }
+}
+
+/* --------------------------------------------------------
+ * Mahlzeit-Slot
+ * -------------------------------------------------------- */
+.meal-slot {
+  min-height: 72px;
+  border-radius: var(--radius-sm);
+  border: 1.5px dashed var(--color-border);
+  background-color: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  overflow: hidden;
+  transition: border-color var(--transition-fast);
+}
+
+/* Belegter Slot ist eine randlose Karte auf dem Grouped-Grund; die gestrichelte
+ * Kante des LEEREN Slots bleibt, sie ist die Drop-/Add-Affordanz und damit ein
+ * Griff, kein Kasten (Kasten-in-Kasten-Vokabular, tokens.css). */
+.meal-slot--has-meal {
+  border-color: transparent;
+  box-shadow: var(--shadow-xs);
+}
+
+.meal-slot__type-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  padding: var(--space-1) var(--space-2) 0;
+  text-align: left;
+}
+
+/* Farbiger Typ-Punkt als klarer Anker; das Label bleibt neutrale, lesbare
+ * Ink-Farbe statt kleinem farbigem Text. Punktfarbe je Mahlzeit-Typ (tokens.css). */
+.meal-slot__type-label::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--meal-type-dot, var(--color-text-disabled));
+  flex-shrink: 0;
+}
+
+/* Labels werden nie silbengetrennt: die früheren Notlösungen (Ellipse in F-04,
+ * hyphens:auto in A1-09) kurierten nur Symptome der 7-Spalten-Quetsche und
+ * zerhackten „MITTAG-ESSEN" in jeder Karte (Critique P1). Das Desktop-Board
+ * gibt den Spalten jetzt eine Mindestbreite (Scroll-Fenster unter 1440px) und
+ * trägt die Typ-Labels in einer Gutter-Spalte — hier bleibt nur der Backstop
+ * für unhyphenierbare Langwörter. Eigener Span, weil die Umbruch-Regeln nicht
+ * auf anonyme Flex-Textknoten wirken. */
+.meal-slot__type-text {
+  min-width: 0;
+  hyphens: manual;
+  overflow-wrap: break-word;
+}
+
+.meal-slot[data-type="breakfast"] .meal-slot__type-label { --meal-type-dot: var(--meal-breakfast); }
+.meal-slot[data-type="lunch"]     .meal-slot__type-label { --meal-type-dot: var(--meal-lunch); }
+.meal-slot[data-type="dinner"]    .meal-slot__type-label { --meal-type-dot: var(--meal-dinner); }
+.meal-slot[data-type="snack"]     .meal-slot__type-label { --meal-type-dot: var(--meal-snack); }
+
+/* Gutter-Zeilenlabels des Desktop-Boards (≥1024px, siehe unten): mobil und auf
+ * Tablets existiert keine Gutter-Spalte — die Slots tragen ihre Labels selbst. */
+.week-gutter-label {
+  display: none;
+}
+
+.week-gutter-label[data-type="breakfast"] { --meal-type-dot: var(--meal-breakfast); }
+.week-gutter-label[data-type="lunch"]     { --meal-type-dot: var(--meal-lunch); }
+.week-gutter-label[data-type="dinner"]    { --meal-type-dot: var(--meal-dinner); }
+.week-gutter-label[data-type="snack"]     { --meal-type-dot: var(--meal-snack); }
+
+.meal-slot__add-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* NICHT --color-text-disabled: der Knopf ist bedienbar, er sieht nur
+   * zurueckgenommen aus. Dieselbe Unterscheidung, die tokens.css schon fuer den
+   * Placeholder-Fuehrungstext trifft. Als einzige sichtbare Information seines
+   * Knopfes faellt das Plus-Icon unter WCAG 1.4.11 (3:1) - `disabled` traegt das
+   * auf keiner Flaeche (gemessen 1.36 bis 2.17), `tertiary` auf jeder
+   * (4.86 bis 6.90) und bleibt gegen --color-text-primary (12 bis 17) sichtbar
+   * leiser. Guard: Sonde 14 in test-document-guards.js. */
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+  padding: var(--space-2);
+  transition: color var(--transition-fast);
+  min-height: var(--target-lg);
+}
+
+.meal-slot__add-btn:hover {
+  color: var(--module-accent);
+}
+
+.meal-slot__add-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px dashed var(--color-border);
+  cursor: pointer;
+  /* tertiary, nicht disabled - siehe .meal-slot__add-btn. */
+  color: var(--color-text-tertiary);
+  padding: var(--space-1) var(--space-2);
+  /* 28px lagen unter --target-md; der Button ist auf Desktop der Weg, eine
+   * zweite Mahlzeit in denselben Slot zu legen (Critique 2026-07-29). */
+  min-height: var(--target-md);
+  opacity: 0;
+  /* Unsichtbar heisst auch unklickbar: ohne pointer-events bleibt hier ein
+   * volles Trefferziel stehen, das niemand sieht (Guard
+   * `verborgene Reveal-Aktionen bleiben nicht klickbar`, test-frontend-audit.js). */
+  pointer-events: none;
+  transition: color var(--transition-fast), background-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.meal-slot:hover .meal-slot__add-more-btn,
+.meal-slot:focus-within .meal-slot__add-more-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Ohne Zeigergerät gibt es kein Hover: dauerhaft sichtbar und bedienbar. Das
+ * Muster ist dasselbe wie bei .meal-card__actions und .recipe-card__icon-actions
+ * - dieser Button war beim Umbau übersehen worden (Critique 2026-07-30). */
+@media (hover: none) {
+  .meal-slot__add-more-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.meal-slot__add-more-btn:hover {
+  color: var(--module-accent);
+  background-color: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+}
+
+/* Touch-Geräte kennen kein Hover: Button dauerhaft sichtbar und auf
+ * vollwertiges Touch-Target heben, sonst bleibt er unerreichbar. */
+@media (hover: none) {
+  .meal-slot__add-more-btn {
+    opacity: 1;
+  pointer-events: auto;
+    min-height: var(--target-md);
+  }
+}
+
+/* --------------------------------------------------------
+ * Mahlzeit-Karte (innerhalb des Slots)
+ * -------------------------------------------------------- */
+.meal-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: var(--space-4);
+  cursor: pointer;
+}
+
+.meal-card + .meal-card {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.meal-card__title {
+  color: var(--color-text-primary);
+  text-align: left;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.meal-card__title-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meal-card__recurrence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--module-meals);
+  flex: none;
+}
+
+.meal-card__meta {
+  margin-top: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: stretch;
+  text-align: left;
+}
+
+.meal-card__ingredients-count {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.meal-card__ing-done {
+  font-size: var(--text-xs);
+  color: var(--color-success);
+  font-variant-numeric: tabular-nums;
+}
+
+/* gap muss mindestens so groß sein wie der beidseitige Hitslop der Buttons
+ * (2 × 8px, siehe .meal-card__action-btn::before), sonst überlappen sich die
+ * unsichtbaren Trefferflächen. Bei --space-1 taten sie das um 20px: wer auf
+ * dem Desktop den Warenkorb anvisierte, landete im Papierkorb daneben
+ * (Critique 2026-07-29). */
+/* Sichtbar per Default, nur auf Zeigergeräten eingeblendet.
+ *
+ * Vorher stand `opacity: 0` unbedingt hier und wurde erst per
+ * `@media (max-width: 640px)` zurückgenommen. Zwei Folgen, beide gemessen:
+ * Ein Tablet ohne Hover und über 640px bekam die Aktionen nie zu sehen (sie
+ * waren dort nicht entdeckbar, nur zufällig treffbar), und im ausgeblendeten
+ * Zustand blieb ein 114px breites, unsichtbares aber klickbares Band stehen,
+ * weil `pointer-events` mitzuziehen vergessen wurde (Critique 2026-07-29).
+ *
+ * Die Umschaltung hängt jetzt an der Geräte-Fähigkeit, nicht an der
+ * Viewport-Breite - dasselbe Muster, das .meal-slot__add-more-btn schon nutzt. */
+.meal-card__actions {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-1);
+  align-self: stretch;
+  transition: opacity var(--transition-fast);
+}
+
+@media (hover: hover) {
+  .meal-card__actions {
+    opacity: 0;
+    /* Unsichtbar heißt auch unklickbar. */
+    pointer-events: none;
+  }
+
+  .meal-slot:hover .meal-card__actions,
+  .meal-slot:focus-within .meal-card__actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* Bewusst NICHT .row-action, als einziger der vier Küchen-Tabs.
+ *
+ * Die geteilte Komponente ist --target-lg (48px) gross. Eine Mahlzeitskarte
+ * sitzt in einem Slot von rund 148px Breite und trägt bis zu drei Aktionen:
+ * 144px Buttons in 148px Slot ist kein Layout. Die Trefferfläche stimmt
+ * trotzdem - das ::before unten spannt sie auf 40px (= --target-md, die
+ * Desktop-Untergrenze des Projekts), und 24px sichtbare Grösse erfüllt für
+ * sich genommen bereits WCAG 2.5.8 AA.
+ *
+ * Zwei Critique-Läufe haben die 24px als Verstoss gemeldet, weil sie die
+ * Element-Box messen statt der Trefferfläche. Beide Male war es keiner. */
+.meal-card__action-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* tertiary, nicht disabled - siehe .meal-slot__add-btn. Betraf hier das
+   * Papierkorb-Icon der Basisregel; --shopping und --recipe setzen ihre eigene
+   * Farbe (--module-accent) und trugen schon vorher. */
+  color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+/* -8px statt -12px: ergibt 40px Trefferfläche (= --target-md, die Desktop-
+ * Untergrenze) und passt exakt in den --space-4-gap darüber, ohne in den
+ * Nachbarbutton zu ragen. Auf Touch ist der Button ohnehin bereits
+ * --target-lg groß (siehe @media (hover: none) weiter unten). */
+.meal-card__action-btn::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.meal-card__action-btn:hover {
+  color: var(--color-danger);
+  background-color: var(--color-surface-2);
+}
+
+/* Der Transfer trägt den MODUL-AKZENT, im Ruhezustand und auf Hover.
+ *
+ * Dieselbe Aktion („Auf die Einkaufsliste") hatte im Modul drei Erscheinungsformen:
+ * hier ein 24px-Glyph in --color-text-disabled mit GRÜNEM Hover, im Vorrat ein
+ * 48px-Glyph in --module-accent, in den Rezepten ein beschriftetes Pill (Critique
+ * 2026-07-30, P1). Drei Farben für einen Weg.
+ *
+ * Die GRÖSSE bleibt unterschiedlich, und das ist kein Versehen: dieser Knopf sitzt
+ * in einer 148px-Wochenspalte neben zwei Geschwistern, drei 48px-Ziele passen dort
+ * nicht (3 × 48 = 144 von 148px). Die Trefferfläche ist über das ::before ohnehin
+ * 40px bzw. auf Touch --target-lg. Was sich vereinheitlichen LÄSST, ist Ikone,
+ * Farbe und Name - und die sind es jetzt: shopping-cart, --module-accent,
+ * common.toShoppingList in allen vier Tabs. */
+.meal-card__action-btn--shopping {
+  color: var(--module-accent);
+}
+
+.meal-card__action-btn--shopping:hover {
+  color: var(--module-accent);
+  background-color: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+}
+
+.meal-card__action-btn--recipe {
+  text-decoration: none;
+}
+
+.meal-card__action-btn--recipe:hover {
+  color: var(--module-accent);
+}
+
+/* --------------------------------------------------------
+ * Meals-Modal Content-Styles (Overlay/Panel via shared modal.js)
+ * -------------------------------------------------------- */
+
+/* Autocomplete im Modal */
+.meal-modal__autocomplete {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background-color: var(--glass-bg-card);
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-glass-inner);
+  box-shadow: var(--glass-shadow-md);
+  z-index: calc(var(--z-modal) + 1);
+  overflow: hidden;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.meal-modal__autocomplete-item {
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.meal-modal__autocomplete-item:hover,
+.meal-modal__autocomplete-item--active {
+  background-color: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+  color: var(--module-accent);
+}
+
+/* Zutaten-Bereich */
+.ingredient-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* .ingredient-row* lebt jetzt global in layout.css (geteilt mit Rezepte-Modal,
+ * das im modul-fremden Overlay rendert). Hier bleibt nur der meals-eigene
+ * Container .ingredient-list und der Add-Button. */
+
+.add-ingredient-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--module-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1) 0;
+  min-height: var(--target-lg);
+}
+
+/* Einkaufsliste-Auswahl im Modal */
+.shopping-transfer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background-color: color-mix(in srgb, var(--module-accent) var(--tint-surface), transparent);
+  border-radius: var(--radius-sm);
+  /* Getönte Fläche ohne Kante: die Tönung trägt die Hervorhebung allein
+   * (Kasten-in-Kasten-Vokabular, tokens.css). */
+  border: none;
+}
+
+.shopping-transfer__label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--module-accent);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.shopping-transfer__select {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  /* Feldkante nach dem Input-Kanon (DESIGN.md: 1.5px --color-border), nicht
+   * im Modul-Akzent - die Akzentkante gehörte zur abgelösten Welt. */
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--type-body);
+}
+
+.shopping-transfer__btn {
+  align-self: flex-start;
+}
+
+/* Ohne Einkaufsliste: die geteilte Antwort statt eines toten Auswahlfelds
+   (utils/kitchen-transfer.js, mountMissingShoppingList). Erbt Ausrichtung und
+   Abstand vom Container, damit der Ausweg-Knopf genau dort sitzt, wo sonst
+   „Jetzt übernehmen" steht. */
+.shopping-transfer__missing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.shopping-transfer__hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.meal-randomize-modal {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.meal-randomize-modal__toggle {
+  align-items: center;
+}
+
+/* Vorschauzeile: sagt vor dem Klick, wie viele Slots gefüllt und wie viele
+ * bestehende Mahlzeiten überschrieben werden. Sekundär gesetzt - sie informiert,
+ * sie warnt nicht; die Entscheidung trägt der Toggle darüber. */
+.meal-randomize-modal__preview {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Getönte Hinweisfläche im Formular - ohne Kante, sonst stünde ein umrandeter
+ * Kasten im Sheet (Kasten-in-Kasten-Vokabular, tokens.css). */
+.meal-recurrence-option,
+.meal-recurrence-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--module-meals) var(--tint-wash), transparent);
+}
+
+.meal-recurrence-note {
+  flex-direction: row;
+  align-items: flex-start;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.meal-recurrence-note i {
+  color: var(--module-meals);
+  flex: none;
+  margin-top: var(--space-0h);
+}
+
+/* Leere Slots tragen keinen „Kein Essen geplant"-Text mehr (Rauschen auf dem
+ * Planer-Raster) — nur noch Typ-Label + Plus-Affordanz. */
+
+/* --------------------------------------------------------
+ * Drag & Drop
+ * -------------------------------------------------------- */
+.meal-card--ghost {
+  position: fixed;
+  z-index: var(--z-modal);
+  pointer-events: none;
+  opacity: 0.85;
+  box-shadow: var(--glass-shadow-lg);
+  transform: rotate(2deg) scale(1.03);
+  transition: none;
+}
+
+.meal-slot--dragging {
+  opacity: 0.35;
+}
+
+.meal-slot--drop-target {
+  outline: 2px dashed var(--module-accent);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--module-accent) var(--tint-state), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meal-card--ghost {
+    transform: none;
+  }
+}
+
+@media (hover: none), (max-width: 640px) {
+  .meal-card__actions {
+    opacity: 1;
+  }
+
+  .week-nav__today,
+  .meal-slot__add-more-btn {
+    opacity: 1;
+  pointer-events: auto;
+    min-height: var(--target-lg);
+  }
+
+  .meal-card__action-btn {
+    width: var(--target-lg);
+    height: var(--target-lg);
+    min-width: var(--target-lg);
+    min-height: var(--target-lg);
+    color: var(--color-text-secondary);
+  }
+
+  .meal-card__action-btn::before {
+    inset: 0;
+  }
+}
+
+/* --------------------------------------------------------
+ * Desktop: Woche als 7-Spalten-Canvas (Tage = Spalten)
+ * Ersetzt die gestapelte Tages-Liste ab ≥1024px durch ein Wochen-Board —
+ * „Woche auf einen Blick" statt Scrollen. Mobile/Tablet bleiben gestapelt.
+ * Späte Quell-Order: überschreibt die .day-slots-Container-Query bewusst.
+ * -------------------------------------------------------- */
+@media (min-width: 1024px) {
+  .meals-layout {
+    display: grid;
+    /* 1024-1439px: Rezept-Sidebar schmaler (272px), damit die 7 Tagesspalten
+     * lesbare Breite behalten (Audit F-04); ab 1440px wieder volle 320px. */
+    grid-template-columns: minmax(0, 1fr) 272px;
+    gap: var(--space-4);
+    /* Horizontal weiter über --page-inline-pad, sonst überschreibt dieser
+     * Breakpoint den Bleed-Gutter mit dem alten Festwert (Issue #577). */
+    padding-inline: var(--page-inline-pad);
+    padding-block: 0 var(--space-8);
+  }
+
+  /* Board als EIN Grid statt sieben unabhängiger Spalten-Stapel: Spalte 1 ist
+   * die Gutter-Spalte, die jedes Mahlzeit-Typ-Label EINMAL pro Zeile trägt
+   * (statt in jedem der bis zu 28 Slots); Zeile 1 sind die Tagesköpfe.
+   * day-column/day-slots lösen sich via display:contents auf, Köpfe und Slots
+   * platzieren sich über --day-col/--type-row aus dem Renderer — so liegen
+   * alle Frühstücke/Abendessen der Woche auf einer Höhe. Die Mindest-
+   * Spaltenbreite erzwingt ein horizontales Scroll-Fenster mit Scroll-Snap
+   * (≈5 Tage sichtbar) statt der 7-Spalten-Quetsche, die Labels und
+   * Gerichtenamen silbenweise zerhackte (Critique P1). Kein Breakpoint-
+   * Sonderfall für „alle 7 Tage": die Content-Spalte ist über
+   * --page-inline-pad auf --content-max-width (1280px) gedeckelt, lesbare
+   * 7 Spalten passen dort strukturell nie —
+   * das Fenster löst sich von selbst auf, sobald der Platz reicht.
+   *
+   * NACHGERECHNET 2026-07-30, weil der Critique behauptete, das Board zeige „auf
+   * keiner Desktop-Breite eine Woche". Das stimmt so nicht - es hängt an genau
+   * 52px:
+   *
+   *   Bedarf   116 Gutter + 7 × 148 Spalte + 8 × 8 Gap = 1208px
+   *   1920px   Content-Spalte gedeckelt auf 1280 → passt, 7/7 sichtbar, kein Fade
+   *   1440px   1156 verfügbar → 52px fehlen  (has-fade-end, Sonntag angeschnitten)
+   *   1280px    996 verfügbar → 212px fehlen (has-fade-start, Montag ausgescrollt)
+   *
+   * Bei 1440px wäre es mit 140px-Spalten erreichbar (116 + 980 + 56 = 1152 ≤ 1156).
+   * Bei 1280px bräuchte es 117px-Spalten - also 21% schmaler, und damit wieder die
+   * Silbentrennung in den Gerichtenamen, gegen die die Mindestbreite überhaupt
+   * eingeführt wurde. Die 8px bei 1440 gegen ein Regressionsrisiko bei 1280 zu
+   * tauschen, ist eine Struktur-, keine Feinschliff-Entscheidung: die eigentliche
+   * Frage ist, ob eine 7-Tage-Ansicht auf Laptop-Breite die richtige Ansicht ist. */
+  .week-grid {
+    display: grid;
+    /* Breit genug für das längste deutsche Typ-Label („Mittagessen" ≈ 84px
+     * bei text-sm/medium) plus Punkt, Lücke und Innenabstand — sonst chopt
+     * der break-word-Backstop das Label wortmittig. */
+    --meal-gutter-width: 116px;
+    grid-template-columns: var(--meal-gutter-width) repeat(7, minmax(148px, 1fr));
+    column-gap: var(--space-2);
+    row-gap: var(--space-2);
+    align-items: stretch;
+    padding: 0 0 var(--space-3);
+    min-width: 0;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-left: calc(var(--meal-gutter-width) + var(--space-2));
+    overscroll-behavior-x: contain;
+  }
+
+  .day-column,
+  .day-slots {
+    display: contents;
+  }
+
+  /* Die Ecke oben links. Die Körperzeilen decken die Gutter-Gasse mit ihrem
+   * sticky Label ab, die KOPFZEILE hatte dort gar kein Grid-Item - der erste
+   * Tageskopf scrollte darunter sichtbar durch, während sein Karteninhalt eine
+   * Zeile tiefer korrekt maskiert war (Finish-Review Runde 3). Ein
+   * Pseudo-Element des Grid-Containers ist selbst ein Grid-Item und schliesst
+   * die Lücke ohne Markup-Umbau; es liegt über dem Tageskopf (z-sticky), weil
+   * es ihn genau dort verdecken soll. */
+  .week-grid::before {
+    content: '';
+    grid-column: 1;
+    grid-row: 1;
+    position: sticky;
+    left: 0;
+    z-index: calc(var(--z-sticky) + 1);
+    background-color: var(--color-bg);
+  }
+
+  /* Scroll-Affordance des Boards (Critique-Folgebefund): wireScrollFade setzt
+   * die geteilten has-fade-*-Klassen (filter-chip.css). Der End-Anriss zeigt
+   * „rechts liegen weitere Tage" — auch wenn eine Spalte zufällig bündig mit
+   * der Kante abschließt. Die Start-Maske ist hier neutralisiert: sie würde
+   * die sticky Gutter-Labels am linken Rand ausblenden; links übernimmt der
+   * opake Gutter-Hintergrund die Anriss-Rolle. */
+  .week-grid.has-fade-start {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  /* Start-Anriss AM RAIL statt an der Grid-Maske.
+   *
+   * Die Maske oben ist zu Recht neutralisiert - sie würde die sticky
+   * Gutter-Labels ausblenden. Der Kommentar behauptete, „links übernimmt der
+   * opake Gutter-Hintergrund die Anriss-Rolle": tut er nicht, ein opaker Block
+   * sieht aus wie der Tabellenrand. Gemessen war der erste Wochentag dahinter
+   * vollständig unsichtbar, ohne jeden Hinweis (Critique 2026-07-30). Ein
+   * Strich an der rechten Rail-Kante trägt die Rolle wirklich, und zwar nur
+   * solange links etwas liegt.
+   *
+   * Als `box-shadow` gezeichnet, nicht als `border`: der Strich erscheint und
+   * verschwindet beim Scrollen, ein echter Rand würde dabei 1px Layout
+   * verschieben. Die Schatten-Tokens sind fertige Mehrfach-Schatten und als
+   * gerichtete Kante nicht verwendbar, deshalb die Geometrie hier und die Farbe
+   * aus dem Rand-Token. */
+  .week-grid.has-fade-start .week-gutter-label {
+    box-shadow: 1px 0 0 var(--color-border);
+  }
+
+  .week-grid.has-fade-start.has-fade-end {
+    mask-image: linear-gradient(to right, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+    -webkit-mask-image: linear-gradient(to right, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+  }
+
+  /* Achse gespiegelt, Werte gleich - Begruendung an den Basisregeln in
+     filter-chip.css. */
+  [dir="rtl"] .week-grid.has-fade-start.has-fade-end {
+    mask-image: linear-gradient(to left, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+    -webkit-mask-image: linear-gradient(to left, var(--mask-opaque) calc(100% - var(--space-6)), transparent);
+  }
+
+  .recipe-sidebar {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-left: 1px solid var(--color-border-subtle);
+    padding-left: var(--space-4);
+  }
+
+  .recipe-sidebar__title {
+    margin: 0;
+    padding: var(--space-3) 0 var(--space-2);
+    color: var(--color-text-primary);
+  }
+
+  .recipe-sidebar__hint {
+    margin: 0 0 var(--space-3);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .recipe-sidebar__list {
+    display: grid;
+    gap: var(--space-2);
+    overflow-y: auto;
+    padding-right: var(--space-1);
+  }
+
+  .recipe-sidebar__card {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    cursor: grab;
+  }
+
+  .recipe-sidebar__card--dragging {
+    opacity: 0.5;
+  }
+
+  .recipe-sidebar__card-title {
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .recipe-sidebar__card-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .recipe-sidebar__empty {
+    color: var(--color-text-secondary);
+    padding: var(--space-3) 0;
+  }
+
+  .day-header {
+    grid-row: 1;
+    grid-column: var(--day-col);
+    /* Snap-Anker des Scroll-Fensters: je Tagesspalte ein Rastpunkt, der hinter
+     * der sticky Gutter-Spalte beginnt (scroll-padding-left oben). */
+    scroll-snap-align: start;
+    /* Kompakter Kopf (Audit F-04): Name+Datum dürfen nicht kollidieren —
+     * Name ellipsiert, Kompakt-Datum (ohne Jahr) bleibt. */
+    padding: var(--space-3) var(--space-1) var(--space-2);
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  /* Slots in Grid-Zellen heben: Zeile = Mahlzeit-Typ, Spalte = Wochentag. */
+  .meal-slot {
+    grid-column: var(--day-col);
+    grid-row: var(--type-row);
+  }
+
+  /* Slot-eigene Typ-Labels: visuell übernimmt sie die Gutter-Spalte, im
+   * Accessibility-Tree bleiben sie erhalten, damit jeder Slot für
+   * Screenreader benannt bleibt (sr-only-Muster). */
+  .meal-slot__type-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .week-gutter-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    grid-column: 1;
+    grid-row: var(--type-row);
+    align-self: stretch;
+    /* Bleibt beim horizontalen Scrollen stehen; der Hintergrund deckt die
+     * darunter durchlaufenden Tagesspalten ab. */
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: var(--color-bg);
+    color: var(--color-text-secondary);
+    /* Typo-Rolle (Overline-Mikro-Label) kommt aus typography.css — dieselbe
+     * wie beim mobilen .meal-slot__type-label, damit beide Flächen eine
+     * Sprache sprechen. */
+    padding: var(--space-2) var(--space-2) 0 0;
+    align-items: flex-start;
+  }
+
+  .week-gutter-label::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--meal-type-dot, var(--color-text-disabled));
+    flex-shrink: 0;
+    /* Punkt optisch auf die erste Textzeile setzen (Label ist top-aligned). */
+    margin-top: var(--space-1);
+  }
+
+  .week-gutter-label__text {
+    min-width: 0;
+    hyphens: manual;
+    overflow-wrap: break-word;
+  }
+
+  .day-header__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .day-header__date {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  /* Karten-Titel im Board: zwei Zeilen statt Einzeiler-Ellipse nach ~5
+   * Zeichen ("Tomat…") — Wiedererkennung vor Kompaktheit. Keine
+   * Auto-Silbentrennung mehr: die Mindest-Spaltenbreite (148px) lässt
+   * Gerichtenamen an Wortgrenzen umbrechen; break-word bleibt Backstop
+   * für Einzelwörter jenseits der Spaltenbreite (Critique P1). */
+  .meal-card__title-text {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    hyphens: manual;
+    overflow-wrap: break-word;
+  }
+}
+
+@media (min-width: 1440px) {
+  .meals-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+
+/* --------------------------------------------------------
+ * Rezept-Spalte einklappen (Critique 2026-07-29)
+ * Die Spalte kostet 272-320px. Genau die fehlen dem Board für den sechsten und
+ * siebten Tag: mit ihr sind Samstag und Sonntag nur über horizontales Scrollen
+ * erreichbar - ausgerechnet die Tage, an denen am meisten gekocht wird. Ohne
+ * sie passen alle sieben Spalten in voller Breite, ohne dass die 148px-
+ * Mindestbreite angetastet werden muss.
+ * -------------------------------------------------------- */
+.week-nav__rail-toggle {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .week-nav__rail-toggle {
+    display: inline-flex;
+  }
+
+  .meals-layout--rail-hidden {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .meals-layout--rail-hidden .recipe-sidebar {
+    display: none;
+  }
+}

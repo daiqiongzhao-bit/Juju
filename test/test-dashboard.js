@@ -1,0 +1,1193 @@
+/**
+ * Modul: Dashboard-API-Test
+ * Zweck: Validiert die Dashboard-Aggregationsabfragen mit node:sqlite
+ * Ausführen: node --experimental-sqlite test-dashboard.js
+ */
+
+process.env.DB_PATH = ':memory:';
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret';
+
+import { DatabaseSync } from 'node:sqlite';
+import { register } from 'node:module';
+import * as nodeAssert from 'node:assert/strict';
+import express from 'express';
+import { MIGRATIONS_SQL } from '../server/db-schema-test.js';
+import { addLocalDays, toLocalDateKey } from '../public/utils/date.js';
+
+// Dynamisch geladen, weil beide Module inzwischen server/db.js in ihren
+// Import-Graphen ziehen: statische Imports laufen vor der DB_PATH-Zuweisung
+// oben, sodass db.js eine echte yuvomi.db im Repo anlegen würde
+// (`test:db-isolation` wacht darüber).
+const { hydrateBirthday, syncBirthdayArtifacts } = await import('../server/services/birthdays.js');
+const { getUpcomingEvents } = await import('../server/services/calendar-events.js');
+
+register('./test-browser-loader.mjs', import.meta.url);
+
+let passed = 0;
+let failed = 0;
+const pendingTests = [];
+
+function test(name, fn) {
+  pendingTests.push(Promise.resolve()
+    .then(fn)
+    .then(() => {
+      console.log(`  ✓ ${name}`);
+      passed++;
+    })
+    .catch((err) => {
+      console.error(`  ✗ ${name}: ${err.message}`);
+      failed++;
+    }));
+}
+
+function assert(condition, msg) {
+  if (!condition) throw new Error(msg || 'Assertion fehlgeschlagen');
+}
+
+// --------------------------------------------------------
+// DB aufbauen
+// --------------------------------------------------------
+const db = new DatabaseSync(':memory:');
+db.exec('PRAGMA foreign_keys = ON;');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY, description TEXT NOT NULL,
+    applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+  );
+`);
+db.exec(MIGRATIONS_SQL[1]);
+db.exec(MIGRATIONS_SQL[85]); // calendar_event_exceptions (EXDATE, #489)
+
+// Testdaten einfügen
+const u1 = db.prepare(`INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+  VALUES ('admin', 'Anna Admin', 'x', '#007AFF', 'admin')`).run();
+const u2 = db.prepare(`INSERT INTO users (username, display_name, password_hash, avatar_color)
+  VALUES ('max', 'Max Muster', 'x', '#34C759')`).run();
+
+const uid1 = u1.lastInsertRowid;
+const uid2 = u2.lastInsertRowid;
+
+const today = new Date().toISOString().slice(0, 10);
+const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+const currentMonth = today.slice(0, 7);
+const inOneHour = new Date(Date.now() + 3600000).toISOString();
+const in30h = new Date(Date.now() + 30 * 3600000).toISOString().slice(0, 10);
+const in72h = new Date(Date.now() + 72 * 3600000).toISOString().slice(0, 10);
+
+// Aufgaben
+db.prepare(`INSERT INTO tasks (title, priority, status, due_date, created_by, assigned_to)
+  VALUES ('Urgent Task', 'urgent', 'open', ?, ?, ?)`).run(today, uid1, uid2);
+db.prepare(`INSERT INTO tasks (title, priority, status, due_date, created_by)
+  VALUES ('High Task morgen', 'high', 'open', ?, ?)`).run(tomorrow, uid1);
+db.prepare(`INSERT INTO tasks (title, priority, status, due_date, created_by)
+  VALUES ('High Task in 3 Tagen', 'high', 'open', ?, ?)`).run(in72h, uid1);
+db.prepare(`INSERT INTO tasks (title, priority, status, due_date, created_by)
+  VALUES ('Done Task', 'urgent', 'done', ?, ?)`).run(today, uid1);
+
+// Kalender-Events
+const evMeeting = db.prepare(`INSERT INTO calendar_events (title, start_datetime, created_by, assigned_to, color)
+  VALUES ('Morgen-Meeting', ?, ?, ?, '#007AFF')`).run(inOneHour, uid1, uid2);
+db.prepare(`INSERT INTO calendar_events (title, start_datetime, created_by)
+  VALUES ('Event in 3 Tagen', ?, ?)`).run(in72h + 'T10:00:00Z', uid1);
+
+// Multi-Assignments für Morgen-Meeting (uid1 + uid2 sind zugewiesen)
+db.prepare(`INSERT INTO event_assignments (event_id, user_id) VALUES (?, ?)`).run(evMeeting.lastInsertRowid, uid1);
+db.prepare(`INSERT INTO event_assignments (event_id, user_id) VALUES (?, ?)`).run(evMeeting.lastInsertRowid, uid2);
+
+// Mahlzeiten
+db.prepare(`INSERT INTO meals (date, meal_type, title, created_by)
+  VALUES (?, 'breakfast', 'Haferbrei', ?)`).run(today, uid1);
+db.prepare(`INSERT INTO meals (date, meal_type, title, created_by)
+  VALUES (?, 'dinner', 'Pasta', ?)`).run(today, uid1);
+db.prepare(`INSERT INTO meals (date, meal_type, title, created_by)
+  VALUES (?, 'lunch', 'Salat morgen', ?)`).run(tomorrow, uid1);
+
+// Notizen
+db.prepare(`INSERT INTO notes (content, title, pinned, color, created_by)
+  VALUES ('Wichtige Info', 'Pinnwand-Notiz', 1, '#FFEB3B', ?)`).run(uid1);
+db.prepare(`INSERT INTO notes (content, pinned, color, created_by)
+  VALUES ('Nicht angepinnt', 0, '#E3F2FF', ?)`).run(uid1);
+
+// Geburtstage
+db.prepare(`INSERT INTO birthdays (name, birth_date, created_by)
+  VALUES ('Heute Geburtstag', ?, ?)`).run(`2012-${today.slice(5)}`, uid1);
+db.prepare(`INSERT INTO birthdays (name, birth_date, created_by)
+  VALUES ('Morgen Geburtstag', ?, ?)`).run(`2010-${tomorrow.slice(5)}`, uid1);
+db.prepare(`INSERT INTO birthdays (name, birth_date, created_by)
+  VALUES ('Anderer Nutzer', ?, ?)`).run(`2011-${today.slice(5)}`, uid2);
+
+// Budget
+db.prepare(`INSERT INTO budget_entries (title, amount, category, subcategory, date, created_by)
+  VALUES ('Salary', 3000, 'Erwerbseinkommen', '', ?, ?)`).run(`${currentMonth}-05`, uid1);
+db.prepare(`INSERT INTO budget_entries (title, amount, category, subcategory, date, created_by)
+  VALUES ('Rent', -1200, 'housing', 'rent_mortgage', ?, ?)`).run(`${currentMonth}-06`, uid1);
+db.prepare(`INSERT INTO budget_entries (title, amount, category, subcategory, date, created_by)
+  VALUES ('Groceries', -450, 'food', 'supermarket', ?, ?)`).run(`${currentMonth}-07`, uid1);
+
+console.log('\n[Dashboard-Test] API-Abfragen\n');
+
+test('Today-Highlights priorisieren dringende Aufgaben und nächsten Termin', async () => {
+  const { __test } = await import('../public/pages/dashboard.js');
+  const result = __test.buildTodayHighlights({
+    tasks: [
+      { id: 1, title: 'Low task', priority: 'low' },
+      { id: 2, title: 'Pay bill', priority: 'urgent' },
+    ],
+    events: [{ id: 3, title: 'Dentist' }],
+    shopping: { items: [{ is_checked: false }, { is_checked: true }] },
+    meals: { dinner: { title: 'Soup' } },
+  });
+
+  assert(result.urgentTask.title === 'Pay bill', 'Urgent Task sollte priorisiert werden');
+  assert(result.nextEvent.title === 'Dentist', 'Nächster Termin sollte übernommen werden');
+  assert(result.openShoppingCount === 1, 'Offene Einkaufsartikel sollten gezählt werden');
+  assert(result.meal.title === 'Soup', 'Geplante Mahlzeit sollte übernommen werden');
+});
+
+test('Today-Highlights wählt die Mahlzeit passend zur Tageszeit', async () => {
+  const { __test } = await import('../public/pages/dashboard.js');
+  const RealDate = Date;
+  const withHour = (hour, fn) => {
+    class FakeDate extends RealDate {
+      constructor(...args) {
+        if (args.length === 0) { super('2026-07-03T00:00:00'); this.setHours(hour); return; }
+        super(...args);
+      }
+    }
+    globalThis.Date = FakeDate;
+    try { return fn(); } finally { globalThis.Date = RealDate; }
+  };
+  const meals = [
+    { meal_type: 'breakfast', title: 'Eier' },
+    { meal_type: 'lunch', title: 'Salat' },
+    { meal_type: 'dinner', title: 'Suppe' },
+  ];
+
+  const morning = withHour(8, () => __test.buildTodayHighlights({ meals }));
+  assert(morning.mealType === 'breakfast' && morning.meal.title === 'Eier', 'Morgens sollte Frühstück gezeigt werden');
+
+  const noon = withHour(13, () => __test.buildTodayHighlights({ meals }));
+  assert(noon.mealType === 'lunch' && noon.meal.title === 'Salat', 'Mittags sollte Mittagessen gezeigt werden');
+
+  const evening = withHour(20, () => __test.buildTodayHighlights({ meals }));
+  assert(evening.mealType === 'dinner' && evening.meal.title === 'Suppe', 'Abends sollte Abendessen gezeigt werden');
+
+  // Frühstück nicht geplant → nächste geplante Mahlzeit des Tages
+  const onlyDinner = withHour(8, () => __test.buildTodayHighlights({ meals: [{ meal_type: 'dinner', title: 'Suppe' }] }));
+  assert(onlyDinner.meal.title === 'Suppe', 'Ohne Frühstück sollte die nächste geplante Mahlzeit gezeigt werden');
+});
+
+test('Today-Highlights filtert Termine auf den heutigen Tag', async () => {
+  const { __test } = await import('../public/pages/dashboard.js');
+  const todayStr = toLocalDateKey(new Date());
+  const tomorrowStr = addLocalDays(todayStr, 1);
+
+  const result = __test.buildTodayHighlights({
+    events: [
+      { id: 1, title: 'Termin Morgen', start_datetime: `${tomorrowStr}T10:00:00` },
+      { id: 2, title: 'Termin Heute', start_datetime: `${todayStr}T14:30:00` },
+    ],
+  });
+
+  assert(result.eventCount === 1, `Erwartet 1 Termin für heute, erhalten ${result.eventCount}`);
+  assert(result.nextEvent.title === 'Termin Heute', 'Erwartet "Termin Heute" als nächsten Termin');
+});
+
+test('eventStartDate: ganztägige Termine (date-only) landen auf dem lokalen Kalendertag (Issue #466)', async () => {
+  const { __test } = await import('../public/pages/dashboard.js');
+  // Google speichert ganztägige Termine als reines Datum "2026-07-10". `new Date()`
+  // parst das als UTC-Mitternacht und verschiebt den Tag westlich von UTC um einen
+  // Tag zurück. eventStartDate muss stattdessen den lokalen Kalendertag liefern.
+  const d = __test.eventStartDate({ start_datetime: '2026-07-10', all_day: 1 });
+  assert(d.getFullYear() === 2026, `Erwartet Jahr 2026, erhalten ${d.getFullYear()}`);
+  assert(d.getMonth() === 6, `Erwartet Monat Juli (6), erhalten ${d.getMonth()}`);
+  assert(d.getDate() === 10, `Erwartet Tag 10, erhalten ${d.getDate()}`);
+  assert(d.getHours() === 0, `Erwartet lokale Mitternacht, erhalten ${d.getHours()}h`);
+});
+
+test('Today-Highlights zählt ganztägigen Termin von heute (date-only, Issue #466)', async () => {
+  const { __test } = await import('../public/pages/dashboard.js');
+  const todayStr = toLocalDateKey(new Date());
+
+  const result = __test.buildTodayHighlights({
+    events: [
+      { id: 1, title: 'Ganztägig Heute', start_datetime: todayStr, all_day: 1 },
+    ],
+  });
+
+  assert(result.eventCount === 1, `Erwartet 1 ganztägigen Termin für heute, erhalten ${result.eventCount}`);
+  assert(result.nextEvent.title === 'Ganztägig Heute', 'Erwartet "Ganztägig Heute" als nächsten Termin');
+});
+
+test('Today-Meals-Widget rendert nur sichtbare Mahlzeit-Typen', async () => {
+  const { __test } = await import('../public/pages/dashboard.js');
+  const html = __test.renderTodayMeals([
+    { meal_type: 'breakfast', title: 'Haferbrei' },
+    { meal_type: 'dinner', title: 'Pasta' },
+    { meal_type: 'snack', title: 'Apfel' },
+  ], ['dinner', 'snack']);
+
+  nodeAssert.ok(html.includes('data-type="dinner"'));
+  nodeAssert.ok(html.includes('data-type="snack"'));
+  nodeAssert.ok(!html.includes('data-type="breakfast"'));
+  nodeAssert.ok(!html.includes('data-type="lunch"'));
+});
+
+// --------------------------------------------------------
+// Tests: Dringende Aufgaben
+// --------------------------------------------------------
+const deadline48h = new Date(Date.now() + 48 * 3600000).toISOString().slice(0, 10);
+
+test('Dringende Aufgaben: nur high/urgent mit Fälligkeit ≤ 48h und nicht done', () => {
+  const tasks = db.prepare(`
+    SELECT t.*, u.display_name AS assigned_name, u.avatar_color AS assigned_color
+    FROM tasks t
+    LEFT JOIN users u ON t.assigned_to = u.id
+    WHERE t.priority IN ('high', 'urgent')
+      AND t.status != 'done'
+      AND (t.due_date IS NULL OR t.due_date <= ?)
+    ORDER BY CASE t.priority WHEN 'urgent' THEN 0 ELSE 1 END, t.due_date ASC
+    LIMIT 10
+  `).all(deadline48h);
+
+  assert(tasks.length === 2, `Erwartet 2 Aufgaben, erhalten ${tasks.length}`);
+  assert(tasks[0].priority === 'urgent', 'Urgent zuerst');
+  assert(tasks[0].assigned_name === 'Max Muster', 'assigned_name korrekt');
+  assert(tasks[0].assigned_color === '#34C759', 'assigned_color korrekt');
+});
+
+test('Dringende Aufgaben: erledigte Aufgaben werden nicht angezeigt', () => {
+  const tasks = db.prepare(`
+    SELECT * FROM tasks
+    WHERE priority IN ('high', 'urgent') AND status != 'done' AND due_date <= ?
+  `).all(deadline48h);
+  const doneTask = tasks.find((t) => t.title === 'Done Task');
+  assert(!doneTask, 'Erledigte Aufgaben sollten gefiltert sein');
+});
+
+test('Dringende Aufgaben: Task mit Fälligkeit in 3 Tagen wird ausgeschlossen', () => {
+  const tasks = db.prepare(`
+    SELECT * FROM tasks
+    WHERE priority IN ('high', 'urgent') AND status != 'done' AND due_date <= ?
+  `).all(deadline48h);
+  const farTask = tasks.find((t) => t.title === 'High Task in 3 Tagen');
+  assert(!farTask, 'Aufgabe in 72h sollte nicht erscheinen');
+});
+
+// --------------------------------------------------------
+// Tests: Anstehende Termine
+// --------------------------------------------------------
+test('Anstehende Termine: zukünftige Events, sortiert, max 5', () => {
+  const now = new Date().toISOString();
+  const events = db.prepare(`
+    SELECT ce.*, u.display_name AS assigned_name, u.avatar_color AS assigned_color
+    FROM calendar_events ce
+    LEFT JOIN users u ON ce.assigned_to = u.id
+    WHERE ce.start_datetime >= ?
+    ORDER BY ce.start_datetime ASC
+    LIMIT 5
+  `).all(now);
+
+  assert(events.length === 2, `Erwartet 2 Events, erhalten ${events.length}`);
+  assert(events[0].title === 'Morgen-Meeting', 'Erstes Event ist das nächste');
+  assert(events[0].assigned_color === '#34C759', 'assigned_color vom Join');
+});
+
+test('Anstehende Termine: Dashboard-Mapping erzeugt assigned_users Array (Issue #284)', () => {
+  const raw = getUpcomingEvents(cdb, { userId: cuTheo, limit: 10 });
+  const mapped = raw.map(({ assigned_users_json, ...event }) => {
+    event.assigned_users = assigned_users_json ? JSON.parse(assigned_users_json) : [];
+    return event;
+  });
+
+  const soccer = mapped.find((e) => e.title === 'Theodore Soccer Game');
+  assert(soccer, 'Theodore Soccer Game muss im Ergebnis sein');
+  assert(!('assigned_users_json' in soccer), 'assigned_users_json darf nicht im Ergebnis sein');
+  assert(Array.isArray(soccer.assigned_users), 'assigned_users muss ein Array sein');
+  assert(soccer.assigned_users.length === 2, `Erwartet 2 Einträge, erhalten ${soccer.assigned_users.length}`);
+  assert('avatar_data' in soccer.assigned_users[0], 'avatar_data muss im User-Objekt enthalten sein');
+
+  const fieldTrip = mapped.find((e) => e.title === 'Sofia Field Trip');
+  assert(fieldTrip, 'Sofia Field Trip muss erscheinen');
+  assert(Array.isArray(fieldTrip.assigned_users) && fieldTrip.assigned_users.length === 0,
+    'Event ohne Zuweisung hat leeres assigned_users Array');
+});
+
+// --------------------------------------------------------
+// Tests: Heutige Mahlzeiten
+// --------------------------------------------------------
+test('Heutige Mahlzeiten: nur heute, in korrekter Reihenfolge', () => {
+  const meals = db.prepare(`
+    SELECT * FROM meals WHERE date = ?
+    ORDER BY CASE meal_type
+      WHEN 'breakfast' THEN 0 WHEN 'lunch' THEN 1
+      WHEN 'dinner' THEN 2 WHEN 'snack' THEN 3 END
+  `).all(today);
+
+  assert(meals.length === 2, `Erwartet 2 Mahlzeiten, erhalten ${meals.length}`);
+  assert(meals[0].meal_type === 'breakfast', 'Frühstück zuerst');
+  assert(meals[1].meal_type === 'dinner', 'Abendessen danach');
+});
+
+test('Heutige Mahlzeiten: morgige Mahlzeit nicht enthalten', () => {
+  const meals = db.prepare(`SELECT * FROM meals WHERE date = ?`).all(today);
+  const wrongMeal = meals.find((m) => m.title === 'Salat morgen');
+  assert(!wrongMeal, 'Morgige Mahlzeit sollte nicht erscheinen');
+});
+
+// --------------------------------------------------------
+// Tests: Angepinnte Notizen
+// --------------------------------------------------------
+test('Angepinnte Notizen: nur pinned=1, max 3', () => {
+  const notes = db.prepare(`
+    SELECT n.*, u.display_name AS author_name, u.avatar_color AS author_color
+    FROM notes n
+    LEFT JOIN users u ON n.created_by = u.id
+    WHERE n.pinned = 1
+    ORDER BY n.updated_at DESC
+    LIMIT 3
+  `).all();
+
+  assert(notes.length === 1, `Erwartet 1 Notiz, erhalten ${notes.length}`);
+  assert(notes[0].title === 'Pinnwand-Notiz', 'Korrekte Notiz');
+  assert(notes[0].author_name === 'Anna Admin', 'author_name vom Join');
+});
+
+test('Angepinnte Notizen: nicht angepinnte werden ausgeschlossen', () => {
+  const notes = db.prepare(`SELECT * FROM notes WHERE pinned = 1`).all();
+  const unpinned = notes.find((n) => n.content === 'Nicht angepinnt');
+  assert(!unpinned, 'Nicht angepinnte Notiz sollte gefiltert sein');
+});
+
+// --------------------------------------------------------
+// Tests: Geburtstage
+// --------------------------------------------------------
+test('Geburtstage: haushaltsweit, sortiert nach nächstem Geburtstag', () => {
+  const rows = db.prepare('SELECT * FROM birthdays ORDER BY name COLLATE NOCASE ASC').all();
+  const birthdays = rows
+    .map((row) => hydrateBirthday(row, new Date(`${today}T12:00:00Z`)))
+    .sort((a, b) => a.days_until - b.days_until || a.name.localeCompare(b.name))
+    .slice(0, 3);
+
+  assert(rows.length === 3, `Erwartet 3 Geburtstage, erhalten ${rows.length}`);
+  assert(birthdays[0].days_until === 0, 'Ein heutiger Geburtstag steht zuerst');
+  assert(birthdays.some((birthday) => birthday.name === 'Heute Geburtstag' && birthday.days_until === 0),
+    'Eigener heutiger Geburtstag muss enthalten sein');
+  assert(birthdays.some((birthday) => birthday.name === 'Anderer Nutzer'), 'Geburtstag eines anderen Nutzers muss enthalten sein');
+});
+
+test('Dashboard-Geburtstagswidget lädt Geburtstage haushaltsweit (Issue #406)', async () => {
+  const { get } = await import('../server/db.js');
+  const { default: dashboardRouter } = await import('../server/routes/dashboard.js');
+  const routeDb = get();
+
+  routeDb.prepare("DELETE FROM reminders WHERE created_by IN (SELECT id FROM users WHERE username LIKE 'dashboard-birthday-%')").run();
+  routeDb.prepare("DELETE FROM calendar_events WHERE created_by IN (SELECT id FROM users WHERE username LIKE 'dashboard-birthday-%')").run();
+  routeDb.prepare("DELETE FROM birthdays WHERE created_by IN (SELECT id FROM users WHERE username LIKE 'dashboard-birthday-%')").run();
+  routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-birthday-%'").run();
+
+  const routeUser1 = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-birthday-owner', 'Owner', 'x', '#007AFF', 'admin')
+  `).run().lastInsertRowid;
+  const routeUser2 = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-birthday-other', 'Other', 'x', '#34C759', 'member')
+  `).run().lastInsertRowid;
+
+  routeDb.prepare('INSERT INTO birthdays (name, birth_date, created_by) VALUES (?, ?, ?)')
+    .run('Widget Owner Today', `2012-${today.slice(5)}`, routeUser1);
+  routeDb.prepare('INSERT INTO birthdays (name, birth_date, created_by) VALUES (?, ?, ?)')
+    .run('Widget Other Today', `2011-${today.slice(5)}`, routeUser2);
+
+  const app = express();
+  app.use((req, _res, next) => {
+    req.authUserId = routeUser1;
+    req.session = { userId: routeUser1 };
+    next();
+  });
+  app.use('/', dashboardRouter);
+
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/`);
+    const body = await response.json();
+    const names = body.birthdays.map((birthday) => birthday.name);
+
+    nodeAssert.equal(response.status, 200);
+    nodeAssert.equal(body.birthdayCount, 2);
+    nodeAssert.ok(names.includes('Widget Other Today'), 'Dashboard widget must include birthdays created by other users');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('Dashboard-Endpoint filtert heutige Mahlzeiten nach sichtbaren Typen', async () => {
+  const { get } = await import('../server/db.js');
+  const { default: dashboardRouter } = await import('../server/routes/dashboard.js');
+  const routeDb = get();
+  const previousMealTypes = routeDb.prepare('SELECT value FROM sync_config WHERE key = ?').get('visible_meal_types')?.value ?? null;
+
+  routeDb.prepare("DELETE FROM meals WHERE created_by IN (SELECT id FROM users WHERE username LIKE 'dashboard-meals-%')").run();
+  routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-meals-%'").run();
+
+  const routeUser = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-meals-owner', 'Meal Owner', 'x', '#007AFF', 'admin')
+  `).run().lastInsertRowid;
+
+  routeDb.prepare(`
+    INSERT INTO meals (date, meal_type, title, created_by)
+    VALUES (?, ?, ?, ?)
+  `).run(today, 'breakfast', 'Hidden Breakfast', routeUser);
+  routeDb.prepare(`
+    INSERT INTO meals (date, meal_type, title, created_by)
+    VALUES (?, ?, ?, ?)
+  `).run(today, 'dinner', 'Visible Dinner', routeUser);
+  routeDb.prepare(`
+    INSERT INTO sync_config (key, value)
+    VALUES ('visible_meal_types', 'dinner')
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run();
+
+  const app = express();
+  app.use((req, _res, next) => {
+    req.authUserId = routeUser;
+    req.session = { userId: routeUser };
+    next();
+  });
+  app.use('/', dashboardRouter);
+
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/`);
+    const body = await response.json();
+
+    nodeAssert.equal(response.status, 200);
+    nodeAssert.deepEqual(body.todayMeals.map((meal) => meal.meal_type), ['dinner']);
+    nodeAssert.equal(body.todayMeals[0].title, 'Visible Dinner');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    if (previousMealTypes === null) {
+      routeDb.prepare('DELETE FROM sync_config WHERE key = ?').run('visible_meal_types');
+    } else {
+      routeDb.prepare(`
+        INSERT INTO sync_config (key, value)
+        VALUES ('visible_meal_types', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run(previousMealTypes);
+    }
+    routeDb.prepare("DELETE FROM meals WHERE created_by IN (SELECT id FROM users WHERE username LIKE 'dashboard-meals-%')").run();
+    routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-meals-%'").run();
+  }
+});
+
+test('Dashboard-Endpoint: Belohnungen liefert Punktestand, Teilnehmerzahl und offene Freigaben', async () => {
+  const { get } = await import('../server/db.js');
+  const { default: dashboardRouter } = await import('../server/routes/dashboard.js');
+  const routeDb = get();
+
+  routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-rewards-%'").run();
+
+  const parent = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-rewards-parent', 'Rewards Parent', 'x', '#007AFF', 'admin')
+  `).run().lastInsertRowid;
+  const kidA = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-rewards-kid-a', 'Kid A', 'x', '#34C759', 'member')
+  `).run().lastInsertRowid;
+  const kidB = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-rewards-kid-b', 'Kid B', 'x', '#FF9500', 'member')
+  `).run().lastInsertRowid;
+
+  for (const uid of [kidA, kidB]) {
+    routeDb.prepare('INSERT INTO reward_participants (user_id, enabled) VALUES (?, 1)').run(uid);
+  }
+  routeDb.prepare("INSERT INTO reward_ledger (user_id, delta, type) VALUES (?, 30, 'earn')").run(kidA);
+  routeDb.prepare("INSERT INTO reward_ledger (user_id, delta, type) VALUES (?, 80, 'earn')").run(kidB);
+  routeDb.prepare(`INSERT INTO reward_redemptions (user_id, reward_name, cost, status)
+    VALUES (?, 'Kino', 50, 'pending')`).run(kidB);
+
+  const app = express();
+  app.use((req, _res, next) => { req.authUserId = parent; req.session = { userId: parent }; next(); });
+  app.use('/', dashboardRouter);
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  try {
+    const body = await (await fetch(`http://127.0.0.1:${server.address().port}/`)).json();
+    const names = body.rewards.standings.map((s) => s.display_name);
+    nodeAssert.equal(names[0], 'Kid B', 'höchster Saldo führt das Ranking an');
+    nodeAssert.ok(names.includes('Kid A'), 'zweiter Teilnehmer ist enthalten');
+    nodeAssert.ok(!names.includes('Rewards Parent'), 'Nicht-Teilnehmer erscheinen nicht');
+    nodeAssert.equal(body.rewards.standings.find((s) => s.display_name === 'Kid B').balance, 80);
+    nodeAssert.equal(body.rewards.participantCount, 2);
+    nodeAssert.equal(body.rewards.pending, 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-rewards-%'").run();
+  }
+});
+
+test('Dashboard-Endpoint: Gesundheit zählt heute fällige eigene Dosen und Nachbestellungen', async () => {
+  const { get } = await import('../server/db.js');
+  const { default: dashboardRouter } = await import('../server/routes/dashboard.js');
+  const routeDb = get();
+
+  routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-health-%'").run();
+  const owner = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-health-owner', 'Health Owner', 'x', '#007AFF', 'admin')
+  `).run().lastInsertRowid;
+  const other = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-health-other', 'Health Other', 'x', '#34C759', 'member')
+  `).run().lastInsertRowid;
+
+  // Familiensichtbares Medikament mit täglichem Plan (days_mask NULL) → heute fällig.
+  const famMed = routeDb.prepare(`
+    INSERT INTO medications (user_id, name, active, visibility) VALUES (?, 'Vitamin D', 1, 'family')
+  `).run(owner).lastInsertRowid;
+  routeDb.prepare(`
+    INSERT INTO medication_schedules (medication_id, time_of_day, days_mask, active) VALUES (?, '08:00', NULL, 1)
+  `).run(famMed);
+  // Familiensichtbar, niedriger Bestand, ohne Plan → zählt als Nachbestellung, nicht als Dosis.
+  routeDb.prepare(`
+    INSERT INTO medications (user_id, name, active, visibility, stock_qty, refill_threshold)
+    VALUES (?, 'Ibuprofen', 1, 'family', 2, 5)
+  `).run(owner);
+  // Eigenes privates Medikament mit Plan → zählt auf dem persönlichen Dashboard mit.
+  const privMed = routeDb.prepare(`
+    INSERT INTO medications (user_id, name, active, visibility) VALUES (?, 'Privat-Med', 1, 'private')
+  `).run(owner).lastInsertRowid;
+  routeDb.prepare(`
+    INSERT INTO medication_schedules (medication_id, time_of_day, days_mask, active) VALUES (?, '09:00', NULL, 1)
+  `).run(privMed);
+  // Fremdes Medikament, familiensichtbar, früheste Zeit + niedriger Bestand → darf weder
+  // als Dosis noch als nextDose noch als Nachbestellung erscheinen (Issue #592).
+  const foreignMed = routeDb.prepare(`
+    INSERT INTO medications (user_id, name, active, visibility, stock_qty, refill_threshold)
+    VALUES (?, 'Fremd-Med', 1, 'family', 0, 5)
+  `).run(other).lastInsertRowid;
+  routeDb.prepare(`
+    INSERT INTO medication_schedules (medication_id, time_of_day, days_mask, active) VALUES (?, '05:00', NULL, 1)
+  `).run(foreignMed);
+
+  // Lokaler Tagesschlüssel wie im Handler (lokales Kalenderdatum), damit die
+  // medication_logs-Zuordnung (substr(scheduled_at,1,10)) auch westlich von UTC greift.
+  const localKey = toLocalDateKey(new Date());
+
+  // Zusätzlicher familiensichtbarer Med mit gesetzter days_mask=127 (jeder Wochentag) →
+  // deckt den Nicht-NULL-Maskenzweig ab und ist mit 07:00 die früheste offene Dosis.
+  const dailyMed = routeDb.prepare(`
+    INSERT INTO medications (user_id, name, active, visibility) VALUES (?, 'Tagesmed', 1, 'family')
+  `).run(owner).lastInsertRowid;
+  routeDb.prepare(`
+    INSERT INTO medication_schedules (medication_id, time_of_day, days_mask, active) VALUES (?, '07:00', 127, 1)
+  `).run(dailyMed);
+  // Plan startet erst in ferner Zukunft → heute nicht fällig (start_date-Zweig).
+  const futureMed = routeDb.prepare(`
+    INSERT INTO medications (user_id, name, active, visibility) VALUES (?, 'Zukunftsmed', 1, 'family')
+  `).run(owner).lastInsertRowid;
+  routeDb.prepare(`
+    INSERT INTO medication_schedules (medication_id, time_of_day, days_mask, start_date, active) VALUES (?, '06:00', NULL, '2099-12-31', 1)
+  `).run(futureMed);
+  // Plan bereits abgelaufen → heute nicht fällig (end_date-Zweig).
+  const endedMed = routeDb.prepare(`
+    INSERT INTO medications (user_id, name, active, visibility) VALUES (?, 'Abgelaufenmed', 1, 'family')
+  `).run(owner).lastInsertRowid;
+  routeDb.prepare(`
+    INSERT INTO medication_schedules (medication_id, time_of_day, days_mask, end_date, active) VALUES (?, '06:30', NULL, '2000-01-01', 1)
+  `).run(endedMed);
+  // Fällig + heute bereits genommen → zählt als dosesTaken, nicht als nextDose.
+  const takenMed = routeDb.prepare(`
+    INSERT INTO medications (user_id, name, active, visibility) VALUES (?, 'Genommenmed', 1, 'family')
+  `).run(owner).lastInsertRowid;
+  routeDb.prepare(`
+    INSERT INTO medication_schedules (medication_id, time_of_day, days_mask, active) VALUES (?, '10:00', NULL, 1)
+  `).run(takenMed);
+  routeDb.prepare(`
+    INSERT INTO medication_logs (medication_id, scheduled_at, status) VALUES (?, ?, 'taken')
+  `).run(takenMed, `${localKey}T10:00:00`);
+  // Fällig + heute ausgelassen → zählt als dosesSkipped.
+  const skippedMed = routeDb.prepare(`
+    INSERT INTO medications (user_id, name, active, visibility) VALUES (?, 'Ausgelassenmed', 1, 'family')
+  `).run(owner).lastInsertRowid;
+  routeDb.prepare(`
+    INSERT INTO medication_schedules (medication_id, time_of_day, days_mask, active) VALUES (?, '11:00', NULL, 1)
+  `).run(skippedMed);
+  routeDb.prepare(`
+    INSERT INTO medication_logs (medication_id, scheduled_at, status) VALUES (?, ?, 'skipped')
+  `).run(skippedMed, `${localKey}T11:00:00`);
+
+  const app = express();
+  app.use((req, _res, next) => { req.authUserId = owner; req.session = { userId: owner }; next(); });
+  app.use('/', dashboardRouter);
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  try {
+    const body = await (await fetch(`http://127.0.0.1:${server.address().port}/`)).json();
+    nodeAssert.equal(body.health.hasMeds, true);
+    // Fällig heute: Tagesmed (07:00), Vitamin D (08:00), Privat-Med (09:00),
+    // Genommenmed (10:00), Ausgelassenmed (11:00). Zukunfts-/Abgelaufen-Plan zählen
+    // nicht; das fremde Med (05:00) ist trotz visibility='family' ausgeschlossen.
+    nodeAssert.equal(body.health.dosesTotal, 5, 'fünf eigene, heute fällige Dosen (zukunft/abgelaufen/fremd ausgeschlossen)');
+    nodeAssert.equal(body.health.dosesTaken, 1, 'die geloggte Einnahme zählt als genommen');
+    nodeAssert.equal(body.health.dosesSkipped, 1, 'die geloggte Auslassung zählt als ausgelassen');
+    nodeAssert.equal(body.health.nextDose.name, 'Tagesmed', 'früheste eigene offene Dosis (07:00) ist die nächste');
+    nodeAssert.equal(body.health.lowStockCount, 1, 'nur der eigene niedrige Bestand wird gezählt');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-health-%'").run();
+  }
+});
+
+test('Dashboard-Endpoint: Haushaltshilfe meldet Anwesenheit, Monatsbesuche und offenen Betrag', async () => {
+  const { get } = await import('../server/db.js');
+  const { default: dashboardRouter } = await import('../server/routes/dashboard.js');
+  const routeDb = get();
+
+  routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-hk-%'").run();
+  const owner = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-hk-owner', 'HK Owner', 'x', '#007AFF', 'admin')
+  `).run().lastInsertRowid;
+  const helperUser = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-hk-helper', 'Maria', 'x', '#34C759', 'member')
+  `).run().lastInsertRowid;
+  const workerId = routeDb.prepare(`
+    INSERT INTO housekeeping_workers (user_id, daily_rate) VALUES (?, 40)
+  `).run(helperUser).lastInsertRowid;
+
+  // Offene Sitzung heute → Anwesenheit. check_in mit lokalem Monat.
+  routeDb.prepare(`
+    INSERT INTO housekeeping_work_sessions (check_in, check_out, daily_rate, extras, worker_id, created_by)
+    VALUES (?, NULL, 40, 0, ?, ?)
+  `).run(`${today}T09:00:00`, workerId, owner);
+  // Abgeschlossene, unbezahlte Sitzung diesen Monat.
+  routeDb.prepare(`
+    INSERT INTO housekeeping_work_sessions (check_in, check_out, daily_rate, extras, paid_at, worker_id, created_by)
+    VALUES (?, ?, 40, 10, NULL, ?, ?)
+  `).run(`${currentMonth}-01T09:00:00`, `${currentMonth}-01T13:00:00`, workerId, owner);
+
+  const app = express();
+  app.use((req, _res, next) => { req.authUserId = owner; req.session = { userId: owner }; next(); });
+  app.use('/', dashboardRouter);
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  try {
+    const body = await (await fetch(`http://127.0.0.1:${server.address().port}/`)).json();
+    nodeAssert.equal(body.housekeeping.configured, true);
+    nodeAssert.equal(body.housekeeping.present, true);
+    nodeAssert.equal(body.housekeeping.workerName, 'Maria');
+    nodeAssert.equal(body.housekeeping.visitsThisMonth, 1, 'nur abgeschlossene Sitzungen zählen als Besuch');
+    nodeAssert.equal(body.housekeeping.unpaidAmount, 50, 'daily_rate 40 + extras 10, unbezahlt');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-hk-%'").run();
+  }
+});
+
+test('Dashboard-Endpoint: dringende Aufgaben, anstehende Termine, Einkaufslisten und Sparziel', async () => {
+  const { get } = await import('../server/db.js');
+  const { default: dashboardRouter } = await import('../server/routes/dashboard.js');
+  const routeDb = get();
+
+  routeDb.prepare("DELETE FROM budget_plans WHERE category = '__savings__'").run();
+  routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-widgets-%'").run();
+  const owner = routeDb.prepare(`
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
+    VALUES ('dashboard-widgets-owner', 'Widget Owner', 'x', '#007AFF', 'admin')
+  `).run().lastInsertRowid;
+
+  // Offene, dringende Aufgabe mit Zuweisung → deckt die urgentTasks-Map + addAssignedUsers.
+  const taskId = routeDb.prepare(`
+    INSERT INTO tasks (title, priority, status, due_date, visibility, created_by, assigned_to)
+    VALUES ('Widget Urgent', 'urgent', 'open', ?, 'all', ?, ?)
+  `).run(today, owner, owner).lastInsertRowid;
+  routeDb.prepare('INSERT INTO task_assignments (task_id, user_id) VALUES (?, ?)').run(taskId, owner);
+
+  // Abgelegte Aufgabe (#688): steht weiter auf 'open' und wäre damit vor dem Fix
+  // in "Heute auf einen Blick" gelandet - dort ließ sie sich aber nicht öffnen,
+  // weil die Liste sie ausblendet.
+  routeDb.prepare(`
+    INSERT INTO tasks (title, priority, status, due_date, visibility, created_by, assigned_to, archived_at)
+    VALUES ('Widget Abgelegt', 'urgent', 'open', ?, 'all', ?, ?, '2026-08-01T10:00:00Z')
+  `).run(today, owner, owner);
+
+  // Anstehender Termin mit Zuweisung → deckt die upcomingEvents-Map (assigned_users).
+  const eventId = routeDb.prepare(`
+    INSERT INTO calendar_events (title, start_datetime, visibility, created_by, assigned_to)
+    VALUES ('Widget Termin', ?, 'all', ?, ?)
+  `).run(`${in72h}T09:00:00`, owner, owner).lastInsertRowid;
+  routeDb.prepare('INSERT INTO event_assignments (event_id, user_id) VALUES (?, ?)').run(eventId, owner);
+
+  // Einkaufsliste mit offenen Artikeln → deckt die innere Items-Schleife.
+  const listId = routeDb.prepare(`
+    INSERT INTO shopping_lists (name, created_by) VALUES ('Widget Einkauf', ?)
+  `).run(owner).lastInsertRowid;
+  routeDb.prepare('INSERT INTO shopping_items (list_id, name, is_checked) VALUES (?, ?, 0)').run(listId, 'Milch');
+  routeDb.prepare('INSERT INTO shopping_items (list_id, name, is_checked) VALUES (?, ?, 0)').run(listId, 'Brot');
+  routeDb.prepare('INSERT INTO shopping_items (list_id, name, is_checked) VALUES (?, ?, 1)').run(listId, 'Butter (erledigt)');
+
+  // Monats-Sparziel (Budgetplan) → deckt den savingsGoal-Zweig.
+  routeDb.prepare("INSERT INTO budget_plans (category, amount) VALUES ('__savings__', 500)").run();
+
+  const app = express();
+  app.use((req, _res, next) => { req.authUserId = owner; req.session = { userId: owner }; next(); });
+  app.use('/', dashboardRouter);
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  try {
+    const body = await (await fetch(`http://127.0.0.1:${server.address().port}/`)).json();
+
+    const urgent = body.urgentTasks.find((t) => t.title === 'Widget Urgent');
+    nodeAssert.ok(urgent, 'dringende Aufgabe erscheint im Widget');
+    nodeAssert.ok(Array.isArray(urgent.assigned_users), 'assigned_users ist ein Array (addAssignedUsers lief)');
+    nodeAssert.equal(urgent.assigned_users.length, 1, 'die eine Zuweisung ist enthalten');
+    nodeAssert.equal(urgent.assigned_users_json, undefined, 'das rohe JSON-Feld wird entfernt');
+    nodeAssert.equal(
+      body.urgentTasks.find((t) => t.title === 'Widget Abgelegt'),
+      undefined,
+      'abgelegte Aufgaben bleiben aus "Heute auf einen Blick" (#688)',
+    );
+
+    const upcoming = body.upcomingEvents.find((e) => e.title === 'Widget Termin');
+    nodeAssert.ok(upcoming, 'anstehender Termin erscheint im Widget');
+    nodeAssert.ok(Array.isArray(upcoming.assigned_users), 'assigned_users am Termin ist ein Array');
+
+    const list = body.shoppingLists.find((l) => l.name === 'Widget Einkauf');
+    nodeAssert.ok(list, 'Einkaufsliste mit offenen Artikeln erscheint');
+    nodeAssert.equal(list.open_count, 2, 'nur die zwei offenen Artikel zählen');
+    nodeAssert.equal(list.items.length, 2, 'die innere Items-Liste enthält nur offene Artikel');
+    nodeAssert.ok(list.items.every((i) => i.is_checked === 0), 'kein erledigter Artikel in der Items-Liste');
+
+    nodeAssert.equal(body.budget.savingsGoal, 500, 'Sparziel wird aus dem Budgetplan gelesen');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    routeDb.prepare("DELETE FROM budget_plans WHERE category = '__savings__'").run();
+    routeDb.prepare("DELETE FROM users WHERE username LIKE 'dashboard-widgets-%'").run();
+  }
+});
+
+test('Dashboard-Endpoint: fehlender Auth-Kontext führt zu 500 (kritischer Fehlerpfad)', async () => {
+  const { default: dashboardRouter } = await import('../server/routes/dashboard.js');
+
+  const app = express();
+  // Middleware setzt weder authUserId noch session → der Handler wirft beim Lesen von
+  // req.session.userId und der äußere try/catch liefert die 500-Antwort.
+  app.use((req, _res, next) => { next(); });
+  app.use('/', dashboardRouter);
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/`);
+    nodeAssert.equal(response.status, 500);
+    const body = await response.json();
+    nodeAssert.equal(body.code, 500);
+    nodeAssert.equal(body.error, 'Dashboard could not be loaded.');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+// --------------------------------------------------------
+// Tests: Budget
+// --------------------------------------------------------
+test('Budget: Monatswerte für Einnahmen, Ausgaben, Saldo und Top-Ausgabe', () => {
+  const from = `${currentMonth}-01`;
+  const to = `${currentMonth}-31`;
+  const totals = db.prepare(`
+    SELECT
+      SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS income,
+      SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END) AS expenses,
+      SUM(amount) AS balance,
+      COUNT(*) AS entry_count
+    FROM budget_entries
+    WHERE date BETWEEN ? AND ?
+  `).get(from, to);
+
+  const topExpense = db.prepare(`
+    SELECT category, SUM(amount) AS amount
+    FROM budget_entries
+    WHERE amount < 0 AND date BETWEEN ? AND ?
+    GROUP BY category
+    ORDER BY ABS(SUM(amount)) DESC
+    LIMIT 1
+  `).get(from, to);
+
+  assert(totals.income === 3000, `Einnahmen sollten 3000 sein, erhalten ${totals.income}`);
+  assert(Math.abs(totals.expenses) === 1650, `Ausgaben sollten 1650 sein, erhalten ${totals.expenses}`);
+  assert(totals.balance === 1350, `Saldo sollte 1350 sein, erhalten ${totals.balance}`);
+  assert(totals.entry_count === 3, `Erwartet 3 Einträge, erhalten ${totals.entry_count}`);
+  assert(topExpense.category === 'housing', 'Wohnen sollte Top-Ausgabenkategorie sein');
+});
+
+// --------------------------------------------------------
+// Tests: getUpcomingEvents (geteilte Dashboard/Kalender-Logik)
+// Regression für Issue #224: wiederkehrende Termine, deren Master-Start in
+// der Vergangenheit liegt, müssen auf der Übersicht erscheinen.
+// --------------------------------------------------------
+
+// Eigene DB mit vollständigem Kalender-Schema (subscription_id, calendar_ref_id).
+const cdb = new DatabaseSync(':memory:');
+cdb.exec('PRAGMA foreign_keys = ON;');
+cdb.exec(`
+  CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL,
+    password_hash TEXT NOT NULL, avatar_color TEXT NOT NULL DEFAULT '#007AFF',
+    avatar_data TEXT
+  );
+  CREATE TABLE external_calendars (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL, color TEXT
+  );
+  CREATE TABLE ics_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL, shared INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE TABLE calendar_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL, description TEXT,
+    start_datetime TEXT NOT NULL, end_datetime TEXT,
+    all_day INTEGER NOT NULL DEFAULT 0, location TEXT,
+    color TEXT NOT NULL DEFAULT '#007AFF', icon TEXT NOT NULL DEFAULT 'calendar',
+    assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    external_source TEXT NOT NULL DEFAULT 'local',
+    recurrence_rule TEXT,
+    subscription_id INTEGER REFERENCES ics_subscriptions(id) ON DELETE CASCADE,
+    calendar_ref_id INTEGER REFERENCES external_calendars(id) ON DELETE SET NULL,
+    visibility TEXT NOT NULL DEFAULT 'all'
+  );
+  CREATE TABLE event_assignments (
+    event_id INTEGER NOT NULL REFERENCES calendar_events(id) ON DELETE CASCADE,
+    user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (event_id, user_id)
+  );
+  CREATE TABLE calendar_event_exceptions (
+    event_id       INTEGER NOT NULL REFERENCES calendar_events(id) ON DELETE CASCADE,
+    exception_date TEXT    NOT NULL,
+    created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    PRIMARY KEY (event_id, exception_date)
+  );
+  -- Für den LEFT JOIN in getUpcomingEvents (Geburtstags-Lokalisierung, Issue #524).
+  CREATE TABLE birthdays (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL, birth_date TEXT NOT NULL,
+    calendar_event_id INTEGER REFERENCES calendar_events(id) ON DELETE SET NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE CASCADE
+  );
+`);
+
+const cu1 = cdb.prepare(`INSERT INTO users (username, display_name, password_hash, avatar_color)
+  VALUES ('theodore', 'Theodore', 'x', '#34C759')`).run();
+const cu2 = cdb.prepare(`INSERT INTO users (username, display_name, password_hash, avatar_color)
+  VALUES ('sofia', 'Sofia', 'x', '#AF52DE')`).run();
+const cuTheo = cu1.lastInsertRowid;
+const cuSofia = cu2.lastInsertRowid;
+
+function insertEvent(fields) {
+  const cols = Object.keys(fields);
+  const placeholders = cols.map(() => '?').join(', ');
+  const r = cdb.prepare(`INSERT INTO calendar_events (${cols.join(', ')}) VALUES (${placeholders})`)
+    .run(...cols.map((c) => fields[c]));
+  return r.lastInsertRowid;
+}
+
+const isoIn = (ms) => new Date(Date.now() + ms).toISOString().slice(0, 19);
+const HOUR = 3600000;
+const DAY = 24 * HOUR;
+// Tagesbeginn heute (UTC). Robust gegen die Tageszeit: ein Event hier ist immer
+// "heute" und nie in der Zukunft, anders als now-Nh (rollt nach Mitternacht UTC
+// auf gestern und macht den fromToday-Test #230 flaky).
+const todayStartIso = () => `${new Date().toISOString().slice(0, 10)}T00:00:00`;
+
+// Wiederkehrender Wochentermin, dessen Master-Start 14 Tage in der Vergangenheit liegt.
+// Die nächste Instanz liegt in 7 Tagen relativ zum Master, also innerhalb des Fensters.
+const recurStart = isoIn(-14 * DAY + 5 * HOUR);
+const recurId = insertEvent({
+  title: "Sofia Field Trip",
+  start_datetime: recurStart,
+  recurrence_rule: 'FREQ=WEEKLY;INTERVAL=1',
+  created_by: cuSofia,
+  assigned_to: cuSofia,
+});
+
+// Nicht-wiederkehrender Termin in der Vergangenheit -> darf NICHT erscheinen.
+insertEvent({ title: 'Past one-off', start_datetime: isoIn(-2 * DAY), created_by: cuTheo });
+
+// Termin von heute Morgen (Vergangenheit, aber noch heute) -> bei fromToday erscheinen.
+insertEvent({ title: 'Morning Meeting Today', start_datetime: todayStartIso(), created_by: cuTheo });
+
+// Nicht-wiederkehrender Termin in der Zukunft -> erscheint.
+// Beiden Nutzern (Theo + Sofia) zugewiesen – für Issue #284 (assigned_users im Dashboard).
+const soccerId = insertEvent({ title: 'Theodore Soccer Game', start_datetime: isoIn(3 * DAY), created_by: cuTheo });
+cdb.prepare(`INSERT INTO event_assignments (event_id, user_id) VALUES (?, ?)`).run(soccerId, cuTheo);
+cdb.prepare(`INSERT INTO event_assignments (event_id, user_id) VALUES (?, ?)`).run(soccerId, cuSofia);
+
+test('getUpcomingEvents: wiederkehrender Termin mit Vergangenheits-Start erscheint (Issue #224)', () => {
+  const events = getUpcomingEvents(cdb, { userId: cuTheo, limit: 10 });
+  const sofia = events.find((e) => e.title === 'Sofia Field Trip');
+  assert(sofia, 'Wiederkehrender "Sofia Field Trip" muss in den anstehenden Terminen erscheinen');
+  assert(sofia.start_datetime >= new Date().toISOString(), 'Die expandierte Instanz liegt in der Zukunft');
+  assert(sofia.id === recurId, 'Behält die Original-Event-ID der Serie');
+});
+
+test('calendarEventRoute: Dashboard-Link enthält die expandierte Instanz-Datumskomponente', async () => {
+  const { __test: dashboardHelpers } = await import('../public/pages/dashboard.js');
+  const events = getUpcomingEvents(cdb, { userId: cuTheo, limit: 10 });
+  const sofia = events.find((e) => e.title === 'Sofia Field Trip');
+  const route = dashboardHelpers.calendarEventRoute(sofia);
+  const params = new URLSearchParams(route.split('?')[1]);
+  assert(route.startsWith('/calendar?'), `Unerwartete Route: ${route}`);
+  assert(params.get('open') === String(recurId), 'Route muss die Serien-ID öffnen');
+  assert(params.get('date') === sofia.start_datetime.slice(0, 10),
+    'Route muss auf die expandierte Dashboard-Instanz zeigen');
+});
+
+test('calendarEventRoute: ungültige oder fehlende Startdaten erzeugen keinen kaputten date-Parameter', async () => {
+  const { __test: dashboardHelpers } = await import('../public/pages/dashboard.js');
+  const route = dashboardHelpers.calendarEventRoute({ id: 123, start_datetime: 'not-a-date' });
+  const params = new URLSearchParams(route.split('?')[1]);
+  assert(params.get('open') === '123', 'Event-ID bleibt erhalten');
+  assert(params.has('date') === false, 'Ungültiges Datum darf nicht in die Kalender-Query');
+  assert(dashboardHelpers.calendarEventRoute(null) === '/calendar', 'Ohne Event geht es zur Kalenderübersicht');
+});
+
+test('getUpcomingEvents: vergangene Einzeltermine erscheinen nicht', () => {
+  const events = getUpcomingEvents(cdb, { userId: cuTheo, limit: 10 });
+  assert(!events.find((e) => e.title === 'Past one-off'), 'Vergangener Einzeltermin darf nicht erscheinen');
+  assert(!events.find((e) => e.title === 'Morning Meeting Today'), 'Vergangener Heute-Termin ohne fromToday nicht erscheinen');
+});
+
+test('getUpcomingEvents: fromToday=true zeigt heutige vergangene Termine (Issue #230)', () => {
+  const events = getUpcomingEvents(cdb, { userId: cuTheo, limit: 10, fromToday: true });
+  assert(events.find((e) => e.title === 'Morning Meeting Today'),
+    'Heute-Morgen-Termin muss mit fromToday=true erscheinen');
+  assert(!events.find((e) => e.title === 'Past one-off'),
+    'Termin von gestern darf auch mit fromToday nicht erscheinen');
+});
+
+test('getUpcomingEvents: zukünftige Termine sortiert und auf limit begrenzt', () => {
+  const events = getUpcomingEvents(cdb, { userId: cuTheo, limit: 10 });
+  assert(events.find((e) => e.title === 'Theodore Soccer Game'), 'Zukünftiger Einzeltermin erscheint');
+  for (let i = 1; i < events.length; i++) {
+    assert(events[i - 1].start_datetime <= events[i].start_datetime, 'Aufsteigend nach Startzeit sortiert');
+  }
+  const limited = getUpcomingEvents(cdb, { userId: cuTheo, limit: 1 });
+  assert(limited.length === 1, `limit=1 liefert genau 1 Event, erhalten ${limited.length}`);
+});
+
+test('getUpcomingEvents: assigned_users_json enthält avatar_data (Issue #284)', () => {
+  const events = getUpcomingEvents(cdb, { userId: cuTheo, limit: 10 });
+  const soccer = events.find((e) => e.title === 'Theodore Soccer Game');
+  assert(soccer, 'Theodore Soccer Game muss erscheinen');
+  assert('assigned_users_json' in soccer, 'assigned_users_json muss im rohen Event enthalten sein');
+  const users = JSON.parse(soccer.assigned_users_json);
+  assert(Array.isArray(users) && users.length === 2,
+    `Erwartet 2 zugewiesene User, erhalten ${users.length}`);
+  assert(users.every((u) => 'avatar_data' in u),
+    'Jeder User im assigned_users_json muss avatar_data enthalten');
+  const theo  = users.find((u) => u.display_name === 'Theodore');
+  const sofia = users.find((u) => u.display_name === 'Sofia');
+  assert(theo,  'Theodore muss in assigned_users sein');
+  assert(sofia, 'Sofia muss in assigned_users sein');
+});
+
+test('getUpcomingEvents: Event ohne Assignments hat leeres assigned_users_json Array (Issue #284)', () => {
+  // Morning Meeting Today wurde ohne event_assignments eingefügt.
+  const mornEvents = getUpcomingEvents(cdb, { userId: cuTheo, limit: 10, fromToday: true });
+  const mm = mornEvents.find((e) => e.title === 'Morning Meeting Today');
+  assert(mm, 'Morning Meeting Today mit fromToday=true vorhanden');
+  const users = JSON.parse(mm.assigned_users_json ?? '[]');
+  assert(Array.isArray(users) && users.length === 0,
+    'Event ohne Zuweisung hat leeres assigned_users_json Array');
+});
+
+test('getUpcomingEvents: private ICS-Termine fremder User werden ausgeblendet', () => {
+  const sub = cdb.prepare(`INSERT INTO ics_subscriptions (name, shared, created_by) VALUES ('Privat', 0, ?)`)
+    .run(cuSofia).lastInsertRowid;
+  insertEvent({
+    title: 'Sofias privater ICS-Termin',
+    start_datetime: isoIn(2 * DAY),
+    external_source: 'ics',
+    subscription_id: sub,
+    created_by: cuSofia,
+  });
+  const events = getUpcomingEvents(cdb, { userId: cuTheo, limit: 20 });
+  assert(!events.find((e) => e.title === 'Sofias privater ICS-Termin'),
+    'Privates ICS-Abo eines anderen Users darf nicht erscheinen');
+  const ownerEvents = getUpcomingEvents(cdb, { userId: cuSofia, limit: 20 });
+  assert(ownerEvents.find((e) => e.title === 'Sofias privater ICS-Termin'),
+    'Eigentümer sieht seinen privaten ICS-Termin');
+});
+
+// --------------------------------------------------------
+// Bug #360: Geburtstag mit reminder_offset='' darf nicht als Kalender-Event existieren
+// --------------------------------------------------------
+{
+  const bdb = new DatabaseSync(':memory:');
+  bdb.exec(`
+    CREATE TABLE users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL, avatar_color TEXT NOT NULL DEFAULT '#007AFF',
+      avatar_data TEXT
+    );
+    CREATE TABLE calendar_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL, description TEXT,
+      start_datetime TEXT NOT NULL, end_datetime TEXT,
+      all_day INTEGER NOT NULL DEFAULT 0, location TEXT,
+      color TEXT NOT NULL DEFAULT '#007AFF', icon TEXT NOT NULL DEFAULT 'calendar',
+      assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      external_source TEXT NOT NULL DEFAULT 'local',
+      recurrence_rule TEXT,
+      subscription_id INTEGER,
+      calendar_ref_id INTEGER,
+      visibility TEXT NOT NULL DEFAULT 'all'
+    );
+    CREATE TABLE birthdays (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL, birth_date TEXT NOT NULL, notes TEXT,
+      photo_data TEXT, created_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      calendar_event_id INTEGER REFERENCES calendar_events(id) ON DELETE SET NULL,
+      reminder_offset TEXT, reminder_custom_amount TEXT, reminder_custom_unit TEXT,
+      updated_at TEXT
+    );
+    CREATE TABLE event_assignments (
+      event_id INTEGER NOT NULL REFERENCES calendar_events(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (event_id, user_id)
+    );
+    CREATE TABLE ics_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL, shared INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE reminders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_type TEXT NOT NULL, entity_id INTEGER NOT NULL,
+      remind_at TEXT NOT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    );
+  `);
+  const bUserId = bdb.prepare(
+    `INSERT INTO users (username, display_name, password_hash, avatar_color) VALUES ('bert', 'Bert', 'x', '#ff0')`
+  ).run().lastInsertRowid;
+
+  test('syncBirthdayArtifacts: reminder_offset="" → kein calendar_event_id (Issue #360)', () => {
+    const bdId = bdb.prepare(
+      `INSERT INTO birthdays (name, birth_date, created_by, reminder_offset) VALUES ('Max', '1990-05-10', ?, '')`
+    ).run(bUserId).lastInsertRowid;
+    const bd = bdb.prepare('SELECT * FROM birthdays WHERE id = ?').get(bdId);
+    syncBirthdayArtifacts(bdb, bd);
+    const updated = bdb.prepare('SELECT calendar_event_id FROM birthdays WHERE id = ?').get(bdId);
+    assert(updated.calendar_event_id === null, 'Geburtstag ohne Benachrichtigung darf kein Kalender-Event haben');
+    const evCount = bdb.prepare('SELECT COUNT(*) AS n FROM calendar_events').get().n;
+    assert(evCount === 0, 'Keine Kalender-Events in der DB erwartet');
+  });
+
+  test('syncBirthdayArtifacts: vorhandenes Event wird bei reminder_offset="" gelöscht (Issue #360)', () => {
+    const evId = bdb.prepare(
+      `INSERT INTO calendar_events (title, start_datetime, all_day, created_by) VALUES ('Geburtstag Hans', '1985-03-15', 1, ?)`
+    ).run(bUserId).lastInsertRowid;
+    const bdId = bdb.prepare(
+      `INSERT INTO birthdays (name, birth_date, created_by, calendar_event_id, reminder_offset) VALUES ('Hans', '1985-03-15', ?, ?, '')`
+    ).run(bUserId, evId).lastInsertRowid;
+    const bd = bdb.prepare('SELECT * FROM birthdays WHERE id = ?').get(bdId);
+    syncBirthdayArtifacts(bdb, bd);
+    const ev = bdb.prepare('SELECT * FROM calendar_events WHERE id = ?').get(evId);
+    assert(!ev, 'Vorhandenes Kalender-Event muss gelöscht worden sein');
+    const updated = bdb.prepare('SELECT calendar_event_id FROM birthdays WHERE id = ?').get(bdId);
+    assert(updated.calendar_event_id === null, 'calendar_event_id in birthdays muss NULL sein');
+  });
+
+  test('syncBirthdayArtifacts: reminder_offset gesetzt → Kalender-Event wird angelegt (Issue #360)', () => {
+    const bdId = bdb.prepare(
+      `INSERT INTO birthdays (name, birth_date, created_by, reminder_offset) VALUES ('Lisa', '1992-07-20', ?, '1440')`
+    ).run(bUserId).lastInsertRowid;
+    const bd = bdb.prepare('SELECT * FROM birthdays WHERE id = ?').get(bdId);
+    syncBirthdayArtifacts(bdb, bd);
+    const updated = bdb.prepare('SELECT calendar_event_id FROM birthdays WHERE id = ?').get(bdId);
+    assert(updated.calendar_event_id !== null, 'Geburtstag mit Erinnerung muss ein Kalender-Event haben');
+    const ev = bdb.prepare('SELECT * FROM calendar_events WHERE id = ?').get(updated.calendar_event_id);
+    assert(ev, 'Kalender-Event muss existieren');
+    assert(ev.all_day === 1, 'Geburtstags-Event muss ganztägig sein');
+  });
+}
+
+// --------------------------------------------------------
+// Bug-Fixes: ganztägige Termine + Geburtstags-Filterung
+// --------------------------------------------------------
+test('getUpcomingEvents: ganztägiger Termin heute erscheint mit fromToday=true (Issue #360)', () => {
+  const todayDate = new Date().toISOString().slice(0, 10);
+  insertEvent({
+    title: 'Ganztägiger Termin heute',
+    start_datetime: todayDate, // kein T-Teil – genau das war das Problem
+    all_day: 1,
+    created_by: cuTheo,
+  });
+  const events = getUpcomingEvents(cdb, { userId: cuTheo, limit: 20, fromToday: true });
+  assert(events.find((e) => e.title === 'Ganztägiger Termin heute'),
+    'Heutiger ganztägiger Termin muss im Dashboard erscheinen (start_datetime ohne Zeit-Teil)');
+});
+
+test('getUpcomingEvents: ganztägiger Termin in der Zukunft erscheint (Issue #360)', () => {
+  const futureDate = new Date(Date.now() + 3 * DAY).toISOString().slice(0, 10);
+  insertEvent({
+    title: 'Ganztägiger Zukunfts-Termin',
+    start_datetime: futureDate,
+    all_day: 1,
+    created_by: cuTheo,
+  });
+  const events = getUpcomingEvents(cdb, { userId: cuTheo, limit: 20, fromToday: true });
+  assert(events.find((e) => e.title === 'Ganztägiger Zukunfts-Termin'),
+    'Zukünftiger ganztägiger Termin muss im Dashboard erscheinen');
+});
+
+// --------------------------------------------------------
+// Tests: maybeUpdateAutoLocation (Per-User-Wetter-Standort)
+// --------------------------------------------------------
+test('maybeUpdateAutoLocation writes weather_user and ignores role', async () => {
+  const { maybeUpdateAutoLocation } = await import('../public/pages/dashboard.js');
+  const calls = [];
+  const geolocation = {
+    getCurrentPosition: (resolve) => resolve({ coords: { latitude: 52.5200, longitude: 13.4100 } }),
+  };
+  const ok = await maybeUpdateAutoLocation({
+    autoLocateEnabled: true,
+    geolocation,
+    putPreferences: (body) => { calls.push(body); return Promise.resolve(); },
+  });
+  nodeAssert.equal(ok, true);
+  nodeAssert.equal(calls.length, 1);
+  nodeAssert.deepEqual(calls[0], { weather_user: { lat: '52.5200', lon: '13.4100', city: null } });
+});
+
+test('maybeUpdateAutoLocation skips when disabled', async () => {
+  const { maybeUpdateAutoLocation } = await import('../public/pages/dashboard.js');
+  const ok = await maybeUpdateAutoLocation({
+    autoLocateEnabled: false,
+    geolocation: { getCurrentPosition: () => { throw new Error('should not be called'); } },
+    putPreferences: () => { throw new Error('should not be called'); },
+  });
+  nodeAssert.equal(ok, false);
+});
+
+// --------------------------------------------------------
+// Ergebnis
+// --------------------------------------------------------
+await Promise.all(pendingTests);
+
+console.log(`\n[Dashboard-Test] Ergebnis: ${passed} bestanden, ${failed} fehlgeschlagen\n`);
+if (failed > 0) process.exit(1);

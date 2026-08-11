@@ -1,0 +1,85 @@
+name: Bug Report
+description: Something isn't working as expected
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! The version and deployment
+        fields below decide where we look first - Yuvomi ships to seven
+        deployment targets and they fail in different ways.
+  - type: input
+    id: version
+    attributes:
+      label: Yuvomi version
+      description: >-
+        Open **Changes** in the sidebar - the dialog shows the installed
+        version at the top. (For source installs, `git rev-parse --short HEAD`
+        works too.)
+      placeholder: "e.g. 1.84.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      description: How is this instance installed?
+      options:
+        - Docker Compose (incl. web/CLI installer)
+        - Podman / Quadlet
+        - TrueNAS SCALE (catalog app)
+        - Umbrel
+        - Unraid (Community Applications)
+        - Portainer stack
+        - Bare metal / from source
+        - Other (describe below)
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs. actual behavior
+      description: >-
+        What you expected to happen, and what actually happened. Include error
+        messages, console output, or screenshots if applicable.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser / device / OS
+      placeholder: "e.g. Firefox 128 on Ubuntu 24.04 / Safari on iPhone 15 (iOS 18)"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >-
+        Container logs if relevant - for Docker Compose:
+        `docker compose logs yuvomi --tail=50`
+        (installations from before the rename still use `oikos` as the
+        service name). Output is formatted automatically.
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any other context - screenshots, related issues, or configuration details.

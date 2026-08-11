@@ -1,0 +1,848 @@
+/**
+ * Modul: Einkaufslisten (Shopping)
+ * Zweck: Styles für Listen-Tabs, Artikel-Liste, Kategorie-Gruppen, Quick-Add, Autocomplete
+ * Abhängigkeiten: tokens.css, layout.css
+ */
+
+/* --------------------------------------------------------
+ * Modul-Akzent
+ * -------------------------------------------------------- */
+.shopping-page {
+  /* Geteilter Küchen-Akzent, siehe --module-kitchen in tokens.css. */
+  --module-accent: var(--module-kitchen);
+}
+
+/* --------------------------------------------------------
+ * Seiten-Layout
+ * -------------------------------------------------------- */
+.shopping-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Full-bleed-Root (Issue #577): Content-Spalte über --page-inline-pad auf den
+   * direkten Kindern. Die 720er-Lesespalte der Liste (unten, ab 1024px) bleibt
+   * davon unberührt und sitzt weiterhin an derselben Stelle. */
+  /* overflow:clip inside overflow:auto (.app-content) triggers iOS WebKit blank-screen on scroll.
+   * overflow:hidden provides identical clipping without the compositor bug. */
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .shopping-page {
+    height: 100%;
+  }
+}
+
+/* --------------------------------------------------------
+ * Listen-Tabs (horizontal scroll)
+ * -------------------------------------------------------- */
+.list-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* Schlanker als die Modul-Tabs darüber: liest sich als sekundäre Sub-Leiste,
+   * nicht als zweite gleichrangige Navigation. */
+  padding-block: var(--space-1);
+  padding-inline: var(--page-inline-pad);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.list-tabs-bar::-webkit-scrollbar { display: none; }
+
+/* Kategorie-Marker: bleibt links stehen (scrollt nicht mit den Chips weg). */
+.list-tabs-bar__marker {
+  position: sticky;
+  left: 0;
+  flex-shrink: 0;
+  width: var(--space-4);
+  height: var(--space-4);
+  color: var(--color-text-tertiary);
+  background-color: var(--color-surface);
+}
+
+.list-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1.5px solid var(--color-border);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  /* Benannt statt `all`: der Chip wechselt auf Hover und im Aktivzustand genau
+   * diese drei. `all` zieht implizit auch Layout-Properties mit - im Modul wurden
+   * sonst 0 animierte Layout-Properties gemessen, diese drei Stellen waren die
+   * einzige Lücke in der Zusage (Critique 2026-07-30). */
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  min-height: var(--target-base);
+}
+
+.list-tab:hover:not(.list-tab--active) {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+/* Aktive Liste: Modul-Akzent GEFÜLLT - die eine Segment-Sprache der Shell
+ * (DESIGN.md „Segmented Controls", Muster .sub-tab--active). Die
+ * Listen-Auswahl steht direkt unter der Küchen-Tab-Leiste, die seit dem
+ * HIG-Rollout gefüllt ist; eine 14 %-Tönung darunter las sich als zweiter,
+ * schwächerer Zustandsbegriff für dieselbe Handlung.
+ *
+ * Das frühere Ink-Label war mit der Tönung richtig (Modul-Akzent als TEXT auf
+ * Hell erreicht nur ~3.5:1); auf der Vollfläche erbt --color-ink-on-vivid den
+ * verifizierten Akzent-auf-Weiß-Wert (>=5:1). */
+.list-tab--active {
+  background-color: var(--module-accent);
+  border-color: var(--module-accent);
+  color: var(--color-ink-on-vivid);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Der Zähler kehrt sich auf der gefüllten Pille um - gleiche Rechnung wie
+ * .sub-tab--active .sub-tab__badge. */
+.list-tab--active .list-tab__count {
+  background-color: var(--color-ink-on-vivid);
+  color: var(--module-accent);
+}
+
+.list-tab__count {
+  background-color: color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: var(--radius-full);
+  padding: var(--space-px) var(--space-1);
+  font-size: var(--text-xs);
+}
+
+.list-tab__new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--target-base);
+  height: var(--target-base);
+  border-radius: var(--radius-full);
+  border: 1.5px dashed var(--color-border);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+  min-height: var(--target-lg);
+}
+
+.list-tab__new:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* --------------------------------------------------------
+ * Liste-Header (Name + Aktionen)
+ * -------------------------------------------------------- */
+/* Der Listen-Kopf ist der kanonische .page-toolbar in der Variante --in-group
+ * (#list-head in shopping.js). Padding, Trennlinie, opaker Hintergrund und
+ * Sticky-Rolle kommen von dort - inklusive der Warnung, dass hier kein
+ * backdrop-filter hin darf (WebKit leert sonst den Scroll-Container, iOS 26+).
+ * Die frühere .list-header-Regel entfällt damit vollständig. */
+/* Der Titel ist zugleich die Umbenennen-Affordanz: Flex nur, damit das
+ * Stift-Icon neben dem Namen sitzt. nowrap, overflow und Ellipse kommen aus
+ * .page-toolbar__title - vorher stand hier `overflow: hidden` OHNE
+ * `white-space`, was gar nicht kürzt: „Weekly Shop" brach schon bei 1440px in
+ * zwei Zeilen (Critique 2026-07-29). */
+.list-header__name {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  /* Der Titel ist ein `role="button"` (Umbenennen) und war nur 25px hoch
+   * gemessen - unter --target-md, der Desktop-Untergrenze des Projekts. Als
+   * einziger Weg zum Umbenennen einer Liste braucht er die reguläre
+   * Zielgröße (Critique 2026-07-29). */
+  min-height: var(--target-md);
+}
+
+@media (hover: none) {
+  .list-header__name {
+    min-height: var(--target-lg);
+  }
+}
+
+.list-header__edit-icon {
+  width: var(--space-4);
+  height: var(--space-4);
+  /* tertiary, nicht disabled (gemessen 1.36:1 auf --color-bg im Light).
+   * Der Stift steht zwar neben Text, aber der Text ist der LISTENNAME - er sagt
+   * nirgends, dass die Zeile bedienbar ist. Das Icon ist die einzige Affordanz
+   * fuers Umbenennen und traegt damit Information (WCAG 1.4.11), auch wenn es
+   * aria-hidden ist: das gilt fuer den Screenreader, nicht fuers Auge. */
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+/* Hier standen `.list-header__clear-btn`, `.list-header__clear-label`,
+ * `.list-header__checked` und `.list-header__pantry-btn`: vier Regeln, die die
+ * beiden Abschluss-Aktionen im Kopf am Leben hielten - Ellipse fürs Label,
+ * Mindestbreite gegen das Zusammenquetschen, ein eigener Flex-Container, damit sie
+ * zusammen umbrechen. Jede davon war die Antwort auf eine Platznot, die es im Kopf
+ * gar nicht zu lösen gab: mobil brachen sie trotzdem in zwei zusätzliche Zeilen
+ * (Kopfhöhe 173px bei 393px, 229px bei 320px).
+ *
+ * Die Aktionen sitzen jetzt in der geteilten .list-bulkbar über der Liste, mit
+ * vollen Labels und einer Zeile, die sagt, worauf sie wirken (Critique
+ * 2026-07-30, P1). */
+
+.list-header__import-btn {
+  gap: var(--space-2);
+}
+
+/* Die drei dauerhaften Kopf-Aktionen in zwei Fassungen: Leiste ab 768px,
+ * Überlaufmenü darunter. Genau eine ist je Breite im Layout - `display: none`
+ * nimmt die andere auch aus der Tabfolge, es gibt also keine doppelten Stops.
+ *
+ * WARUM DER SCHNITT BEI 768px UND NICHT BEI `hover: none`: ein 700px breites
+ * Desktop-Fenster hat eine Maus und trotzdem keinen Platz für drei Buttons neben
+ * dem Titel. Maßgeblich ist hier die Breite, nicht die Zeigerfähigkeit - anders
+ * als beim Quick-Add und beim Zeilen-Löschen weiter unten, wo es um Finger
+ * gegen Cursor geht. */
+.list-header__inline-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.list-header__more {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .list-header__inline-actions {
+    display: none;
+  }
+
+  .list-header__more {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+}
+
+/* Untergrenze wie bei .list-header__clear-btn - siehe dort. */
+.list-header__pantry-btn {
+  font-size: var(--text-sm);
+  min-width: var(--target-lg);
+}
+
+/* Kopf-Inhalt auf dasselbe Lesemaß wie der Körper: `.page-toolbar--narrow`
+ * (layout.css), gesetzt im Markup neben `--in-group`. Hier stand dieselbe
+ * Absicht als `> * { max-width: ... }` - sie kappte die Slot-Breiten und ließ
+ * die Aktionen trotzdem an der äußeren Kante stehen; die Begründung steht am
+ * geteilten Selektor.
+ *
+ * Der Kopf darf umbrechen: Titel und die drei Listen-Aktionen brauchen
+ * zusammen mehr als das Lesemaß, sobald der Listenname lang wird. */
+.shopping-page .page-toolbar--in-group {
+  flex-wrap: wrap;
+}
+
+/* --------------------------------------------------------
+ * Übernahme-Dialog „Einkauf → Vorrat"
+ * -------------------------------------------------------- */
+
+.pantry-transfer__intro {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+.pantry-transfer__list {
+  margin: var(--space-2) 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+  /* Lange Einkäufe scrollen im Dialog statt ihn über den Bildschirm zu treiben;
+   * Kopf, Lagerort-Auswahl und Fußzeile bleiben dadurch immer erreichbar. */
+  max-height: min(46vh, 380px);
+  overflow-y: auto;
+}
+
+/* Name | Menge | Einheit auf einer Zeile, solange der Name seine 10rem hält.
+ * Darunter rutschen Menge und Einheit gemeinsam in die zweite Zeile und teilen
+ * sie sich - drei Spalten auf einem schmalen Telefon hätten den Namen auf
+ * wenige Zeichen zusammengedrückt. Intrinsisch statt per Breakpoint, weil die
+ * maßgebliche Breite die des Modals ist, nicht die des Viewports. */
+.pantry-transfer__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pantry-transfer__name {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pantry-transfer__qty {
+  flex: 1 1 6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pantry-transfer__unit {
+  flex: 1 1 8rem;
+}
+
+/* Geometrie, Zielgröße und das eingekleidete Control kommen aus dem geteilten
+ * .form-check (layout.css). Hier bleibt nur die Tinte: die Zeile ist eine
+ * Nebenoption unter der Artikel-Liste, kein Formularfeld auf Augenhöhe. */
+.pantry-transfer__clear {
+  color: var(--color-text-secondary);
+}
+
+.shopping-import-meals-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Mobiler Kopf: EINE Zeile, Titel plus Überlaufmenü.
+ *
+ * Was hier stand, war die dritte Ausbaustufe eines Umbruch-Managements: `#list-head
+ * { flex-wrap: wrap }`, eine Sonderregel für den Titel, eine für die Aktionsgruppe,
+ * ein `:empty`-Schutz gegen leere Zeilen, ein zweites `flex-wrap` innerhalb der
+ * abgehakt-Gruppe und `flex-shrink: 0` gegen deren Ellipsen. Jede Stufe reagierte
+ * darauf, dass fünf Bedienelemente nicht in 361px passen.
+ *
+ * Sie passen jetzt, weil es zwei sind: der Titel und ein Menü-Trigger. Die drei
+ * dauerhaften Aktionen stehen mit Label im Menü, die zwei Abschluss-Aktionen in der
+ * .list-bulkbar über der Liste. Gemessen 173px Kopfhöhe vorher (229px bei
+ * 320px), erste Datenzeile bei y=439 von 852.
+ *
+ * DER UMBRUCH BLEIBT ALS RÜCKFALL: eine Locale mit langem Listennamen oder eine
+ * größere Systemschrift darf umbrechen statt zu überlaufen. Er ist nur nicht mehr
+ * der Regelfall, den vier Sonderregeln zähmen müssen. */
+@media (max-width: 767px) {
+  #list-head {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+
+  /* Den Titel mobil ganz auszublenden wäre naheliegend - der aktive Chip darüber
+   * zeigt den Namen bereits -, macht aber das UMBENENNEN unerreichbar:
+   * `rename-list` hängt ausschließlich an diesem Titel. Erst wenn die Aktion einen
+   * zweiten Weg hat (etwa im Überlaufmenü), ist das eine Option. */
+  #list-head .page-toolbar__title {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  #list-head .page-toolbar__actions {
+    justify-content: flex-end;
+    min-width: 0;
+  }
+}
+
+/* --------------------------------------------------------
+ * Quick-Add Eingabe
+ * -------------------------------------------------------- */
+.quick-add {
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  flex-shrink: 0;
+  position: relative;
+  /* Teilt das Lesemaß der Liste darunter (siehe .items-list), damit Eingabezeile
+   * und Artikel an derselben rechten Kante enden. */
+  max-width: var(--content-max-width-narrow);
+}
+
+/* Auf Touch eingeklappt; der FAB öffnet es (utils/… bzw. syncQuickAddDisclosure
+ * in shopping.js).
+ *
+ * WARUM `hover: none` UND NICHT EINE BREITE: das Kriterium ist, ob der FAB
+ * überhaupt das primäre Erstell-Muster ist. Auf Zeigergeräten ist das sichtbare
+ * Feld schneller als jeder Knopf, und Platz ist dort nicht das Problem.
+ *
+ * WAS ES EINSPART: 126px von 439px Chrome über der ersten Datenzeile bei 393px.
+ * WAS ES KOSTET: einen Tap pro Einkaufszettel-Eintrag - aber der FAB tut damit
+ * dasselbe wie in den drei Geschwistertabs, und der Leerzustands-CTA führt
+ * denselben Weg (Critique 2026-07-30, P1).
+ *
+ * `display: none`, nicht `height: 0`: ein eingeklapptes Feld darf keinen
+ * Tabstop und keine Autocomplete-Fläche hinterlassen. */
+@media (hover: none) {
+  .quick-add {
+    display: none;
+  }
+
+  .shopping-page--adding .quick-add {
+    display: block;
+  }
+}
+
+/* Der Leerzustands-CTA entfällt, solange das Eingabefeld selbst sichtbar ist.
+ *
+ * Auf der leeren Liste konkurrierten drei identische Add-Wege: das Feld oben, der
+ * CTA in der Mitte und der FAB unten (gemessen y=294/…/716 bei 393px), während
+ * der Hinweis daneben auf das Feld verwies. Auf Touch ist das Feld eingeklappt -
+ * dort ist der CTA der sichtbare Weg und bleibt. Auf Zeigergeräten steht das Feld
+ * offen, und ein Knopf, der nur dorthin führt, ist eine dritte Tür in denselben
+ * Raum (Critique 2026-07-30). */
+@media (hover: hover) {
+  #items-list > .empty-state > .empty-state__cta {
+    display: none;
+  }
+}
+
+.quick-add__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--target-base);
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.quick-add__input-wrap {
+  grid-column: 1 / -1;
+  position: relative;
+  min-width: 0;
+}
+
+.quick-add__input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  /* --color-border wie die beiden Nachbarfelder, nicht --glass-border-subtle.
+   * Das Glas-Token ist ein weißes Alpha (35 % hell / 12 % dunkel) und erreichte
+   * auf der opaken Arbeitsfläche 1.03:1 gegen den Grund - die schwächste
+   * Feldkante der ganzen App und als Glas auf einer Arbeitsfläche zusätzlich
+   * gegen die Hausregel „Glas bleibt der Shell" (Critique 2026-07-29). */
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  min-height: var(--target-base);
+}
+
+.quick-add__input:focus {
+  outline: none;
+  border-color: var(--module-accent, var(--color-accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-shadow), transparent);
+}
+
+.quick-add__qty {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  min-height: var(--target-base);
+  height: var(--target-base);
+}
+
+/* Sichtbarer Fokus-Ring wie beim Namensfeld (Audit F-10): der reine
+ * 1.5px-Border-Farbwechsel war als Fokus-Indikator zu schwach. */
+.quick-add__qty:focus {
+  outline: none;
+  border-color: var(--module-accent, var(--color-accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-shadow), transparent);
+}
+
+.quick-add__cat {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+  cursor: pointer;
+  min-height: var(--target-base);
+}
+
+.quick-add__cat:focus {
+  outline: none;
+  border-color: var(--module-accent, var(--color-accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-shadow), transparent);
+}
+
+@media (min-width: 1024px) {
+  .quick-add__form {
+    grid-template-columns: minmax(0, 1fr) calc(var(--target-lg) + var(--space-8)) minmax(calc(var(--target-lg) * 2), calc(var(--target-lg) * 3)) var(--target-base);
+  }
+
+  .quick-add__input-wrap {
+    grid-column: auto;
+  }
+
+  .quick-add__input { font-size: var(--text-base); }
+  .quick-add__qty   { font-size: var(--text-base); }
+  .quick-add__cat   { font-size: var(--text-base); }
+}
+
+.quick-add__btn {
+  width: var(--target-base);
+  height: var(--target-base);
+  border-radius: var(--radius-full);
+  /* Modul-Akzent wie FAB und Fokus-Ringe daneben (Audit F-05) — vorher stand
+   * der einzige violette App-Akzent-Button neben lauter Pink. */
+  background-color: var(--module-accent, var(--color-accent));
+  color: var(--color-ink-on-vivid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color var(--transition-fast);
+  min-height: var(--target-lg);
+}
+
+.quick-add__btn:hover { background-color: color-mix(in srgb, var(--module-accent, var(--color-accent)) 85%, black); }
+
+/* Autocomplete-Dropdown */
+.autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background-color: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-modal);
+  overflow: hidden;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.autocomplete-item {
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  font-size: var(--text-base);
+  transition: background-color var(--transition-fast);
+}
+
+.autocomplete-item:hover,
+.autocomplete-item--active {
+  background-color: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+/* Lade-Feedback beim Listenwechsel: dimmt den alten Inhalt, bis der neue steht. */
+/* Inhaltsfläche unter der Listen-Auswahl: trägt die gemeinsame Content-Spalte,
+ * damit die 720er-Lesespalte darin an derselben Stelle sitzt wie zuvor. */
+#list-content {
+  padding-inline: var(--page-inline-pad);
+}
+
+#list-content[aria-busy="true"] {
+  opacity: 0.55;
+  transition: opacity var(--transition-fast);
+}
+
+/* --------------------------------------------------------
+ * Artikel-Liste (scrollbar)
+ * -------------------------------------------------------- */
+/* Bottom-Padding hält die letzte Zeile frei vom FAB, der sonst den untersten
+ * Artikel überdeckt. Gleiche Formel wie --budget-fab-clearance und
+ * --rw-fab-clearance, damit die Freiräume app-weit gleich groß sind. */
+/* Scroller, Lesemaß, FAB-Auslauf und Gruppen-Abstand kommen aus .list-scroller
+ * (styles/list-row.css); die Klasse steht im Markup neben .items-list.
+ *
+ * Weggefallen ist dabei das eigene `padding: 0 var(--space-4)`: #list-content
+ * trägt schon --page-inline-pad, und das Eigenpolster addierte sich darauf.
+ * Genau das war der Grund, warum der Einkauf bei x=268 begann, während Kopf,
+ * Rezepte und Vorrat bei x=252 beginnen - auf allen fünf Viewports (Critique
+ * 2026-07-30). Die Content-Spalte darf pro Ahnenkette genau einmal gesetzt
+ * werden, das ist der Canonical-Page-Head-Vertrag aus DESIGN.md. */
+
+/* --------------------------------------------------------
+ * Kategorie-Gruppen
+ * -------------------------------------------------------- */
+/* KEINE reservierte FAB-Gasse mehr.
+ *
+ * Hier stand `padding-inline-end: var(--fab-lane)` = 76px auf JEDER
+ * Kategoriegruppe. Der Einkauf war damit der einzige kollisionsfreie Tab (12/12
+ * Messungen) - und der einzige, dessen Liste man im Laden nicht lesen konnte:
+ * bei 320px blieben 56px Namensbreite gegen 176px Bedarf, also rund vier
+ * Zeichen („Broc…", „Cherr…"). 24% der Viewportbreite für einen Knopf in der
+ * Ecke (Critique 2026-07-30, P0).
+ *
+ * Den Freiraum trägt jetzt `--fab-safe-zone`: eine Marge an .app-content
+ * verkürzt den Scrollport, sodass bei jedem Scrollstand nichts Bedienbares mehr
+ * unter dem FAB liegt - eine Antwort für alle vier Tabs, statt einer Gasse hier
+ * und 14 Überdeckungen dort. */
+
+/* Der Abstand zwischen den Gruppen kommt aus dem gap von .list-scroller. */
+
+/* Web: Einkauf-Content als breitenbegrenzte Lesespalte statt links auslaufender
+ * Vollbreite (die Liste liest sich auf ≥1024px ruhiger).
+ *
+ * LINKSBÜNDIG, nicht zentriert (Critique 2026-07-29): die 720er-Spalte ist per
+ * DESIGN.md erlaubt, ihre Zentrierung war es nie. Zentriert begann der Body bei
+ * 1440px auf x=470, während Mahlzeiten, Rezepte und Vorrat bei x=252 beginnen
+ * und die geteilte Küchen-Tab-Leiste darüber bei x=323 - beim Durchklicken der
+ * vier Tabs sprang der Inhalt sichtbar um 218px. Der Canonical-Page-Head-
+ * Vertrag (#577) verlangt EINE Alignment-Linie; die Lesespalte darf schmaler
+ * sein als die Content-Spalte, muss aber an derselben Kante beginnen.
+ * Damit entfällt auch die Sonderrechnung für .list-tabs-bar: sie erbt jetzt
+ * dieselbe Kante wie alles andere, statt sich eine zweite auszurechnen (die
+ * 24px daneben lag). */
+/* Die Kappung sitzt jetzt breakpointfrei an .items-list und .quick-add (oben).
+ * Unter 720px ist sie ein No-op, zwischen 720 und 1024px verhält sich der Tab
+ * damit genauso wie der Vorrat - vorher galt sie erst ab 1024px und die beiden
+ * Checklisten divergierten in genau diesem Bereich um bis zu 300px.
+ * .item-category braucht keine eigene Kappung mehr: es liegt in der gekappten
+ * .items-list. .list-header ist entfallen, der Kopf ist der full-bleed
+ * .page-toolbar--in-group (#list-head). */
+@media (min-width: 1024px) {
+  /* Vollbreite-Toolbar mit durchgehendem Trenner; der Inhalt sitzt auf der
+   * gemeinsamen Kante. */
+  .shopping-page .list-tabs-bar {
+    padding-inline: var(--page-inline-pad);
+  }
+}
+
+/* Gruppenkopf und Gruppenfläche kommen aus .list-group__title /
+ * .list-rows. Das eigene .item-category__icon entfällt: der Kopf nutzt jetzt
+ * die geteilte .icon-sm-Größe wie die Geschwistertabs. */
+
+/* --------------------------------------------------------
+ * Einkaufsartikel
+ * -------------------------------------------------------- */
+/* Geometrie, Trennlinie, Hover und Zielhöhe kommen aus .list-row. Hier bleibt
+ * nur, was den Einkauf unterscheidet. */
+.shopping-item {
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+/* Platz für den Swipe-Hinweis-Pfeil (.swipe-row::after in layout.css: 12px
+ * breit, 8px von der rechten Kante, opacity 0.3).
+ *
+ * Er lag vorher unter dem letzten Zeilen-Button und war damit unsichtbar - bei
+ * 4px Zeilenpolster reichte der Stift bis 296px, der Pfeil sitzt bei 280..292.
+ * Mit dem geteilten 12px-Polster endet der Stift bei 288px und der Pfeil kam
+ * darunter hervor: zwei Glyphen nebeneinander, von denen einer keine Aktion ist.
+ *
+ * Die Reserve steht hier statt in layout.css, weil `.swipe-row` auch von
+ * Aufgaben benutzt wird und deren Zeile eine andere Bedienzone hat. Nur auf
+ * Touch: auf Desktop blendet layout.css den Pfeil ohnehin aus (ab 1024px), und
+ * dort löscht man aus der Zeile statt per Swipe. */
+@media (hover: none) {
+  .shopping-item {
+    padding-inline-end: calc(var(--space-2) + var(--space-3) + var(--space-2));
+  }
+}
+
+/* Abgehakt: gedämpft über die ganze Zeile. Der Vollton-Grün der Checkbox bleibt
+ * BEWUSST - er trägt das weiße Häkchen (--color-ink-on-vivid), eine Tönung würde
+ * dessen Kontrast brechen. Die 0.45 multiplizieren die Sättigung ohnehin herunter,
+ * der abgehakte Artikel ist also nicht die stärkste Fläche der Seite. */
+.shopping-item--checked {
+  opacity: 0.45;
+}
+
+/* Checkbox */
+.item-check {
+  width: var(--target-base);
+  height: var(--target-base);
+  border-radius: var(--radius-sm);
+  border: none;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Der sichtbare Wechsel liegt am ::before (Rahmen + Fläche), das seine eigene,
+   * benannte Transition trägt. Hier bleibt nur die Farbe. */
+  transition: color var(--transition-fast);
+  position: relative;
+}
+
+.item-check::before {
+  content: '';
+  position: absolute;
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.item-check--checked {
+  animation: check-pop var(--duration-md) var(--ease-out);
+}
+
+/* Skalierungs-Pop unter reduzierter Bewegung abschalten (Audit F-07);
+ * der Farbwechsel trägt das Feedback allein. */
+@media (prefers-reduced-motion: reduce) {
+  .item-check--checked {
+    animation: none;
+  }
+}
+
+.item-check--checked::before {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.item-check__icon {
+  width: var(--space-3);
+  height: var(--space-3);
+  color: var(--color-ink-on-vivid);
+  display: none;
+  position: relative;
+  z-index: 1;
+}
+
+.item-check--checked .item-check__icon { display: block; }
+
+/* Textspalte, Name und Menge kommen aus .list-row__main / __name / __meta
+ * (styles/list-row.css).
+ *
+ * Entfallen ist dabei die Ellipse auf dem Artikelnamen
+ * (`white-space: nowrap; text-overflow: ellipsis`): sie war die Ursache des
+ * P0 aus Critique 2026-07-30 - bei 320px stand der Name in 56px Lesebreite
+ * gegen 176px Bedarf, lesbar blieben vier Zeichen („Broc…", „Cherr…"), und das
+ * in genau der Situation, für die diese Liste gebaut ist. Der geteilte Name
+ * bricht stattdessen um, wie es das MHD im Vorrat schon tat. */
+.shopping-item--checked .list-row__name {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
+/* Tabellenziffern nur für die Menge: der geteilte Meta-Slot trägt in den
+ * Geschwistertabs auch Text (MHD, Lagerort), dort wären sie falsch. */
+.shopping-item .list-row__meta {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Die beiden Zeilenaktionen (Details, Löschen) nutzen seit dem Audit die
+ * geteilte .row-action-Grammatik aus layout.css: 48px über --target-lg,
+ * dauerhaft sichtbare Tertiär-Tinte, Danger-Hover über .row-action--danger.
+ * Die früheren .item-details/.item-delete-Regeln waren eine Kopie derselben
+ * Geometrie in eigener Größe - Einkaufen war der letzte der sieben Nutzer
+ * dieser Komponente, der sie nicht verwendete (Critique 2026-07-29). */
+
+/* Detail-Indikatoren (Link/Notiz) inline hinter dem Namen — dezent. */
+.item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+  color: var(--module-accent, var(--color-text-secondary));
+  vertical-align: middle;
+}
+
+.item-meta__icon {
+  width: 0.9em;
+  height: 0.9em;
+}
+
+/* Erledigt ist ein Zustand, kein deaktivierter Knopf: die Zeile laesst sich
+ * weiter antippen (wieder aufmachen), also greift die WCAG-Ausnahme fuer
+ * Deaktiviertes nicht. Gedaempft bleibt sie ueber tertiary. */
+.shopping-item--checked .item-meta {
+  color: var(--color-text-tertiary);
+}
+
+/* Klickbare Link-Vorschau im Detail-Drawer. */
+.item-details__link-wrap:not(:empty) {
+  margin-top: var(--space-2);
+}
+
+.item-details__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  /* Fallback auf --color-accent: `--color-primary` gab es nie, und eine
+   * var()-Kette mit undefiniertem Endglied ist als Ganzes ungueltig - der Link
+   * haette dann die Textfarbe geerbt statt den Akzent (Audit 2026-08-08). */
+  color: var(--module-accent, var(--color-accent));
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.item-details__link:hover { text-decoration: underline; }
+
+/* --------------------------------------------------------
+ * Swipe-Wrapper - Shopping-spezifische Styles
+ * -------------------------------------------------------- */
+
+/* Kein Margin mehr am shopping-item selbst (übernimmt swipe-row).
+ *
+ * KEIN border-radius mehr: den trägt jetzt die Gruppe (.list-rows, 12px, mit
+ * overflow: hidden), und die klippt die Swipe-Fläche mit. Ein eigener Radius auf
+ * der Zeile war der letzte Rest des Karten-Paradigmas im Einkauf und hätte
+ * innerhalb der Gruppenfläche als doppelte Rundung gelesen. */
+/* KEIN `will-change: transform` mehr: das Compositor-Versprechen haengt an der
+ * Geste (.swipe-row--armed > :first-child in layout.css), nicht an der Zeile.
+ * Hier stand es dauerhaft - 26 Einkaufszeilen gleichzeitig im Demo-Seed, jede
+ * mit eigener Ebene, ohne dass ein Finger die Liste beruehrt haette
+ * (Audit 2026-08-08, P2-1). */
+.swipe-row .shopping-item {
+  margin-bottom: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Welche Rolle hinter welcher Kante liegt, steht am Aufruf von wireSwipeRows
+ * in pages/shopping.js - und die Kanten sind logisch, nicht links und rechts. */
+/* Das Touch-Feedback während der Geste trägt jetzt die geteilte Bühne
+ * (.swipe-row--swiping > :first-child in layout.css), zusammen mit der
+ * Trägerfläche, die das Reveal-Panel verdeckt. */
+
+/* × Löschen-Button ausblenden, wo Swipe übernimmt. Greift über das
+ * data-Attribut, weil die Zeilenaktionen die geteilte .row-action-Klasse
+ * tragen und keine eigene mehr haben.
+ *
+ * Das Kriterium ist die ZEIGER-Fähigkeit, nicht die Viewport-Breite. Vorher
+ * stand hier `max-width: 1023px`: in einem 800px breiten Desktop-Fenster mit
+ * Maus verschwand das Löschen aus der Zeile, und Swipe - der einzige Ersatz -
+ * gibt es dort nicht (Critique 2026-07-30). Die drei Geschwister-Tabs sind im
+ * Umbau auf `hover` umgestellt worden, dieser Selektor blieb übrig. */
+@media (hover: none) {
+  .shopping-item .row-action[data-action="delete-item"] {
+    display: none;
+  }
+}
+
+/* Der Leerzustand ohne Liste hängt in #list-content, das selbst nicht gekappt
+ * ist - er zentrierte deshalb über die volle Content-Breite, während der
+ * Vorrats-Leerzustand in seiner 720er-Lesespalte sitzt: 250px Unterschied
+ * zwischen zwei Tabs desselben Objekttyps (Critique-Nachlauf 2026-07-30). Mit
+ * derselben Kappung folgt die Mitte dem Zwei-Maße-System: Checklisten schmal,
+ * Kartenraster und Wochenboard breit. */
+#list-content > .empty-state {
+  max-width: var(--content-max-width-narrow);
+}
+
+/* Der No-Lists-Zustand nutzt die geteilte .empty-state-Grammatik (layout.css)
+ * und setzt wie die drei Geschwister-Tabs OBEN an. Hier stand ein `flex: 1`,
+ * das die Box über die volle Resthöhe streckte; zusammen mit dem
+ * `justify-content: center` der Grammatik landete der Titel bei y=495 statt
+ * y=255 - die dritte von drei vertikalen Achsen für denselben Zustand
+ * (Critique 2026-07-29). Das Ansetzen oben regelt jetzt `flex: 0 0 auto` in
+ * layout.css, für alle Konsumenten gleich. */
+
+/* Kategorie-Manager: seit Audit F-15 die geteilte Komponente
+ * <yuvomi-category-manager> (Styles global in category-manager.css). */

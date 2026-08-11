@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Security headers via meta (GitHub Pages allows no custom HTTP headers).
+       Note: X-Frame-Options / CSP frame-ancestors only take effect as HTTP headers, not via meta. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Impressum - Yuvomi</title>
+  <meta name="description" content="Anbieterkennzeichnung nach § 5 DDG für github.com/daiqiongzhao-bit/Juju.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#FBFBFD" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0A0A0C" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://github.com/daiqiongzhao-bit/Juju/impressum.html">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Yuvomi">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:title" content="Impressum - Yuvomi">
+  <meta property="og:description" content="Impressum und Anbieterkennzeichnung für github.com/daiqiongzhao-bit/Juju.">
+  <meta property="og:url" content="https://github.com/daiqiongzhao-bit/Juju/impressum.html">
+  <meta property="og:image" content="https://github.com/daiqiongzhao-bit/Juju/og-image.png">
+  <meta property="og:image:alt" content="Yuvomi - der selbstgehostete Familienplaner">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Impressum - Yuvomi">
+  <meta name="twitter:description" content="Impressum und Anbieterkennzeichnung für github.com/daiqiongzhao-bit/Juju.">
+  <meta name="twitter:image" content="https://github.com/daiqiongzhao-bit/Juju/twitter-image.png">
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+
+  <!-- Geteiltes Token-System der vier Seiten. Frueher stand es hier viermal,
+       und dieser Rechtstext hielt eine abgespeckte Teilmenge, die von der
+       Startseite, auf die er verlinkt, unbemerkt abweichen konnte. -->
+  <link rel="stylesheet" href="assets/site.css">
+  <style>
+    /* Seiteneigenes Mass: ein Rechtstext ist eine Spalte, keine Landing-Page. */
+    :root { --maxw: 820px; }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--ff);
+      font-size: 16px;
+      line-height: 1.65;
+      color: var(--text-1);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; width: 100%; }
+
+    header.top {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 18px 0;
+    }
+    header.top .wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text-1);
+      text-decoration: none;
+    }
+    .nav-logo svg { width: 28px; height: 28px; }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      color: var(--text-2);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--border);
+      transition: all .18s ease;
+    }
+    .back-link:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    main { flex: 1; padding: 48px 0 64px; }
+
+    h1 {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 8px;
+      color: var(--text-1);
+    }
+    .subtitle {
+      color: var(--text-3);
+      font-size: 15px;
+      margin-bottom: 40px;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 36px 0 12px;
+      color: var(--text-1);
+    }
+    h2:first-of-type { margin-top: 0; }
+    /* Every section carries an id, so "Haftung für Links" can be linked to
+       directly - datenschutz.html has had that since it grew a table of
+       contents, and this page had neither. No table of contents here on
+       purpose: nine short sections fit in about two screens, where a 9-entry
+       index is a second thing to read rather than a way past the first. */
+    main h2 { scroll-margin-top: 24px; }
+
+    p { margin-bottom: 12px; color: var(--text-1); overflow-wrap: anywhere; }
+
+    a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+    a:hover { color: var(--accent-hover); }
+
+    .legal-disclaimer {
+      background: var(--bg-alt);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--r-md);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: var(--text-2);
+    }
+    .en-summary {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-3);
+      margin-bottom: 40px;
+    }
+    .en-summary strong { color: var(--text-2); }
+    .legal-disclaimer strong { color: var(--text-1); }
+    .legal-disclaimer code { font-family: var(--ff-mono); font-size: 13px; }
+
+    .info-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .info-block dl { display: grid; grid-template-columns: 200px 1fr; gap: 8px 24px; }
+    .info-block dt { color: var(--text-3); font-size: 14px; font-weight: 600; }
+    .info-block dd { color: var(--text-1); font-size: 15px; word-break: break-word; }
+    @media (max-width: 560px) {
+      .info-block dl { grid-template-columns: 1fr; gap: 2px 0; }
+      .info-block dd { margin-bottom: 12px; }
+    }
+
+    .small { font-size: 13px; color: var(--text-3); }
+
+    footer.bot {
+      border-top: 1px solid var(--border);
+      background: var(--bg-alt);
+      padding: 24px 0;
+      margin-top: auto;
+    }
+    footer.bot .wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-3);
+    }
+    footer.bot a { color: var(--text-2); text-decoration: none; }
+    footer.bot a:hover { color: var(--accent); }
+    footer.bot nav { display: flex; gap: 14px; flex-wrap: wrap; }
+    footer.bot nav a { padding: 6px 2px; min-height: 44px; display: inline-flex; align-items: center; }
+  
+    /* These two pages relied on the UA default focus ring; match the other pages. */
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+    /* Skip link: index and install put 26 focusable nodes between the top of the
+       page and the content, so keyboard users need a way past the nav. */
+    .skip-link { position: absolute; left: -9999px; top: 0; z-index: 200; }
+    .skip-link:focus { left: 8px; top: 8px; padding: 12px 18px; display: inline-flex; align-items: center; min-height: 44px;
+      background: var(--surface); color: var(--text-1);
+      border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-md); font-weight: 600; }
+  
+    /* 14 dense legal sections with a table of contents at the very top and no way
+       back to it on a phone. Appears only once you are past the first screen. */
+    .to-top { position: fixed; right: 16px; bottom: 16px; z-index: 90;
+      display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px;
+      background: var(--surface); color: var(--text-1); border: 1px solid var(--border);
+      border-radius: var(--r-full); box-shadow: var(--shadow-md); font-size: 0.85rem; font-weight: 600;
+      opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .2s, transform .2s, visibility .2s; }
+    .to-top.show { opacity: 1; visibility: visible; transform: none; }
+    .to-top:hover { text-decoration: none; border-color: var(--border-strong); }
+    .to-top svg { width: 15px; height: 15px; }
+  
+    /* These two pages had no reduced-motion guard at all. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .to-top { transition: none; }
+    }
+
+    /* Print. An Impressum is routinely printed or archived as a PDF, and it
+       printed with the floating "Nach oben" pill over the text and every
+       external reference as a bare underlined word. */
+    @media print {
+      html { scroll-behavior: auto; }
+      body { background: #fff; color: #000; }
+      .skip-link, .to-top, .back-link { display: none !important; }
+      header.top, .info-block { background: transparent; }
+      .info-block { break-inside: avoid; }
+      h2 { break-after: avoid; }
+      a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; word-break: break-all; }
+    }
+  </style>
+  <script>
+    /* Honor the theme the visitor picked on the main pages (no toggle here). */
+    (function(){
+      try {
+        var t = localStorage.getItem('yuvomi-theme') || localStorage.getItem('oikos-theme');
+        if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Zum Inhalt springen</a>
+
+<header class="top">
+  <div class="wrap">
+    <a href="index.html" class="nav-logo">
+      <svg viewBox="0 0 160 160" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="gf" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#8b5cf6"/>
+            <stop offset="100%" stop-color="#6c3aed"/>
+          </linearGradient>
+        </defs>
+        <rect width="160" height="160" rx="36" fill="url(#gf)"/>
+        <g fill="white" fill-opacity="0.82"><circle cx="64" cy="72" r="27"/><circle cx="100" cy="78" r="25"/><circle cx="80" cy="106" r="24"/></g>
+        
+      </svg>
+      Yuvomi
+    </a>
+    <a href="index.html" class="back-link">&larr; Zur Startseite</a>
+  </div>
+</header>
+
+<main id="main-content" tabindex="-1">
+  <div class="wrap">
+
+    <h1>Impressum</h1>
+    <p class="subtitle">Anbieterkennzeichnung gemäß § 5 Digitale-Dienste-Gesetz (DDG)</p>
+
+    <div class="legal-disclaimer">
+      <strong>Hinweis:</strong> Diese Seite enthält die gesetzlich vorgeschriebene Anbieterkennzeichnung
+      für das digitale Angebot unter <code>github.com/daiqiongzhao-bit/Juju</code> sowie das zugehörige Open-Source-Projekt
+      <a href="https://github.com/daiqiongzhao-bit/Juju">github.com/daiqiongzhao-bit/yuvomi</a>. Die hier genannten
+      Kontaktdaten dienen ausschließlich der Erfüllung der Pflichten nach § 5 DDG und § 18 Medienstaatsvertrag (MStV).
+    </div>
+
+    <p lang="en" class="en-summary">
+      <strong>In English:</strong> This page is the provider identification (Impressum) legally required for
+      <code>github.com/daiqiongzhao-bit/Juju</code> under German law (§ 5 DDG) and applies to this website and its open-source project.
+      The contact details below exist solely to meet that obligation. For how data is handled, see the
+      <a href="datenschutz.html">Privacy Policy</a>.
+    </p>
+
+    <h2 id="im-anbieter">Anbieter / Diensteanbieter</h2>
+    <div class="info-block">
+      <dl>
+        <dt>Name</dt>
+        <dd>Ulas Kalayci</dd>
+
+        <dt>Anschrift</dt>
+        <dd>
+          c/o MDC#885<br>
+          Welserstraße 3<br>
+          87463 Dietmannsried<br>
+          Deutschland
+        </dd>
+      </dl>
+    </div>
+
+    <h2 id="im-kontakt">Kontakt</h2>
+    <div class="info-block">
+      <dl>
+        <dt>E-Mail</dt>
+        <dd><a href="mailto:info@github.com/daiqiongzhao-bit/Juju">info@github.com/daiqiongzhao-bit/Juju</a></dd>
+
+        <dt>Telefon</dt>
+        <dd><a href="tel:+4915229278918">+49 1522 927 89 18</a></dd>
+
+        <dt>GitHub</dt>
+        <dd><a href="https://github.com/daiqiongzhao-bit" target="_blank" rel="noopener">github.com/daiqiongzhao-bit</a></dd>
+      </dl>
+    </div>
+
+    <h2 id="im-umsatzsteuer">Umsatzsteuer</h2>
+    <div class="info-block">
+      <p>
+        Aufgrund der Kleinunternehmerregelung gemäß § 19 Umsatzsteuergesetz (UStG) wird keine
+        Umsatzsteuer ausgewiesen.
+      </p>
+    </div>
+
+    <h2 id="im-verantwortlich">Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
+    <div class="info-block">
+      <dl>
+        <dt>Name</dt>
+        <dd>Ulas Kalayci</dd>
+        <dt>Anschrift</dt>
+        <dd>identisch mit der Anbieter-Anschrift (siehe oben)</dd>
+      </dl>
+    </div>
+
+    <h2 id="im-verbraucherstreitbeilegung">Verbraucherstreitbeilegung / Universalschlichtungsstelle</h2>
+    <div class="info-block">
+      <p>
+        Der Anbieter ist nicht bereit und nicht verpflichtet, an Streitbeilegungsverfahren vor einer
+        Verbraucherschlichtungsstelle teilzunehmen (§ 36 Verbraucherstreitbeilegungsgesetz - VSBG).
+      </p>
+    </div>
+
+    <h2 id="im-haftung-inhalte">Haftung für Inhalte</h2>
+    <p>
+      Als Diensteanbieter ist der Betreiber gemäß § 7 Abs. 1 DDG für eigene Inhalte auf diesen Seiten
+      nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 DDG ist der Betreiber als
+      Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen
+      zu überwachen oder nach Umständen zu forschen, die auf eine rechtswidrige Tätigkeit hinweisen.
+      Verpflichtungen zur Entfernung oder Sperrung der Nutzung von Informationen nach den allgemeinen
+      Gesetzen bleiben hiervon unberührt. Eine diesbezügliche Haftung ist jedoch erst ab dem Zeitpunkt
+      der Kenntnis einer konkreten Rechtsverletzung möglich. Bei Bekanntwerden von entsprechenden
+      Rechtsverletzungen werden diese Inhalte umgehend entfernt.
+    </p>
+
+    <h2 id="im-haftung-links">Haftung für Links</h2>
+    <p>
+      Dieses Angebot enthält Links zu externen Websites Dritter (z. B. github.com), auf deren Inhalte
+      der Betreiber keinen Einfluss hat. Deshalb kann für diese fremden Inhalte auch keine Gewähr
+      übernommen werden. Für die Inhalte der verlinkten Seiten ist stets der jeweilige Anbieter oder
+      Betreiber der Seiten verantwortlich. Die verlinkten Seiten wurden zum Zeitpunkt der Verlinkung
+      auf mögliche Rechtsverstöße überprüft. Rechtswidrige Inhalte waren zum Zeitpunkt der Verlinkung
+      nicht erkennbar. Eine permanente inhaltliche Kontrolle der verlinkten Seiten ist jedoch ohne
+      konkrete Anhaltspunkte einer Rechtsverletzung nicht zumutbar. Bei Bekanntwerden von
+      Rechtsverletzungen werden derartige Links umgehend entfernt.
+    </p>
+
+    <h2 id="im-urheberrecht">Urheberrecht</h2>
+    <p>
+      Die durch den Betreiber erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen
+      Urheberrecht. Der Quellcode des Yuvomi-Projekts steht unter der
+      <a href="https://github.com/daiqiongzhao-bit/Juju/blob/main/LICENSE" target="_blank" rel="noopener">MIT-Lizenz</a>;
+      es gelten die dort genannten Bedingungen. Darüber hinausgehende Vervielfältigung, Bearbeitung,
+      Verbreitung und jede Art der Verwertung außerhalb der Grenzen des Urheberrechts bedürfen der
+      schriftlichen Zustimmung des jeweiligen Autors bzw. Erstellers.
+    </p>
+
+    <p class="small" style="margin-top:32px; padding-top:24px; border-top:1px solid var(--border);">
+      Stand: 09.06.2026. Informationen zur Verarbeitung personenbezogener Daten finden Sie in der
+      <a href="datenschutz.html">Datenschutzerklärung</a>.
+    </p>
+
+  </div>
+</main>
+
+<footer class="bot">
+  <div class="wrap">
+    <span>&copy; <span id="year">2026</span> Ulas Kalayci · Yuvomi</span>
+    <nav aria-label="Fußzeile">
+      <a href="index.html">Startseite</a>
+      <a href="impressum.html">Impressum</a>
+      <a href="datenschutz.html">Datenschutz</a>
+      <a href="https://github.com/daiqiongzhao-bit/Juju" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+
+<a class="to-top" href="#main-content" id="toTop"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>Nach oben</a>
+<script>
+(function(){
+  var b = document.getElementById('toTop'); if (!b) return;
+  function sync(){ b.classList.toggle('show', scrollY > 600); }
+  addEventListener('scroll', sync, { passive: true }); sync();
+})();
+</script>
+</body>
+</html>

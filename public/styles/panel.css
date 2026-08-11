@@ -1,0 +1,295 @@
+/**
+ * Geteilte Bauteile einer Auswertungsansicht
+ * Zweck: EINE Grammatik für Kennzahlen, Umschalter und Panel-Kopf
+ *
+ * APP-WEITES VOKABULAR, KEIN MODUL-BAUSTEIN. Die vier Bauteile entstanden im
+ * Budget und hießen deshalb `.budget-*`, obwohl sie schon dort von vier
+ * Untertabs geteilt wurden (budget, budget-stats, split-expenses,
+ * subscriptions). Ein geteiltes Bauteil mit Modulnamen ist eine Einladung,
+ * beim nächsten Modul dasselbe zu tun - deshalb stehen sie hier und heißen
+ * neutral. Was WIRKLICH dem Budget gehört (`.budget-tab-panel`,
+ * `.budget-summary-bar`, `.budget-expenses-toggle`), heißt weiter so.
+ *
+ * Sie stehen zusammen, weil sie zusammen auftreten: ein Panel hat eine
+ * Kopfleiste (.panel-head), darin oder darunter einen Zustands-Umschalter
+ * (.segmented), und darüber eine Kennzahl-Zeile (.metric-grid) aus Karten
+ * (.metric-card).
+ *
+ * DIE RESPONSIVE KOMPAKTSTUFE GEHÖRT DEM HOST, NICHT DIESER DATEI. Die
+ * Kennzahl-Zeile und die Karte werden im Budget über `@container budget-page`
+ * enger gestellt; diese Stufen stehen in budget.css. Grund: der Container ist
+ * eine Eigenschaft der Seite, die das Bauteil einsetzt, und der Name ist es
+ * auch. Eine unbenannte Query hier hätte im Aufteilen-Tab den näheren
+ * Container `split-page` gemessen statt `budget-page` und die Stufen dort
+ * verschoben. Wer die Karte in einem anderen Modul einsetzt, setzt seinen
+ * eigenen Container und wiederholt die Stufe.
+ *
+ * Abgrenzung: `.health-metric-card` ist ein anderes Bauteil - eine anklickbare
+ * Kachel, die eine Metrik AUSWÄHLT, nicht eine, die eine Zahl anzeigt.
+ */
+
+/* --------------------------------------------------------
+ * Kopfleiste des Panels.
+ *
+ * Vier Klassennamen für dieselbe Rolle (budget-list-header,
+ * budget-accounts__header, subscriptions-toolbar, budget-loans__header) waren
+ * vier Gelegenheiten, sie unterschiedlich zu bauen. Eine Klasse, ein Verhalten.
+ * -------------------------------------------------------- */
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.panel-head__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Sektionsüberschrift des Panels. Eine Auszeichnung für alle Tabs statt der
+ * bisherigen sechs (__eyebrow, __section-title, blankes h2, blankes h3, span).
+ * Größe, Gewicht, Laufweite und Versalsatz kommen aus der app-weiten
+ * Eyebrow-Klasse in typography.css - hier steht nur die Farbe. */
+.panel-head__title {
+  color: var(--color-text-secondary);
+}
+
+/* --------------------------------------------------------
+ * Segment-Umschalter
+ *
+ * EINE Optik für jede Leiste, die zwischen wenigen Zuständen umschaltet:
+ * Zeitraum (Berichte), Darlehensstatus, Gruppenstatus, Kontofarbe. Vorher waren
+ * es vier Optiken - getönte Kapsel, eckig gefülltes Rechteck in gerundetem
+ * Container, weiße Kachel, umrandete Pille -, sodass derselbe Zustand pro Tab
+ * anders aussah (Critique 2026-07-30, P1). Extrahiert aus dem Statistik-
+ * Umschalter, der sauberste der vier.
+ *
+ * Das Touch-Maß kommt aus --target-base (44px Zeiger / 48px Finger); die
+ * abgelösten Leisten lagen bei 40px bzw. 28px Höhe.
+ * -------------------------------------------------------- */
+.segmented {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: var(--space-0h);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.segmented__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--target-base);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.segmented__item:hover:not(.is-active) {
+  color: var(--color-text-primary);
+}
+
+/* Aktiv: Modul-Akzent gefüllt + --color-ink-on-vivid - die eine Segment-Sprache
+ * der Shell (DESIGN.md „Segmented Controls", Muster .sub-tab--active /
+ * .group-toggle__btn--active / .cal-toolbar__view-btn--active).
+ *
+ * Hier stand die erhabene weiße Kachel der abgelösten Welt, begründet mit
+ * „muss sich vom Primärbutton daneben unterscheiden". In der HIG-Welt trennt
+ * die FORM: der Primärbutton ist ein 12px-Rechteck mit Schatten, das Segment
+ * eine randlose Kapsel in einer umrandeten Leiste - dieselbe Unterscheidung,
+ * die Apple zwischen „Aktion" und „Zustand" zieht. Innenradius konzentrisch
+ * (radius-sm im radius-md-Träger). */
+.segmented__item.is-active {
+  background: var(--module-accent, var(--color-accent));
+  color: var(--color-ink-on-vivid);
+}
+
+.segmented__item i {
+  width: 14px;
+  height: 14px;
+}
+
+.segmented__item:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* --------------------------------------------------------
+ * Kennzahl-Zeile und Kennzahlkarte
+ * -------------------------------------------------------- */
+/* Horizontal bewusst ohne eigenen Wert: die Content-Spalte liegt bereits auf
+ * #budget-body. Ein zusätzliches --space-4 hier addierte sich darauf und stellte
+ * die Karten 16px neben den Kopf-Titel (Issue #577). */
+/* Die Kennzahl-Zeile. Die Kartenzahl kommt über --summary-cards, damit alle
+ * Untertabs dieselbe Zeile benutzen können statt je ein eigenes Raster:
+ * Budget 3, Abos 4, Aufteilen 3, „Nur Ausgaben" 1. */
+.metric-grid {
+  display: grid;
+  /* Immer eine volle Zeile: der frühere Mobil-Stapel (3 volle Karten,
+   * ~600px) schob jeden Inhalt unter den Fold (Audit A2-06). */
+  grid-template-columns: repeat(var(--summary-cards, 3), minmax(0, 1fr));
+  /* Die Kacheln EINER Kennzahlreihe sind gleich hoch, auch wenn die Reihe
+   * umbricht. Ohne das strecken sich die Rasterzeilen unabhängig voneinander:
+   * die Abo-Reihe stand mobil als 2x2 mit 78px oben und 95px unten da, weil
+   * eine einzige Fußnote in der unteren Zeile umbrach. Gleichartige Kacheln
+   * verschieden hoch nebeneinander lesen sich als Unruhe genau dort, wo die
+   * Zahl auf einen Blick erfasst werden soll.
+   * Die Höhe gehört damit dem TRÄGER, nicht dem längsten Text einer Zelle -
+   * dieselbe Grammatik wie beim Well und beim Lesemaß. Geprüft auf Ebene 4
+   * (Sonde 6), weil im Stylesheet nur die Deklaration steht und nicht die
+   * Zusage. */
+  grid-auto-rows: 1fr;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+  flex-shrink: 0;
+}
+
+/* „Nur Ausgaben" (#504): die einzelne Ausgaben-Karte trägt die volle Breite,
+   statt in einer 1/3-Spalte eingeklemmt zu bleiben. */
+.metric-grid--expenses-only {
+  --summary-cards: 1;
+}
+
+/* Vierer-Zeile (Abos). */
+.metric-grid--quad { --summary-cards: 4; }
+
+/* Die Kennzahlkarte des Moduls. EINE Bauart für alle sieben Untertabs.
+ *
+ * Vorher gab es fünf (budget, subscriptions, split-expenses, Nettovermögen,
+ * Darlehensstatistik) - die Kennzahlzeile ist das Erste, was auf jedem Tab
+ * gelesen wird, und fünf Bauarten hießen fünfmal neu lernen, wo die Zahl steht
+ * (Critique 2026-07-30, P0).
+ *
+ * Linksbündig statt zentriert: die Mehrheit der abgelösten Varianten war es
+ * bereits, lange Labels und Fußnoten brechen sauberer, und in einer Reihe
+ * beginnt jede Zahl an derselben x-Position - bei Geld ein echter Lesevorteil. */
+.metric-card {
+  /* Arbeitsfläche = opak (Brief: Glass bleibt den Overlays/Modals vorbehalten,
+   * Inhalt muss auf einen Blick lesbar sein). Gilt modulweit: subscriptions.css
+   * und split-expenses.css hatten hier Glass und widersprachen damit dieser
+   * Zeile im selben Modul. */
+  background-color: var(--color-surface);
+  /* HIG-Karte: randlos auf dem Grouped-Grund, 16px Rundung, shadow-sm -
+   * dieselbe Bauart wie das Dashboard-Widget. Vorher: 26px
+   * (--radius-glass-card, der Radius für Glas-Chrome und Sheets) plus
+   * sichtbare Kante plus ein 3 %-Modul-Tint-Overlay aus der Glas-Phase. Drei
+   * Merkmale, die eine Kennzahlkarte wie ein Sheet aussehen ließen. */
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0h);
+  min-width: 0;
+  position: relative;
+}
+
+.metric-card__label,
+.metric-card__amount,
+.metric-card__trend,
+.metric-card__note,
+.metric-card__progress {
+  position: relative;
+  z-index: 1;
+}
+
+/* Größe, Gewicht und Versalsatz kommen aus der geteilten Eyebrow-Klasse in
+ * typography.css - hier stehen nur Farbe und Umbruchverhalten. */
+.metric-card__label {
+  color: var(--color-text-secondary);
+  /* min-width:0 + Umbruch: „Nächstes Fälligkeitsdatum" und die längeren
+   * Übersetzungen sprengen sonst die schmalste Spalte der Vierer-Zeile. */
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.metric-card__amount {
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fußnote unter dem Betrag: „7 aktiv", „121% des Budgets genutzt", „EUR".
+ * Löst die frühere <small>-Sonderbehandlung in subscriptions.css ab. */
+.metric-card__note {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.metric-card__note--danger { color: var(--color-danger); }
+
+/* Fortschritt in der Karte (Monatsbudget der Abos). Der Balken ist der
+ * Zweitkanal zur Zahl, nicht ihr Ersatz - über 100% färbt er sich um, statt
+ * stumm bei voller Breite stehen zu bleiben. */
+.metric-card__progress {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  overflow: hidden;
+  margin-top: var(--space-1);
+}
+
+/* Füllstand über --fill (0..1) als transform, nicht als width: eine Breiten-
+ * Animation wirft bei jedem Renderdurchlauf das Layout neu. Der Parent clippt
+ * die Ecken, der Balken braucht deshalb keinen eigenen Radius. */
+.metric-card__progress > span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left center;
+  background: var(--module-accent, var(--color-accent));
+  transition: transform var(--transition-base);
+}
+
+.metric-card__progress--over > span { background: var(--color-danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  .metric-card__progress > span { transition: none; }
+}
+
+/* Tonwerte aus utils/money.js: der Formatierer entscheidet Vorzeichen und Farbe
+ * gemeinsam und liefert die passende Modifier-Klasse gleich mit. */
+.metric-card--positive .metric-card__amount { color: var(--color-success); }
+.metric-card--negative .metric-card__amount { color: var(--color-danger); }
+.metric-card--neutral  .metric-card__amount { color: var(--color-text-primary); }
+
+.metric-card--income   .metric-card__amount { color: var(--color-success); }
+.metric-card--expenses .metric-card__amount { color: var(--color-danger);  }
+.metric-card--balance  .metric-card__amount { color: var(--color-text-primary); }
+.metric-card--balance-positive .metric-card__amount { color: var(--color-success); }
+.metric-card--balance-negative .metric-card__amount { color: var(--color-danger);  }
+/* Reines Ausgaben-Tracking (keine Einnahmen im Monat): Saldo = -Ausgaben ist eine
+   Tautologie, die rote Zahl wird als „im Minus" fehlgelesen (#504). Neutral statt rot. */
+.metric-card--balance-neutral  .metric-card__amount { color: var(--color-text-primary); }
+
+.metric-card__trend {
+  font-size: var(--text-xs);
+  /* Icon und Text bilden eine Zeile an der Fluchtlinie von Label und Betrag. */
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.metric-card__trend svg { flex-shrink: 0; }
+
+.metric-card__trend--positive { color: var(--color-success); }
+.metric-card__trend--negative { color: var(--color-danger);  }
+.metric-card__trend--neutral  { color: var(--color-text-secondary); }

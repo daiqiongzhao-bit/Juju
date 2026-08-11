@@ -1,0 +1,997 @@
+/**
+ * Modul: Liquid Glass - Shell Components (Phase 1–3)
+ * Zweck: Glass-Effekte für Navigation, Modal, Buttons, FAB, Animationen
+ *        Rein additiv: überschreibt nur optische Eigenschaften,
+ *        keine Layout-, Größen- oder Funktionsänderungen.
+ * Abhängigkeiten: tokens.css (Section 16 Glass-Tokens), layout.css
+ *
+ * Architektur:
+ *   Nicht-Blur-Stile (background, border, shadow) sind AUSSERHALB von
+ *   @supports gesetzt → wirken auf allen Geräten und Browsern.
+ *   Blur-Filter (backdrop-filter) sind INNERHALB von @supports mit
+ *   webkit-Fallback → greifen wenn vom Browser unterstützt.
+ *   @supports-Check: (backdrop-filter) OR (-webkit-backdrop-filter)
+ *   deckt Safari < 18 (nur webkit-Prefix) und moderne Browser ab.
+ */
+
+/* ================================================================
+ * 1. Bottom Navigation — Glass Bar
+ * ================================================================ */
+
+/* Immer aktiv: Glass-Hintergrund auf der schwebenden Kapsel
+ * (.nav-bottom__items), nicht mehr auf der Bar-Zone (Liquid Glass).
+ * Der Schatten der Kapsel steht vollstaendig in §41 - hier stand er ein
+ * zweites Mal, wortgleich, und wurde von dort ohnehin ueberschrieben. */
+.nav-bottom__items {
+  background-color: var(--glass-bg-elevated);
+}
+
+/* Blur nur wenn unterstützt (webkit-Fallback für Safari < 18) */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .nav-bottom__items {
+    backdrop-filter: var(--blur-md) saturate(var(--lg-glass-saturate));
+    -webkit-backdrop-filter: var(--blur-md) saturate(var(--lg-glass-saturate));
+  }
+}
+
+/* Active-State: EINE crispe Glass-Kapsel. Der Tint sitzt am Indikator selbst
+ * (siehe §39); das ::before trägt nur noch den inneren Specular-Highlight,
+ * damit sich nicht zwei Tint-Schichten überlagern (matschige Kante). */
+.nav-bottom__indicator::before {
+  box-shadow: inset 0 var(--space-px) 0 var(--glass-highlight-subtle);
+}
+
+/* Bottom-Nav: inaktive Icons sitzen nackt in der Bar — kein gefülltes Well.
+ * Die Fläche gehört exklusiv dem aktiven Tab (gleitende Pille). */
+.nav-bottom .nav-item__icon-well {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Hover-State Bottom-Nav (nur sichtbar auf Mobile) */
+@media (hover: hover) {
+  .nav-bottom .nav-item:hover:not([aria-current="page"]):not(.nav-item--active) {
+    background: color-mix(in srgb, var(--color-text-tertiary) 8%, transparent);
+    border-radius: var(--radius-glass-chip);
+  }
+}
+
+/* ================================================================
+ * 1b. FAB — getönte Glas-Kapsel (Direction Contract FIRST VIEWPORT)
+ *
+ * Der FAB gehört zum Chrome wie Tab-Bar und Sidebar: getönter Modul-
+ * akzent auf transluzentem Grund + Blur, der Specular-Inset kommt
+ * weiter aus layout.css. Ohne Blur-Support bleibt der Vollton aus
+ * layout.css stehen (identische Fallback-Logik wie oben).
+ * ================================================================ */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .page-fab {
+    background-color: color-mix(in srgb, var(--module-accent, var(--color-accent)) 78%, transparent);
+    /* blur-md statt blur-sm: die weiche Streuung des Untergrunds ist auf
+     * Kapselgröße der einzige Materialbeweis, wenn kein Text darunter
+     * durchläuft (Finish-Verdict Fundament-Phase, Fix 3). Der Tint bleibt
+     * bei 78 %: darunter fällt das Plus-Glyph auf hellen Modul-Tints
+     * unter die 3:1-Grenze (gemessen: 78 % tasks-Grün auf Weiß = 3.4:1). */
+    backdrop-filter: var(--blur-md) saturate(var(--lg-glass-saturate));
+    -webkit-backdrop-filter: var(--blur-md) saturate(var(--lg-glass-saturate));
+    /* Stärkerer Specular als das layout.css-Inset: Glas braucht die Kante. */
+    box-shadow: var(--shadow-lg), var(--glass-inset-strong), var(--glass-inset-bottom-base);
+  }
+
+  /* Sheen: die obere Kapselhälfte fängt Licht - unter dem FAB läuft per
+   * --fab-safe-zone nie Inhalt durch (v1.60.0/#634), der Sheen ist damit
+   * neben dem Tint der einzige Materialbeweis. --glass-sheen ist gethemt
+   * (Light 0.35, Dark 0.16) und wird unter prefers-reduced-transparency/
+   * -contrast transparent, der Sheen verschwindet dort von selbst. */
+  /* Kein pointer-events:none nötig: Pseudos hit-testen auf ihr Host-Element,
+   * der Sheen kann dem FAB nichts verdecken - und der #634-Guard verbietet
+   * die Deklaration in .page-fab-Regeln zu Recht pauschal. */
+  .page-fab::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(to bottom, var(--glass-sheen), transparent 55%);
+  }
+
+  .page-fab:hover {
+    background-color: var(--module-accent, var(--color-accent));
+  }
+}
+
+/* ================================================================
+ * 2. Sidebar (Desktop ≥ 1024px) — Glass Panel
+ * ================================================================ */
+@media (min-width: 1024px) {
+  .nav-sidebar {
+    background: var(--glass-bg-elevated);
+    border-right: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-md);
+  }
+
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .nav-sidebar {
+      backdrop-filter: var(--blur-md) saturate(180%);
+      -webkit-backdrop-filter: var(--blur-md) saturate(180%);
+    }
+  }
+
+  /* Active-State in Sidebar */
+  .nav-sidebar .nav-item[aria-current="page"] {
+    background: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-state), transparent);
+    border-radius: var(--radius-sm);
+    box-shadow: inset 0 1px 0 var(--glass-highlight-subtle);
+  }
+}
+
+/* ================================================================
+ * 3. Modal — Glass Overlay + Glass Panel
+ * ================================================================ */
+
+/* Immer aktiv: stärkerer Schatten und Glass-Border */
+.modal-panel {
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-lg);
+}
+
+.modal-panel__header {
+  border-bottom-color: var(--glass-border);
+}
+
+/* Blur nur wenn unterstützt */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .modal-overlay {
+    background-color: var(--color-overlay-glass);
+    backdrop-filter: var(--blur-xs) saturate(120%);
+    -webkit-backdrop-filter: var(--blur-xs) saturate(120%);
+  }
+
+  /* No backdrop-filter on .modal-panel: it breaks async scrolling on the inner scroll container. Blur lives on .modal-overlay. */
+
+  .modal-panel__header {
+    background: var(--glass-bg-elevated);
+  }
+}
+
+/* Bottom-Sheet Handle: im Glass-Modus nur die Linienfarbe umfärben. NICHT das
+   background-Shorthand setzen — das löschte das Griff-Linien-Gradient aus
+   layout.css und machte aus der dünnen Linie einen vollen 36×44-Block (#569). */
+@media (max-width: 767px) {
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .modal-panel::before {
+      --modal-handle-color: var(--glass-border);
+    }
+  }
+}
+
+/* ================================================================
+ * 4. Buttons — Specular Highlight
+ *
+ * Die Kapselform steht seit Runde 3 in der Basisregel (.btn in layout.css) und
+ * gilt damit für ALLE Buttons. Hier stand sie nur für --primary und
+ * --secondary und gewann allein über die Ladereihenfolge - Ghost- und
+ * Danger-Buttons blieben deshalb eckig.
+ * ================================================================ */
+.btn--primary {
+  box-shadow:
+    var(--shadow-sm),
+    var(--glass-inset-medium);
+}
+
+.btn--primary:hover {
+  box-shadow:
+    var(--shadow-md),
+    var(--glass-inset-soft);
+}
+
+/* Ghost-Buttons: hier stand ihr Hover mit einem backdrop-filter. Ein
+ * Ghost-Button steht in Karten und Zeilen, also auf INHALT, und Glas gehört dem
+ * Chrome (DESIGN.md) - damit hatte er in dieser Datei nichts mehr zu suchen.
+ * Seine Tönung steht jetzt in layout.css bei der Basisregel, wo sie vorher
+ * doppelt und mit einem zweiten Farbwert danebenstand. */
+
+/* ================================================================
+ * 5. FAB — Specular Highlight
+ * ================================================================ */
+.fab {
+  box-shadow:
+    var(--shadow-lg),
+    var(--glass-inset-elevated),
+    var(--glass-inset-bottom-base);
+}
+
+.fab:hover {
+  box-shadow:
+    var(--shadow-lg),
+    var(--glass-inset-strong),
+    var(--glass-inset-bottom-hover);
+}
+
+/* ================================================================
+ * 6. Cards — Glass auf hover (nur interaktive Cards)
+ * ================================================================ */
+@media (hover: hover) {
+  .card--interactive:hover {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border-subtle);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* ================================================================
+ * 7. Accessibility Overrides — Phase 1
+ * ================================================================ */
+@media (prefers-reduced-transparency: reduce) {
+  /* DIESE ZWEI WERTE GEHOEREN ZUSAMMEN, und ohne diesen Absatz sieht das
+   * niemand: `.nav-bottom__indicator` toent hier eine Sprosse ueber der
+   * Objekt-Stufe (+6 %), weil ihm ohne Glas die Tiefe fehlt - allein gemessen
+   * kaeme er damit auf 1,438 (light) / 1,644 (dark) gegen die Bar und waere
+   * deutlich kraeftiger als die Glas-Fassung. Dieses ::before legt sich OPAK
+   * darueber und holt ihn zurueck: zusammen 1,231 / 1,203, gegen 1,259 / 1,190
+   * in der Glas-Fassung. Wer einen der beiden Werte anfasst, kippt den anderen
+   * still - deshalb steht beiden ihre Stufe als Bezug voran statt einer Zahl. */
+  .nav-bottom__indicator::before {
+    background: color-mix(
+      in srgb,
+      var(--active-module-accent, var(--color-accent)) calc(var(--tint-surface) - 2%),
+      var(--color-surface)
+    );
+    box-shadow: none;
+  }
+
+  .nav-item__icon-well {
+    background: var(--color-surface-elevated);
+    box-shadow: none;
+  }
+
+  .nav-item[aria-current="page"] .nav-item__icon-well,
+  .nav-item--active .nav-item__icon-well {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .btn--primary,
+  .btn--primary:hover,
+  .fab,
+  .fab:hover {
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .nav-bottom__indicator::before {
+    box-shadow: inset 0 0 0 var(--space-px) currentColor;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-item,
+  .nav-sidebar .nav-item,
+  .btn,
+  .fab,
+  .card--interactive {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ================================================================
+ * PHASE 2 — Modul-Komponenten
+ * ================================================================ */
+
+/* ================================================================
+ * 8. Form-Inputs — Glass Border + verbesserter Focus-Ring
+ * ================================================================ */
+/* Nur die KANTE. Der Grund steht in Abschnitt 31 (`--color-surface-work`) und
+ * gewinnt bei gleicher Spezifität durch seine spätere Stelle - die transluzente
+ * 95%-Variante, die hier bis 2026-08-09 stand, hat nie gegriffen. Zwei Regeln
+ * für dieselbe Fläche in einer Datei sind eine Frage ohne Antwort: wer den
+ * Eingabefeld-Grund sucht, findet zuerst die falsche. */
+.input,
+.form-input,
+select.form-input,
+textarea.form-input {
+  border-color: var(--color-border);
+}
+
+@media (prefers-contrast: more) {
+  .input,
+  .form-input,
+  select.form-input,
+  textarea.form-input {
+    border-color: var(--color-text-primary);
+  }
+}
+
+.input:focus,
+.form-input:focus {
+  border-color: var(--active-module-accent, var(--color-accent));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-shadow), transparent),
+    var(--glass-inset-input);
+}
+
+/* ================================================================
+ * 9. Toasts — Glass + Capsule
+ * ================================================================ */
+.toast {
+  border-radius: var(--radius-glass-card);
+  box-shadow: var(--glass-shadow-md);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .toast:not(.toast--success):not(.toast--danger):not(.toast--warning) {
+    background-color: color-mix(in srgb, var(--neutral-800) 90%, transparent);
+    backdrop-filter: var(--blur-sm);
+    -webkit-backdrop-filter: var(--blur-sm);
+    border: 1px solid var(--glass-border-overlay);
+  }
+}
+
+.toast--success,
+.toast--danger,
+.toast--warning {
+  border-radius: var(--radius-glass-card);
+  box-shadow:
+    var(--glass-shadow-md),
+    var(--glass-inset-soft);
+}
+
+/* ================================================================
+ * 10. Filter-Chips — Glass Border (immer aktiv)
+ * Aktiver Glass-State: direkt in tasks.css (Load-Order-Konflikt)
+ * ================================================================ */
+.filter-chip {
+  border-color: var(--glass-border-subtle);
+}
+
+.filter-chip:hover:not(.filter-chip--active) {
+  border-color: var(--glass-border);
+  background-color: color-mix(in srgb, var(--color-text-tertiary) 8%, transparent);
+}
+
+/* ================================================================
+ * 11. Priority Badges — Capsule + Glass Border
+ * Immer aktiv (kein backdrop-filter nötig)
+ * ================================================================ */
+.nav-badge {
+  box-shadow: var(--glass-inset-base);
+}
+
+/* ================================================================
+ * 12. Toggle-Switch — Specular Thumb
+ * ================================================================ */
+.toggle__track::after {
+  box-shadow:
+    var(--shadow-sm),
+    var(--glass-inset-thumb);
+}
+
+.toggle input:checked + .toggle__track::after {
+  transition: transform var(--transition-glass);
+}
+
+/* ================================================================
+ * 13. FAB-Backdrop (Dashboard) — Glass Blur
+ * ================================================================ */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .fab-backdrop--visible {
+    backdrop-filter: var(--blur-xs);
+    -webkit-backdrop-filter: var(--blur-xs);
+    background: var(--color-backdrop-glass);
+  }
+}
+
+/* ================================================================
+ * 14. Dashboard-Widgets — Glass Cards
+ * Glass-Styles direkt in dashboard.css (Load-Order-Konflikt)
+ * ================================================================ */
+
+/* ================================================================
+ * 15. Modal-Inputs
+ * ================================================================ */
+.modal-panel .form-input,
+.modal-panel .input {
+  background-color: var(--color-surface-2);
+}
+
+/* ================================================================
+ * 16. Accessibility — Phase 2
+ * ================================================================ */
+@media (prefers-reduced-transparency: reduce) {
+  .filter-chip--active,
+  .toast:not(.toast--success):not(.toast--danger):not(.toast--warning) {
+    background-color: var(--color-accent-light);
+    border-color: var(--color-accent);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle__track::after {
+    transition: none;
+  }
+
+  .toast {
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ================================================================
+ * PHASE 3 — Micro-Interactions + Polish
+ * ================================================================ */
+
+/* ================================================================
+ * 17. Bottom-Nav Surface Transitions
+ * ================================================================ */
+.nav-bottom__items {
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+/* ================================================================
+ * 18. Modal-Entrance — Glass Spring
+ * ================================================================ */
+@keyframes glass-modal-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.90) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes glass-sheet-in {
+  from {
+    opacity: 0.6;
+    transform: translateY(40%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 768px) {
+  .modal-panel {
+    animation: glass-modal-scale-in 0.32s var(--ease-glass) forwards;
+  }
+}
+
+@media (max-width: 767px) {
+  .modal-panel {
+    animation: glass-sheet-in 0.30s var(--ease-glass) forwards;
+  }
+}
+
+/* ================================================================
+ * 19. Seitentransitionen — Spring Easing
+ * ================================================================ */
+.page-transition--in-right,
+.page-transition--in-left {
+  animation-duration: 0.20s;
+  animation-timing-function: var(--ease-glass);
+}
+
+.page-transition--out-left,
+.page-transition--out-right {
+  animation-duration: var(--duration-xs);
+  animation-timing-function: var(--ease-out);
+}
+
+/* Blank-Screen-on-Scroll Prevention (iOS 26+ WebKit + Android Blink):
+ * Jedes Element mit backdrop-filter ODER filter innerhalb von overflow:auto wird
+ * vom Browser als eigenständige Compositor-GPU-Layer gerendert. Bei vielen solchen
+ * Layern (Task-Cards, Note-Items, Widgets, Inputs, Calendar-Events) scheitert der
+ * Compositor auf mobilen Geräten beim Scrollen → kompletter Weißbild-/Leerbild-Fehler.
+ * Elemente AUSSERHALB von .app-content (nav-bottom, Modals, Toasts) behalten
+ * ihren Blur unverändert — nur der Scroll-Container ist betroffen.
+ * Referenz: Issue #166 (iOS), nachgemeldet auch auf Android. */
+.app-content *,
+.app-content *::before,
+.app-content *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+}
+
+/* Performance: backdrop-filter deaktivieren während Seitenübergängen.
+ * (Superset der obigen Regel — bleibt für semantische Klarheit erhalten.) */
+html.navigating .app-content *,
+html.navigating .app-content *::before,
+html.navigating .app-content *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ================================================================
+ * 20. List-Stagger — Spring Timing
+ * ================================================================ */
+.list-stagger > * {
+  animation-duration: 280ms;
+  animation-timing-function: var(--ease-glass);
+}
+
+/* ================================================================
+ * 21. Focus-Ring — Scale-In Animation
+ * ================================================================ */
+/* Nur die Animation. Der `outline-offset: 3px`, der hier stand, war die zweite
+ * globale Fokus-Spezifikation neben reset.css und überschrieb dessen 2px überall
+ * dort, wo keine Komponente lokal etwas sagte - der 3px-Ring am Filter-Chip war
+ * genau dieser Durchgriff (Critique P1, 2026-07-30). Der Offset kommt jetzt aus
+ * `--focus-ring-offset`; hier bleibt, was hierher gehört: das Timing. */
+:focus-visible {
+  transition:
+    box-shadow var(--transition-fast),
+    outline-offset var(--transition-fast);
+}
+
+/* ================================================================
+ * 22. Skeleton Shimmer — Glass Shimmer
+ * ================================================================ */
+.skeleton {
+  background: linear-gradient(
+    105deg,
+    var(--color-border-subtle) 0%,
+    var(--color-border-subtle) 30%,
+    color-mix(in srgb, var(--color-surface) 90%, var(--glass-highlight)) 50%,
+    var(--color-border-subtle) 70%,
+    var(--color-border-subtle) 100%
+  );
+  background-size: 250% 100%;
+}
+
+/* ================================================================
+ * 23. FAB — Attention Pulse
+ * ================================================================ */
+@keyframes fab-ring-pulse {
+  0%   { box-shadow: var(--shadow-lg), var(--glass-inset-elevated), 0 0 0 0 color-mix(in srgb, var(--module-accent, var(--color-btn-primary)) 50%, transparent); }
+  60%  { box-shadow: var(--shadow-lg), var(--glass-inset-elevated), 0 0 0 10px transparent; }
+  100% { box-shadow: var(--shadow-lg), var(--glass-inset-elevated), 0 0 0 0 transparent; }
+}
+
+.fab {
+  animation:
+    fab-in 420ms var(--ease-out) backwards,
+    fab-ring-pulse 600ms var(--ease-out) 450ms 1 backwards;
+}
+
+/* ================================================================
+ * 24. Accessibility — Phase 3
+ * ================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .nav-bottom {
+    transition: none;
+  }
+
+  .modal-panel {
+    animation: none;
+  }
+
+  .page-transition--in-right,
+  .page-transition--in-left,
+  .page-transition--out-left,
+  .page-transition--out-right {
+    animation-duration: 0.01ms !important;
+  }
+
+  .list-stagger > * {
+    animation-duration: 0.01ms !important;
+  }
+
+  .fab {
+    animation: none;
+  }
+}
+
+/* ================================================================
+ * PHASE 4 — Liquid Glass Vibrancy + Tint
+ * ================================================================ */
+
+/* ================================================================
+ * 25.–27. Widget-, Greeting- und Wetter-Karten
+ *
+ * ENTFALLEN mit dem HIG-Rollout (Glas-ist-Chrome-Regel, DESIGN.md).
+ *
+ * Hier stand ein Drei-Block-Satz, der Dashboard-Karten auf
+ * `--glass-bg-card` (62 % deckendes Weiß) plus blur-sm/saturate(180 %)
+ * und einen 3 %-Modul-Tint setzte. Der Selektor `.dashboard .widget`
+ * (0-2-0) schlug dabei das `.widget { background-color: var(--color-surface) }`
+ * aus dashboard.css (0-1-0) — die als "opake HIG-Karte" gebaute Fläche war
+ * live also nie opak, sie sah auf dem hellen Grouped-Grund nur so aus.
+ *
+ * backdrop-filter gehört ausschließlich dem Chrome (Tab-Bar, Sidebar,
+ * Sheets, Toolbar, FAB); Inhalte sind opak. Die Widget-Fläche kommt jetzt
+ * ungestört aus dashboard.css.
+ * ================================================================ */
+
+/* ================================================================
+ * 28. Page-Toolbars
+ *
+ * Entfallen mit Issue #577. Hier stand ein Vier-Modul-Override
+ * (.tasks-page .tasks-toolbar, .notes-page .notes-toolbar,
+ * .contacts-page .contacts-toolbar, .calendar-page .cal-toolbar), das
+ * Hintergrund und 3px-Akzentstreifen exakt so wiederholte, wie
+ * .page-toolbar sie in layout.css ohnehin setzt — ein Relikt aus der
+ * Zeit vor der Vereinheitlichung des Canonical Page Head ("Eltern-
+ * Selektoren fuer Spezifitaet").
+ *
+ * Genau diese höhere Spezifität (0-2-0 gegen 0-1-0) hielt aber auch das
+ * alte `padding-left/right: var(--space-4)` fest und hebelte damit den
+ * Full-bleed-Rail in vier Modulen aus: Kopf-Inhalt saß 16px vom Rand,
+ * der Seiten-Body bei --page-inline-pad. Der Trennstrich kommt jetzt
+ * ebenfalls einheitlich aus .page-toolbar (--color-border statt
+ * --glass-border-subtle).
+ * ================================================================ */
+
+/* ================================================================
+ * 29. Note-Items — opake Karten
+ *
+ * Der Dashboard-Zweig trug bis zum HIG-Rollout Glas (glass-bg-card +
+ * blur-xs) und lief damit gegen die Glas-ist-Chrome-Regel. Beide Zweige
+ * teilen jetzt dieselbe opake Kartenfläche; der @supports-Rahmen ist
+ * entfallen, weil hier nichts mehr an backdrop-filter hängt.
+ * ================================================================ */
+.dashboard .note-item,
+.notes-page .note-item {
+  background-color: var(--color-surface-work);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard .note-item:hover,
+.notes-page .note-item:hover {
+  background-color: var(--color-surface-raised);
+  box-shadow: var(--shadow-md);
+}
+
+/* ================================================================
+ * 30. Meal-Slots — opake Grid-Zellen
+ *
+ * Gleiche Bereinigung wie bei den Note-Items: der Dashboard-Zweig war
+ * geglast, der Modul-Zweig nicht. Eine Fläche für beide.
+ * ================================================================ */
+.dashboard .meal-slot,
+.meals-page .meal-slot {
+  background-color: var(--color-surface-work);
+}
+
+.dashboard .meal-slot:hover,
+.meals-page .meal-slot:hover {
+  background-color: var(--color-surface-raised);
+}
+
+.dashboard .meal-slot--filled,
+.meals-page .meal-slot--filled {
+  background-color: color-mix(in srgb, var(--module-accent, var(--module-meals)) var(--tint-wash), var(--color-surface-raised));
+}
+
+/* ================================================================
+ * 31. Form-Inputs — Arbeitsfläche
+ *
+ * Hier hing nie ein Blur drin, nur die opake Arbeitsfläche; der
+ * @supports-Rahmen war ein Relikt der Glas-Phase.
+ * ================================================================ */
+.input,
+.form-input,
+select.form-input,
+textarea.form-input {
+  background-color: var(--color-surface-work);
+}
+
+/* ================================================================
+ * 32. List-Items — Hover-Tönung
+ *
+ * Eltern-Selektoren fuer Spezifitaet (glass.css < page CSS). Ebenfalls
+ * ohne backdrop-filter, also ohne @supports-Rahmen.
+ * ================================================================ */
+.tasks-page .task-card {
+  background-color: var(--color-surface-work);
+}
+
+.tasks-page .task-card:hover {
+  background-color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-state), var(--color-surface-raised));
+}
+
+.shopping-page .shopping-item:hover {
+  background-color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-state), var(--color-surface-raised));
+  border-radius: var(--radius-sm);
+}
+
+.contacts-page .contact-item:hover {
+  background-color: color-mix(in srgb, var(--module-accent, var(--color-accent)) var(--tint-state), var(--color-surface-raised));
+  border-radius: var(--radius-sm);
+}
+
+/* ================================================================
+ * 33. Group-Toggle — Spur des Segment-Umbaus
+ *
+ * Der Aktiv-Zustand steht NICHT mehr hier: er ist seit dem HIG-Rollout
+ * die shell-weite Segment-Sprache (Modul-Akzent gefüllt +
+ * --color-ink-on-vivid, siehe tasks.css). Der frühere
+ * `.group-toggle__btn--active { background: surface-work; box-shadow }`
+ * war die erhabene Kachel der abgelösten Welt und überlebte den Umbau
+ * nur, weil die Modul-CSS später lädt — eine Falle für den nächsten
+ * Selektor, der hier gleiche Spezifität hat.
+ * ================================================================ */
+.group-toggle {
+  background-color: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+}
+
+/* ================================================================
+ * 34. FAB Speed-Dial Actions — Glass Labels + Buttons
+ * ================================================================ */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .fab-action__label {
+    background-color: var(--glass-bg-elevated);
+    backdrop-filter: var(--blur-sm) saturate(160%);
+    -webkit-backdrop-filter: var(--blur-sm) saturate(160%);
+    border: 1px solid var(--glass-border-subtle);
+    box-shadow: var(--glass-shadow-md);
+  }
+
+  .fab-action__btn {
+    background-color: var(--glass-bg-elevated);
+    backdrop-filter: var(--blur-sm) saturate(160%);
+    -webkit-backdrop-filter: var(--blur-sm) saturate(160%);
+    border: 1px solid var(--glass-border-subtle);
+  }
+}
+
+/* ================================================================
+ * 35. App-Content-Hintergrund — Vibrancy-Basis
+ *
+ * Subtiler Gradient im Seitenhintergrund damit Glass-
+ * Elemente darauf lebendiger wirken.
+ *
+ * WICHTIG: Der Gradient liegt auf .app-shell (Viewport-Container,
+ * scrollt nicht), NICHT auf .app-content (Scroll-Container).
+ * Grund: ein radialer color-mix()-Gradient auf einem overflow:auto-
+ * Element wird in WebKit (iOS Safari/PWA) und Blink (Android Chrome)
+ * beim Scrollen unzuverlässig rasterisiert — Symptom: leerer
+ * Bildschirminhalt nach kurzem Scrollen (Issue #166).
+ * .app-content trägt darum nur die opake Basisfarbe; der Gradient
+ * scheint vom darunterliegenden .app-shell-Hintergrund durch.
+ * ================================================================ */
+.app-shell {
+  background:
+    radial-gradient(
+      ellipse at 20% 0%,
+      color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--app-backdrop-accent-strength), transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse at 85% 90%,
+      color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--app-backdrop-secondary-strength), transparent),
+      transparent 50%
+    ),
+    var(--color-bg);
+}
+
+.app-content {
+  background-color: var(--color-bg);
+}
+
+/* ================================================================
+ * 36. Skeleton — Platzhalter der Widget-Karte
+ *
+ * Der Platzhalter muss dieselbe Fläche zeigen wie das Widget, das ihn
+ * ablöst: opak, randlos. Vorher stand hier Glas plus sichtbare Kante -
+ * beim Einschwenken wechselte die Karte damit zweimal ihr Material.
+ * ================================================================ */
+.widget-skeleton {
+  background-color: var(--color-surface);
+  border: 1px solid transparent;
+}
+
+/* ================================================================
+ * 37. Accessibility — Phase 4
+ * ================================================================ */
+@media (prefers-reduced-transparency: reduce) {
+  /* Inhalte sind seit dem HIG-Rollout ohnehin opak (Sektionen 25-33); die
+   * frühere Liste aus Widgets, Task-Cards, Note-Items, Meal-Slots und
+   * Skeletons schaltete hier ein Glas ab, das es nicht mehr gibt.
+   * Zurück bleibt, was echtes Chrome-Material ist. */
+  .app-shell {
+    background: var(--color-bg);
+  }
+
+  .app-content {
+    background-color: transparent;
+  }
+
+  .fab-action__label,
+  .fab-action__btn {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* Modul-Köpfe brauchen hier nichts mehr: .page-toolbar (layout.css) ist
+   * ohnehin opak (--color-bg) und trägt bewusst KEIN backdrop-filter. Hier
+   * stand bis #577 der Zwilling des gelöschten Section-28-Blocks — dieselbe
+   * Vier-Modul-Liste, die vier von dreizehn Köpfen unter dieser Präferenz auf
+   * --color-surface umfärbte, plus ein backdrop-filter:none, das nichts mehr
+   * abzuschalten hatte. */
+}
+
+/* ================================================================
+ * 38. Sidebar Liquid Indikator — Glass Pill
+ * ================================================================ */
+@media (min-width: 1024px) {
+  .nav-sidebar__indicator {
+    background: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) calc(var(--tint-surface) - 4%), var(--glass-bg-card));
+    border: 1px solid var(--glass-border-subtle);
+    box-shadow:
+      var(--glass-inset-soft),
+      var(--glass-shadow-sm);
+  }
+
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .nav-sidebar__indicator {
+      backdrop-filter: var(--blur-xs) saturate(150%);
+      -webkit-backdrop-filter: var(--blur-xs) saturate(150%);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .nav-sidebar__indicator {
+      background: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-surface), var(--color-surface-elevated));
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+}
+
+/* ================================================================
+ * 39. Mobile Tab-Indikator — Glass Pill
+ * ================================================================ */
+/* iOS-Tab-Pille: crisp und randlos — solide Tönung statt Blur+Border,
+ * die auf der Kapsel als verschwommener Fleck lasen. */
+.nav-bottom__indicator {
+  background: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) var(--tint-surface), transparent);
+  border: none;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  /* Eine Sprosse ueber der Objekt-Stufe, weil ohne Glas die Tiefe fehlt. Der
+   * Wert steht NICHT allein: das ::before in §7 deckt ihn opak zurueck, und
+   * erst beide zusammen treffen die Glas-Fassung (1,231/1,203 gegen
+   * 1,259/1,190). Die Rechnung steht dort. */
+  .nav-bottom__indicator {
+    background: color-mix(in srgb, var(--active-module-accent, var(--color-accent)) calc(var(--tint-surface) + 6%), var(--color-surface-elevated));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* ================================================================
+ * PHASE 5 — Liquid Glass: lebender Backdrop + Specular
+ * ================================================================ */
+
+/* ================================================================
+ * 40. Lebender Backdrop — driftende, getönte Blobs
+ *
+ * Das "Flüssige", das die Glass-Flächen brechen. Liegt als
+ * .lg-backdrop direkt in .app-shell (Viewport-Container, scrollt
+ * NICHT). z-index: 0 → malt über die opaken html/body- und
+ * app-shell-Hintergründe; .app-content (position: relative, später
+ * im DOM) und alle positionierten Nav-/Overlay-Flächen liegen
+ * darüber. Bewusst KEINE negative z-Ebene / kein isolation auf der
+ * Shell, damit die globale z-Reihenfolge unverändert bleibt.
+ *
+ * WICHTIG (Issue #166): Die Blobs liegen AUSSERHALB von .app-content.
+ * Die Blanket-Regel `.app-content * { filter: none }` greift hier
+ * nicht — der blur() der Blobs bleibt erhalten, ohne den Scroll-
+ * Container zu rastern. Da sie nicht scrollen, lösen sie den
+ * Blank-Screen-Bug nicht aus.
+ *
+ * Blob 1 folgt --active-module-accent → die ganze App rekoloriert
+ * pro Sektion (Headline-Interaktion). Blobs 2–4 sind feste
+ * Modul-Tints für Farbvielfalt.
+ * Opazität/Specular werden in prefers-reduced-transparency /
+ * prefers-contrast über die Tokens auf 0 gesetzt (tokens.css).
+ * ================================================================ */
+.lg-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* .app-content über den Backdrop heben (position: relative → wird im
+ * Root-Stacking-Context nach dem Backdrop in DOM-Reihenfolge gemalt).
+ * z-index bewusst weggelassen → app-content wird KEIN Stacking-Context,
+ * damit Descendants (FAB etc.) ihre bisherige z-Ebene behalten. */
+.app-content {
+  position: relative;
+}
+
+.lg-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: var(--lg-blob-opacity);
+  animation: lg-drift 26s ease-in-out infinite alternate;
+  transition: background 600ms var(--ease-out);
+  /* Auf eigenen Compositor-Layer heben: die geblurrte Textur wird EINMAL
+   * gerastert und pro Frame nur verschoben. Zusammen mit der translate-only-
+   * Keyframe (kein scale → keine Blur-Neuberechnung) fällt die GPU-Dauerlast
+   * von ~25–50 % (Issue #443) auf reines Compositing. */
+  will-change: transform;
+}
+
+/* Blob-Positionen meiden die Chrome-Zonen (Sidebar links, schwebende Tab-Bar
+ * unten): ein Modul-getönter Blob, der durch das Glas einer Nav-Fläche
+ * scheint, liest sich als verrutschte Aktiv-Pille (Befund Redesign 2026-08 -
+ * auf /tasks stand ein grüner Blob exakt hinter der Tab-Bar-Kapsel). */
+.lg-blob--1 {
+  width: 46vw; height: 46vw; top: -8%; left: 30%;
+  background: radial-gradient(circle, var(--active-module-accent, var(--color-accent)) 0%, transparent 70%);
+}
+.lg-blob--2 {
+  width: 38vw; height: 38vw; top: 26%; right: 2%;
+  background: radial-gradient(circle, var(--module-shopping) 0%, transparent 70%);
+  animation-delay: -8s;
+  opacity: calc(var(--lg-blob-opacity) * 0.7);
+}
+.lg-blob--3 {
+  width: 40vw; height: 40vw; bottom: 14%; left: 34%;
+  background: radial-gradient(circle, var(--module-tasks) 0%, transparent 70%);
+  animation-delay: -14s;
+  opacity: calc(var(--lg-blob-opacity) * 0.6);
+}
+.lg-blob--4 {
+  width: 30vw; height: 30vw; top: 40%; left: 28%;
+  background: radial-gradient(circle, var(--module-meals) 0%, transparent 70%);
+  animation-delay: -19s;
+  opacity: calc(var(--lg-blob-opacity) * 0.5);
+}
+
+/* translate-only: bewusst KEIN scale(). Ein Skalierungswechsel würde den
+ * blur(90px) pro Frame neu rastern (GPU-Dauerlast, Issue #443); reines
+ * Verschieben einer bereits geblurrten Layer-Textur ist ein Compositor-Nop.
+ * Translate-Bereich leicht erweitert, um das entfallene „Atmen" auszugleichen. */
+@keyframes lg-drift {
+  0%   { transform: translate(0, 0); }
+  50%  { transform: translate(5vw, -4vw); }
+  100% { transform: translate(-4vw, 3vw); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg-blob {
+    animation: none;
+  }
+}
+
+/* ================================================================
+ * 41. Stärkerer Specular — Inset-Top-Highlight auf erhöhten Flächen
+ *
+ * Kanonische Glass-Rezeptur (siehe README): jede erhöhte Glass-
+ * Fläche erhält einen Inset-Top-Highlight, dessen Stärke über
+ * --lg-specular gesteuert wird (0 in prefers-reduced-transparency /
+ * prefers-contrast → Highlight verschwindet).
+ *
+ * --glass-shadow-capsule darunter ist der einzige Schatten der Kapsel; die
+ * Begruendung, warum es nicht --glass-shadow-md ist, steht am Token.
+ * ================================================================ */
+.nav-bottom__items {
+  box-shadow:
+    inset 0 var(--space-px) 0 color-mix(in srgb, white calc(var(--lg-specular) * 100%), transparent),
+    var(--glass-inset-bottom-lift),
+    var(--glass-shadow-capsule);
+}
+
+@media (min-width: 1024px) {
+  .nav-sidebar {
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white calc(var(--lg-specular) * 100%), transparent),
+      var(--glass-inset-bottom-lift),
+      var(--glass-shadow-md);
+  }
+}

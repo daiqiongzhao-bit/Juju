@@ -1,0 +1,402 @@
+/**
+ * Modul: Beleg-Feld (Dokumente anhängen)
+ * Zweck: Ein Formularfeld, das Dokumente aus dem Dokumente-Modul an einen
+ *        Datensatz hängt - vorhandene verknüpfen oder neue hochladen.
+ * Abhängigkeiten: /api.js, /i18n.js, /utils/html.js
+ *
+ * Warum geteilt: Kalender, Hauswirtschaft und Dokumente führten je eine eigene
+ * Dropzone, und keine davon konnte ein bereits abgelegtes Dokument auswählen -
+ * hochladen ging, wiederverwenden nicht. Diese Komponente ist die eine Stelle,
+ * an der beides passiert (#583).
+ *
+ * Muster wie rrule-ui.js: HTML-Fragment für den Modal-Content, danach ein
+ * bind()-Aufruf im onSave-Hook, der einen Controller zurückgibt.
+ *
+ *   ${renderDocumentAttachField({ attachments: entry.attachments })}
+ *   const belege = bindDocumentAttachField(panel, { category: 'finance' });
+ *   body.attachment_document_ids = await belege.commit();
+ *
+ * commit() lädt erst beim Speichern hoch. Bricht der Nutzer das Formular ab,
+ * bleibt keine verwaiste Datei im Dokumente-Modul zurück.
+ */
+
+import { api } from '/api.js';
+import { t, formatDate } from '/i18n.js';
+import { esc } from '/utils/html.js';
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+// Spiegelt die Upload-Allowlist des Servers (server/routes/documents.js).
+// Der Server bleibt die Instanz, die ablehnt - das accept-Attribut erspart dem
+// Nutzer nur den Umweg über eine Fehlermeldung.
+const ACCEPT = [
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'text/plain',
+  'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+].join(',');
+
+const FIELD_CLASS = 'doc-attach';
+
+/**
+ * HTML des Beleg-Felds. Gehört in den Modal-Content.
+ * @param {object} options
+ * @param {object[]} [options.attachments] - bereits verknüpfte Dokumente
+ * @param {string} [options.label] - Feld-Beschriftung
+ * @param {string} [options.hint] - Hinweistext unter den Aktionen
+ * @param {string} [options.icon] - Lucide-Icon der leeren Fläche
+ * @returns {string}
+ */
+export function renderDocumentAttachField({
+  attachments = [],
+  label = t('documentAttach.label'),
+  hint = t('documentAttach.hint'),
+  icon = 'paperclip',
+  maxItems = 0,
+} = {}) {
+  // Vorbelegung als data-Attribut: hält render und bind entkoppelt, der
+  // Aufrufer muss die Liste nicht ein zweites Mal an bind() reichen.
+  const initial = attachments
+    .filter((a) => a?.document_id)
+    .map((a) => ({ id: a.document_id, name: a.name || a.original_name || '' }));
+
+  return `
+    <div class="form-group ${FIELD_CLASS}" data-doc-attach
+         data-doc-attach-initial="${esc(JSON.stringify(initial))}"
+         data-doc-attach-max="${Number(maxItems) || 0}">
+      <span class="form-label" id="doc-attach-label">${esc(label)}</span>
+      <div class="doc-attach__chips" data-doc-attach-chips role="list"
+           aria-labelledby="doc-attach-label"></div>
+      <p class="doc-attach__empty" data-doc-attach-empty hidden>
+        <i data-lucide="${esc(icon)}" aria-hidden="true"></i>
+        <span>${esc(t('documentAttach.emptyState'))}</span>
+      </p>
+      <div class="doc-attach__actions">
+        <button class="btn btn--secondary doc-attach__action" type="button" data-doc-attach-upload>
+          <i data-lucide="upload" aria-hidden="true"></i>
+          <span>${esc(t('documentAttach.uploadAction'))}</span>
+        </button>
+        <button class="btn btn--secondary doc-attach__action" type="button" data-doc-attach-pick>
+          <i data-lucide="folder-open" aria-hidden="true"></i>
+          <span>${esc(t('documentAttach.pickAction'))}</span>
+        </button>
+      </div>
+      <input class="sr-only" type="file" multiple accept="${ACCEPT}" data-doc-attach-input
+             aria-labelledby="doc-attach-label">
+      <p class="form-hint">${esc(hint)}</p>
+    </div>`;
+}
+
+/**
+ * Verdrahtet das Feld und gibt einen Controller zurück.
+ *
+ * Ein Feld je Formular: bind() greift das erste `[data-doc-attach]` im Panel,
+ * und die Beschriftungs-ID ist fest. Zwei Beleg-Felder in einem Modal gäbe es
+ * bisher nirgends - käme das auf, braucht render() eine Instanz-ID.
+ *
+ * @param {HTMLElement} panel - Container, in dem das Feld steckt
+ * @param {object} options
+ * @param {string} [options.category] - Dokument-Kategorie für neue Uploads
+ * @param {string} [options.folderName] - Zielordner für neue Uploads
+ * @param {string} [options.visibility] - Sichtbarkeit neuer Uploads
+ * @param {Function} [options.documentName] - (file) => Anzeigename des Uploads
+ * @param {number} [options.maxFileSize]
+ * @returns {{ commit: Function, documentIds: Function, isDirty: Function }|null}
+ */
+export function bindDocumentAttachField(panel, {
+  category = 'other',
+  folderName = '',
+  visibility = 'family',
+  documentName = null,
+  maxFileSize = MAX_FILE_SIZE,
+} = {}) {
+  const field = panel?.querySelector('[data-doc-attach]');
+  if (!field) return null;
+
+  const chipsEl = field.querySelector('[data-doc-attach-chips]');
+  const emptyEl = field.querySelector('[data-doc-attach-empty]');
+  const fileInput = field.querySelector('[data-doc-attach-input]');
+  const initialIds = readInitialIds(field);
+  // 0 = unbegrenzt. Bei 1 nimmt das Feld genau einen Beleg an (Zahlungsnachweis:
+  // das Datenmodell hat dort eine einzelne Spalte, ein zweiter Beleg ginge beim
+  // Speichern verloren) - dann ersetzt eine neue Wahl die bisherige.
+  const maxItems = Number(field.dataset.docAttachMax) || 0;
+  if (maxItems === 1) fileInput.removeAttribute('multiple');
+
+  // Zwei Sorten Einträge in einer Liste, damit die Reihenfolge der Chips der
+  // Reihenfolge des Hinzufügens entspricht:
+  //   { kind: 'document', id, name }  - existiert bereits serverseitig
+  //   { kind: 'file', file, name }    - wird erst bei commit() hochgeladen
+  const items = initialIds.map((entry) => ({ kind: 'document', id: entry.id, name: entry.name }));
+
+  const renderChips = () => {
+    chipsEl.replaceChildren();
+    for (const [index, item] of items.entries()) {
+      // Bereits abgelegte Dokumente sind anklickbar - ein Beleg, den man nicht
+      // ansehen kann, ist kein Beleg. Wartende Uploads haben noch keine URL.
+      const nameHtml = item.kind === 'file'
+        ? `<span class="doc-attach__chip-name">${esc(item.name)}</span>`
+        : `<a class="doc-attach__chip-name" href="/api/v1/documents/${item.id}/preview"
+              target="_blank" rel="noopener noreferrer"
+              title="${esc(t('documentAttach.openAction', { name: item.name }))}">${esc(item.name)}</a>`;
+      chipsEl.insertAdjacentHTML('beforeend', `
+        <span class="doc-attach__chip${item.kind === 'file' ? ' doc-attach__chip--pending' : ''}" role="listitem">
+          <i data-lucide="${item.kind === 'file' ? 'upload-cloud' : 'file-text'}" aria-hidden="true"></i>
+          ${nameHtml}
+          <button class="doc-attach__chip-remove" type="button" data-doc-attach-remove="${index}"
+                  aria-label="${esc(t('documentAttach.removeAction', { name: item.name }))}">
+            <i data-lucide="x" aria-hidden="true"></i>
+          </button>
+        </span>`);
+    }
+    emptyEl.hidden = items.length > 0;
+    if (window.lucide) window.lucide.createIcons({ el: chipsEl });
+  };
+
+  /** Nimmt einen Eintrag auf; bei maxItems=1 ersetzt er den bisherigen. */
+  const addItem = (item) => {
+    if (maxItems === 1) items.length = 0;
+    else if (maxItems && items.length >= maxItems) {
+      window.yuvomi?.showToast(t('documentAttach.limitReached', { count: maxItems }), 'danger');
+      return false;
+    }
+    items.push(item);
+    return true;
+  };
+
+  chipsEl.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-doc-attach-remove]');
+    if (!button) return;
+    items.splice(Number(button.dataset.docAttachRemove), 1);
+    renderChips();
+  });
+
+  field.querySelector('[data-doc-attach-upload]').addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', () => {
+    for (const file of fileInput.files || []) {
+      if (file.size > maxFileSize) {
+        window.yuvomi?.showToast(t('documents.fileTooLarge'), 'danger');
+        continue;
+      }
+      if (!addItem({ kind: 'file', file, name: file.name })) break;
+    }
+    // Zurücksetzen, sonst löst dieselbe Datei beim zweiten Mal kein change aus.
+    fileInput.value = '';
+    renderChips();
+  });
+
+  field.querySelector('[data-doc-attach-pick]').addEventListener('click', async () => {
+    const alreadyLinked = new Set(items.filter((i) => i.kind === 'document').map((i) => i.id));
+    const picked = await openDocumentPicker(panel, { excludeIds: alreadyLinked, single: maxItems === 1 });
+    for (const doc of picked) {
+      if (!addItem({ kind: 'document', id: doc.id, name: doc.name })) break;
+    }
+    if (picked.length) renderChips();
+  });
+
+  renderChips();
+
+  return {
+    /** IDs ohne Upload - für Aufrufer, die nur den aktuellen Stand brauchen. */
+    documentIds: () => items.filter((i) => i.kind === 'document').map((i) => i.id),
+
+    /** true, sobald noch nicht hochgeladene Dateien warten. */
+    isDirty: () => items.some((i) => i.kind === 'file'),
+
+    /**
+     * Lädt wartende Dateien hoch und gibt alle Dokument-IDs zurück.
+     * Wirft, wenn ein Upload fehlschlägt - der Aufrufer soll dann nicht
+     * speichern, sonst stünde die Buchung ohne den Beleg da, den der Nutzer
+     * angehängt zu haben glaubt.
+     * @returns {Promise<number[]>}
+     */
+    async commit() {
+      for (const item of items) {
+        if (item.kind !== 'file') continue;
+        const res = await api.post('/documents', {
+          name: documentName ? documentName(item.file) : item.file.name,
+          description: '',
+          category,
+          visibility,
+          status: 'active',
+          allowed_member_ids: [],
+          original_name: item.file.name,
+          content_data: await readFileAsDataUrl(item.file),
+          ...(folderName ? { folder_name: folderName } : {}),
+        });
+        item.kind = 'document';
+        item.id = res.data?.id;
+        item.name = res.data?.name || item.name;
+        delete item.file;
+      }
+      return items.filter((i) => i.id).map((i) => i.id);
+    },
+  };
+}
+
+/** Liest die von renderDocumentAttachField hinterlegte Vorbelegung. */
+function readInitialIds(field) {
+  try {
+    return JSON.parse(field.dataset.docAttachInitial || '[]');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Auswahl-Overlay für bereits abgelegte Dokumente.
+ *
+ * Bewusst ein Overlay im Panel und kein zweites Modal: Das geteilte Modal ist
+ * nicht verschachtelbar, und ein zweites würde das Formular darunter schließen.
+ *
+ * @param {HTMLElement} panel
+ * @param {object} options
+ * @param {Set<number>} [options.excludeIds] - bereits verknüpfte Dokumente
+ * @param {boolean} [options.single] - nur ein Dokument wählbar
+ * @returns {Promise<object[]>} ausgewählte Dokumente
+ */
+function openDocumentPicker(panel, { excludeIds = new Set(), single = false } = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'doc-attach-picker';
+    overlay.insertAdjacentHTML('afterbegin', `
+      <div class="doc-attach-picker__panel" role="dialog" aria-modal="true"
+           aria-label="${esc(t('documentAttach.pickerTitle'))}">
+        <div class="doc-attach-picker__header">
+          <strong>${esc(t('documentAttach.pickerTitle'))}</strong>
+          <button class="btn btn--icon" type="button" data-picker-close
+                  aria-label="${esc(t('common.cancel'))}">
+            <i data-lucide="x" aria-hidden="true"></i>
+          </button>
+        </div>
+        <input class="form-input doc-attach-picker__search" type="search" data-picker-search
+               placeholder="${esc(t('documentAttach.searchPlaceholder'))}"
+               aria-label="${esc(t('documentAttach.searchPlaceholder'))}">
+        <div class="doc-attach-picker__list" data-picker-list>
+          <p class="doc-attach-picker__status">${esc(t('common.loading'))}</p>
+        </div>
+        <div class="doc-attach-picker__footer">
+          <button class="btn btn--secondary" type="button" data-picker-close>${esc(t('common.cancel'))}</button>
+          <button class="btn btn--primary" type="button" data-picker-confirm disabled>
+            ${esc(t('documentAttach.confirmSelection'))}
+          </button>
+        </div>
+      </div>`);
+    panel.append(overlay);
+    if (window.lucide) window.lucide.createIcons({ el: overlay });
+
+    const listEl = overlay.querySelector('[data-picker-list]');
+    const searchEl = overlay.querySelector('[data-picker-search]');
+    const confirmEl = overlay.querySelector('[data-picker-confirm]');
+    // Der Auslöser bekommt den Fokus zurück - das Overlay liegt über einem
+    // offenen Modal, sonst fiele der Fokus auf <body>.
+    const opener = document.activeElement;
+    const selected = new Set();
+    let documents = [];
+
+    const close = (result) => {
+      overlay.remove();
+      if (opener?.isConnected) opener.focus();
+      resolve(result);
+    };
+
+    const renderList = () => {
+      const needle = searchEl.value.trim().toLowerCase();
+      const visible = documents.filter((doc) => {
+        if (excludeIds.has(doc.id)) return false;
+        if (!needle) return true;
+        return `${doc.name} ${doc.original_name || ''}`.toLowerCase().includes(needle);
+      });
+
+      listEl.replaceChildren();
+      if (!visible.length) {
+        listEl.insertAdjacentHTML('afterbegin',
+          `<p class="doc-attach-picker__status">${esc(t('documentAttach.noDocuments'))}</p>`);
+        return;
+      }
+      for (const doc of visible) {
+        listEl.insertAdjacentHTML('beforeend', `
+          <label class="doc-attach-picker__item">
+            <input type="checkbox" value="${doc.id}" ${selected.has(doc.id) ? 'checked' : ''}>
+            <span class="doc-attach-picker__item-body">
+              <span class="doc-attach-picker__item-name">${esc(doc.name)}</span>
+              <span class="doc-attach-picker__item-meta">${esc(pickerMeta(doc))}</span>
+            </span>
+          </label>`);
+      }
+    };
+
+    listEl.addEventListener('change', (event) => {
+      const box = event.target.closest('input[type="checkbox"]');
+      if (!box) return;
+      const id = Number(box.value);
+      // Ein-Dokument-Feld: die neue Wahl ersetzt die alte, statt eine zweite
+      // Checkbox stehen zu lassen, die beim Übernehmen ignoriert würde.
+      if (single && box.checked) {
+        selected.clear();
+        for (const other of listEl.querySelectorAll('input[type="checkbox"]')) {
+          if (other !== box) other.checked = false;
+        }
+      }
+      if (box.checked) selected.add(id); else selected.delete(id);
+      confirmEl.disabled = selected.size === 0;
+    });
+
+    searchEl.addEventListener('input', renderList);
+    overlay.querySelectorAll('[data-picker-close]').forEach((button) => {
+      button.addEventListener('click', () => close([]));
+    });
+    confirmEl.addEventListener('click', () => {
+      close(documents.filter((doc) => selected.has(doc.id)));
+    });
+    overlay.addEventListener('mousedown', (event) => {
+      if (event.target === overlay) close([]);
+    });
+    // Escape und Fokus-Trap auf Overlay-Ebene: sonst tabbt man aus dem Dialog
+    // heraus in das Formular darunter.
+    overlay.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') { event.stopPropagation(); close([]); return; }
+      if (event.key !== 'Tab') return;
+      const focusable = [...overlay.querySelectorAll('button, input')].filter((el) => !el.disabled);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
+
+    searchEl.focus();
+
+    api.get('/documents').then((res) => {
+      documents = res.data || [];
+      renderList();
+    }).catch(() => {
+      listEl.replaceChildren();
+      listEl.insertAdjacentHTML('afterbegin',
+        `<p class="doc-attach-picker__status">${esc(t('documentAttach.loadFailed'))}</p>`);
+    });
+  });
+}
+
+/** Zweitzeile eines Picker-Eintrags: Ordner und Datum, soweit vorhanden. */
+function pickerMeta(doc) {
+  return [doc.folder_name, doc.created_at ? formatDate(doc.created_at) : '']
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error(t('documents.fileReadError')));
+    reader.readAsDataURL(file);
+  });
+}

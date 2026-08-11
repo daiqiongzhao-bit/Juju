@@ -1,0 +1,145 @@
+import { wireScrollFade } from '/utils/ux.js';
+
+/**
+ * Modul: Tablist-Verhalten — geteilte WAI-ARIA-Tab-Navigation
+ *
+ * EINE Verhaltens-Quelle (Klick + Pfeiltasten/Home/End + Roving-Tabindex + ARIA)
+ * für Tab-Leisten, deren Buttons bereits im Markup stehen (rewards,
+ * housekeeping, budget, calendar). `renderSubTabs` ist die Variante, die die
+ * Leiste selbst baut und dabei Deep-Link-Routen, Zustandszahlen und
+ * Panel-Synchronisierung mitbringt (health, kitchen). So teilen beide dieselbe
+ * Interaktions-Grammatik, ohne dass ein Modul die Tastatur-Navigation erneut
+ * von Hand nachbaut.
+ *
+ * WO DIE LEISTE STEHT, ENTSCHEIDET NICHT DIESE WAHL. Hier stand bis Runde 6
+ * „aus Layout-Gründen" - das war eine Beobachtung, kein Kriterium, und weil
+ * keines dastand, entschied jedes Modul neu. Das Kriterium ist der
+ * `module:`-Wert der Zielroute (ROUTES in router.js):
+ *
+ *   Wechselt die Leiste ihn, ist SIE die Kopf-Navigation und trägt keinen Titel
+ *   über sich - der Tab-Name IST der Modulname (Küche: vier eigenständige
+ *   Module unter einer Leiste).
+ *   Wechselt sie ihn nicht, oder wechselt sie gar keine Route, gehört sie unter
+ *   den Large Title in den kanonischen `page-toolbar`-Kopf (Gesundheit, Budget,
+ *   Belohnungen, Haushaltshilfe).
+ *   Sektionen mit eigener Shell (Einstellungen) führen ihren Titel in ihrem
+ *   eigenen Kopf. Das ist der dritte Fall der Regel, keine Ausnahme von ihr.
+ *
+ * Warum die Route und nicht der Helfername: Gesundheits Tabs SIND echte Routen
+ * (HEALTH_ROUTES), tragen aber alle `module: 'health'`. Ein Guard auf
+ * „renderSubTabs gegen wireTablist" wäre damit entweder verletzt oder falsch.
+ * Geprüft wird die Regel auf Ebene 2 (Struktur, aus ROUTES abgeleitet) in
+ * test-frontend-audit.js.
+ *
+ * Erwartetes Markup:
+ *   - Container: role="tablist"    (mode 'tabs')  bzw. role="radiogroup" ('select')
+ *   - Buttons:   role="tab"/"radio", data-tab-id="<id>"
+ * Der Helper setzt den Auswahlzustand, tabindex und die aktive Klasse und ruft
+ * onChange(id) beim Wechsel.
+ *
+ * `mode` trennt die beiden Fragen, die eine Leiste stellen kann, ohne die
+ * Verhaltensschicht zu spalten: 'tabs' wechselt eine SICHT (aria-selected +
+ * aria-current), 'select' wählt EINEN WERT aus einer Filterleiste (aria-checked).
+ * Vorher trugen die Wert-Leisten des Budgets role="group" mit aria-pressed und
+ * standen damit ohne Pfeiltasten-Navigation da, während die Sicht-Leisten daneben
+ * welche hatten (Critique 2026-07-30, P1). Pfeiltasten + Roving-Tabindex sind für
+ * radiogroup ohnehin das vorgeschriebene Muster.
+ *
+ * @param {HTMLElement} container            - die Leiste (role="tablist"|"radiogroup")
+ * @param {object}      opts
+ * @param {string}      opts.activeId         - initial aktive Tab-id
+ * @param {Function}    opts.onChange         - onChange(id) beim Wechsel
+ * @param {string}      [opts.activeClass='sub-tab--active']
+ * @param {'tabs'|'select'} [opts.mode='tabs']
+ * @returns {{ setActive: (id: string, opts?: { focus?: boolean }) => void }}
+ */
+/**
+ * Holt einen Tab in den sichtbaren Bereich SEINER Leiste, indem nur deren
+ * scrollLeft angepasst wird — anders als Element.scrollIntoView werden
+ * scrollbare Vorfahren (inkl. overflow:hidden-Container) NICHT mitgescrollt.
+ * Auf nicht-überlaufenden Leisten (Desktop) ist es ein No-op.
+ */
+function scrollTabIntoView(container, btn) {
+  const c = container.getBoundingClientRect();
+  const b = btn.getBoundingClientRect();
+  if (b.left < c.left) {
+    container.scrollLeft -= c.left - b.left;
+  } else if (b.right > c.right) {
+    container.scrollLeft += b.right - c.right;
+  }
+}
+
+export function wireTablist(container, { activeId, onChange, activeClass = 'sub-tab--active', mode = 'tabs' } = {}) {
+  if (!container) return { setActive() {} };
+  let current = activeId;
+
+  const buttons = () => [...container.querySelectorAll('[data-tab-id]')];
+
+  const paint = () => {
+    let activeBtn = null;
+    buttons().forEach((b) => {
+      const on = b.dataset.tabId === current;
+      b.classList.toggle(activeClass, on);
+      // Sicht vs. Wert: aria-current="page" gehört zur Navigation und wäre auf
+      // einem Filterwert eine Falschaussage („Sie sind hier").
+      if (mode === 'select') {
+        b.setAttribute('aria-checked', String(on));
+      } else {
+        b.setAttribute('aria-selected', String(on));
+        if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      }
+      b.tabIndex = on ? 0 : -1;
+      if (on) activeBtn = b;
+    });
+    // Überlaufende Leisten (Mobil): den aktiven Tab in den sichtbaren
+    // Scroll-Bereich holen (Audit A2-18) — aber NUR die Leiste selbst scrollen.
+    // Element.scrollIntoView scrollt jeden scrollbaren Vorfahren mit, auch
+    // overflow:hidden-Container wie .calendar-page (die per JS scrollbar bleiben,
+    // aber weder Scrollbar noch Touch zum Zurückscrollen bieten). Auf schmalen
+    // Viewports kippte das die ganze Seite horizontal weg und ließ sich nur per
+    // Neu-Render zurückholen (#565).
+    if (activeBtn) scrollTabIntoView(container, activeBtn);
+  };
+
+  const setActive = (id, { focus = false } = {}) => {
+    if (!id || id === current) return;
+    current = id;
+    paint();
+    if (focus) buttons().find((b) => b.dataset.tabId === id)?.focus();
+    onChange?.(id);
+  };
+
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-tab-id]');
+    if (btn) setActive(btn.dataset.tabId);
+  });
+
+  container.addEventListener('keydown', (e) => {
+    const keys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'];
+    if (!keys.includes(e.key)) return;
+    const b = buttons();
+    if (!b.length) return;
+    const focusedIndex = b.indexOf(document.activeElement);
+    const currentIndex = Math.max(0, b.findIndex((x) => x.dataset.tabId === current));
+    const index = focusedIndex >= 0 ? focusedIndex : currentIndex;
+    let next = index;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (index + 1) % b.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (index - 1 + b.length) % b.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = b.length - 1;
+    e.preventDefault();
+    setActive(b[next]?.dataset.tabId, { focus: true });
+  });
+
+  // Aktiven Tab extern synchronisieren (ohne onChange) — für Zustandswechsel,
+  // die NICHT über die Leiste ausgelöst werden (z. B. Kalender: Klick auf einen
+  // Tag wechselt in die Tagesansicht).
+  const sync = (id) => { current = id; paint(); };
+
+  // Scroll-Affordanz für überlaufende Leisten: geteilte has-fade-Masken
+  // (filter-chip.css) auf jeder wireTablist-Leiste, nicht nur im Budget.
+  wireScrollFade(container);
+
+  paint(); // initiale Roving-Tabindex/ARIA-Zustände setzen
+  return { setActive, sync };
+}
