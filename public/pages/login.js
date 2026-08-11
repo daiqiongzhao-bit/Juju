@@ -41,6 +41,10 @@ export async function render(container) {
   container.insertAdjacentHTML('beforeend', `
     <main class="auth-page" id="main-content">
       <section class="auth-aside" aria-label="${esc(storedAppName)}">
+        <span class="auth-aside__orb auth-aside__orb--1" aria-hidden="true"></span>
+        <span class="auth-aside__orb auth-aside__orb--2" aria-hidden="true"></span>
+        <span class="auth-aside__orb auth-aside__orb--3" aria-hidden="true"></span>
+
         <div class="auth-aside__brand">
           <span class="auth-aside__mark" aria-hidden="true">
             <svg viewBox="0 0 160 160" fill="none" class="auth-aside__logo">
@@ -68,14 +72,46 @@ export async function render(container) {
           </span>
           <span class="auth-brand__name">${esc(storedAppName)}</span>
         </div>
-        <div class="auth-aside__copy">
+
+        <div class="auth-aside__center">
           <p class="auth-aside__tagline">${esc(t('login.tagline'))}</p>
+          <ul class="auth-features" aria-hidden="true">
+            <li class="auth-feature"><i data-lucide="calendar-days"></i><span>${esc(t('login.featureCalendar'))}</span></li>
+            <li class="auth-feature"><i data-lucide="list-checks"></i><span>${esc(t('login.featureTasks'))}</span></li>
+            <li class="auth-feature"><i data-lucide="shield-check"></i><span>${esc(t('login.featurePrivate'))}</span></li>
+          </ul>
         </div>
-        <p class="auth-aside__foot">© ${new Date().getFullYear()} ${esc(storedAppName)}</p>
+
+        <p class="auth-aside__foot">${new Date().getFullYear()} ${esc(storedAppName)}</p>
       </section>
 
       <section class="auth-main">
         <div class="auth-card card card--padded">
+          <header class="auth-card__head">
+            <span class="auth-card__mark" aria-hidden="true">
+              <svg viewBox="0 0 160 160" fill="none">
+                <defs>
+                  <linearGradient id="jujuBg2" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#A78BFA"/>
+                    <stop offset="46%" stop-color="#8B5CF6"/>
+                    <stop offset="100%" stop-color="#6D28D9"/>
+                  </linearGradient>
+                  <linearGradient id="jujuStroke2" x1="44" y1="42" x2="120" y2="126" gradientUnits="userSpaceOnUse">
+                    <stop offset="0" stop-color="#ffffff"/>
+                    <stop offset="1" stop-color="#F4ECFF"/>
+                  </linearGradient>
+                </defs>
+                <rect x="6" y="6" width="148" height="148" rx="34" fill="url(#jujuBg2)"/>
+                <rect x="6.5" y="6.5" width="147" height="147" rx="33.5" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1"/>
+                <path d="M104 46 L104 100 Q104 122 82 124 Q58 126 50 104" fill="none" stroke="url(#jujuStroke2)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M126 21 C126 27.3 128.7 30 135 30 C128.7 30 126 32.7 126 39 C126 32.7 123.3 30 117 30 C123.3 30 126 27.3 126 21 Z" fill="#ffffff"/>
+              </svg>
+            </span>
+            <div>
+              <h1 class="auth-card__title">${esc(t('login.welcomeTitle'))}</h1>
+              <p class="auth-card__sub">${esc(t('login.welcomeSubtitle'))}</p>
+            </div>
+          </header>
 
           <form class="auth-form" id="auth-form" novalidate>
             <div class="form-group">
@@ -171,6 +207,10 @@ export async function render(container) {
   // vermeintlich falsche Passwörter. Nur am Passwortfeld, nur solange aktiv.
   const capslockEl = container.querySelector('#auth-capslock');
   if (window.lucide) lucide.createIcons({ el: capslockEl });
+
+  // Marken-Panel: Feature-Icons (kalendar/aufgaben/sicherheit) rendern
+  const featuresEl = container.querySelector('.auth-features');
+  if (window.lucide && featuresEl) lucide.createIcons({ el: featuresEl });
   const updateCapsLock = (e) => {
     if (typeof e.getModifierState !== 'function') return;
     capslockEl.hidden = !e.getModifierState('CapsLock');

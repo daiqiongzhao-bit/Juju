@@ -2200,7 +2200,12 @@
         "forgotPassword": "Passwort vergessen?",
         "networkError": "Verbindung fehlgeschlagen. Prüfe, ob der Server läuft, und versuche es erneut.",
         "capsLockWarning": "Feststelltaste (Caps Lock) ist aktiv.",
-        "fillAllFields": "Bitte gib Benutzername und Passwort ein."
+        "fillAllFields": "Bitte gib Benutzername und Passwort ein.",
+        "welcomeTitle": "Willkommen zurück",
+        "welcomeSubtitle": "Melde dich an, um deinen Familienplaner zu öffnen.",
+        "featureCalendar": "Gemeinsamer Kalender",
+        "featureTasks": "Aufgaben & Einkauf",
+        "featurePrivate": "Privat & selbst gehostet"
     },
     "setup": {
         "title": "Willkommen bei Juju",

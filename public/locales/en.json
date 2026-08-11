@@ -2188,7 +2188,12 @@
         "forgotPassword": "Forgot password?",
         "networkError": "Connection failed. Check that the server is running and try again.",
         "capsLockWarning": "Caps Lock is on.",
-        "fillAllFields": "Please enter your username and password."
+        "fillAllFields": "Please enter your username and password.",
+        "welcomeTitle": "Welcome back",
+        "welcomeSubtitle": "Sign in to your family planner to continue.",
+        "featureCalendar": "Shared calendar",
+        "featureTasks": "Tasks & shopping",
+        "featurePrivate": "Private & self-hosted"
     },
     "setup": {
         "title": "Welcome to Juju",

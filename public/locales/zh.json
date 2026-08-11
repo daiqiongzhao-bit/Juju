@@ -2188,7 +2188,12 @@
         "forgotPassword": "忘记密码？",
         "networkError": "连接失败。请检查服务器是否正在运行，然后重试。",
         "capsLockWarning": "大写锁定已开启。",
-        "fillAllFields": "请输入用户名和密码。"
+        "fillAllFields": "请输入用户名和密码。",
+        "welcomeTitle": "欢迎回来",
+        "welcomeSubtitle": "登录以继续使用你的家庭计划。",
+        "featureCalendar": "共享日历",
+        "featureTasks": "任务与采购",
+        "featurePrivate": "私密且自托管"
     },
     "setup": {
         "title": "欢迎使用 Juju",
