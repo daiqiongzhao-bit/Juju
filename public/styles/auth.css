@@ -4,21 +4,10 @@
  * Abhängigkeiten: tokens.css, reset.css, layout.css
  *
  * EINE Seitenfamilie, fünf Routen: /login, /setup, /join, /forgot-password und
- * /reset-password. Sie hieß bis zur Namensbereinigung nach ihrer ersten Route
- * (`login.css`, `.login-*`), obwohl vier der fünf Seiten keine Anmeldung sind -
- * gemeinsam ist ihnen, dass sie ohne App-Shell auskommen.
- *
- * Was hier NICHT mehr steht: die Rückmeldung eines Formulars (`.form-error`,
- * `.form-success`). Sie stand als `.login-*` hier, während sie längst auch in
- * Aufgaben, Dokumenten und Belohnungen benutzt wurde, und liegt jetzt in
- * layout.css.
+ * /reset-password.
  */
 
-/* Diese Seiten werden direkt in #app.app-shell gerendert (keine Sidebar/App-Shell
- * vor dem Login). Ab >=1024px schaltet .app-shell auf flex-direction: row für die
- * Sidebar um – ohne Sidebar schrumpft der Seiten-Wrapper dann auf Inhaltsbreite und
- * wird linksbündig (sieht aus wie das Mobil-Layout). Solange eine Auth-Seite präsent
- * ist, bleibt die Shell daher im Spaltenfluss, damit das Formular voll zentriert. */
+/* Solange eine Auth-Seite präsent ist, bleibt die Shell im Spaltenfluss. */
 .app-shell:has(.auth-page) {
   flex-direction: column;
 }
@@ -27,6 +16,10 @@
   --juju-g1: #A78BFA;
   --juju-g2: #8B5CF6;
   --juju-g3: #6D28D9;
+  --aurora-purple: #D8B4FE;
+  --aurora-cyan: #67E8F9;
+  --aurora-pink: #FDA4AF;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -34,23 +27,81 @@
   min-height: 100dvh;
   width: 100%;
   padding: var(--space-4);
-  /* Markengetönte Bühne hinter der Glas-Karte: zwei weiche violette Aurora-
-   * Tupfer auf dem System-Grund. Die Marke trägt weiterhin das Tile, aber die
-   * Bühne ist nicht mehr starr-flach – ein ruhiger, Premium-Kontrast. */
+  overflow: hidden;
+  /* Sanfte, luftige Mehrfarben-Bühne wie im Screenshot-Beispiel. */
   background:
-    radial-gradient(120% 120% at 12% 8%, color-mix(in srgb, var(--juju-g1) 24%, transparent) 0%, transparent 55%),
-    radial-gradient(120% 120% at 92% 96%, color-mix(in srgb, var(--juju-g3) 20%, transparent) 0%, transparent 50%),
+    radial-gradient(90% 80% at 6% 4%, color-mix(in srgb, var(--aurora-purple) 45%, transparent) 0%, transparent 55%),
+    radial-gradient(80% 70% at 96% 94%, color-mix(in srgb, var(--aurora-pink) 42%, transparent) 0%, transparent 55%),
+    radial-gradient(70% 80% at 50% 110%, color-mix(in srgb, var(--aurora-cyan) 34%, transparent) 0%, transparent 50%),
     var(--color-bg);
 }
 
-/* Hero-Bereich über dem Login-Formular */
-.auth-hero {
-  text-align: center;
-  margin-bottom: var(--space-8);
+/* ── Schwimmende Partikel (dekorativ) ── */
+.auth-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.auth-particles span {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(139, 92, 246, 0.18);
+  animation: auth-particle 18s ease-in-out infinite;
+}
+.auth-particles span:nth-child(1)  { top: 12%; left: 14%; animation-delay: 0s; }
+.auth-particles span:nth-child(2)  { top: 22%; left: 78%; width: 5px; height: 5px; background: rgba(103, 232, 249, 0.18); animation-delay: -2s; }
+.auth-particles span:nth-child(3)  { top: 34%; left: 8%;  width: 3px; height: 3px; background: rgba(253, 164, 175, 0.16); animation-delay: -4s; }
+.auth-particles span:nth-child(4)  { top: 46%; left: 92%; width: 6px; height: 6px; animation-delay: -6s; }
+.auth-particles span:nth-child(5)  { top: 58%; left: 18%; background: rgba(103, 232, 249, 0.14); animation-delay: -8s; }
+.auth-particles span:nth-child(6)  { top: 68%; left: 84%; width: 4px; height: 4px; background: rgba(253, 164, 175, 0.18); animation-delay: -10s; }
+.auth-particles span:nth-child(7)  { top: 78%; left: 6%;  width: 5px; height: 5px; animation-delay: -12s; }
+.auth-particles span:nth-child(8)  { top: 86%; left: 66%; background: rgba(103, 232, 249, 0.16); animation-delay: -14s; }
+.auth-particles span:nth-child(9)  { top: 18%; left: 56%; width: 3px; height: 3px; background: rgba(253, 164, 175, 0.18); animation-delay: -16s; }
+.auth-particles span:nth-child(10) { top: 74%; left: 44%; animation-delay: -3s; }
+.auth-particles span:nth-child(11) { top: 8%;  left: 88%; width: 5px; height: 5px; background: rgba(103, 232, 249, 0.12); animation-delay: -5s; }
+.auth-particles span:nth-child(12) { top: 62%; left: 30%; width: 3px; height: 3px; animation-delay: -7s; }
+.auth-particles span:nth-child(13) { top: 28%; left: 34%; background: rgba(253, 164, 175, 0.14); animation-delay: -9s; }
+.auth-particles span:nth-child(14) { top: 90%; left: 24%; width: 4px; height: 4px; animation-delay: -11s; }
+.auth-particles span:nth-child(15) { top: 44%; left: 62%; width: 5px; height: 5px; background: rgba(103, 232, 249, 0.18); animation-delay: -13s; }
+.auth-particles span:nth-child(16) { top: 4%;  left: 40%; width: 3px; height: 3px; animation-delay: -1s; }
+.auth-particles span:nth-child(17) { top: 54%; left: 10%; background: rgba(253, 164, 175, 0.16); animation-delay: -15s; }
+.auth-particles span:nth-child(18) { top: 38%; left: 96%; width: 4px; height: 4px; animation-delay: -17s; }
+.auth-particles span:nth-child(19) { top: 82%; left: 76%; width: 3px; height: 3px; animation-delay: -4.5s; }
+.auth-particles span:nth-child(20) { top: 16%; left: 26%; background: rgba(103, 232, 249, 0.14); animation-delay: -8.5s; }
+
+@keyframes auth-particle {
+  0%, 100% { transform: translate(0, 0); opacity: 0.45; }
+  50%      { transform: translate(0, -18px); opacity: 0.85; }
 }
 
-/* Marken-Anker: App-Tile mit dem Juju-Zeichen (drei transluzente Kreise).
- * Selbstbewusst (gefülltes Tile, weicher Schatten) und warm – „Würde ohne Kälte". */
+/* ── Zentrierter Wrapper ── */
+.auth-wrap {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: 420px;
+  animation: auth-wrap-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes auth-wrap-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Hero-Bereich (setup) über dem Formular ── */
+.auth-hero {
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
 .auth-hero__mark {
   display: inline-flex;
   align-items: center;
@@ -60,29 +111,13 @@
   margin-bottom: var(--space-4);
   border-radius: var(--radius-lg);
   background-color: var(--color-accent);
-  /* Nicht --color-text-on-accent: das ist statisches Weiss und wird im Dark-Block
-   * nirgends redefiniert, während --color-accent dort aufhellt - gemessene
-   * 2,72:1 auf dem Zeichen. --color-ink-on-vivid kippt mit dem Modus und liegt
-   * so in beiden Themes bei 6,06:1 bzw. 6,40:1. */
   color: var(--color-ink-on-vivid);
-  box-shadow:
-    var(--shadow-md),
-    /* Lichtkante, kein Text: bleibt weiss und nimmt im Dark-Modus zurück, weil
-     * die Fläche dort selbst hell ist. Eigenes Token, damit die Zeile nicht
-     * versehentlich der Textfarbe oben folgt. */
-    inset 0 1px 0 var(--glass-highlight-subtle);
+  box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-highlight-subtle);
 }
-
 .auth-hero__mark svg {
   width: 55%;
   height: 55%;
 }
-
-/* Large Title wie jeder Seitentitel, in Label-Farbe. Der Titel stand bis Runde 3
- * auf einer eigenen 48px-Stufe und in --color-accent - beides verbietet
- * DESIGN.md ausdruecklich (Ueberschriften enden bei 34px; Large Titles tragen
- * immer --color-text-primary). Die Marke trägt das Tile darueber, das laut
- * PRODUCT.md unantastbar ist. */
 .auth-hero__title {
   font-size: var(--type-page-title-mobile);
   font-weight: var(--font-weight-bold);
@@ -90,7 +125,6 @@
   letter-spacing: var(--tracking-tight);
   margin-bottom: var(--space-2);
 }
-
 .auth-hero__tagline {
   font-size: var(--text-base);
   color: var(--color-text-secondary);
@@ -98,119 +132,191 @@
   line-height: var(--line-height-relaxed, 1.6);
 }
 
-/* Die Karte, die das Formular trägt */
+/* ── Die Karte ── */
 .auth-card {
   width: 100%;
-  max-width: 380px;
+  max-width: 420px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: color-mix(in srgb, #ffffff 78%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow:
+    0 24px 60px rgba(91, 33, 182, 0.10),
+    0 8px 24px rgba(91, 33, 182, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+.auth-card.card--padded {
+  padding: clamp(32px, 5vw, 42px);
 }
 
+/* ── Marken-Header in der Karte (login) ── */
+.auth-card__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-7);
+}
+.auth-card__mark {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 14px 32px color-mix(in srgb, var(--juju-g3) 28%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.auth-card__mark svg { width: 100%; height: 100%; display: block; }
+.auth-card__titles { display: flex; flex-direction: column; gap: var(--space-1); }
+.auth-card__app-name {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-bold, 700);
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+.auth-card__tagline {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ── Standard-Karten-Titel (setup/join/forgot/reset) ── */
+.auth-card__title {
+  margin: 0 0 var(--space-2);
+  font-size: 1.4rem;
+  font-weight: var(--font-weight-bold, 700);
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+  text-align: center;
+}
+.auth-card__intro {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-5);
+  text-align: center;
+}
+
+/* ── Formular ── */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.auth-form .form-group {
+  margin: 0;
+}
+.auth-form .label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+}
+.auth-form .input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background-color: rgba(255, 255, 255, 0.85);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+.auth-form .input::placeholder { color: var(--color-text-tertiary); }
+.auth-form .input:focus {
+  outline: none;
+  border-color: var(--juju-g2);
+  background-color: #ffffff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--juju-g2) 18%, transparent);
+}
+
+/* ── Zeile: Merken + Passwort vergessen ── */
+.auth-form__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: calc(var(--space-1) * -1);
+}
+
+.auth-link {
+  font-size: var(--text-sm);
+  color: var(--juju-g2);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium, 500);
+  transition: color var(--transition-fast);
+}
+.auth-link:hover {
+  color: var(--juju-g3);
+  text-decoration: underline;
+}
+
+/* ── Submit-Button ── */
 .auth-form__submit {
   width: 100%;
-  margin-top: var(--space-2);
+  min-height: 46px;
+  margin-top: var(--space-1);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-}
-
-/* Einleitungstext unter dem Kartentitel (/join). */
-.auth-card__intro {
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-4);
-}
-
-/* Hinweis unter einem Feld, das die Einladung vorgibt. Bewusst ohne
- * display-Angabe: eine solche überschriebe das UA-display:none des
- * hidden-Attributs, und der Hinweis stünde auch ohne Vorgabe da. */
-.auth-form__hint {
-  margin-top: var(--space-1);
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-}
-
-/* Das vorgegebene Feld selbst: eigene Klasse statt eines .input[readonly]-
- * Selektors. readonly wird auch dort gesetzt, wo ein Feld nur seine Tastatur-
- * eingabe sperrt und trotzdem normal aussehen soll; die Dämpfung gilt hier
- * ausdrücklich nur für "die Einladung gibt diesen Wert vor". */
-.input--fixed {
-  background-color: var(--color-surface-2);
-  color: var(--color-text-secondary);
-  cursor: default;
-}
-
-/* Caps-Lock-Hinweis am Passwortfeld */
-.auth-capslock {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--color-warning);
-}
-
-/* Das display:flex oben überschreibt sonst das UA-display:none des
- * hidden-Attributs – Hinweis würde permanent sichtbar sein. */
-.auth-capslock[hidden] {
-  display: none;
-}
-
-.auth-capslock i {
-  width: var(--text-base, 1rem);
-  height: var(--text-base, 1rem);
-  flex-shrink: 0;
-}
-
-/* Nach falschen Zugangsdaten wird der Recovery-Link betont, damit der Nutzer
- * einen Ausweg sieht statt es blind erneut zu versuchen. */
-.auth-form__forgot--emphasis a {
+  border-radius: 12px;
+  border: none;
+  color: #fff;
+  font-size: var(--text-base);
   font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-accent);
+  background-image: linear-gradient(135deg, var(--juju-g1) 0%, var(--juju-g2) 55%, var(--juju-g3) 100%);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--juju-g2) 36%, transparent);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-fast);
+  position: relative;
+  overflow: hidden;
 }
-
-.auth-version {
-  margin-top: var(--space-4);
-  /* Platz reservieren, damit die spät nachgeladene Version das zentrierte
-   * Formular nicht nach oben schiebt (CLS). */
-  min-height: var(--text-sm);
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary, var(--color-text-secondary));
-  text-align: center;
+.auth-form__submit:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--juju-g2) 46%, transparent);
 }
-
-/* „oder"-Trenner zwischen Passwort- und SSO-Anmeldung */
-.auth-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: var(--space-4) 0 var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-}
-
-.auth-divider::before,
-.auth-divider::after {
+.auth-form__submit::after {
   content: "";
-  flex: 1;
-  height: 1px;
-  background-color: var(--color-border);
+  position: absolute;
+  top: 0; left: -120%;
+  width: 55%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-18deg);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+.auth-form__submit:hover::after { left: 130%; }
+.auth-form__submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
 }
 
-/* Passwort-Sichtbarkeit-Toggle */
+/* ── Untere Tagline / Version ── */
+.auth-bottom-tagline {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  text-align: center;
+  min-height: var(--text-xs);
+}
+
+/* ── Passwort-Sichtbarkeit-Toggle ── */
 .input-password-wrapper {
   position: relative;
   display: flex;
   align-items: stretch;
 }
-
 .input-password-wrapper .input {
   flex: 1;
   min-width: 0;
-  /* logisch statt physisch, damit der Toggle-Platz in RTL auf der richtigen
-   * Seite reserviert wird (ar/fa) */
   padding-inline-end: calc(var(--target-lg) + var(--space-1));
 }
-
 .password-toggle {
   position: absolute;
   inset-inline-end: 0;
@@ -219,45 +325,51 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Komfortable Daumen-Trefferfläche (≥44 px) statt der bisherigen 40 px */
   width: var(--target-lg);
   padding: 0;
   background: none;
   border: none;
   cursor: pointer;
   color: var(--color-text-secondary);
-  /* logische Ecken: rundet in RTL automatisch die richtige Seite */
   border-start-start-radius: 0;
   border-start-end-radius: var(--radius-md);
   border-end-end-radius: var(--radius-md);
   border-end-start-radius: 0;
   transition: color var(--transition-fast);
 }
-
-.password-toggle:hover {
-  color: var(--color-text-primary);
-}
-
+.password-toggle:hover { color: var(--color-text-primary); }
 .password-toggle:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset-inset);
 }
-
 .password-toggle i {
   width: var(--text-lg, 1.125rem);
   height: var(--text-lg, 1.125rem);
   pointer-events: none;
 }
 
-/* Feld-Fehler-Zustand */
+/* ── Caps-Lock-Hinweis ── */
+.auth-capslock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-warning);
+}
+.auth-capslock[hidden] { display: none; }
+.auth-capslock i {
+  width: var(--text-base, 1rem);
+  height: var(--text-base, 1rem);
+  flex-shrink: 0;
+}
+
+/* ── Fehler-Status ── */
 .form-group--error .input {
   border-color: var(--color-danger);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) var(--tint-shadow), transparent);
 }
-
-.form-group--error .label {
-  color: var(--color-danger);
-}
+.form-group--error .label { color: var(--color-danger); }
 
 .auth-spinner {
   width: 16px;
@@ -268,318 +380,40 @@
   animation: auth-spin 0.7s linear infinite;
   flex-shrink: 0;
 }
+@keyframes auth-spin { to { transform: rotate(360deg); } }
 
-@keyframes auth-spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .auth-spinner { animation: none; opacity: 0.6; }
-}
-
-/* ============================================================
- * Split-Layout (nur Login): links Marken-Panel, rechts Glas-Karte.
- * setup/join/forgot/reset nutzen .auth-page OHNE .auth-aside und
- * fallen damit auf das zentrierte Einzel-Spalten-Layout zurück.
- * ============================================================ */
-
-/* Lebendige Aurora-Bühne: sanft driftende Glow-Blobs hinter der ganzen
- * Auth-Seite (egal ob Split oder Einzel-Spalte) geben Tiefe statt Flachheit. */
-.auth-page::before,
-.auth-page::after {
-  content: "";
-  position: fixed;
-  z-index: 0;
-  border-radius: 50%;
-  filter: blur(64px);
-  pointer-events: none;
-  opacity: 0.5;
-}
-.auth-page::before {
-  width: 460px; height: 460px;
-  top: -140px; right: 4%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--juju-g1) 65%, transparent), transparent 70%);
-  animation: auth-drift-a 19s ease-in-out infinite;
-}
-.auth-page::after {
-  width: 380px; height: 380px;
-  bottom: -120px; left: 6%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--juju-g3) 55%, transparent), transparent 70%);
-  animation: auth-drift-b 23s ease-in-out infinite;
-}
-@keyframes auth-drift-a {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50%      { transform: translate(-34px, 46px) scale(1.08); }
-}
-@keyframes auth-drift-b {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50%      { transform: translate(40px, -32px) scale(1.1); }
-}
-
-/* Geteilte Bühne: links gefülltes Panel, rechts getönte Glas-Bühne. */
-.auth-page:has(.auth-aside) {
-  display: grid;
-  grid-template-columns: 1.05fr 1fr;
-  align-items: stretch;
-  justify-content: center;
-  padding: 0;
-  min-height: 100dvh;
-  overflow: hidden;
-  background:
-    radial-gradient(70% 90% at 100% 0%, color-mix(in srgb, var(--juju-g1) 16%, transparent) 0%, transparent 55%),
-    radial-gradient(80% 80% at 100% 100%, color-mix(in srgb, var(--juju-g3) 12%, transparent) 0%, transparent 55%),
-    var(--color-bg);
-}
-
-/* Marken-Panel links: tiefer Violett-Verlauf + weicher Innen-Glow + schwebende Orbs */
-.auth-aside {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: var(--space-8);
-  padding: clamp(var(--space-8), 5vw, 72px);
-  color: #fff;
-  overflow: hidden;
-  isolation: isolate;
-  background:
-    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, #C4B5FD 42%, transparent) 0%, transparent 46%),
-    linear-gradient(152deg, var(--juju-g1) 0%, var(--juju-g2) 48%, var(--juju-g3) 100%);
-}
-.auth-aside::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(60% 50% at 82% 10%, rgba(255, 255, 255, 0.22), transparent 60%);
-}
-.auth-aside__orb {
-  position: absolute;
-  z-index: -1;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
-  filter: blur(2px);
-  pointer-events: none;
-  animation: auth-float 14s ease-in-out infinite;
-}
-.auth-aside__orb--1 { width: 260px; height: 260px; top: -90px; right: -70px; }
-.auth-aside__orb--2 { width: 200px; height: 200px; bottom: -80px; left: -60px; background: rgba(255, 255, 255, 0.13); animation-delay: -6s; }
-.auth-aside__orb--3 { width: 120px; height: 120px; top: 42%; left: 10%; background: rgba(255, 255, 255, 0.10); animation-delay: -3s; }
-@keyframes auth-float {
-  0%, 100% { transform: translate(0, 0); }
-  50%      { transform: translate(12px, -24px); }
-}
-
-.auth-aside__brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  position: relative;
-  z-index: 1;
-}
-.auth-aside__mark {
-  display: inline-flex;
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  box-shadow: 0 12px 32px rgba(43, 21, 91, 0.38);
-  overflow: hidden;
-}
-.auth-aside__logo { width: 100%; height: 100%; display: block; }
-.auth-brand__name {
-  font-size: 1.5rem;
-  font-weight: var(--font-weight-bold, 700);
-  letter-spacing: -0.02em;
-  color: #fff;
-}
-
-/* Mitte: Headline (Tagline) + Glas-Feature-Liste */
-.auth-aside__center {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-}
-.auth-aside__tagline {
-  margin: 0;
-  font-size: clamp(1.5rem, 3vw, 2.15rem);
-  line-height: 1.28;
-  font-weight: var(--font-weight-bold, 700);
-  letter-spacing: -0.02em;
-  color: #fff;
-  text-wrap: balance;
-}
-.auth-features {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.auth-feature {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  color: #fff;
-  font-size: var(--text-base);
-  font-weight: var(--font-weight-medium, 500);
-}
-.auth-feature i {
-  width: 20px; height: 20px;
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.95);
-}
-.auth-aside__foot {
-  position: relative;
-  z-index: 1;
-  margin: 0;
-  font-size: var(--text-sm);
-  color: rgba(255, 255, 255, 0.72);
-}
-
-/* Rechte Spalte: Formular auf der getönten Bühne */
-.auth-main {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: clamp(var(--space-6), 4vw, 56px);
-}
-
-/* Premium-Glas-Karte: Unschärfe + weiche Kante + großer weicher Schatten.
- * Gilt für die ganze Auth-Familie (login/setup/join/...), nicht nur Split. */
-.auth-card {
-  max-width: 400px;
-  border-radius: var(--radius-xl);
-  border: 1px solid color-mix(in srgb, #ffffff 55%, transparent);
-  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-  backdrop-filter: blur(22px) saturate(140%);
-  box-shadow:
-    var(--shadow-xl),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  animation: auth-card-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.auth-card.card--padded {
-  padding: clamp(28px, 4vw, 40px);
-}
-.auth-card__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-6);
-}
-.auth-card__mark {
-  width: 44px; height: 44px;
-  border-radius: 13px;
-  overflow: hidden;
-  flex-shrink: 0;
-  box-shadow: 0 8px 20px rgba(43, 21, 91, 0.28);
-}
-.auth-card__mark svg { width: 100%; height: 100%; display: block; }
-.auth-card__title {
-  margin: 0;
-  font-size: 1.4rem;
-  font-weight: var(--font-weight-bold, 700);
-  letter-spacing: -0.01em;
-  color: var(--color-text-primary);
-}
-.auth-card__sub {
-  margin: 2px 0 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-}
-
-/* Primär-Button in der Glas-Karte: Marken-Gradient + Shine + Lift */
-.auth-card .btn--primary {
-  position: relative;
-  overflow: hidden;
-  color: #fff;
-  font-weight: var(--font-weight-semibold, 600);
-  background-image: linear-gradient(135deg, var(--juju-g1), var(--juju-g2) 55%, var(--juju-g3));
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--juju-g2) 40%, transparent);
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-fast);
-}
-.auth-card .btn--primary:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
-  box-shadow: 0 14px 30px color-mix(in srgb, var(--juju-g2) 50%, transparent);
-}
-.auth-card .btn--primary::after {
-  content: "";
-  position: absolute;
-  top: 0; left: -120%;
-  width: 55%; height: 100%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
-  transform: skewX(-18deg);
-  transition: left 0.6s ease;
-  pointer-events: none;
-}
-.auth-card .btn--primary:hover::after { left: 130%; }
-
-/* Fokus-Glow auf Eingabefeldern der Glas-Karte */
-.auth-card .input:focus {
-  border-color: var(--juju-g2);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--juju-g2) 22%, transparent);
-}
-
-@keyframes auth-card-in {
-  from { opacity: 0; transform: translateY(16px) scale(0.99); }
-  to   { opacity: 1; transform: none; }
-}
-.auth-aside__center { animation: auth-aside-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
-@keyframes auth-aside-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: none; }
-}
-
-/* Mobile: Panel wird zum kompakten Kopf-Banner, Karte darunter */
-@media (max-width: 900px) {
-  .auth-page:has(.auth-aside) { grid-template-columns: 1fr; }
-  .auth-aside {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: var(--space-4);
-  }
-  .auth-aside__center,
-  .auth-aside__foot,
-  .auth-aside__orb { display: none; }
-}
-
-/* Dark Mode: Glas-Karte abdunkeln, Bühne-Tupfer dezent zurücknehmen */
+/* ── Dark Mode ── */
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .auth-card {
     border-color: rgba(255, 255, 255, 0.12);
-    background: color-mix(in srgb, var(--color-surface) 62%, transparent);
+    background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+    box-shadow:
+      0 24px 60px rgba(0, 0, 0, 0.25),
+      0 8px 24px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
   }
-  :root:not([data-theme="light"]) .auth-page::before,
-  :root:not([data-theme="light"]) .auth-page::after { opacity: 0.38; }
+  :root:not([data-theme="light"]) .auth-form .input {
+    background-color: color-mix(in srgb, var(--color-surface-2) 80%, transparent);
+  }
+  :root:not([data-theme="light"]) .auth-form .input:focus { background-color: var(--color-surface-2); }
 }
 [data-theme="dark"] .auth-card {
   border-color: rgba(255, 255, 255, 0.12);
-  background: color-mix(in srgb, var(--color-surface) 62%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.25),
+    0 8px 24px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
-[data-theme="dark"] .auth-page::before,
-[data-theme="dark"] .auth-page::after { opacity: 0.38; }
+[data-theme="dark"] .auth-form .input {
+  background-color: color-mix(in srgb, var(--color-surface-2) 80%, transparent);
+}
+[data-theme="dark"] .auth-form .input:focus { background-color: var(--color-surface-2); }
 
+/* ── Reduced Motion ── */
 @media (prefers-reduced-motion: reduce) {
-  .auth-page::before,
-  .auth-page::after,
-  .auth-aside__orb,
-  .auth-card,
-  .auth-aside__center { animation: none !important; }
+  .auth-particles span,
+  .auth-wrap,
+  .auth-spinner { animation: none !important; }
+  .auth-form__submit::after { transition: none; }
 }
