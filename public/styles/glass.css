@@ -915,7 +915,7 @@ textarea.form-input {
 .lg-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
+  filter: blur(120px);
   opacity: var(--lg-blob-opacity);
   animation: lg-drift 26s ease-in-out infinite alternate;
   transition: background 600ms var(--ease-out);
@@ -931,24 +931,24 @@ textarea.form-input {
  * scheint, liest sich als verrutschte Aktiv-Pille (Befund Redesign 2026-08 -
  * auf /tasks stand ein grüner Blob exakt hinter der Tab-Bar-Kapsel). */
 .lg-blob--1 {
-  width: 46vw; height: 46vw; top: -8%; left: 30%;
-  background: radial-gradient(circle, var(--active-module-accent, var(--color-accent)) 0%, transparent 70%);
+  width: 55vw; height: 55vw; top: -12%; left: -8%;
+  background: radial-gradient(circle, var(--blob-violet, #C4B5FD) 0%, transparent 70%);
 }
 .lg-blob--2 {
-  width: 38vw; height: 38vw; top: 26%; right: 2%;
-  background: radial-gradient(circle, var(--module-shopping) 0%, transparent 70%);
+  width: 48vw; height: 48vw; top: 8%; right: -10%;
+  background: radial-gradient(circle, var(--blob-blue, #93C5FD) 0%, transparent 70%);
   animation-delay: -8s;
   opacity: calc(var(--lg-blob-opacity) * 0.7);
 }
 .lg-blob--3 {
-  width: 40vw; height: 40vw; bottom: 14%; left: 34%;
-  background: radial-gradient(circle, var(--module-tasks) 0%, transparent 70%);
+  width: 50vw; height: 50vw; bottom: 8%; right: 10%; left: auto;
+  background: radial-gradient(circle, var(--blob-green, #86EFAC) 0%, transparent 70%);
   animation-delay: -14s;
   opacity: calc(var(--lg-blob-opacity) * 0.6);
 }
 .lg-blob--4 {
-  width: 30vw; height: 30vw; top: 40%; left: 28%;
-  background: radial-gradient(circle, var(--module-meals) 0%, transparent 70%);
+  width: 42vw; height: 42vw; top: 52%; left: 8%;
+  background: radial-gradient(circle, var(--blob-yellow, #FCD34D) 0%, transparent 70%);
   animation-delay: -19s;
   opacity: calc(var(--lg-blob-opacity) * 0.5);
 }

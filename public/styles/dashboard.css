@@ -214,13 +214,11 @@
  * Internes Spacing: 8–12px (enger als vorher 16–24px).
  * -------------------------------------------------------- */
 .widget {
-  /* HIG-Karte: randlos auf dem Grouped Background, weiche Rundung (16px),
-   * subtiler Schatten. Der transparente Rahmen bleibt als Träger für
-   * .widget--error (Danger-Tint) bestehen. */
-  background-color: var(--color-surface);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid transparent;
+  /* Liquid-Glass-Karte: transluzent, weiche Rundung, weisser Rand + Schatten. */
+  background: var(--color-surface-glass);
+  border-radius: var(--radius-glass-card);
+  box-shadow: var(--glass-shadow-sm);
+  border: 1px solid var(--glass-border);
   overflow: hidden;
   display: flex;
   flex-direction: column;

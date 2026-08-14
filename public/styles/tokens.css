@@ -44,7 +44,7 @@
    * -------------------------------------------------------- */
   --_neutral-50:  #FBFBFD;
   --neutral-50:   var(--_neutral-50);
-  --_neutral-100: #F2F2F7;   /* systemGray6 — Grouped Background */
+  --_neutral-100: #F5F7FA;   /* systemGray6 — Grouped Background */
   --neutral-100:  var(--_neutral-100);
   --_neutral-150: #EBEBF0;
   --neutral-150:  var(--_neutral-150);
@@ -130,7 +130,7 @@
   --color-surface-work:       var(--_color-surface-work);
   --_color-surface-raised:    #FBFBFD;
   --color-surface-raised:     var(--_color-surface-raised);
-  --_color-surface-glass:     rgba(250, 250, 252, 0.62);
+  --_color-surface-glass: rgba(255, 255, 255, 0.78);
 
   /* KASTEN-IN-KASTEN-VOKABULAR (HIG-Rollout Runde 2, 2026-08-06).
    * Karten sind randlos auf dem Grouped-Grund. Was IN einer Karte liegt, bekommt
@@ -1080,18 +1080,18 @@
    * -------------------------------------------------------- */
 
   /* a) Glass-Hintergründe */
-  --_glass-bg-elevated: rgba(250, 250, 252, 0.86);
+  --_glass-bg-elevated: rgba(255, 255, 255, 0.72);
   --glass-bg-elevated:  var(--_glass-bg-elevated);
-  --_glass-border:      rgba(255, 255, 255, 0.65);
+  --_glass-border:      rgba(255, 255, 255, 0.78);
   --glass-border:       var(--_glass-border);
-  --_glass-border-subtle: rgba(255, 255, 255, 0.38);
+  --_glass-border-subtle: rgba(255, 255, 255, 0.48);
   --glass-border-subtle:  var(--_glass-border-subtle);
   --glass-border-overlay: rgba(255, 255, 255, 0.10);  /* immer-dunkle Surfaces (Toasts, Overlays) */
 
   /* a2) Glass-Hintergründe: Vibrancy-Stufe (transparenter, mehr Durchschein) */
   --_glass-bg-card:       var(--_color-surface-glass);
   --glass-bg-card:        var(--_glass-bg-card);
-  --_glass-bg-card-hover: rgba(250, 250, 252, 0.74);
+  --_glass-bg-card-hover: rgba(255, 255, 255, 0.66);
   --glass-bg-card-hover:  var(--_glass-bg-card-hover);
 
   /* a3) Tint: Modul-Akzentfarbe als subtile Glass-Tonung */
@@ -1109,9 +1109,9 @@
   --opacity-glass-elevated: 0.92;
 
   /* d) Highlights / Specular */
-  --_glass-highlight:        rgba(255, 255, 255, 0.70);
+  --_glass-highlight:        rgba(255, 255, 255, 0.82);
   --glass-highlight:         var(--_glass-highlight);
-  --_glass-highlight-subtle: rgba(255, 255, 255, 0.35);
+  --_glass-highlight-subtle: rgba(255, 255, 255, 0.50);
   --glass-highlight-subtle:  var(--_glass-highlight-subtle);
   --glass-highlight-mid:     rgba(255, 255, 255, 0.50);  /* Mittlere Stärke für Outlines auf dunklen Surfaces */
   /* Flächen-Sheen (Lichtfang der oberen Kapselhälfte, z.B. FAB-Glas). Eigener
@@ -1120,7 +1120,7 @@
    * getöntes Glas im Dark-Theme von einer opaken Fläche nicht unterscheidbar -
    * unter dem FAB läuft per --fab-safe-zone nie Inhalt durch, der Sheen ist
    * dort der einzige Materialbeweis. */
-  --_glass-sheen: rgba(255, 255, 255, 0.35);
+  --_glass-sheen: rgba(255, 255, 255, 0.45);
   --glass-sheen:  var(--_glass-sheen);
 
   /* d2) Inset-Specular: Oberrand-Sheen für Glass-Elemente (volle inset-Kurzform)
@@ -1158,11 +1158,11 @@
   --glass-inset-input:        inset 0  1px 2px rgba(0, 0, 0, calc(0.04 * var(--glass-inset-strength)));
 
   /* e) Glass-Schatten */
-  --_glass-shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.55);
+  --_glass-shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.65);
   --glass-shadow-sm:  var(--_glass-shadow-sm);
-  --_glass-shadow-md: 0 6px 24px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(255, 255, 255, 0.50);
+  --_glass-shadow-md: 0 10px 32px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.60);
   --glass-shadow-md:  var(--_glass-shadow-md);
-  --_glass-shadow-lg: 0 10px 44px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.45);
+  --_glass-shadow-lg: 0 18px 56px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(255, 255, 255, 0.55);
   --glass-shadow-lg:  var(--_glass-shadow-lg);
   /* Die schwebende Tab-Kapsel braucht dunklen Halt statt des weissen Rings der
      drei Stufen darueber: auf dem hellen Grouped Background ist der Ring
@@ -1178,8 +1178,8 @@
   --glass-shadow-capsule:  var(--_glass-shadow-capsule);
 
   /* f) Glass-Radien — iOS-26-Kurvatur */
-  --radius-glass-card:   26px;
-  --radius-glass-inner:  18px;
+  --radius-glass-card:   32px;
+  --radius-glass-inner:  22px;
   --radius-glass-chip:   var(--radius-full);
   /* --radius-glass-button ist mit Runde 3 entfallen: die Kapsel ist jetzt die
    * Form JEDES Buttons und steht als --radius-full in der .btn-Basisregel
@@ -1199,13 +1199,21 @@
    *    --lg-blob-opacity bleibt bewusst niedrig, damit Inhalte dominieren.
    *    In prefers-reduced-transparency / prefers-contrast wird sie auf 0
    *    gesetzt (siehe unten). */
-  --_app-backdrop-accent-strength: 2%;
+  --_app-backdrop-accent-strength: 3.5%;
   --app-backdrop-accent-strength:  var(--_app-backdrop-accent-strength);
-  --_app-backdrop-secondary-strength: 1%;
+  --_app-backdrop-secondary-strength: 2%;
   --app-backdrop-secondary-strength: var(--_app-backdrop-secondary-strength);
-  --lg-blob-opacity:   0.16;
+  --lg-blob-opacity:   0.28;
   --lg-glass-saturate: 200%;    /* Backdrop-Sättigung erhöhter Glass-Flächen */
-  --lg-specular:       0.22;    /* Stärke des Inset-Top-Highlights */
+  --lg-specular:       0.32;
+  /* Pastell-Blob-Palette fuer den neuen Liquid-Glass-Look */
+  --blob-violet: #C4B5FD;
+  --blob-blue:   #93C5FD;
+  --blob-yellow: #FCD34D;
+  --blob-pink:   #FDA4AF;
+  --blob-green:  #86EFAC;
+  --blob-cyan:   #67E8F9;
+    /* Stärke des Inset-Top-Highlights */
 
   /* i) Maskenstopp — voll deckend. KEIN FARBWERT.
    *
@@ -1299,7 +1307,7 @@
     --_color-surface-hover:    #3A3A3C;
     --_color-surface-work:     #1C1C1E;
     --_color-surface-raised:   #2C2C2E;
-    --_color-surface-glass:    rgba(28, 28, 30, 0.66);
+    --_color-surface-glass: rgba(30, 30, 32, 0.72);
 
     /* Kanten: im Dark eigenständig gesetzt statt aus der Neutral-Rampe
      * abgeleitet — die Rampe liegt zu dicht an --color-surface, eine
@@ -1512,7 +1520,7 @@
     --_color-surface-hover:    #3A3A3C;
     --_color-surface-work:     #1C1C1E;
     --_color-surface-raised:   #2C2C2E;
-    --_color-surface-glass:    rgba(28, 28, 30, 0.66);
+    --_color-surface-glass: rgba(30, 30, 32, 0.72);
 
     /* Kanten: eigenständig gesetzt (siehe Media-Block oben) */
     --color-border-subtle: #2E2E31;
