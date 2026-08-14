@@ -163,7 +163,12 @@
    * Banner schiebt den Inhalt hinunter - echte Layout-Höhe, per transform nicht
    * animierbar. Selten (nur bei Offline-Wechsel); reduced-motion schaltet sie ab. */
   transition: padding-top var(--duration-md) ease;
-  background-color: var(--color-bg);
+  /* Transparent: der lebende Backdrop (Blobs + .app-shell-Gradient) soll in
+   * den Seitenrändern durchscheinen. Inhaltsflächen (.card/.widget) sind
+   * opak (HIG), decken ihn also nur dort ab, wo Inhalt liegt. Vorher stand
+   * hier var(--color-bg) (opak) → hat den gesamten Liquid-Glass-Backdrop
+   * unsichtbar gemacht (Bug, 2026-08-14 gefunden). */
+  background-color: transparent;
 }
 
 /* Der Scrollport endet über dem FAB.

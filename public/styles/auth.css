@@ -16,11 +16,6 @@
   --juju-g1: #A78BFA;
   --juju-g2: #8B5CF6;
   --juju-g3: #6D28D9;
-  --blob-purple: #C4B5FD;
-  --blob-blue:   #93C5FD;
-  --blob-yellow: #FCD34D;
-  --blob-pink:   #FDA4AF;
-  --blob-green:  #86EFAC;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -30,57 +25,20 @@
   width: 100%;
   padding: var(--space-4);
   overflow: hidden;
-  /* Weiche, pastellfarbene Liquid-Glass-Bühne mit grossen diffusen Blobs. */
-  background:
-    radial-gradient(85% 85% at 12% 8%,  color-mix(in srgb, var(--blob-purple) 42%, transparent) 0%, transparent 55%),
-    radial-gradient(80% 80% at 92% 14%, color-mix(in srgb, var(--blob-blue)   36%, transparent) 0%, transparent 55%),
-    radial-gradient(75% 75% at 88% 88%, color-mix(in srgb, var(--blob-pink)   34%, transparent) 0%, transparent 55%),
-    radial-gradient(80% 80% at 10% 86%, color-mix(in srgb, var(--blob-green)  30%, transparent) 0%, transparent 55%),
-    radial-gradient(70% 70% at 50% 105%,color-mix(in srgb, var(--blob-yellow) 28%, transparent) 0%, transparent 50%),
-    var(--color-bg);
+  /* Vereinheitlicht mit der App (2026-08-14): die Auth-Seite trägt KEIN
+   * eigenes Hintergrund-Layer mehr. Der lebende Backdrop (.lg-backdrop, 4
+   * Blobs aus glass.css §40) wird aus dem .app-shell durch den transparenten
+   * .app-content und das transparente .auth-page durchscheinen — exakt wie
+   * auf allen Modulseiten. Vorher hatte .auth-page eine eigene radial-
+   * gradient-Bühne + opake --color-bg-Basis, die den geteilten Backdrop
+   * verdeckte. html/body (reset.css) liefern als Fallback --color-bg. */
+  background: transparent;
 }
 
-/* ── Schwimmende Partikel (dekorativ) ── */
-.auth-particles {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-.auth-particles span {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(139, 92, 246, 0.18);
-  animation: auth-particle 18s ease-in-out infinite;
-}
-.auth-particles span:nth-child(1)  { top: 12%; left: 14%; animation-delay: 0s; }
-.auth-particles span:nth-child(2)  { top: 22%; left: 78%; width: 5px; height: 5px; background: rgba(103, 232, 249, 0.18); animation-delay: -2s; }
-.auth-particles span:nth-child(3)  { top: 34%; left: 8%;  width: 3px; height: 3px; background: rgba(253, 164, 175, 0.16); animation-delay: -4s; }
-.auth-particles span:nth-child(4)  { top: 46%; left: 92%; width: 6px; height: 6px; animation-delay: -6s; }
-.auth-particles span:nth-child(5)  { top: 58%; left: 18%; background: rgba(103, 232, 249, 0.14); animation-delay: -8s; }
-.auth-particles span:nth-child(6)  { top: 68%; left: 84%; width: 4px; height: 4px; background: rgba(253, 164, 175, 0.18); animation-delay: -10s; }
-.auth-particles span:nth-child(7)  { top: 78%; left: 6%;  width: 5px; height: 5px; animation-delay: -12s; }
-.auth-particles span:nth-child(8)  { top: 86%; left: 66%; background: rgba(103, 232, 249, 0.16); animation-delay: -14s; }
-.auth-particles span:nth-child(9)  { top: 18%; left: 56%; width: 3px; height: 3px; background: rgba(253, 164, 175, 0.18); animation-delay: -16s; }
-.auth-particles span:nth-child(10) { top: 74%; left: 44%; animation-delay: -3s; }
-.auth-particles span:nth-child(11) { top: 8%;  left: 88%; width: 5px; height: 5px; background: rgba(103, 232, 249, 0.12); animation-delay: -5s; }
-.auth-particles span:nth-child(12) { top: 62%; left: 30%; width: 3px; height: 3px; animation-delay: -7s; }
-.auth-particles span:nth-child(13) { top: 28%; left: 34%; background: rgba(253, 164, 175, 0.14); animation-delay: -9s; }
-.auth-particles span:nth-child(14) { top: 90%; left: 24%; width: 4px; height: 4px; animation-delay: -11s; }
-.auth-particles span:nth-child(15) { top: 44%; left: 62%; width: 5px; height: 5px; background: rgba(103, 232, 249, 0.18); animation-delay: -13s; }
-.auth-particles span:nth-child(16) { top: 4%;  left: 40%; width: 3px; height: 3px; animation-delay: -1s; }
-.auth-particles span:nth-child(17) { top: 54%; left: 10%; background: rgba(253, 164, 175, 0.16); animation-delay: -15s; }
-.auth-particles span:nth-child(18) { top: 38%; left: 96%; width: 4px; height: 4px; animation-delay: -17s; }
-.auth-particles span:nth-child(19) { top: 82%; left: 76%; width: 3px; height: 3px; animation-delay: -4.5s; }
-.auth-particles span:nth-child(20) { top: 16%; left: 26%; background: rgba(103, 232, 249, 0.14); animation-delay: -8.5s; }
-
-@keyframes auth-particle {
-  0%, 100% { transform: translate(0, 0); opacity: 0.45; }
-  50%      { transform: translate(0, -18px); opacity: 0.85; }
-}
+/* ── Schwimmende Partikel entfernt (2026-08-14) ──
+   Die Auth-Seite nutzt jetzt den geteilten .lg-backdrop aus glass.css §40
+   (dieselben 4 Blobs wie die Modulseiten). Eine zweite, eigene Partikel-
+   Ebene hätte mit dem Backdrop konkurriert statt ihn zu ergänzen. */
 
 /* ── Zentrierter Wrapper ── */
 .auth-wrap {
@@ -423,7 +381,6 @@
 
 /* ── Reduced Motion ── */
 @media (prefers-reduced-motion: reduce) {
-  .auth-particles span,
   .auth-wrap,
   .auth-spinner { animation: none !important; }
   .auth-form__submit::after { transition: none; }

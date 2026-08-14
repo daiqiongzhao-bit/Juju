@@ -772,8 +772,13 @@ textarea.form-input {
     var(--color-bg);
 }
 
+/* Transparent belassen: der lebende Backdrop (Blobs + .app-shell-Gradient)
+ * muss in den Seitenrändern durchscheinen. Inhaltsflächen sind opak (HIG).
+ * Vorher hier var(--color-bg) (opak) → Backdrop unsichtbar (Bug 2026-08-14).
+ * prefers-reduced-transparency unten setzt ebenfalls transparent + schaltet
+ * die Blobs via --lg-blob-opacity:0 ab. */
 .app-content {
-  background-color: var(--color-bg);
+  background-color: transparent;
 }
 
 /* ================================================================

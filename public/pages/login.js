@@ -33,13 +33,6 @@ export async function render(container) {
   container.replaceChildren();
   container.insertAdjacentHTML('beforeend', `
     <main class="auth-page" id="main-content">
-      <div class="auth-particles" aria-hidden="true">
-        <span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span>
-      </div>
-
       <div class="auth-wrap">
         <section class="auth-card card card--padded" aria-labelledby="auth-card-title">
           <header class="auth-card__brand">
