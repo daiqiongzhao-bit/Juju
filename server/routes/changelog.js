@@ -111,6 +111,14 @@ function buildChangelogPayload(releases, currentVersion = APP_VERSION) {
     .filter((release) => release.version);
 
   const currentKey = normalizeVersion(currentVersion);
+
+  // No releases published yet (or GitHub unreachable and nothing cached): treat
+  // the running version as the latest so the UI never shows "unknown" and never
+  // claims a phantom update is available. Any real release overrides this.
+  if (normalized.length === 0 && currentKey) {
+    normalized.push({ version: currentVersion, sections: [] });
+  }
+
   const latestVersion = normalized[0]?.version || null;
   const currentInReleases = Boolean(currentKey)
     && normalized.some((release) => normalizeVersion(release.version) === currentKey);
