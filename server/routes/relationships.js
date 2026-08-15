@@ -271,6 +271,134 @@ router.get('/common', (req, res) => {
 });
 
 // --------------------------------------------------------
+// Beziehungsbaum (hierarchische Ansicht gemeinsamer Kontakte)
+// --------------------------------------------------------
+router.get('/tree', (req, res) => {
+  try {
+    let sourceIds = [];
+    if (req.query.sourceIds) {
+      sourceIds = String(req.query.sourceIds)
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isInteger(n) && n > 0);
+    }
+
+    const allEdges = db.get().prepare(`
+      SELECT r.contact_a, r.contact_b, r.relation_type,
+             a.name AS name_a, b.name AS name_b,
+             a.photo AS photo_a, b.photo AS photo_b,
+             a.relationship_type AS rt_a, b.relationship_type AS rt_b
+      FROM contact_relationships r
+      JOIN contacts a ON a.id = r.contact_a
+      JOIN contacts b ON b.id = r.contact_b
+    `).all();
+
+    // Falls keine Quellen angegeben, automatisch alle Kontakte mit Kanten wählen.
+    if (!sourceIds.length && allEdges.length) {
+      const touched = new Set();
+      for (const e of allEdges) {
+        touched.add(e.contact_a);
+        touched.add(e.contact_b);
+      }
+      sourceIds = [...touched].slice(0, 12);
+    }
+
+    // Kontakt-Metadaten auflösen
+    const contactMap = new Map();
+    const loadContact = (id) => {
+      if (contactMap.has(id)) return contactMap.get(id);
+      const c = db.get().prepare('SELECT id, name, photo, relationship_type FROM contacts WHERE id = ?').get(id);
+      const resolved = c || { id, name: '?', photo: null, relationship_type: null };
+      contactMap.set(id, resolved);
+      return resolved;
+    };
+
+    // Adjazenzliste inkl. Beziehungstyp (ungerichtet)
+    const adj = new Map();
+    for (const e of allEdges) {
+      const push = (from, to, type) => {
+        if (!adj.has(from)) adj.set(from, []);
+        adj.get(from).push({ contactId: to, relation_type: type });
+      };
+      push(e.contact_a, e.contact_b, e.relation_type);
+      push(e.contact_b, e.contact_a, e.relation_type);
+    }
+
+    const sources = sourceIds.map((id) => loadContact(id));
+
+    // Äste: pro Quellkontakt dessen direkte Verbindungen
+    const branches = sources.map((s) => {
+      const connections = (adj.get(s.id) || [])
+        .map((conn) => {
+          const c = loadContact(conn.contactId);
+          return {
+            contactId: c.id,
+            name: c.name,
+            photo: c.photo,
+            relationship_type: c.relationship_type,
+            relation_type: conn.relation_type,
+          };
+        })
+        .sort((a, b) => String(a.name).localeCompare(b.name));
+      return {
+        sourceId: s.id,
+        sourceName: s.name,
+        sourcePhoto: s.photo,
+        sourceRelationshipType: s.relationship_type,
+        connections,
+      };
+    });
+
+    // Häufigkeit: wie viele ausgewählte Quellen kennen diesen Kontakt?
+    const freq = new Map();
+    for (const b of branches) {
+      for (const c of b.connections) {
+        freq.set(c.contactId, (freq.get(c.contactId) || 0) + 1);
+      }
+    }
+
+    const shared = [];
+    const commonToAll = [];
+    for (const [contactId, count] of freq.entries()) {
+      if (count < 2) continue;
+      const c = loadContact(contactId);
+      const sourceIdsForContact = branches
+        .filter((b) => b.connections.some((conn) => conn.contactId === contactId))
+        .map((b) => b.sourceId);
+      const entry = {
+        contactId: c.id,
+        name: c.name,
+        photo: c.photo,
+        relationship_type: c.relationship_type,
+        sourceCount: count,
+        sourceIds: sourceIdsForContact,
+      };
+      shared.push(entry);
+      if (count === sources.length && sources.length > 1) {
+        commonToAll.push(entry);
+      }
+    }
+
+    // Alphabetisch sortieren
+    const sortByName = (a, b) => String(a.name).localeCompare(b.name);
+    shared.sort(sortByName);
+    commonToAll.sort(sortByName);
+
+    res.json({
+      data: {
+        sources,
+        branches,
+        shared,
+        commonToAll,
+      },
+    });
+  } catch (err) {
+    log.error('GET /tree error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
 // Interaktionen (Zeitstrahl)
 // --------------------------------------------------------
 router.get('/interactions', (req, res) => {

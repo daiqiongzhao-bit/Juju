@@ -20,10 +20,13 @@ const INTERACTION_TYPES = ['note', 'call', 'meeting', 'message', 'gift', 'other'
 
 let _container = null;
 let _user = null;
+const TREE_STORAGE_KEY = 'juju-rel-tree-sources';
 const state = {
   contacts: [],
   options: { relationTypes: RELATION_TYPES, interactionTypes: INTERACTION_TYPES, photoMaxBytes: 6_990_507 },
   activeTab: 'network',
+  treeSources: [],
+  treeExpanded: new Set(),
 };
 
 // --------------------------------------------------------
@@ -145,6 +148,7 @@ export async function render(container, { user } = {}) {
         <button class="sub-tab" role="tab" data-tab-id="network" aria-selected="true">${t('relationships.tab.network')}</button>
         <button class="sub-tab" role="tab" data-tab-id="people">${t('relationships.tab.people')}</button>
         <button class="sub-tab" role="tab" data-tab-id="common">${t('relationships.tab.common')}</button>
+        <button class="sub-tab" role="tab" data-tab-id="tree">${t('relationships.tab.tree')}</button>
         <button class="sub-tab" role="tab" data-tab-id="timeline">${t('relationships.tab.timeline')}</button>
         <button class="sub-tab" role="tab" data-tab-id="anniversaries">${t('relationships.tab.anniversaries')}</button>
       </div>
@@ -152,6 +156,7 @@ export async function render(container, { user } = {}) {
       <section class="rel-panel" id="rel-panel-network" role="tabpanel"></section>
       <section class="rel-panel" id="rel-panel-people" role="tabpanel" hidden></section>
       <section class="rel-panel" id="rel-panel-common" role="tabpanel" hidden></section>
+      <section class="rel-panel" id="rel-panel-tree" role="tabpanel" hidden></section>
       <section class="rel-panel" id="rel-panel-timeline" role="tabpanel" hidden></section>
       <section class="rel-panel" id="rel-panel-anniversaries" role="tabpanel" hidden></section>
     </div>`;
@@ -169,7 +174,7 @@ export async function render(container, { user } = {}) {
 
 async function switchTab(id) {
   state.activeTab = id;
-  const panels = ['network', 'people', 'common', 'timeline', 'anniversaries'];
+  const panels = ['network', 'people', 'common', 'tree', 'timeline', 'anniversaries'];
   for (const p of panels) {
     const el = _container.querySelector(`#rel-panel-${p}`);
     if (el) el.hidden = p !== id;
@@ -177,6 +182,7 @@ async function switchTab(id) {
   if (id === 'network') return renderNetwork();
   if (id === 'people') return renderPeople();
   if (id === 'common') return renderCommon();
+  if (id === 'tree') return renderTree();
   if (id === 'timeline') return renderTimeline();
   if (id === 'anniversaries') return renderAnniversaries();
 }
@@ -504,6 +510,218 @@ async function renderCommon() {
   panel.querySelectorAll('[data-contact]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const c = contactById(Number(btn.dataset.contact));
+      if (c) openContactModal(c);
+    });
+  });
+}
+
+// --------------------------------------------------------
+// Tab: Tree (hierarchische gemeinsame Kontakte)
+// --------------------------------------------------------
+async function renderTree() {
+  const panel = _container.querySelector('#rel-panel-tree');
+  panel.innerHTML = `<div class="rel-loading">${t('common.loading')}</div>`;
+
+  await ensureContacts();
+
+  // Persistierte Auswahl wiederherstellen
+  if (!state.treeSources.length) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(TREE_STORAGE_KEY) || '[]');
+      if (Array.isArray(saved) && saved.length) state.treeSources = saved;
+    } catch { /* ignore */ }
+  }
+
+  let tree;
+  try {
+    const qs = state.treeSources.length ? `?sourceIds=${state.treeSources.join(',')}` : '';
+    const res = await api.get(`/relationships/tree${qs}`);
+    tree = res?.data || { sources: [], branches: [], shared: [], commonToAll: [] };
+  } catch {
+    tree = { sources: [], branches: [], shared: [], commonToAll: [] };
+  }
+
+  // Synchronisiere die Auswahl mit der Server-Antwort (wenn auto-selected)
+  if (tree.sources?.length) {
+    state.treeSources = tree.sources.map((s) => s.id);
+    try {
+      localStorage.setItem(TREE_STORAGE_KEY, JSON.stringify(state.treeSources));
+    } catch { /* ignore */ }
+  }
+
+  const sharedIds = new Set((tree.shared || []).map((s) => s.contactId));
+
+  panel.innerHTML = `
+    <div class="rel-tree card">
+      <div class="rel-tree__header">
+        <div class="rel-tree__controls">
+          <span class="rel-tree__label">${t('relationships.tree.sourcesLabel')}</span>
+          <div class="rel-tree__source-chips" id="rel-tree-sources"></div>
+        </div>
+        <div class="rel-tree__actions">
+          <button class="btn btn--secondary btn--sm" data-action="tree-expand">${t('relationships.tree.expandAll')}</button>
+          <button class="btn btn--secondary btn--sm" data-action="tree-collapse">${t('relationships.tree.collapseAll')}</button>
+        </div>
+      </div>
+      <div class="rel-tree__body" id="rel-tree-body"></div>
+    </div>`;
+
+  paintTreeSources(panel, tree);
+  paintTreeBody(panel, tree, sharedIds);
+
+  panel.querySelector('[data-action="tree-expand"]')?.addEventListener('click', () => {
+    state.treeExpanded = new Set((tree.branches || []).map((b) => b.sourceId));
+    paintTreeBody(panel, tree, sharedIds);
+  });
+  panel.querySelector('[data-action="tree-collapse"]')?.addEventListener('click', () => {
+    state.treeExpanded.clear();
+    paintTreeBody(panel, tree, sharedIds);
+  });
+}
+
+function paintTreeSources(panel, tree) {
+  const box = panel.querySelector('#rel-tree-sources');
+  if (!box) return;
+
+  const selectedIds = new Set(state.treeSources);
+  const contactsWithEdges = new Set();
+  for (const b of tree.branches || []) contactsWithEdges.add(b.sourceId);
+
+  const chips = state.contacts
+    .filter((c) => contactsWithEdges.has(c.id) || selectedIds.has(c.id))
+    .map((c) => {
+      const active = selectedIds.has(c.id);
+      return `<button class="rel-tree-source ${active ? 'rel-tree-source--active' : ''}" data-source="${c.id}" title="${esc(c.name || '?')}">
+        ${avatarHtml(c, 24)}
+        <span>${esc(c.name || '?')}</span>
+      </button>`;
+    });
+
+  if (!chips.length) {
+    box.innerHTML = `<span class="rel-muted">${t('relationships.tree.noSourcesHint')}</span>`;
+    return;
+  }
+  box.innerHTML = chips.join('');
+
+  box.querySelectorAll('[data-source]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = Number(btn.dataset.source);
+      const idx = state.treeSources.indexOf(id);
+      if (idx === -1) state.treeSources.push(id);
+      else state.treeSources.splice(idx, 1);
+      try {
+        localStorage.setItem(TREE_STORAGE_KEY, JSON.stringify(state.treeSources));
+      } catch { /* ignore */ }
+      renderTree();
+    });
+  });
+}
+
+function paintTreeBody(panel, tree, sharedIds) {
+  const body = panel.querySelector('#rel-tree-body');
+  if (!body) return;
+
+  const branches = tree.branches || [];
+  const commonToAll = tree.commonToAll || [];
+  const shared = tree.shared || [];
+
+  if (!branches.length) {
+    body.innerHTML = `<div class="empty-state">
+      <div class="empty-state__title">${t('relationships.tree.emptyTitle')}</div>
+      <div class="empty-state__description">${t('relationships.tree.emptyDesc')}</div>
+    </div>`;
+    return;
+  }
+
+  const renderConnection = (conn) => {
+    const isShared = sharedIds.has(conn.contactId);
+    return `
+      <div class="rel-tree-node ${isShared ? 'rel-tree-node--shared' : ''}" data-contact="${conn.contactId}">
+        <span class="rel-tree-node__line"></span>
+        ${avatarHtml(conn, 28)}
+        <span class="rel-tree-node__name">${esc(conn.name || '?')}</span>
+        <span class="rel-tree-node__edge" style="color:${relColor(conn.relation_type)}">${esc(relLabel(conn.relation_type))}</span>
+        ${isShared ? `<span class="rel-tree-node__badge" title="${t('relationships.tree.sharedBadge')}">${t('relationships.tree.shared')}</span>` : ''}
+      </div>`;
+  };
+
+  const renderBranch = (branch) => {
+    const expanded = state.treeExpanded.has(branch.sourceId);
+    const count = branch.connections?.length || 0;
+    const sourceContact = {
+      name: branch.sourceName,
+      photo: branch.sourcePhoto,
+      relationship_type: branch.sourceRelationshipType,
+    };
+    return `
+      <div class="rel-tree-branch" data-branch="${branch.sourceId}">
+        <button class="rel-tree-branch__header" aria-expanded="${expanded ? 'true' : 'false'}">
+          <i data-lucide="chevron-right" class="icon-sm rel-tree-branch__chevron ${expanded ? 'rel-tree-branch__chevron--open' : ''}" aria-hidden="true"></i>
+          ${avatarHtml(sourceContact, 32)}
+          <span class="rel-tree-branch__name">${esc(branch.sourceName || '?')}</span>
+          <span class="rel-tree-branch__count">${count}</span>
+        </button>
+        <div class="rel-tree-branch__children ${expanded ? '' : 'rel-tree-branch__children--collapsed'}">
+          ${count ? branch.connections.map(renderConnection).join('') : `<div class="rel-muted rel-tree-node">${t('relationships.tree.noConnections')}</div>`}
+        </div>
+      </div>`;
+  };
+
+  const hasShared = shared.length > 0;
+  const hasCommonToAll = commonToAll.length > 0 && tree.sources?.length > 1;
+
+  body.innerHTML = `
+    ${hasCommonToAll ? `
+      <div class="rel-tree-aggregate rel-tree-aggregate--all">
+        <div class="rel-tree-aggregate__title">
+          <i data-lucide="users" class="icon-sm" aria-hidden="true"></i>
+          ${t('relationships.tree.commonToAll')}
+          <span class="rel-tree-aggregate__subtitle">${t('relationships.tree.commonToAllDesc', { count: tree.sources.length })}</span>
+        </div>
+        <div class="rel-tree-aggregate__list">
+          ${commonToAll.map((c) => `
+            <button class="rel-tree-node rel-tree-node--shared" data-contact="${c.contactId}">
+              ${avatarHtml(c, 28)}
+              <span class="rel-tree-node__name">${esc(c.name || '?')}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>` : ''}
+    ${hasShared && !hasCommonToAll ? `
+      <div class="rel-tree-aggregate">
+        <div class="rel-tree-aggregate__title">
+          <i data-lucide="share-2" class="icon-sm" aria-hidden="true"></i>
+          ${t('relationships.tree.sharedContacts')}
+        </div>
+        <div class="rel-tree-aggregate__list">
+          ${shared.map((c) => `
+            <button class="rel-tree-node rel-tree-node--shared" data-contact="${c.contactId}">
+              ${avatarHtml(c, 28)}
+              <span class="rel-tree-node__name">${esc(c.name || '?')}</span>
+              <span class="rel-tree-node__sources">${t('relationships.tree.sharedBy', { count: c.sourceCount })}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>` : ''}
+    <div class="rel-tree-branches">
+      ${branches.map(renderBranch).join('')}
+    </div>`;
+
+  if (window.lucide) window.lucide.createIcons({ el: body });
+
+  // Interaktionen
+  body.querySelectorAll('.rel-tree-branch__header').forEach((hdr) => {
+    hdr.addEventListener('click', () => {
+      const branchId = Number(hdr.closest('[data-branch]')?.dataset.branch);
+      if (state.treeExpanded.has(branchId)) state.treeExpanded.delete(branchId);
+      else state.treeExpanded.add(branchId);
+      paintTreeBody(panel, tree, sharedIds);
+    });
+  });
+
+  body.querySelectorAll('[data-contact]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const c = contactById(Number(node.dataset.contact));
       if (c) openContactModal(c);
     });
   });

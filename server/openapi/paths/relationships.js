@@ -63,6 +63,16 @@ export function relationshipsPaths() {
         responses: { 200: { description: 'Edges with shared contacts' } },
       },
     },
+    '/api/v1/relationships/tree': {
+      get: {
+        summary: 'Relationship tree (source contacts + shared connections)',
+        tags: ['Relationships'],
+        parameters: [
+          { name: 'sourceIds', in: 'query', schema: { type: 'string' }, description: 'Comma-separated contact IDs to use as tree roots' },
+        ],
+        responses: { 200: { description: 'Tree structure with sources, branches, shared and commonToAll contacts' } },
+      },
+    },
     '/api/v1/relationships/interactions': {
       get: {
         summary: 'List interaction events',
