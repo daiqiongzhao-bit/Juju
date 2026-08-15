@@ -64,6 +64,7 @@ import healthRouter from './routes/health.js';
 import rewardsRouter from './routes/rewards.js';
 import permissionsRouter from './routes/permissions.js';
 import changelogRouter from './routes/changelog.js';
+import updateRouter from './routes/update.js';
 import mcpRouter from './mcp/server.js';
 import { moduleForPath, requiredAccess, tokenAllows } from './scopes.js';
 
@@ -438,6 +439,9 @@ app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/rewards', rewardsRouter);
 app.use('/api/v1/permissions', permissionsRouter);
+
+// Admin: Ein-Klick-Update (erfordert Admin + CSRF; nutzt gemounteten Docker-Socket)
+app.use('/api/v1/update', requireAdmin, updateRouter);
 
 // --------------------------------------------------------
 // Health-Check (für Docker)

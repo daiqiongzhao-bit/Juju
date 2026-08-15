@@ -19,9 +19,21 @@ RUN npm ci --omit=dev
 # ---- Runtime stage ----
 FROM node:24-slim
 
+# gosu: unprivileged start; git: in-container self-update (checkout release tags);
+# curl + ca-certificates: download the static docker CLI below.
 RUN apt-get update && apt-get install -y \
     gosu \
+    git \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Static docker CLI so the one-click updater can rebuild & replace this very
+# container through the mounted /var/run/docker.sock (no docker daemon in-image).
+RUN curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.3.1.tgz -o /tmp/docker.tgz \
+ && tar xzf /tmp/docker.tgz -C /tmp \
+ && mv /tmp/docker/docker /usr/local/bin/docker \
+ && rm -rf /tmp/docker /tmp/docker.tgz
 
 WORKDIR /app
 
