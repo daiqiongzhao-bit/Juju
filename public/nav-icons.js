@@ -83,6 +83,13 @@ export const NAV_ICONS = {
     e('path', { d: 'M16 9h2.5M16 12h2M16 15h2.5' }),
   ),
 
+  'git-network': () => makeSvg(
+    e('circle', { cx: '6', cy: '6', r: '2.4' }),
+    e('circle', { cx: '18', cy: '6', r: '2.4' }),
+    e('circle', { cx: '12', cy: '18', r: '2.4' }),
+    e('path', { d: 'M7.6 7.6 10.6 16M16.4 7.6 13.4 16M8.4 6h7.2' }),
+  ),
+
   'wallet': () => makeSvg(
     e('path', { d: 'M4 8.5a2.5 2.5 0 0 1 2.5-2.5H17l1 2.5' }),
     e('rect', { x: '3.5', y: '7.5', width: '17', height: '12', rx: '2.5' }),

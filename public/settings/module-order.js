@@ -14,7 +14,7 @@ const PLAN_MODULE_IDS = new Set(['calendar', 'tasks', 'notes']);
 // Ehemals ein einziger „Zuhause"-Sammeltopf (8 Module) — aufgeteilt in semantische
 // Gruppen ≤5, damit die Sidebar-Sektion eine Bedeutung trägt statt „nicht Plan/Übersicht".
 const HOUSEHOLD_MODULE_IDS = new Set(['kitchen', 'meals', 'recipes', 'shopping', 'housekeeping', 'documents', 'rewards']);
-const PEOPLE_MODULE_IDS = new Set(['contacts', 'birthdays', 'health']);
+const PEOPLE_MODULE_IDS = new Set(['contacts', 'birthdays', 'relationships', 'health']);
 const FINANCE_MODULE_IDS = new Set(['budget']);
 const MOBILE_NAV_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 

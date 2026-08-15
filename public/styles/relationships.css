@@ -1,0 +1,231 @@
+/* Relationships module — Layout & components (baut auf .card/.btn/.form-input auf) */
+
+.relationships-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.relationships-page .page-toolbar__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.relationships-page .page-subtitle {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.92rem;
+}
+
+.rel-panel[hidden] { display: none; }
+
+.rel-loading {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+
+.rel-muted {
+  color: var(--color-text-tertiary);
+  font-size: 0.85rem;
+}
+
+/* ---- Toolbars ---- */
+.rel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rel-search {
+  position: relative;
+  flex: 1 1 220px;
+  display: flex;
+  align-items: center;
+}
+.rel-search .icon-sm {
+  position: absolute;
+  left: 12px;
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+.rel-search__input { padding-left: 34px; width: 100%; }
+
+/* ---- Network graph ---- */
+.rel-graph-wrap { padding: 14px; }
+.rel-graph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.rel-graph-hint { color: var(--color-text-tertiary); font-size: 0.85rem; }
+.rel-graph {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: none;
+  user-select: none;
+}
+.rel-edge {
+  stroke: var(--color-border-strong);
+  stroke-width: 1.4;
+  opacity: 0.7;
+}
+.rel-node { cursor: pointer; }
+.rel-node__circle {
+  stroke: var(--color-surface-raised, #fff);
+  stroke-width: 2.5;
+  transition: filter 0.15s ease;
+}
+.rel-node:hover .rel-node__circle { filter: brightness(1.08); }
+.rel-node__label {
+  fill: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--color-surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+/* ---- People grid ---- */
+.rel-people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.rel-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  color: inherit;
+  font: inherit;
+}
+.rel-person:hover { background: var(--color-surface-hover); }
+.rel-person__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rel-person__name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rel-person__type { font-size: 0.82rem; font-weight: 600; }
+
+/* ---- Avatars ---- */
+.rel-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--color-surface-raised, #888);
+  color: var(--color-text-on-accent, #fff);
+  flex: none;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.rel-avatar--initials { background: var(--module-relationships, #15803D); }
+.rel-avatar--lg { width: 64px; height: 64px; font-size: 24px; }
+
+/* ---- Common contacts ---- */
+.rel-common-list { display: flex; flex-direction: column; gap: 12px; }
+.rel-common { padding: 14px; }
+.rel-common__pair {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-weight: 600;
+}
+.rel-common__amp { color: var(--color-text-tertiary); font-weight: 500; }
+.rel-common__shared { margin-top: 10px; }
+.rel-common__shared-label { font-size: 0.82rem; color: var(--color-text-secondary); }
+.rel-common__chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit; font-size: 0.85rem;
+  cursor: pointer;
+}
+.chip:hover { background: var(--color-surface-hover); }
+.chip .rel-avatar { width: 22px; height: 22px; font-size: 9px; }
+
+/* ---- Timeline ---- */
+.rel-timeline { display: flex; flex-direction: column; gap: 10px; }
+.rel-event {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+.rel-event__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 10px; flex: none;
+  background: color-mix(in srgb, var(--module-relationships) 16%, transparent);
+  color: var(--module-relationships);
+}
+.rel-event__body { flex: 1; min-width: 0; }
+.rel-event__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.rel-event__contact { font-weight: 600; }
+.rel-event__date { color: var(--color-text-tertiary); font-size: 0.82rem; }
+.rel-event__note { margin-top: 4px; color: var(--color-text-secondary); }
+.rel-event__type {
+  display: inline-block; margin-top: 6px;
+  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--module-relationships); font-weight: 700;
+}
+
+/* ---- Anniversaries ---- */
+.rel-anniv-list { display: flex; flex-direction: column; gap: 10px; }
+.rel-anniv {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+}
+.rel-anniv__main { flex: 1; min-width: 0; }
+.rel-anniv__title { font-weight: 600; }
+.rel-anniv__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--color-text-secondary); font-size: 0.88rem; }
+.rel-anniv__right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.rel-anniv__count { font-weight: 700; color: var(--module-relationships); font-size: 0.9rem; }
+.rel-anniv__count--soon { color: var(--_module-birthdays); }
+.rel-anniv__actions { display: flex; gap: 4px; }
+
+/* ---- Contact modal ---- */
+.rel-contact-modal { display: flex; flex-direction: column; gap: 14px; }
+.rel-contact-modal__head { display: flex; align-items: center; gap: 14px; }
+.rel-contact-modal__name { font-size: 1.1rem; font-weight: 700; }
+.rel-contact-modal__cat { color: var(--color-text-tertiary); font-size: 0.85rem; text-transform: capitalize; }
+.rel-photo-row { display: flex; align-items: center; gap: 12px; }
+.rel-modal-subhead {
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 600; margin-bottom: 6px;
+}
+.rel-edge-list { display: flex; flex-direction: column; gap: 8px; }
+.rel-edge-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 10px; background: var(--color-surface);
+}
+.rel-edge-item__name { flex: 1; font-weight: 500; }
+.rel-edge-item__type { color: var(--color-text-secondary); font-size: 0.82rem; }
+.rel-modal-quick { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* row actions (delete/edit) — kompakt */
+.row-action {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid transparent; background: transparent;
+  color: var(--color-text-secondary); cursor: pointer;
+}
+.row-action:hover { background: var(--color-surface-hover); color: var(--color-text-primary); }
+.row-action--danger:hover { color: var(--color-danger, #d23); background: color-mix(in srgb, var(--color-danger, #d23) 12%, transparent); }
+
+@media (max-width: 560px) {
+  .rel-people-grid { grid-template-columns: 1fr; }
+  .rel-anniv { flex-direction: column; align-items: stretch; }
+  .rel-anniv__right { flex-direction: row; align-items: center; justify-content: space-between; }
+}

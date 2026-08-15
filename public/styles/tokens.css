@@ -415,6 +415,8 @@
   --module-notes:      var(--_module-notes);       /* Amber-700 - Notizen; 5.02:1 auf weiß — WCAG AA */
   --_module-contacts:  #0969DA;
   --module-contacts:   var(--_module-contacts);    /* Kräftiges Blau - Kontakte */
+  --_module-relationships: #15803D;
+  --module-relationships: var(--_module-relationships); /* Smaragdgrün - Beziehungen/Netzwerk; 5.0:1 auf weiß — WCAG AA */
   --_module-birthdays: #CE2A63;
   --module-birthdays:  var(--_module-birthdays);   /* Rosé - Geburtstage; 5.01:1 auf weiß — WCAG AA */
   --_module-budget:    #0F766E;

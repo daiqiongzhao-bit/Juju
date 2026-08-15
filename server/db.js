@@ -4939,6 +4939,65 @@ const MIGRATIONS = [
         ON shopping_items(list_id, category, sort_order);
     `,
   },
+  {
+    version: 134,
+    description: 'Relationship layer: contact edges, interactions, anniversaries (#rel)',
+    up: `
+      -- Soziale Einordnung eines Kontakts (Familie/Freund/Kollege/...). Bewusst
+      -- freier Text, keine CHECK-Liste: die UI liefert Vorschläge, die DB nimmt
+      -- aber jeden Wert an, damit keine Übersetzungstabelle mitgepflegt werden
+      -- muss. Bestandskontakte starten mit NULL (= "nicht eingeordnet").
+      ALTER TABLE contacts ADD COLUMN relationship_type TEXT;
+
+      -- Kanten des Beziehungsnetzes. Richtungsunabhängig gespeichert
+      -- (contact_a < contact_b), damit jede Verbindung genau einmal existiert.
+      CREATE TABLE IF NOT EXISTS contact_relationships (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_a     INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+        contact_b     INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+        relation_type TEXT    NOT NULL DEFAULT 'knows',
+        note          TEXT,
+        created_by    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE(contact_a, contact_b, relation_type)
+      );
+      CREATE INDEX IF NOT EXISTS idx_contact_relationships_a ON contact_relationships(contact_a);
+      CREATE INDEX IF NOT EXISTS idx_contact_relationships_b ON contact_relationships(contact_b);
+
+      -- Wichtige Interaktionen mit einem Kontakt (Anruf, Treffen, Geschenk, ...).
+      -- Reine Chronik, keine Verknüpfung zu Terminen.
+      CREATE TABLE IF NOT EXISTS contact_interactions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_id   INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+        type         TEXT    NOT NULL DEFAULT 'note',
+        note         TEXT,
+        occurred_at  TEXT    NOT NULL,
+        created_by   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_contact_interactions_contact
+        ON contact_interactions(contact_id);
+
+      -- Jahrestage (Hochzeit, Kennenlernen, ...). anniversary_date ist MM-DD und
+      -- wird jährlich wiederholt - die Kalender-/Reminder-Artefakte entstehen
+      -- über server/services/anniversaries.js (Vorbild birthdays).
+      CREATE TABLE IF NOT EXISTS anniversaries (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_id           INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+        title                TEXT    NOT NULL,
+        anniversary_date     TEXT    NOT NULL,
+        notes                TEXT,
+        reminder_offset      TEXT,
+        reminder_custom_amount INTEGER,
+        reminder_custom_unit TEXT,
+        calendar_event_id    INTEGER,
+        created_by           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_anniversaries_contact ON anniversaries(contact_id);
+    `,
+  },
 ];
 
 /**
@@ -5018,6 +5077,9 @@ const CRITICAL_COLUMNS = [
   // #549: v97 trägt calendar_events.tzid nach; ohne die Spalte scheitert der
   // Sync-Upsert (schreibt tzid) still und die Kalender-Expansion driftet über DST.
   { table: 'calendar_events', column: 'tzid', type: 'TEXT' },
+  // #rel: Beziehungs-Ebene. Fehlt die Spalte, scheitert das Relationships-Modul
+  // still beim Lesen/Schreiben von contact.relationship_type.
+  { table: 'contacts', column: 'relationship_type', type: 'TEXT' },
 ];
 
 /**
