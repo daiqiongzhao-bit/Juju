@@ -19,6 +19,10 @@ const IMAGE = process.env.JUJU_IMAGE || 'juju:latest';
 const LOCK_FILE = `${SRC_DIR}/.update.lock`;
 const STATUS_FILE = `${SRC_DIR}/.update-status.json`;
 const SWAP_WAIT_SECONDS = Number(process.env.JUJU_UPDATE_SWAP_WAIT || 6);
+// Upstream-Repo, aus dem Updates geholt werden. Über Env überschreibbar, damit
+// das Modul auch ohne manuell konfiguriertes `origin` funktioniert (Self-Healing).
+const UPSTREAM_REPO = process.env.JUJU_UPSTREAM_REPO
+  || 'https://github.com/daiqiongzhao-bit/Juju.git';
 
 const execFileP = promisify(execFile);
 const router = express.Router();
@@ -53,6 +57,24 @@ async function run(cmd, args, opts = {}) {
 }
 
 /**
+ * Stellt sicher, dass ein `origin`-Remote existiert und auf das Upstream-Repo
+ * zeigt. Fehlt es (z. B. weil das Quellverzeichnis ohne Remote ausgecheckt wurde),
+ * wird es automatisch angelegt – sonst würde `git fetch origin` fehlschlagen.
+ */
+async function ensureOrigin() {
+  try {
+    const url = (await run('git', ['-C', SRC_DIR, 'remote', 'get-url', 'origin'])).trim();
+    if (url && url !== UPSTREAM_REPO) {
+      log.info('origin points to %s; updating to %s', url, UPSTREAM_REPO);
+      await run('git', ['-C', SRC_DIR, 'remote', 'set-url', 'origin', UPSTREAM_REPO]);
+    }
+  } catch {
+    log.info('origin remote missing – adding %s', UPSTREAM_REPO);
+    await run('git', ['-C', SRC_DIR, 'remote', 'add', 'origin', UPSTREAM_REPO]);
+  }
+}
+
+/**
  * Führt das Update asynchron aus. Der schwere Teil (build + swap) läuft in einem
  * kurzlebigen "juju_swap"-Container, der im Host-Namespace lebt – wenn dieser
  * den laufenden "juju"-Container stoppt, überlebt der Swap-Container und startet
@@ -62,6 +84,7 @@ async function performUpdate(target) {
   try {
     const tag = target.startsWith('v') ? target : `v${target}`;
     writeStatus({ phase: 'fetching', target: tag });
+    await ensureOrigin();
     await run('git', ['-C', SRC_DIR, 'fetch', '--tags', 'origin']);
 
     writeStatus({ phase: 'checking-out', target: tag });
@@ -71,19 +94,17 @@ async function performUpdate(target) {
     await run('docker', ['build', '-t', IMAGE, SRC_DIR], { timeout: 600000 });
 
     writeStatus({ phase: 'swapping', target: tag });
+    // WICHTIG: `docker run ...` muss EINE einzige Anweisung bleiben (alle
+    // Argumente durch Leerzeichen verbunden). Die einzelnen Anweisungen werden
+    // per Zeilenumbruch getrennt, damit `sh` sie korrekt als Sequenz ausführt.
     const swap = [
       `sleep ${SWAP_WAIT_SECONDS}`,
       `docker stop juju 2>/dev/null`,
       `docker rm -f juju 2>/dev/null`,
-      `docker run -d --name juju --restart unless-stopped -p 3000:3000`,
-      `--env-file ${SRC_DIR}/.env`,
-      `-v /opt/juju-data:/data -v /opt/juju-backups:/backups`,
-      `-v /var/run/docker.sock:/var/run/docker.sock`,
-      `-v ${SRC_DIR}:${SRC_DIR}`,
-      `${IMAGE}`,
-      `docker rm -f juju_swap 2>/dev/null`,
-      `rm -f ${LOCK_FILE} ${STATUS_FILE}`,
-    ].join(' ');
+      `docker run -d --name juju --restart unless-stopped -p 3000:3000 --env-file ${SRC_DIR}/.env -v /opt/juju-data:/data -v /opt/juju-backups:/backups -v /var/run/docker.sock:/var/run/docker.sock -v ${SRC_DIR}:${SRC_DIR} ${IMAGE}`,
+      `sleep 3`,
+      `if docker ps --filter name='^juju$' --format '{{.Names}}' | grep -q '^juju$'; then rm -f ${LOCK_FILE} ${STATUS_FILE}; docker rm -f juju_swap 2>/dev/null; else echo 'SWAP FAILED: new juju container did not start' >&2; exit 1; fi`,
+    ].join('\n');
     const swapFile = `${SRC_DIR}/.update-swap.sh`;
     writeFileSync(swapFile, `#!/bin/sh\n${swap}\n`);
     await run('docker', [

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-08-15
+
+在线一键更新稳定性修复。
+
+### Fixed
+- 一键更新健壮性：更新前自动确保 `origin` 远端指向上游仓库（缺失时自动添加），避免 `git fetch origin` 因远端缺失而失败。
+- 修复容器交换（swap）脚本：将 `docker run` 的全部参数合并为单条命令、各步骤以换行分隔，并新增新容器启动校验；修正交换脚本的自我清理顺序，确保锁文件与状态文件在容器替换完成后被正确移除。
+
+
 
 ## [0.0.4] - 2026-08-15
 
