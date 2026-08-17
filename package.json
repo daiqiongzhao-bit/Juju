@@ -440,7 +440,7 @@
 
   "devDependencies": {
 
-    "puppeteer": "^25.4.0",
+    "puppeteer": "^25.7.0",
 
     "sharp": "^0.35.3"
 
