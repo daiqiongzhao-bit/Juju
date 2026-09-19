@@ -440,3 +440,30 @@
   .rel-tree-branch__children { padding-left: 28px; }
   .rel-tree-node__edge { display: none; }
 }
+
+/* --- Suche / Undo / Redo / Export im Netzwerk-Canvas --- */
+.rel-graph-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rel-search-input {
+  width: 170px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+.rel-node--found .rel-node__circle {
+  stroke: var(--color-accent, #f59e0b);
+  stroke-width: 4;
+  filter: brightness(1.15);
+}
+.rel-node--found .rel-node__label {
+  font-weight: 700;
+  fill: var(--color-accent, #f59e0b);
+}
+@media (max-width: 720px) {
+  .rel-graph-actions { justify-content: flex-start; }
+  .rel-search-input { width: 120px; }
+}

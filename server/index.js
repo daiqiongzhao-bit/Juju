@@ -65,6 +65,9 @@ import rewardsRouter from './routes/rewards.js';
 import permissionsRouter from './routes/permissions.js';
 import changelogRouter from './routes/changelog.js';
 import updateRouter from './routes/update.js';
+import mediaRouter from './routes/media.js';
+import memoryRouter from './routes/memory.js';
+import inAppNotificationsRouter from './routes/in-app-notifications.js';
 import mcpRouter from './mcp/server.js';
 import { moduleForPath, requiredAccess, tokenAllows } from './scopes.js';
 
@@ -419,6 +422,9 @@ app.use('/api/v1/contacts/cardav', cardavRouter);
 app.use('/api/v1/contacts', contactsRouter);
 app.use('/api/v1/birthdays', birthdaysRouter);
 app.use('/api/v1/relationships', relationshipsRouter);
+app.use('/api/v1/media', mediaRouter);
+app.use('/api/v1/memory', memoryRouter);
+app.use('/api/v1/in-app-notifications', inAppNotificationsRouter);
 app.use('/api/v1/budget/subscriptions', subscriptionsRouter);
 app.use('/api/v1/budget', budgetRouter);
 app.use('/api/v1/documents/storage/google-drive', googleDriveStorageRouter);
@@ -543,3 +549,4 @@ app.listen(PORT, () => {
 });
 
 export default app;
+

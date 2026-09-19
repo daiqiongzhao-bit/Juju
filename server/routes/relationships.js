@@ -13,7 +13,7 @@ const log = createLogger('Relationships');
 const router = express.Router();
 const MAX_PHOTO_LENGTH = 6_990_507; // ~5 MB raw image in base64
 const PHOTO_RE = /^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
-const RELATION_TYPES = ['knows', 'family', 'friend', 'partner', 'colleague', 'neighbor', 'acquaintance', 'met-through'];
+const RELATION_TYPES = ['knows', 'family', 'friend', 'partner', 'colleague', 'neighbor', 'acquaintance', 'met-through', 'spouse', 'child'];
 const INTERACTION_TYPES = ['note', 'call', 'meeting', 'message', 'gift', 'other'];
 
 function validatePhotoData(val) {
@@ -615,6 +615,25 @@ router.patch('/contacts/:id', (req, res) => {
       sets.push('photo = ?');
       params.push(vPhoto.value ?? null);
     }
+    // Erweiterte Kontakt-Metadaten (v137): Kennzeichen, Schule, eigene Tags
+    if (req.body.vehiclePlate !== undefined) {
+      const vPlate = str(req.body.vehiclePlate, 'Vehicle plate', { max: MAX_SHORT, required: false });
+      if (vPlate.error) return res.status(400).json({ error: vPlate.error, code: 400 });
+      sets.push('vehicle_plate = ?');
+      params.push(vPlate.value ?? null);
+    }
+    if (req.body.school !== undefined) {
+      const vSchool = str(req.body.school, 'School', { max: MAX_TITLE, required: false });
+      if (vSchool.error) return res.status(400).json({ error: vSchool.error, code: 400 });
+      sets.push('school = ?');
+      params.push(vSchool.value ?? null);
+    }
+    if (req.body.customTags !== undefined) {
+      const vTags = str(req.body.customTags, 'Custom tags', { max: MAX_TEXT, required: false });
+      if (vTags.error) return res.status(400).json({ error: vTags.error, code: 400 });
+      sets.push('custom_tags = ?');
+      params.push(vTags.value ?? null);
+    }
     if (sets.length === 0) {
       return res.status(400).json({ error: 'No fields to update.', code: 400 });
     }
@@ -622,11 +641,28 @@ router.patch('/contacts/:id', (req, res) => {
     params.push(id);
     db.get().prepare(`UPDATE contacts SET ${sets.join(', ')} WHERE id = ?`).run(...params);
 
-    const updated = db.get().prepare('SELECT id, name, photo, relationship_type, category FROM contacts WHERE id = ?').get(id);
+    const updated = db.get().prepare(
+      'SELECT id, name, photo, relationship_type, category, vehicle_plate, school, custom_tags FROM contacts WHERE id = ?'
+    ).get(id);
     res.json({ data: updated });
   } catch (err) {
     log.error('PATCH /contacts/:id error:', err);
     res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+
+// GET /api/v1/relationships/tree-export  -> JSON-Backup des Beziehungsgraphen
+router.get('/tree-export', (req, res) => {
+  try {
+    const contacts = db.get().prepare('SELECT id, name, photo, category, relationship_type FROM contacts').all();
+    const edges = db.get().prepare('SELECT contact_a, contact_b, relation_type, note FROM contact_relationships').all();
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="relationship-tree.json"');
+    res.send(JSON.stringify({ exportedAt: new Date().toISOString(), nodes: contacts, edges }, null, 2));
+  } catch (err) {
+    if (typeof log !== 'undefined') log.error('GET /tree-export', err); else console.error(err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
   }
 });
 

@@ -110,7 +110,10 @@ function loadMultiValueFields(contactId) {
     isPrimary: a.is_primary === 1
   }));
 
-  return { phones, emails, addresses };
+  const extras = db.get().prepare(`
+    SELECT vehicle_plate, school, custom_tags FROM contacts WHERE id = ?
+  `).get(contactId) || {};
+  return { phones, emails, addresses, vehiclePlate: extras.vehicle_plate ?? null, school: extras.school ?? null, customTags: extras.custom_tags ?? null };
 }
 
 /**
@@ -381,12 +384,11 @@ router.post('/', (req, res) => {
     const transaction = db.get().transaction(() => {
       const result = db.get().prepare(`
         INSERT INTO contacts (name, category, phone, email, address, notes, birthday,
-                              first_name, last_name, middle_name, name_prefix, name_suffix)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              first_name, last_name, middle_name, name_prefix, name_suffix, vehicle_plate, school, custom_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(vName.value, vCat.value || FALLBACK_CATEGORY, vPhone.value, vEmail.value,
              vAddress.value, vNotes.value, vBirthday.value,
              nameParts.parts.firstName, nameParts.parts.lastName, nameParts.parts.middleName,
-             nameParts.parts.namePrefix, nameParts.parts.nameSuffix);
+             nameParts.parts.namePrefix, nameParts.parts.nameSuffix, req.body.vehiclePlate || null, req.body.school || null, req.body.customTags || null);
 
       const contactId = result.lastInsertRowid;
 
@@ -523,7 +525,10 @@ router.put('/:id', (req, res) => {
             last_name   = ?,
             middle_name = ?,
             name_prefix = ?,
-            name_suffix = ?
+            name_suffix = ?,
+            vehicle_plate = ?,
+            school = ?,
+            custom_tags = ?
         WHERE id = ?
       `).run(
         derivedName ?? req.body.name?.trim() ?? null,
@@ -538,6 +543,9 @@ router.put('/:id', (req, res) => {
         nameParts.provided ? nameParts.parts.middleName : contact.middle_name,
         nameParts.provided ? nameParts.parts.namePrefix : contact.name_prefix,
         nameParts.provided ? nameParts.parts.nameSuffix : contact.name_suffix,
+        req.body.vehiclePlate !== undefined ? (req.body.vehiclePlate?.trim() || null) : contact.vehicle_plate,
+        req.body.school !== undefined ? (req.body.school?.trim() || null) : contact.school,
+        req.body.customTags !== undefined ? (req.body.customTags ?? null) : contact.custom_tags,
         id
       );
 

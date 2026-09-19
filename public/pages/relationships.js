@@ -15,7 +15,7 @@ import { esc } from '/utils/html.js';
 import { openModal, closeModal, confirmModal } from '/components/modal.js';
 import { wireTablist } from '/utils/tablist.js';
 
-const RELATION_TYPES = ['family', 'friend', 'partner', 'colleague', 'neighbor', 'acquaintance', 'knows', 'met-through'];
+const RELATION_TYPES = ['family', 'friend', 'partner', 'spouse', 'child', 'colleague', 'neighbor', 'acquaintance', 'knows', 'met-through'];
 const INTERACTION_TYPES = ['note', 'call', 'meeting', 'message', 'gift', 'other'];
 
 let _container = null;
@@ -27,6 +27,14 @@ const state = {
   activeTab: 'network',
   treeSources: [],
   treeExpanded: new Set(),
+  // Undo/Redo: jeder Eintrag ist { label, undo, redo }
+  undoStack: [],
+  redoStack: [],
+  // Netzwerk-Canvas: letzte Geometrie fuer Suche/Fokus
+  graph: null,
+  graphPos: null,
+  graphNodes: null,
+  focusedId: null,
 };
 
 // --------------------------------------------------------
@@ -52,6 +60,8 @@ function relColor(type) {
     friend: 'var(--_module-contacts)',
     partner: 'var(--_module-health)',
     colleague: 'var(--_module-budget)',
+    spouse: 'var(--_module-birthdays)',
+    child: 'var(--_module-housekeeping)',
     neighbor: 'var(--_module-housekeeping)',
     acquaintance: 'var(--_module-reminders)',
     knows: 'var(--color-text-tertiary)',
@@ -127,6 +137,130 @@ function contactById(id) {
 
 function toast(msg, type = 'success') {
   window.yuvomi?.showToast?.(msg, type);
+}
+
+// --------------------------------------------------------
+// Undo / Redo (Beziehungskanten + Kontakt-Metadaten)
+// --------------------------------------------------------
+function pushHistory(entry) {
+  state.undoStack.push(entry);
+  if (state.undoStack.length > 50) state.undoStack.shift();
+  state.redoStack.length = 0;
+}
+
+async function refreshActiveTab() {
+  if (state.activeTab === 'network') return renderNetwork();
+  if (state.activeTab === 'people') return renderPeople();
+  if (state.activeTab === 'common') return renderCommon();
+  if (state.activeTab === 'tree') return renderTree();
+  if (state.activeTab === 'timeline') return renderTimeline();
+  if (state.activeTab === 'anniversaries') return renderAnniversaries();
+}
+
+async function runUndo() {
+  const entry = state.undoStack.pop();
+  if (!entry) { toast(t('relationships.undoNothing'), 'info'); return; }
+  try {
+    await entry.undo();
+    state.redoStack.push(entry);
+    toast(`${t('relationships.undo')}: ${entry.label}`);
+    await refreshActiveTab();
+  } catch (err) {
+    toast(err?.data?.error || t('common.unknownError'), 'danger');
+  }
+}
+
+async function runRedo() {
+  const entry = state.redoStack.pop();
+  if (!entry) { toast(t('relationships.redoNothing'), 'info'); return; }
+  try {
+    await entry.redo();
+    state.undoStack.push(entry);
+    toast(`${t('relationships.redo')}: ${entry.label}`);
+    await refreshActiveTab();
+  } catch (err) {
+    toast(err?.data?.error || t('common.unknownError'), 'danger');
+  }
+}
+
+function historyEdgeAdd(edge) {
+  if (!edge?.id) return;
+  const { id, contact_a, contact_b, relation_type, note } = edge;
+  pushHistory({
+    label: t('relationships.addRelationship'),
+    undo: () => api.delete(`/relationships/${id}`),
+    redo: () => api.post('/relationships', { contact_a, contact_b, relation_type, note }),
+  });
+}
+
+function historyEdgeDelete(edge) {
+  if (!edge?.id) return;
+  const { contact_a, contact_b, relation_type, note } = edge;
+  pushHistory({
+    label: t('common.delete'),
+    undo: () => api.post('/relationships', { contact_a, contact_b, relation_type, note }),
+    redo: async () => {
+      const rows = await api.get(`/relationships?contactId=${contact_a}`).then((r) => r?.data || []);
+      const hit = rows.find((r) => r.contact_a === contact_a && r.contact_b === contact_b && r.relation_type === relation_type);
+      if (hit) await api.delete(`/relationships/${hit.id}`);
+    },
+  });
+}
+
+// --------------------------------------------------------
+// Suche / Fokus im Netzwerk-Canvas
+// --------------------------------------------------------
+function focusNode(svg, id, zoom = true) {
+  if (!svg || !state.graphPos) return;
+  const pos = state.graphPos.get(id);
+  if (!pos) return;
+  svg.querySelectorAll('.rel-node--found').forEach((el) => el.classList.remove('rel-node--found'));
+  const el = svg.querySelector(`.rel-node[data-id="${id}"]`);
+  if (el) {
+    el.classList.add('rel-node--found');
+    el.parentNode.appendChild(el); // in den Vordergrund zeichnen
+  }
+  if (zoom) {
+    const w = 380; const h = 250;
+    svg.setAttribute('viewBox', `${pos.x - w / 2} ${pos.y - h / 2} ${w} ${h}`);
+  }
+  state.focusedId = id;
+}
+
+function resetGraphView(svg) {
+  if (!svg) return;
+  svg.setAttribute('viewBox', '0 0 800 520');
+  svg.querySelectorAll('.rel-node--found').forEach((el) => el.classList.remove('rel-node--found'));
+  state.focusedId = null;
+}
+
+function searchAndFocus(svg, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) { resetGraphView(svg); return; }
+  const nodes = state.graph?.nodes || [];
+  const hit = nodes.find((n) => String(n.name || '').toLowerCase().includes(q));
+  if (!hit) { toast(t('relationships.noMatch'), 'info'); return; }
+  focusNode(svg, hit.id);
+}
+
+// --------------------------------------------------------
+// Export: JSON-Backup des Beziehungsgraphen
+// --------------------------------------------------------
+async function exportTreeJson() {
+  try {
+    const res = await api.get('/relationships/tree-export');
+    const blob = new Blob([JSON.stringify(res, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relationship-tree-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    toast(err?.data?.error || t('common.unknownError'), 'danger');
+  }
 }
 
 // --------------------------------------------------------
@@ -225,15 +359,39 @@ async function renderNetwork() {
     <div class="rel-graph-wrap card">
       <div class="rel-graph-toolbar">
         <span class="rel-graph-hint">${t('relationships.graphHint')}</span>
-        <button class="btn btn--secondary btn--sm" data-action="rel-layout">${t('relationships.reLayout')}</button>
+        <div class="rel-graph-actions">
+          <input type="search" class="form-input rel-search-input" id="rel-search"
+                 placeholder="${t('relationships.searchPlaceholder')}"
+                 aria-label="${t('relationships.searchPerson')}">
+          <button class="btn btn--secondary btn--sm" data-action="rel-search-go">${t('relationships.searchPerson')}</button>
+          <button class="btn btn--secondary btn--sm" data-action="rel-reset">${t('relationships.resetView')}</button>
+          <button class="btn btn--secondary btn--sm" data-action="rel-undo">${t('relationships.undo')}</button>
+          <button class="btn btn--secondary btn--sm" data-action="rel-redo">${t('relationships.redo')}</button>
+          <button class="btn btn--secondary btn--sm" data-action="rel-layout">${t('relationships.reLayout')}</button>
+          <button class="btn btn--secondary btn--sm" data-action="rel-export">${t('relationships.exportTree')}</button>
+        </div>
       </div>
       <svg class="rel-graph" viewBox="0 0 800 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${t('relationships.graphAria')}"></svg>
     </div>`;
   if (window.lucide) window.lucide.createIcons({ el: panel });
 
-  drawGraph(panel.querySelector('svg.rel-graph'), graph);
-  panel.querySelector('[data-action="rel-layout"]').addEventListener('click', () => {
-    drawGraph(panel.querySelector('svg.rel-graph'), graph, true);
+  const svg = panel.querySelector('svg.rel-graph');
+  drawGraph(svg, graph);
+
+  panel.querySelector('[data-action="rel-layout"]').addEventListener('click', () => drawGraph(svg, graph, true));
+  panel.querySelector('[data-action="rel-undo"]').addEventListener('click', () => runUndo());
+  panel.querySelector('[data-action="rel-redo"]').addEventListener('click', () => runRedo());
+  panel.querySelector('[data-action="rel-export"]').addEventListener('click', () => exportTreeJson());
+  panel.querySelector('[data-action="rel-reset"]').addEventListener('click', () => {
+    const input = panel.querySelector('#rel-search');
+    if (input) input.value = '';
+    resetGraphView(svg);
+  });
+  const searchInput = panel.querySelector('#rel-search');
+  const doSearch = () => searchAndFocus(svg, searchInput.value);
+  panel.querySelector('[data-action="rel-search-go"]').addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); doSearch(); }
   });
 }
 
@@ -318,7 +476,7 @@ function drawGraph(svg, graph, reseed = false) {
     const g = document.createElementNS(NS, 'g');
     g.setAttribute('class', 'rel-node');
     g.setAttribute('transform', `translate(${pos.get(n.id).x},${pos.get(n.id).y})`);
-    g.dataset.id = n.id;
+    g.setAttribute('data-id', n.id);
 
     const circle = document.createElementNS(NS, 'circle');
     circle.setAttribute('r', r);
@@ -355,6 +513,15 @@ function drawGraph(svg, graph, reseed = false) {
     }
   };
   paintEdges();
+
+  // Geometrie fuer Suche/Fokus + Undo/Redo merken
+  state.graph = graph;
+  state.graphPos = pos;
+  state.graphNodes = nodeEls;
+  if (state.focusedId && pos.has(state.focusedId)) {
+    const el = svg.querySelector(`.rel-node[data-id="${state.focusedId}"]`);
+    if (el) el.classList.add('rel-node--found');
+  }
 }
 
 function startDrag(ev, id, pos, svg, edgeEls, nodeEls, W, H) {
@@ -907,6 +1074,21 @@ async function openContactModal(contact) {
       </div>
 
       <div class="form-group">
+        <label class="form-label" for="rc-plate">${t('relationships.vehiclePlate')}</label>
+        <input class="form-input" id="rc-plate" type="text" maxlength="64" value="${esc(c.vehicle_plate || '')}" autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="rc-school">${t('relationships.school')}</label>
+        <input class="form-input" id="rc-school" type="text" maxlength="120" value="${esc(c.school || '')}" autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="rc-tags">${t('relationships.customTags')}</label>
+        <input class="form-input" id="rc-tags" type="text" maxlength="500" value="${esc(c.custom_tags || '')}" placeholder="${t('relationships.customTagsHint')}" autocomplete="off">
+      </div>
+
+      <div class="form-group">
         <label class="form-label">${t('relationships.photo')}</label>
         <div class="rel-photo-row">
           ${avatarHtml(c, 48)}
@@ -976,17 +1158,8 @@ async function openContactModal(contact) {
         renderEdgesInModal(panel, c.id, rows);
       }));
 
-      panel.querySelectorAll('[data-del-edge]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          try {
-            await api.delete(`/relationships/${btn.dataset.delEdge}`);
-            const rows = await api.get(`/relationships?contactId=${c.id}`).then((r) => r?.data || []).catch(() => []);
-            renderEdgesInModal(panel, c.id, rows);
-          } catch (err) {
-            toast(err.data?.error || t('common.unknownError'), 'danger');
-          }
-        });
-      });
+      // Kantenliste einmalig neu zeichnen -> bindet Loesch-Buttons inkl. Undo
+      renderEdgesInModal(panel, c.id, edgeRows);
 
       panel.querySelector('#rc-add-interaction').addEventListener('click', () => {
         closeModal({ force: true });
@@ -999,14 +1172,40 @@ async function openContactModal(contact) {
 
       panel.querySelector('#rc-save').addEventListener('click', async () => {
         const type = panel.querySelector('#rc-type').value;
+        const plate = panel.querySelector('#rc-plate').value.trim();
+        const school = panel.querySelector('#rc-school').value.trim();
+        const tags = panel.querySelector('#rc-tags').value.trim();
         const body = {};
         if (type !== (c.relationship_type || '')) body.relationship_type = type || null;
+        if (plate !== (c.vehicle_plate || '')) body.vehiclePlate = plate || null;
+        if (school !== (c.school || '')) body.school = school || null;
+        if (tags !== (c.custom_tags || '')) body.customTags = tags || null;
         if (pendingPhoto) body.photo = pendingPhoto;
         if (!Object.keys(body).length) { closeModal({ force: true }); return; }
         const btn = panel.querySelector('#rc-save');
         btn.disabled = true; btn.textContent = '…';
         try {
           const res = await api.patch(`/relationships/contacts/${c.id}`, body);
+          const metaBody = { ...body };
+          delete metaBody.photo; // Fotos nicht im Undo-Puffer halten
+          if (Object.keys(metaBody).length) {
+            const prev = {
+              relationship_type: c.relationship_type || null,
+              vehicle_plate: c.vehicle_plate || null,
+              school: c.school || null,
+              custom_tags: c.custom_tags || null,
+            };
+            pushHistory({
+              label: t('relationships.contact'),
+              undo: () => api.patch(`/relationships/contacts/${c.id}`, {
+                relationship_type: prev.relationship_type,
+                vehiclePlate: prev.vehicle_plate,
+                school: prev.school,
+                customTags: prev.custom_tags,
+              }),
+              redo: () => api.patch(`/relationships/contacts/${c.id}`, metaBody),
+            });
+          }
           const idx = state.contacts.findIndex((x) => x.id === c.id);
           if (idx !== -1) state.contacts[idx] = { ...state.contacts[idx], ...res.data };
           closeModal({ force: true });
@@ -1037,6 +1236,20 @@ function renderEdgesInModal(panel, contactId, rows) {
     </div>`;
   }).join('');
   if (window.lucide) window.lucide.createIcons({ el: box });
+
+  box.querySelectorAll('[data-del-edge]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const edge = rows.find((r) => String(r.id) === String(btn.dataset.delEdge));
+      try {
+        await api.delete(`/relationships/${btn.dataset.delEdge}`);
+        if (edge) historyEdgeDelete(edge);
+        const fresh = await api.get(`/relationships?contactId=${contactId}`).then((r) => r?.data || []).catch(() => []);
+        renderEdgesInModal(panel, contactId, fresh);
+      } catch (err) {
+        toast(err?.data?.error || t('common.unknownError'), 'danger');
+      }
+    });
+  });
 }
 
 function openAddRelationshipModal(contactId, onDone) {
@@ -1076,7 +1289,8 @@ function openAddRelationshipModal(contactId, onDone) {
         const btn = panel.querySelector('#ar-save');
         btn.disabled = true;
         try {
-          await api.post('/relationships', { contact_a: contactId, contact_b: otherId, relation_type, note });
+          const res = await api.post('/relationships', { contact_a: contactId, contact_b: otherId, relation_type, note });
+          if (res?.data) historyEdgeAdd(res.data);
           closeModal({ force: true });
           toast(t('relationships.relationshipAdded'));
           if (onDone) await onDone();

@@ -4998,6 +4998,111 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_anniversaries_contact ON anniversaries(contact_id);
     `,
   },
+  {
+    version: 135,
+    description: 'Media library: media_item, media_member_rel, system_media_config (#media)',
+    up: `
+      CREATE TABLE IF NOT EXISTS media_item (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        media_type    TEXT    NOT NULL DEFAULT 'movie',
+        title         TEXT    NOT NULL,
+        cover_url     TEXT,
+        status        TEXT    NOT NULL DEFAULT 'wish',
+        rating        INTEGER,
+        comment       TEXT,
+        metadata_json TEXT,
+        is_private    INTEGER NOT NULL DEFAULT 0,
+        watch_date    TEXT,
+        tags          TEXT,
+        creator_uid   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_media_item_type ON media_item(media_type);
+      CREATE INDEX IF NOT EXISTS idx_media_item_status ON media_item(status);
+      CREATE INDEX IF NOT EXISTS idx_media_item_creator ON media_item(creator_uid);
+
+      CREATE TABLE IF NOT EXISTS media_member_rel (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        media_id         INTEGER NOT NULL REFERENCES media_item(id) ON DELETE CASCADE,
+        member_uid       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        is_shared_memory INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(media_id, member_uid)
+      );
+      CREATE INDEX IF NOT EXISTS idx_media_member_rel_media ON media_member_rel(media_id);
+
+      CREATE TABLE IF NOT EXISTS system_media_config (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        tmdb_api_key    TEXT,
+        tmdb_proxy_url  TEXT,
+        openlibrary_enable INTEGER NOT NULL DEFAULT 1,
+        updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+    `,
+  },
+  {
+    version: 136,
+    description: 'Family memory: memory_item, memory_member_rel (#memory)',
+    up: `
+      CREATE TABLE IF NOT EXISTS memory_item (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        type           TEXT    NOT NULL DEFAULT 'lifeEvent',
+        title          TEXT    NOT NULL,
+        event_time     TEXT,
+        location       TEXT,
+        description    TEXT,
+        photo_refs     TEXT,
+        tags           TEXT,
+        is_locked      INTEGER NOT NULL DEFAULT 0,
+        creator_uid    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        source_media_id INTEGER,
+        created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_memory_item_type ON memory_item(type);
+      CREATE INDEX IF NOT EXISTS idx_memory_item_time ON memory_item(event_time);
+      CREATE INDEX IF NOT EXISTS idx_memory_item_source ON memory_item(source_media_id);
+
+      CREATE TABLE IF NOT EXISTS memory_member_rel (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id  INTEGER NOT NULL REFERENCES memory_item(id) ON DELETE CASCADE,
+        member_uid INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(memory_id, member_uid)
+      );
+      CREATE INDEX IF NOT EXISTS idx_memory_member_rel_memory ON memory_member_rel(memory_id);
+    `,
+  },
+  {
+    version: 137,
+    description: 'Relationship tree fields: contacts vehicle_plate/school/custom_tags (#rel-ext)',
+    up: `
+      ALTER TABLE contacts ADD COLUMN vehicle_plate TEXT;
+      ALTER TABLE contacts ADD COLUMN school TEXT;
+      ALTER TABLE contacts ADD COLUMN custom_tags TEXT;
+    `,
+  },
+  {
+    version: 138,
+    description: 'In-app notifications for media/memory fanout (notify-fanout)',
+    up: `
+      CREATE TABLE IF NOT EXISTS in_app_notifications (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type        TEXT,
+        title       TEXT NOT NULL,
+        body        TEXT,
+        link        TEXT,
+        entity_type TEXT,
+        entity_id   INTEGER,
+        actor_id    INTEGER,
+        read_at     TEXT,
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_in_app_notif_user ON in_app_notifications(user_id, read_at);
+      CREATE INDEX IF NOT EXISTS idx_in_app_notif_entity ON in_app_notifications(entity_type, entity_id);
+    `,
+  },
+
 ];
 
 /**
