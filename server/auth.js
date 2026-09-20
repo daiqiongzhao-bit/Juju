@@ -461,6 +461,7 @@ function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
     req.authMethod = 'session';
     req.authUserId = req.session.userId;
+    req.user = { id: req.session.userId, role: req.session.role };
     req.authRole = req.session.role;
     // Interaktive Sessions kennen kein Token-Scoping.
     req.authScopes = null;
