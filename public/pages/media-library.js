@@ -235,7 +235,11 @@ export async function render(container, { user } = {}) {
         <button class="mk-btn" id="d-save">${esc(t('media.save'))}</button>
       </div>
     `;
-    openModal({ title: item.title, body });
+    openModal({
+      title: item.title,
+      content: '',
+      onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
+    });
     wireStars(body.querySelector('#d-stars'));
     let rating = item.rating || 0;
     body.querySelector('#d-stars').addEventListener('click', (e) => {
@@ -264,7 +268,7 @@ export async function render(container, { user } = {}) {
     body.querySelector('#d-del').addEventListener('click', async () => {
       if (!(await confirmModal(t('media.confirmDelete') || 'Wirklich löschen?'))) return;
       try {
-        await api.del('/media/' + id);
+        await api.delete('/media/' + id);
         closeModal();
         load();
       } catch {}
@@ -308,7 +312,11 @@ export async function render(container, { user } = {}) {
         <div style="display:flex;gap:8px"><div class="mk-spacer" style="flex:1"></div><button class="mk-btn" id="a-save">${esc(t('media.save'))}</button></div>
       </div>
     `;
-    openModal({ title: t('media.add'), body });
+    openModal({
+      title: t('media.add'),
+      content: '',
+      onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
+    });
     let rating = 0;
     wireStars(body.querySelector('#a-stars'));
     body.querySelector('#a-stars').addEventListener('click', (e) => {

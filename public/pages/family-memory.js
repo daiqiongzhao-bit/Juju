@@ -219,7 +219,11 @@ export async function render(container, { user } = {}) {
         <button class="fm-btn" id="d-save">${esc(t('memory.save'))}</button>
       </div>
     `;
-    openModal({ title: item.title, body });
+    openModal({
+      title: item.title,
+      content: '',
+      onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
+    });
     body.querySelector('#d-save').addEventListener('click', async () => {
       const payload = {
         type: body.querySelector('#d-type').value,
@@ -242,7 +246,7 @@ export async function render(container, { user } = {}) {
     body.querySelector('#d-del').addEventListener('click', async () => {
       if (!(await confirmModal(t('memory.confirmDelete') || 'Wirklich löschen?'))) return;
       try {
-        await api.del('/memory/' + id);
+        await api.delete('/memory/' + id);
         closeModal();
         load();
       } catch {}
@@ -266,7 +270,11 @@ export async function render(container, { user } = {}) {
       <div class="fm-field"><label><input type="checkbox" id="a-lock"> ${esc(t('memory.locked'))}</label></div>
       <div style="display:flex;gap:8px"><div class="fm-spacer" style="flex:1"></div><button class="fm-btn" id="a-save">${esc(t('memory.save'))}</button></div>
     `;
-    openModal({ title: t('memory.add'), body });
+    openModal({
+      title: t('memory.add'),
+      content: '',
+      onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
+    });
     body.querySelector('#a-save').addEventListener('click', async () => {
       const title = body.querySelector('#a-title').value.trim();
       if (!title) {
