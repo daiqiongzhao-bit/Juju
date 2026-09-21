@@ -83,6 +83,7 @@ export async function render(container, { user } = {}) {
         <h2>${esc(t('media.title'))}</h2>
         <div class="mk-spacer"></div>
         <button class="mk-btn ghost" id="mk-export">${esc(t('media.export'))}</button>
+        ${user && user.role === 'admin' ? `<button class="mk-btn ghost" id="mk-tmdb-config">⚙ TMDB</button>` : ''}
         <button class="mk-btn" id="mk-add">+ ${esc(t('media.add'))}</button>
       </div>
       <div class="mk-tabs" id="mk-tabs"></div>
@@ -143,6 +144,8 @@ export async function render(container, { user } = {}) {
   });
 
   container.querySelector('#mk-add').addEventListener('click', () => openAdd());
+  const tmdbCfgBtn = container.querySelector('#mk-tmdb-config');
+  if (tmdbCfgBtn) tmdbCfgBtn.addEventListener('click', () => openTmdbConfig());
   container.querySelector('#mk-export').addEventListener('click', () => {
     window.open('/api/v1/media/export', '_blank');
   });
@@ -406,4 +409,47 @@ export async function render(container, { user } = {}) {
     `<option value="">${esc(t('media.allMembers'))}</option>` +
     state.members.map((m) => `<option value="${m.id}">${esc(m.name || m.display_name || '#' + m.id)}</option>`).join('');
   await load();
+
+  async function openTmdbConfig() {
+    const body = document.createElement('div');
+    body.className = 'mk-modal-body';
+    body.innerHTML = `
+      <div class="mk-field"><label>TMDB API Key</label>
+        <input id="c-key" type="password" placeholder="输入 TMDB v3 API Key" autocomplete="off"></div>
+      <div class="mk-field"><label>TMDB 代理 URL（可选，用于国内网络访问）</label>
+        <input id="c-proxy" placeholder="https://...（可选）"></div>
+      <div class="mk-field"><label><input type="checkbox" id="c-ol"> 启用 OpenLibrary（书籍搜索）</label></div>
+      <div id="c-msg" style="font-size:12px;min-height:16px"></div>
+      <div style="display:flex;gap:8px"><div class="mk-spacer" style="flex:1"></div>
+        <button class="mk-btn ghost" id="c-cancel">${esc(t('common.cancel') || '取消')}</button>
+        <button class="mk-btn" id="c-save">${esc(t('common.save') || '保存')}</button></div>
+    `;
+    openModal({ title: t('media.tmdbConfig') || 'TMDB 设置', content: '', onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body) });
+    const msg = body.querySelector('#c-msg');
+    try {
+      const cfg = (await api.get('/media/config')).data || {};
+      body.querySelector('#c-proxy').value = cfg.tmdbProxyUrl || '';
+      body.querySelector('#c-ol').checked = !!cfg.openlibraryEnable;
+      msg.style.color = cfg.tmdbConfigured ? '#16a34a' : '#b45309';
+      msg.textContent = cfg.tmdbConfigured ? 'TMDB 已配置：如需更换请填写新 Key，留空则保留原 Key' : '尚未配置 TMDB Key';
+    } catch { /* 配置读取失败不影响表单 */ }
+    body.querySelector('#c-cancel').addEventListener('click', () => closeModal());
+    body.querySelector('#c-save').addEventListener('click', async () => {
+      const key = body.querySelector('#c-key').value.trim();
+      const proxy = body.querySelector('#c-proxy').value.trim();
+      const ol = body.querySelector('#c-ol').checked;
+      msg.style.color = '#666'; msg.textContent = '保存中…';
+      try {
+        const r = await api.put('/media/config', { tmdbApiKey: key, tmdbProxyUrl: proxy, openlibraryEnable: ol });
+        const d = r.data || {};
+        msg.style.color = '#16a34a';
+        msg.textContent = d.tmdbConfigured ? '已保存：TMDB 配置成功' : '已保存：TMDB Key 为空（已清空）';
+        setTimeout(() => closeModal(), 900);
+      } catch (e) {
+        msg.style.color = '#dc2626';
+        const status = e && e.status ? e.status : (e && e.code);
+        msg.textContent = status === 403 ? '需要管理员权限' : ('保存失败：' + (e?.message || '未知错误'));
+      }
+    });
+  }
 }

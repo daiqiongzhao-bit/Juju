@@ -468,6 +468,8 @@ router.put('/config', (req, res) => {
     const vKey = str(req.body.tmdbApiKey ?? req.body.tmdb_api_key, 'TMDB Key', { max: 512, required: false });
     const vProxy = str(req.body.tmdbProxyUrl ?? req.body.tmdb_proxy_url, 'Proxy', { max: 2048, required: false });
     if (vKey.error) return res.status(400).json({ error: vKey.error, code: 400 });
+    // Empty key means "keep existing" — only overwrite when a non-empty key is supplied.
+    const newTmdbKey = vKey.value && vKey.value.trim().length ? vKey.value : cfg.tmdb_api_key;
     const olEnable = req.body.openlibraryEnable;
     const olValue = olEnable === false || olEnable === 0 ? 0 : 1;
     db.get()
@@ -476,10 +478,10 @@ router.put('/config', (req, res) => {
          SET tmdb_api_key = ?, tmdb_proxy_url = ?, openlibrary_enable = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
          WHERE id = ?`
       )
-      .run(vKey.value || null, vProxy.value || null, olValue, cfg.id);
+      .run(newTmdbKey || null, vProxy.value || null, olValue, cfg.id);
     res.json({
       data: {
-        tmdbConfigured: !!vKey.value,
+        tmdbConfigured: !!newTmdbKey,
         tmdbProxyUrl: vProxy.value || '',
         openlibraryEnable: olValue === 1,
       },
