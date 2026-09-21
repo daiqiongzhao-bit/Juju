@@ -1091,7 +1091,14 @@
       "emptyTitle": "暂无族谱数据",
       "emptyDesc": "在成员资料里建立「子女」「配偶」关系后，这里会自动生成族谱。",
       "spouseLine": "配偶连线",
-      "childLine": "亲子连线"
+      "childLine": "亲子连线",
+      "linkMode": "连线",
+      "linkHint": "连线模式：依次点击两个人物即可建立关系，再点一次按钮退出",
+      "linkPickSecond": "已选第一个人，请点击另一个人物完成连线",
+      "linkTypeHint": "提示：选择 child / spouse / partner 会在族谱中画出连线",
+      "addPerson": "新增人物",
+      "personName": "姓名",
+      "personAdded": "人物已添加，可继续为其建立关系"
     }
   },
   "anniversaries": {
@@ -2390,6 +2397,10 @@
     "embySync": "同步观看状态",
     "embySyncing": "正在同步（视 Emby 库大小可能需要十几秒）…",
     "embySyncDone": "同步完成：Emby {{emby}} 个视频，本地匹配 {{matched}} 条，状态更新 {{updated}} 条（只升级不降级：看完 > 在看 > 想看）",
+    "embyImport": "导入观看历史",
+    "embyImportConfirm": "将按 Emby 的已看/在看状态把影片和剧集导入媒体库（自动去重，跳过已存在条目）。确认继续？",
+    "embyImporting": "正在导入（视 Emby 库大小可能需要几十秒）…",
+    "embyImportDone": "导入完成：新导入 {{imported}} 条，跳过 {{skipped}} 条",
     "embySavedOk": "Emby 配置已保存",
     "embySavedEmpty": "已保存，但 Emby 配置尚不完整"
   },
@@ -4205,6 +4216,14 @@
     "delete": "删除",
     "confirmDelete": "确定删除？",
     "titleRequired": "请填写标题",
-    "dmsRefs": "DMS 引用（账户ID:文档ID，逗号分隔）"
+    "dmsRefs": "DMS 引用（账户ID:文档ID，逗号分隔）",
+    "folderImport": "从文件夹导入",
+    "folderPath": "文件夹路径",
+    "folderList": "列出图片",
+    "folderImportBtn": "导入选中",
+    "folderEmpty": "该目录没有图片",
+    "folderErr": "无法读取该目录",
+    "folderListing": "正在读取目录…",
+    "folderImported": "已导入 {{imported}} 张图片（跳过 {{skipped}} 张）"
   }
 }

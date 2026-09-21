@@ -12,6 +12,9 @@ import express from 'express';
 import * as db from '../db.js';
 import { str, oneOf, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT } from '../middleware/validate.js';
 import { getAdapter } from '../services/dms/index.js';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
 
 const log = createLogger('Memory');
 const router = express.Router();
@@ -194,6 +197,216 @@ router.get('/photo', async (req, res) => {
     if (err?.status === 404) return res.status(404).json({ error: 'DMS-Dokument nicht gefunden', code: 404 });
     log.error('GET /photo', err);
     res.status(502).json({ error: 'Vorschau konnte nicht geladen werden', code: 502 });
+  }
+});
+
+// ------------------------------------------------------------
+// Ordner-Binding: Fotos direkt aus dem Server-Dateisystem
+// (lokale Ordner oder SMB-Mounts) referenzieren, ohne Upload.
+// Der Container haengt das Host-Root read-only unter HOST_ROOT ein
+// (docker run -v /:/hostfs:ro); vom Nutzer angegebene absolute Pfade
+// werden transparent auf dieses Praefix abgebildet und nach dem
+// Aufloesen (auch ueber Symlinks) innerhalb der Wurzel gehalten.
+// ------------------------------------------------------------
+
+const HOST_ROOT = process.env.HOST_ROOT || '/hostfs';
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif']);
+const IMAGE_MIME_TYPES = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  bmp: 'image/bmp',
+  avif: 'image/avif',
+};
+const MAX_FOLDER_ENTRIES = 500;
+const MAX_PHOTO_REFS = 200;
+
+function imageExtOf(name) {
+  const m = /\.([A-Za-z0-9]+)$/.exec(String(name || ''));
+  return m ? m[1].toLowerCase() : '';
+}
+
+/**
+ * Mapped einen Nutzerpfad (absolut, auf dem Host) in den Container und
+ * prueft containment gegen HOST_ROOT (Schutz vor ".."-Traversal).
+ */
+function resolveHostPath(rawPath) {
+  const p = String(rawPath || '').trim();
+  if (!p.startsWith('/')) return { error: 'Pfad muss absolut sein' };
+  if (p.includes('\0')) return { error: 'Ungueltiger Pfad' };
+  const full = path.resolve(HOST_ROOT, '.' + p);
+  const rootPrefix = HOST_ROOT.endsWith('/') ? HOST_ROOT : HOST_ROOT + '/';
+  if (full !== HOST_ROOT && !full.startsWith(rootPrefix)) {
+    return { error: 'Pfad verlaesst den erlaubten Bereich' };
+  }
+  return { full, userPath: p.replace(/\/+$/, '') };
+}
+
+/** Realpath-Aufloesung inkl. erneuter Containment-Pruefung (Symlink-Schutz). */
+async function safeRealpathInside(fullPath) {
+  let real;
+  try {
+    real = await fsp.realpath(fullPath);
+  } catch {
+    return null;
+  }
+  const rootPrefix = HOST_ROOT.endsWith('/') ? HOST_ROOT : HOST_ROOT + '/';
+  if (real !== HOST_ROOT && !real.startsWith(rootPrefix)) return null;
+  return real;
+}
+
+// POST /api/v1/memory/folder/list  { path }  (nur Admin)
+// Listet Bilder (nur Image-Endungen) eines Server-Ordners auf.
+router.post('/folder/list', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const mapped = resolveHostPath(req.body && req.body.path);
+    if (mapped.error) return res.status(400).json({ error: mapped.error, code: 400 });
+    const real = await safeRealpathInside(mapped.full);
+    if (!real) return res.status(404).json({ error: 'Verzeichnis nicht gefunden', code: 404 });
+    let stat;
+    try {
+      stat = await fsp.stat(real);
+    } catch {
+      return res.status(404).json({ error: 'Verzeichnis nicht gefunden', code: 404 });
+    }
+    if (!stat.isDirectory()) return res.status(400).json({ error: 'Kein Verzeichnis', code: 400 });
+
+    const entries = await fsp.readdir(real, { withFileTypes: true });
+    const files = [];
+    for (const ent of entries) {
+      if (!ent.isFile()) continue;
+      if (!IMAGE_EXTENSIONS.has(imageExtOf(ent.name))) continue;
+      try {
+        const st = await fsp.stat(path.join(real, ent.name));
+        files.push({ name: ent.name, size: st.size });
+      } catch {
+        /* Eintrag zwischenzeitlich verschwunden — ueberspringen */
+      }
+      if (files.length >= MAX_FOLDER_ENTRIES) break;
+    }
+    files.sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
+    res.json({ data: { path: mapped.userPath, count: files.length, files } });
+  } catch (err) {
+    log.error('POST /folder/list', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// POST /api/v1/memory/folder/import  { path, files: [name...], albumId }
+// Haengt die gewaehlten Bilder als "file://..."-Referenzen an die
+// photo_refs der Erinnerung an (kein Kopieren, keine Schema-Aenderung).
+router.post('/folder/import', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const albumId = parseInt(req.body.albumId ?? req.body.album_id, 10);
+    if (!Number.isInteger(albumId) || albumId <= 0) {
+      return res.status(400).json({ error: 'albumId erforderlich', code: 400 });
+    }
+    const item = db.get().prepare('SELECT * FROM memory_item WHERE id = ?').get(albumId);
+    if (!item) return res.status(404).json({ error: 'Erinnerung nicht gefunden', code: 404 });
+    if (item.creator_uid !== uid(req) && !isAdmin(req)) {
+      return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    }
+
+    const mapped = resolveHostPath(req.body && req.body.path);
+    if (mapped.error) return res.status(400).json({ error: mapped.error, code: 400 });
+    const realDir = await safeRealpathInside(mapped.full);
+    if (!realDir) return res.status(400).json({ error: 'Verzeichnis nicht gefunden', code: 404 });
+
+    const wanted = Array.isArray(req.body.files)
+      ? req.body.files.filter((x) => typeof x === 'string').slice(0, MAX_PHOTO_REFS)
+      : [];
+    if (!wanted.length) return res.status(400).json({ error: 'Keine Dateien angegeben', code: 400 });
+
+    const refs = parseJsonArray(item.photo_refs);
+    const have = new Set(refs.filter((x) => typeof x === 'string'));
+    let imported = 0;
+    let skipped = 0;
+    for (const name of wanted) {
+      if (refs.length >= MAX_PHOTO_REFS) break;
+      // Nur schlichte Dateinamen innerhalb des angegebenen Ordners.
+      if (!name || name.includes('/') || name.includes('\\') || name.includes('..')) {
+        skipped++;
+        continue;
+      }
+      if (!IMAGE_EXTENSIONS.has(imageExtOf(name))) {
+        skipped++;
+        continue;
+      }
+      const ref = 'file://' + mapped.userPath + '/' + name;
+      if (have.has(ref)) {
+        skipped++;
+        continue;
+      }
+      const real = await safeRealpathInside(path.join(realDir, name));
+      if (!real) {
+        skipped++;
+        continue;
+      }
+      let st;
+      try {
+        st = await fsp.stat(real);
+      } catch {
+        skipped++;
+        continue;
+      }
+      if (!st.isFile()) {
+        skipped++;
+        continue;
+      }
+      refs.push(ref);
+      have.add(ref);
+      imported++;
+    }
+
+    if (imported > 0) {
+      db.get()
+        .prepare(
+          "UPDATE memory_item SET photo_refs = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?"
+        )
+        .run(JSON.stringify(refs), albumId);
+    }
+    res.json({ data: { imported, skipped, total: wanted.length, albumId, refs: refs.length } });
+  } catch (err) {
+    log.error('POST /folder/import', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// GET /api/v1/memory/file?path=/abs/datei.jpg
+// Sicherer Datei-Proxy fuer "file://..."-Foto-Referenzen (nur Bilder).
+router.get('/file', async (req, res) => {
+  try {
+    const mapped = resolveHostPath(req.query.path);
+    if (mapped.error) return res.status(400).json({ error: mapped.error, code: 400 });
+    const ext = imageExtOf(mapped.userPath);
+    if (!IMAGE_EXTENSIONS.has(ext)) return res.status(415).json({ error: 'Kein Bild', code: 415 });
+    const real = await safeRealpathInside(mapped.full);
+    if (!real) return res.status(404).json({ error: 'Datei nicht gefunden', code: 404 });
+    let st;
+    try {
+      st = await fsp.stat(real);
+    } catch {
+      return res.status(404).json({ error: 'Datei nicht gefunden', code: 404 });
+    }
+    if (!st.isFile()) return res.status(400).json({ error: 'Keine Datei', code: 400 });
+
+    res.setHeader('Content-Type', IMAGE_MIME_TYPES[ext] || 'application/octet-stream');
+    res.setHeader('Content-Length', String(st.size));
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    const stream = fs.createReadStream(real);
+    stream.on('error', (e) => {
+      log.error('GET /file stream', e);
+      res.destroy();
+    });
+    stream.pipe(res);
+  } catch (err) {
+    log.error('GET /file', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
   }
 });
 

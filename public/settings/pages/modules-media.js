@@ -1,5 +1,6 @@
 import { t } from '/i18n.js';
 import { api } from '/api.js';
+import { confirmModal } from '/components/modal.js';
 
 /**
  * Blatt: Medien-Metadaten (影视书库数据源)
@@ -88,6 +89,7 @@ function renderPage(container, cfg) {
             <button type="button" class="btn btn--ghost" id="emby-test">${t('settings.embyTest')}</button>
             <button type="submit" class="btn btn--primary">${t('common.save')}</button>
             <button type="button" class="btn btn--primary" id="emby-sync">${t('settings.embySync')}</button>
+            <button type="button" class="btn btn--secondary" id="emby-import">${t('settings.embyImport')}</button>
           </div>
         </form>
       </div>
@@ -214,6 +216,23 @@ export async function render(container, { user }) {
           emby: r.embyItems || 0,
         })
       );
+    } catch (error) {
+      showEmbyMsg(error?.message || t('common.errorGeneric'));
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  container.querySelector('#emby-import')?.addEventListener('click', async (event) => {
+    const btn = event.currentTarget;
+    const ok = await confirmModal(t('settings.embyImportConfirm'));
+    if (!ok) return;
+    showEmbyMsg(t('settings.embyImporting'));
+    btn.disabled = true;
+    try {
+      await saveEmbyConfig();
+      const r = (await api.post('/media/emby/import')).data || {};
+      showEmbyMsg(t('settings.embyImportDone', { imported: r.imported || 0, skipped: r.skipped || 0 }));
     } catch (error) {
       showEmbyMsg(error?.message || t('common.errorGeneric'));
     } finally {

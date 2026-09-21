@@ -27,6 +27,16 @@ function coverSrc(url) {
   return url;
 }
 
+// Foto-Referenzen der Form "file:///abs/pfad.jpg" verweisen auf Dateien auf
+// dem Server (Ordner-Binding ohne Upload) und werden ueber den geschuetzten
+// Proxy-Endpunkt GET /api/v1/memory/file ausgeliefert.
+function photoSrc(ref) {
+  if (typeof ref === 'string' && ref.startsWith('file://')) {
+    return '/api/v1/memory/file?path=' + encodeURIComponent(ref.slice('file://'.length));
+  }
+  return coverSrc(ref);
+}
+
 async function loadMembersList() {
   for (const ep of ['/family/members', '/users', '/family']) {
     try {
@@ -134,6 +144,9 @@ export async function render(container, { user } = {}) {
     const photos = (it.photo_refs || [])
       .map((p) => {
         if (typeof p === 'string') {
+          if (p.startsWith('file://')) {
+            return `<img src="${esc(photoSrc(p))}" alt="" loading="lazy">`;
+          }
           return /^https?:\/\//.test(p)
             ? `<img src="${esc(coverSrc(p))}" alt="" loading="lazy">`
             : `<span class="fm-photo-ref">${esc(p)}</span>`;
@@ -158,10 +171,13 @@ export async function render(container, { user } = {}) {
   }
 
   function albumHtml(it) {
-    // Erstes Foto als Kachel-Cover (Cover-Proxy für TMDB/OpenLibrary-Fall).
-    const first = (it.photo_refs || []).find((p) => typeof p === 'string' && /^https?:\/\//.test(p));
+    // Erstes Foto als Kachel-Cover (Proxy fuer TMDB/OpenLibrary bzw. Datei-
+    // Proxy fuer Ordner-Referenzen "file://...").
+    const first = (it.photo_refs || []).find(
+      (p) => typeof p === 'string' && (/^https?:\/\//.test(p) || p.startsWith('file://'))
+    );
     const count = (it.photo_refs || []).length;
-    const cover = first ? `<img src="${esc(coverSrc(first))}" alt="" loading="lazy">` : `<div>📷</div>`;
+    const cover = first ? `<img src="${esc(photoSrc(first))}" alt="" loading="lazy">` : `<div>📷</div>`;
     const lock = it.is_locked ? ' 🔒' : '';
     return `<div class="fm-album-card" data-id="${it.id}">
       <div class="fm-album-cover">${cover}${count > 1 ? `<span class="fm-album-count">${count}</span>` : ''}</div>
@@ -219,6 +235,85 @@ export async function render(container, { user } = {}) {
     return Array.from(root.querySelectorAll('.fm-member-picker input:checked')).map((x) => parseInt(x.dataset.uid, 10));
   }
 
+  // ------------------------------------------------------
+  // Ordner-Import: Bilder direkt aus einem Server-Ordner
+  // (lokal oder SMB-Mount) referenzieren, ohne Upload.
+  // ------------------------------------------------------
+  function folderImportHtml() {
+    return `
+      <div class="fm-field">
+        <label>${esc(t('memory.folderImport'))}</label>
+        <div style="display:flex;gap:8px">
+          <input id="f-path" placeholder="${esc(t('memory.folderPath'))}" style="flex:1">
+          <button type="button" class="fm-btn ghost" id="f-list">${esc(t('memory.folderList'))}</button>
+        </div>
+        <div id="f-files" style="display:none;margin-top:8px;max-height:220px;overflow:auto"></div>
+        <button type="button" class="fm-btn" id="f-import" style="display:none;margin-top:8px">${esc(t('memory.folderImportBtn'))}</button>
+      </div>`;
+  }
+
+  /**
+   * Verdrahtet den Ordner-Import-Block. getAlbumId liefert die Zielerinnerung;
+   * im "Neu"-Dialog wird der Eintrag bei Bedarf zuerst angelegt (null = Abbruch).
+   */
+  function wireFolderImport(body, getAlbumId) {
+    const pathInput = body.querySelector('#f-path');
+    const listBtn = body.querySelector('#f-list');
+    const filesBox = body.querySelector('#f-files');
+    const importBtn = body.querySelector('#f-import');
+    if (!pathInput || !listBtn || !filesBox || !importBtn) return;
+
+    listBtn.addEventListener('click', async () => {
+      const dir = pathInput.value.trim();
+      if (!dir) return;
+      filesBox.style.display = '';
+      importBtn.style.display = 'none';
+      filesBox.innerHTML = `<div class="fm-empty">${esc(t('memory.folderListing'))}</div>`;
+      try {
+        const r = await api.post('/memory/folder/list', { path: dir });
+        const files = (r.data && r.data.files) || [];
+        if (!files.length) {
+          filesBox.innerHTML = `<div class="fm-empty">${esc(t('memory.folderEmpty'))}</div>`;
+          return;
+        }
+        const base = dir.replace(/\/+$/, '');
+        filesBox.innerHTML = files
+          .map(
+            (f) => `<label style="display:inline-flex;flex-direction:column;align-items:center;margin:4px;cursor:pointer;vertical-align:top">
+              <img src="/api/v1/memory/file?path=${encodeURIComponent(base + '/' + f.name)}" alt="" loading="lazy"
+                   style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid rgba(0,0,0,.1)">
+              <span style="font-size:11px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+              <input type="checkbox" data-name="${esc(f.name)}" checked>
+            </label>`
+          )
+          .join('');
+        importBtn.style.display = '';
+      } catch {
+        filesBox.innerHTML = `<div class="fm-empty">${esc(t('memory.folderErr'))}</div>`;
+      }
+    });
+
+    importBtn.addEventListener('click', async () => {
+      const dir = pathInput.value.trim();
+      const names = Array.from(filesBox.querySelectorAll('input[type="checkbox"]:checked')).map((cb) => cb.dataset.name);
+      if (!dir || !names.length) return;
+      importBtn.disabled = true;
+      try {
+        const albumId = await getAlbumId();
+        if (!albumId) { importBtn.disabled = false; return; }
+        const r = await api.post('/memory/folder/import', { path: dir, files: names, albumId });
+        const d = (r && r.data) || {};
+        window.yuvomi?.showToast?.(t('memory.folderImported', { imported: d.imported || 0, skipped: d.skipped || 0 }), 'success');
+        // force:true → nach erfolgreichem Speichern NICHT nach „Änderungen verwerfen?" fragen
+        closeModal({ force: true });
+        load();
+      } catch {
+        alert(t('memory.folderErr'));
+        importBtn.disabled = false;
+      }
+    });
+  }
+
   async function openDetail(id) {
     let item;
     try {
@@ -239,6 +334,7 @@ export async function render(container, { user } = {}) {
       <div class="fm-field"><label>${esc(t('memory.description'))}</label><textarea id="d-desc" rows="3">${esc(item.description || '')}</textarea></div>
       <div class="fm-field"><label>${esc(t('memory.photos'))} (URLs, durch Komma getrennt)</label><input id="d-photos" value="${esc(splitRefs(item.photo_refs).urls.join(', '))}"></div>
       <div class="fm-field"><label>${esc(t('memory.dmsRefs'))}</label><input id="d-dms" placeholder="1:42" value="${esc(splitRefs(item.photo_refs).dms.join(', '))}"></div>
+      ${folderImportHtml()}
       <div class="fm-field"><label>${esc(t('memory.tags'))}</label><input id="d-tags" value="${esc((item.tags || []).join(', '))}"></div>
       <div class="fm-field"><label>${esc(t('memory.members'))}</label>${memberPicker((item.members || []).map((m) => m.uid))}</div>
       <div class="fm-field"><label><input type="checkbox" id="d-lock" ${item.is_locked ? 'checked' : ''}> ${esc(t('memory.locked'))}</label></div>
@@ -253,6 +349,7 @@ export async function render(container, { user } = {}) {
       content: '',
       onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
     });
+    wireFolderImport(body, async () => id);
     body.querySelector('#d-save').addEventListener('click', async () => {
       const payload = {
         type: body.querySelector('#d-type').value,
@@ -295,6 +392,7 @@ export async function render(container, { user } = {}) {
       <div class="fm-field"><label>${esc(t('memory.description'))}</label><textarea id="a-desc" rows="3"></textarea></div>
       <div class="fm-field"><label>${esc(t('memory.photos'))} (URLs, Komma-getrennt)</label><input id="a-photos" placeholder="https://..."></div>
       <div class="fm-field"><label>${esc(t('memory.dmsRefs'))}</label><input id="a-dms" placeholder="1:42"></div>
+      ${folderImportHtml()}
       <div class="fm-field"><label>${esc(t('memory.tags'))}</label><input id="a-tags"></div>
       <div class="fm-field"><label>${esc(t('memory.members'))}</label>${memberPicker([])}</div>
       <div class="fm-field"><label><input type="checkbox" id="a-lock"> ${esc(t('memory.locked'))}</label></div>
@@ -305,23 +403,35 @@ export async function render(container, { user } = {}) {
       content: '',
       onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
     });
+    // Formularwerte sammeln (vom Speichern- und vom Import-Button genutzt).
+    const collectPayload = () => ({
+      type: body.querySelector('#a-type').value,
+      title: body.querySelector('#a-title').value.trim(),
+      event_time: body.querySelector('#a-time').value || null,
+      location: body.querySelector('#a-loc').value,
+      description: body.querySelector('#a-desc').value,
+      photo_refs: buildRefs(body.querySelector('#a-photos').value, body.querySelector('#a-dms').value),
+      tags: body.querySelector('#a-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
+      is_locked: body.querySelector('#a-lock').checked,
+      members: getPicked(body),
+    });
+    wireFolderImport(body, async () => {
+      const payload = collectPayload();
+      if (!payload.title) {
+        alert(t('memory.titleRequired') || 'Titel erforderlich');
+        body.querySelector('#a-title').focus();
+        return null;
+      }
+      const r = await api.post('/memory/add', payload);
+      return (r.data && r.data.id) || null;
+    });
     body.querySelector('#a-save').addEventListener('click', async () => {
       const title = body.querySelector('#a-title').value.trim();
       if (!title) {
         alert(t('memory.titleRequired') || 'Titel erforderlich');
         return;
       }
-      const payload = {
-        type: body.querySelector('#a-type').value,
-        title,
-        event_time: body.querySelector('#a-time').value || null,
-        location: body.querySelector('#a-loc').value,
-        description: body.querySelector('#a-desc').value,
-        photo_refs: buildRefs(body.querySelector('#a-photos').value, body.querySelector('#a-dms').value),
-        tags: body.querySelector('#a-tags').value.split(',').map((x) => x.trim()).filter(Boolean),
-        is_locked: body.querySelector('#a-lock').checked,
-        members: getPicked(body),
-      };
+      const payload = collectPayload();
       try {
         await api.post('/memory/add', payload);
         // force:true → nach erfolgreichem Speichern NICHT nach „Änderungen verwerfen?" fragen

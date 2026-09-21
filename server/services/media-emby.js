@@ -95,13 +95,17 @@ async function fetchEmbyVideoItems(cfg, userId) {
   const startIndex = 0;
   const limit = 500;
   for (let page = 0; page < 10; page++) {
+    // WICHTIG: Parameter muessen in options.query liegen — embyFetch liest
+    // nur `query`, Top-Level-Keys werden stillschweigend ignoriert.
     const data = await embyFetch(cfg, `/Users/${userId}/Items`, {
-      IncludeItemTypes: 'Movie,Series',
-      Recursive: 'true',
-      Fields: 'UserData,ProductionYear',
-      SortBy: 'SortName',
-      StartIndex: startIndex + page * limit,
-      Limit: limit,
+      query: {
+        IncludeItemTypes: 'Movie,Series',
+        Recursive: 'true',
+        Fields: 'UserData,ProductionYear',
+        SortBy: 'SortName',
+        StartIndex: startIndex + page * limit,
+        Limit: limit,
+      },
     });
     const items = Array.isArray(data?.Items) ? data.Items : [];
     out.push(...items);
@@ -190,6 +194,72 @@ export async function syncWatched(db, cfg) {
     unmatchedSample: unmatched.slice(0, 10),
     unmatchedCount: unmatched.length,
   };
+}
+
+/**
+ * Importiert den Emby-Wiedergabeverlauf als neue media_item-Eintraege.
+ * Status-Mapping: Played -> finished; PlayedPercentage/PlayedItemCount > 0
+ * -> doing; ohne Status wird uebersprungen. Dedup-Key ist der normalisierte
+ * Titel + media_type ('movie' fuer Movie, 'tv' fuer Series) — bereits
+ * vorhandene Eintraege werden uebersprungen, es wird nur ergaenzt.
+ * cover_url bleibt leer; Jahr/Quelle landen in metadata_json.
+ */
+export async function importHistory(db, cfg, creatorUid) {
+  const userId = await resolveUserId(cfg);
+  const limit = 500;
+  const items = [];
+  for (let page = 0; page < 20; page++) {
+    const data = await embyFetch(cfg, `/Users/${userId}/Items`, {
+      query: {
+        IncludeItemTypes: 'Movie,Series',
+        Recursive: 'true',
+        Fields: 'UserData,ProductionYear,ImageTags',
+        SortBy: 'SortName',
+        StartIndex: page * limit,
+        Limit: limit,
+      },
+    });
+    const arr = Array.isArray(data?.Items) ? data.Items : [];
+    items.push(...arr);
+    if (arr.length < limit) break;
+  }
+
+  const existingKeys = new Set(
+    db
+      .prepare("SELECT title, media_type FROM media_item WHERE media_type IN ('movie', 'tv')")
+      .all()
+      .map((r) => normalizeTitle(r.title) + '|' + r.media_type)
+  );
+  const ins = db.prepare(
+    `INSERT INTO media_item
+       (media_type, title, cover_url, status, rating, comment, metadata_json, is_private, watch_date, tags, creator_uid)
+     VALUES (?, ?, NULL, ?, NULL, NULL, ?, 0, ?, NULL, ?)`
+  );
+
+  let imported = 0;
+  let skipped = 0;
+  for (const it of items) {
+    const ud = it.UserData || {};
+    let status = null;
+    if (ud.Played) status = 'finished';
+    else if ((ud.PlayedPercentage || 0) > 0 || (ud.PlayedItemCount || 0) > 0) status = 'doing';
+    if (!status) {
+      skipped++;
+      continue;
+    }
+    const mediaType = it.Type === 'Series' ? 'tv' : 'movie';
+    const key = normalizeTitle(it.Name) + '|' + mediaType;
+    if (!normalizeTitle(it.Name) || existingKeys.has(key)) {
+      skipped++;
+      continue;
+    }
+    const watchDate = status === 'finished' ? (ud.LastPlayedDate || null) : null;
+    const meta = JSON.stringify({ year: it.ProductionYear || null, source: 'emby', emby_id: it.Id || null });
+    ins.run(mediaType, it.Name, status, meta, watchDate, creatorUid);
+    existingKeys.add(key);
+    imported++;
+  }
+  return { imported, skipped, total: items.length };
 }
 
 export { getConfig, isConfigured, trimUrl };

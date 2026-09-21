@@ -906,7 +906,7 @@ function paintTreeBody(panel, tree, sharedIds) {
 // list (Generationenliste). Startperson waehlbar, Zoom im SVG.
 // --------------------------------------------------------
 const GEN_LAYOUT_KEY = 'juju-rel-gen-layout';
-const genState = { layout: 'top', rootId: null, zoom: 1 };
+const genState = { layout: 'top', rootId: null, zoom: 1, linkMode: false, linkFirst: null };
 
 async function renderGenealogy() {
   const panel = _container.querySelector('#rel-panel-genealogy');
@@ -953,6 +953,10 @@ async function renderGenealogy() {
           <button class="btn btn--secondary btn--sm" data-zoom="reset">${t('relationships.resetView')}</button>
           <button class="btn btn--secondary btn--sm" data-zoom="in" aria-label="+">＋</button>
         </div>
+        <div class="rel-gen__actions" style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn--sm ${genState.linkMode ? 'btn--primary' : 'btn--secondary'}" data-action="gen-link">${t('relationships.gen.linkMode')}</button>
+          <button class="btn btn--sm btn--secondary" data-action="gen-add-person">+ ${t('relationships.gen.addPerson')}</button>
+        </div>
       </div>
       <div class="rel-gen__canvas" id="gen-canvas"></div>
       <div class="rel-gen__legend">
@@ -983,10 +987,24 @@ async function renderGenealogy() {
     saveGenPrefs();
     paint();
   });
+  // Verbindungsmodus: zwei Knoten anklicken -> Beziehungs-Dialog
+  panel.querySelector('[data-action="gen-link"]')?.addEventListener('click', (e) => {
+    genState.linkMode = !genState.linkMode;
+    clearGenLinkPick(panel);
+    e.currentTarget.classList.toggle('btn--primary', genState.linkMode);
+    e.currentTarget.classList.toggle('btn--secondary', !genState.linkMode);
+    if (genState.linkMode) toast(t('relationships.gen.linkHint'), 'info');
+  });
+  // Neue Person direkt aus der Genealogie anlegen
+  panel.querySelector('[data-action="gen-add-person"]')?.addEventListener('click', () => openGenAddPersonModal());
   panel.querySelectorAll('[data-zoom]').forEach((btn) => btn.addEventListener('click', () => {
-    if (btn.dataset.zoom === 'in') genState.zoom = Math.min(2, Math.round((genState.zoom + 0.2) * 10) / 10);
-    if (btn.dataset.zoom === 'out') genState.zoom = Math.max(0.4, Math.round((genState.zoom - 0.2) * 10) / 10);
-    if (btn.dataset.zoom === 'reset') genState.zoom = 1;
+    if (btn.dataset.zoom === 'in') genState.zoom = Math.min(3, Math.round((genState.zoom + 0.2) * 10) / 10);
+    if (btn.dataset.zoom === 'out') genState.zoom = Math.max(0.3, Math.round((genState.zoom - 0.2) * 10) / 10);
+    if (btn.dataset.zoom === 'reset') {
+      genState.zoom = 1;
+      const cv = panel.querySelector('#gen-canvas');
+      if (cv) { cv.scrollLeft = 0; cv.scrollTop = 0; }
+    }
     const svg = panel.querySelector('svg.rel-gen__svg');
     if (svg) svg.style.width = `${Math.round(genState.zoom * 100)}%`;
   }));
@@ -1122,6 +1140,10 @@ function drawGenTree(panel, gen) {
   svg.setAttribute('class', 'rel-gen__svg');
   svg.setAttribute('viewBox', `0 0 ${Math.ceil(layout.width)} ${Math.ceil(layout.height)}`);
   svg.setAttribute('preserveAspectRatio', 'xMinYMin meet');
+  // Kein CSS min-width:100% / Width-Transition — sonst stimmt die
+  // cursorzentrierte Mausrad-Zoom-Rechnung nicht.
+  svg.style.minWidth = '0';
+  svg.style.transition = 'none';
   svg.style.width = `${Math.round(genState.zoom * 100)}%`;
 
   const edgeLayer = document.createElementNS(NS, 'g');
@@ -1220,13 +1242,13 @@ function drawGenTree(panel, gen) {
   canvas.appendChild(svg);
 
   svg.querySelectorAll('.rel-gen__node').forEach((el) => {
-    const open = () => {
-      const c = contactById(Number(el.dataset.id));
-      if (c) openContactModal(c);
-    };
-    el.addEventListener('click', open);
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
+    const id = Number(el.dataset.id);
+    // Im Verbindungsmodus faengt handleGenNodeClick den Klick ab (Vorrang
+    // vor dem Detail-Modal), sonst wie gewohnt den Kontakt oeffnen.
+    el.addEventListener('click', () => handleGenNodeClick(id, el, panel));
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleGenNodeClick(id, el, panel); });
   });
+  wireGenCanvas(panel);
 }
 
 function renderGenList(panel, gen) {
@@ -1261,10 +1283,202 @@ function renderGenList(panel, gen) {
   const seen = new Set();
   canvas.innerHTML = `<div class="rel-gen-list">${genRootIds(gen).map((r) => unitHtml(r, 0, seen)).join('')}</div>`;
   canvas.querySelectorAll('.rel-gen-list__person').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const c = contactById(Number(btn.dataset.id));
-      if (c) openContactModal(c);
-    });
+    btn.addEventListener('click', () => handleGenNodeClick(Number(btn.dataset.id), btn, panel));
+  });
+}
+
+// --------------------------------------------------------
+// Genealogie: Interaktionen (Zoom/Pan, Verbinden, Person anlegen)
+// --------------------------------------------------------
+
+/** Auswahl im Verbindungsmodus zuruecksetzen (Markierungen + erster Knoten). */
+function clearGenLinkPick(panel) {
+  genState.linkFirst = null;
+  panel?.querySelectorAll('.rel-gen__node--picked').forEach((el) => el.classList.remove('rel-gen__node--picked'));
+}
+
+/**
+ * Knoten-Klick in der Genealogie. Verbindungsmodus hat Vorrang: erster Klick
+ * waehlt aus, zweiter Klick auf eine andere Person oeffnet den Beziehungs-
+ * Dialog; ohne Verbindungsmodus oeffnet der Klick das Kontakt-Detail.
+ */
+function handleGenNodeClick(id, el, panel) {
+  if (genState.linkMode) {
+    if (genState.linkFirst === null || genState.linkFirst === id) {
+      const wasSame = genState.linkFirst === id;
+      clearGenLinkPick(panel);
+      if (!wasSame) {
+        genState.linkFirst = id;
+        el.classList.add('rel-gen__node--picked');
+        toast(t('relationships.gen.linkPickSecond'), 'info');
+      }
+      return;
+    }
+    const firstId = genState.linkFirst;
+    clearGenLinkPick(panel);
+    openGenLinkForm(firstId, id, () => renderGenealogy());
+    return;
+  }
+  const c = contactById(id);
+  if (c) openContactModal(c);
+}
+
+/** Mausrad-Zoom (cursorzentriert, 0.3–3) + Ziehen im Leerraum zum Schwenken. */
+function wireGenCanvas(panel) {
+  const canvas = panel.querySelector('#gen-canvas');
+  if (!canvas || canvas.dataset.genWired === '1') return;
+  canvas.dataset.genWired = '1';
+
+  canvas.addEventListener('wheel', (ev) => {
+    // Kein SVG (Listenmodus) -> normales Scrollen des Contents zulassen.
+    const svg = panel.querySelector('svg.rel-gen__svg');
+    if (!svg) return;
+    ev.preventDefault();
+    const step = ev.deltaY > 0 ? -0.1 : 0.1;
+    const old = genState.zoom;
+    const next = Math.min(3, Math.max(0.3, Math.round((old + step) * 100) / 100));
+    if (next === old) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = ev.clientX - rect.left;
+    const cy = ev.clientY - rect.top;
+    // Unter dem Cursor liegender Inhaltspunkt bleibt an derselben Stelle.
+    const ux = (canvas.scrollLeft + cx) / old;
+    const uy = (canvas.scrollTop + cy) / old;
+    genState.zoom = next;
+    svg.style.width = `${Math.round(next * 100)}%`;
+    canvas.scrollLeft = Math.max(0, ux * next - cx);
+    canvas.scrollTop = Math.max(0, uy * next - cy);
+  }, { passive: false });
+
+  canvas.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    if (!panel.querySelector('svg.rel-gen__svg')) return;
+    if (ev.target.closest('.rel-gen__node')) return; // Knoten-Klick unveraendert lassen
+    const startX = ev.clientX;
+    const startY = ev.clientY;
+    const startLeft = canvas.scrollLeft;
+    const startTop = canvas.scrollTop;
+    canvas.classList.add('rel-gen__canvas--dragging');
+    const move = (e) => {
+      canvas.scrollLeft = startLeft - (e.clientX - startX);
+      canvas.scrollTop = startTop - (e.clientY - startY);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      canvas.classList.remove('rel-gen__canvas--dragging');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+}
+
+/** Leichter Beziehungs-Dialog fuer den Verbindungsmodus (Typ + Notiz). */
+function openGenLinkForm(contactA, contactB, onDone) {
+  const a = contactById(contactA);
+  const b = contactById(contactB);
+  // spouse/partner/child erzeugen sichtbare Linien im Stammbaum -> vorne.
+  const preferred = ['spouse', 'partner', 'child'];
+  const types = [
+    ...preferred.filter((x) => state.options.relationTypes.includes(x)),
+    ...state.options.relationTypes.filter((x) => !preferred.includes(x)),
+  ];
+  const content = `
+    <div class="rel-muted" style="margin-bottom:10px">${esc((a?.name || '#' + contactA) + ' — ' + (b?.name || '#' + contactB))}</div>
+    <div class="form-group">
+      <label class="form-label" for="gl-type">${t('relationships.relationshipType')}</label>
+      <select class="form-input" id="gl-type">
+        ${types.map((rt) => `<option value="${rt}">${esc(relLabel(rt))}</option>`).join('')}
+      </select>
+      <span class="rel-muted">${t('relationships.gen.linkTypeHint')}</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="gl-note">${t('relationships.note')}</label>
+      <textarea class="form-input" id="gl-note" rows="2"></textarea>
+    </div>
+    <div class="modal-panel__footer">
+      <div></div>
+      <div class="contact-modal__footer-actions">
+        <button class="btn btn--secondary" id="gl-cancel">${t('common.cancel')}</button>
+        <button class="btn btn--primary" id="gl-save">${t('common.save')}</button>
+      </div>
+    </div>`;
+  openModal({
+    title: t('relationships.addRelationship'),
+    content,
+    size: 'md',
+    onSave: (panel) => {
+      panel.querySelector('#gl-cancel').addEventListener('click', () => closeModal());
+      panel.querySelector('#gl-save').addEventListener('click', async () => {
+        const relation_type = panel.querySelector('#gl-type').value;
+        const note = panel.querySelector('#gl-note').value.trim() || null;
+        const btn = panel.querySelector('#gl-save');
+        btn.disabled = true;
+        try {
+          const res = await api.post('/relationships', { contact_a: contactA, contact_b: contactB, relation_type, note });
+          if (res?.data) historyEdgeAdd(res.data);
+          closeModal({ force: true });
+          toast(t('relationships.relationshipAdded'));
+          if (onDone) await onDone();
+        } catch (err) {
+          toast(err.data?.error || t('common.unknownError'), 'danger');
+          btn.disabled = false;
+        }
+      });
+    },
+  });
+}
+
+/** Neue Person aus der Genealogie anlegen (Name + Beziehungstyp). */
+function openGenAddPersonModal() {
+  const content = `
+    <div class="form-group">
+      <label class="form-label" for="gp-name">${t('relationships.gen.personName')}</label>
+      <input class="form-input" id="gp-name" type="text" maxlength="200" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="gp-type">${t('relationships.relationshipType')}</label>
+      <select class="form-input" id="gp-type">
+        <option value="">${t('relationships.type.unset')}</option>
+        ${state.options.relationTypes.map((rt) => `<option value="${rt}">${esc(relLabel(rt))}</option>`).join('')}
+      </select>
+    </div>
+    <div class="modal-panel__footer">
+      <div></div>
+      <div class="contact-modal__footer-actions">
+        <button class="btn btn--secondary" id="gp-cancel">${t('common.cancel')}</button>
+        <button class="btn btn--primary" id="gp-save">${t('common.save')}</button>
+      </div>
+    </div>`;
+  openModal({
+    title: t('relationships.gen.addPerson'),
+    content,
+    size: 'md',
+    onSave: (panel) => {
+      panel.querySelector('#gp-cancel').addEventListener('click', () => closeModal());
+      panel.querySelector('#gp-save').addEventListener('click', async () => {
+        const name = panel.querySelector('#gp-name').value.trim();
+        if (!name) { toast(t('relationships.titleRequired'), 'danger'); return; }
+        const relType = panel.querySelector('#gp-type').value;
+        const btn = panel.querySelector('#gp-save');
+        btn.disabled = true;
+        try {
+          const created = await api.post('/contacts', { name });
+          const newId = created?.data?.id ?? created?.data?.contact?.id ?? null;
+          if (newId && relType) {
+            await api.patch(`/relationships/contacts/${newId}`, { relationship_type: relType }).catch(() => {});
+          }
+          const fresh = await api.get('/contacts').catch(() => null);
+          if (fresh && Array.isArray(fresh.data)) state.contacts = fresh.data;
+          closeModal({ force: true });
+          toast(t('relationships.gen.personAdded'));
+          await renderGenealogy();
+        } catch (err) {
+          toast(err.data?.error || t('common.unknownError'), 'danger');
+          btn.disabled = false;
+        }
+      });
+    },
   });
 }
 

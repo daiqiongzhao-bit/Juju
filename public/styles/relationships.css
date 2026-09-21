@@ -508,9 +508,7 @@
 }
 .rel-gen__svg {
   display: block;
-  min-width: 100%;
   height: auto;
-  transition: width 0.15s ease;
 }
 .rel-gen__link {
   fill: none;
@@ -595,4 +593,21 @@
   background: var(--color-hover, #f8fafc);
   border-radius: 8px;
   padding: 3px 8px;
+}
+
+/* Genealogie-Interaktion: Pan/Zoom + Verbinden (v0.0.17) */
+.rel-gen__canvas {
+  cursor: grab;
+}
+.rel-gen__canvas--dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.rel-gen__node--picked .rel-gen__rect {
+  stroke: #f59e0b;
+  stroke-width: 3px;
+}
+button.rel-gen__node--picked {
+  outline: 2px solid #f59e0b;
+  outline-offset: 1px;
 }

@@ -457,6 +457,21 @@ router.post('/emby/sync', async (req, res) => {
   }
 });
 
+// POST /api/v1/media/emby/import  (nur Admin): Wiedergabeverlauf als neue
+// Eintraege importieren (gesehen/am Schauen, dedupliziert nach Titel+Typ)
+router.post('/emby/import', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const cfg = requireEmbyConfig(req, res);
+    if (!cfg) return;
+    const result = await emby.importHistory(db.get(), cfg, uid(req));
+    res.json({ data: result });
+  } catch (err) {
+    log.error('POST /emby/import', err);
+    res.status(502).json({ error: 'Import fehlgeschlagen: ' + (err?.message || ''), code: 502 });
+  }
+});
+
 // GET /api/v1/media/:id  (param route NACH allen statischen Routen)
 router.get('/:id', (req, res) => {
   try {

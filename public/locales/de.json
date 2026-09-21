@@ -1105,7 +1105,14 @@
       "emptyTitle": "Noch kein Stammbaum",
       "emptyDesc": "Sobald Kontakte als „Kind“ oder „Partner“ verknüpft sind, entsteht hier automatisch ein Stammbaum.",
       "spouseLine": "Partnerschaft",
-      "childLine": "Eltern-Kind"
+      "childLine": "Eltern-Kind",
+      "linkMode": "Verbinden",
+      "linkHint": "Verbindungsmodus: Klicke zwei Personen an, um eine Beziehung zu erstellen. Nochmal klicken beendet den Modus.",
+      "linkPickSecond": "Erste Person gewaehlt – klicke eine zweite Person, um die Verbindung zu erstellen.",
+      "linkTypeHint": "Hinweis: child / spouse / partner erzeugen Linien im Stammbaum.",
+      "addPerson": "Person hinzufuegen",
+      "personName": "Name",
+      "personAdded": "Person hinzugefuegt – Beziehung kann erstellt werden"
     }
   },
   "anniversaries": {
@@ -2404,6 +2411,10 @@
     "embySync": "Watched-Status synchronisieren",
     "embySyncing": "Synchronisierung laeuft (je nach Bibliothek bis zu einer Minute) …",
     "embySyncDone": "Sync fertig: {{emby}} Emby-Titel, {{matched}} lokal gematcht, {{updated}} aktualisiert (nur Upgrades: finished > doing > wish)",
+    "embyImport": "Verlauf importieren",
+    "embyImportConfirm": "Filme und Serien werden anhand des Emby-Status (gesehen / am Schauen) in die Medienbibliothek importiert (Duplikate werden uebersprungen). Fortfahren?",
+    "embyImporting": "Import laeuft (je nach Bibliothek bis zu einer Minute) …",
+    "embyImportDone": "Import fertig: {{imported}} neu, {{skipped}} uebersprungen",
     "embySavedOk": "Emby-Konfiguration gespeichert",
     "embySavedEmpty": "Gespeichert, aber Emby ist noch nicht vollstaendig konfiguriert"
   },
@@ -4205,6 +4216,14 @@
     "delete": "Löschen",
     "confirmDelete": "Wirklich löschen?",
     "titleRequired": "Titel erforderlich",
-    "dmsRefs": "DMS-Referenzen (Konto:Dokument-ID, Komma-getrennt)"
+    "dmsRefs": "DMS-Referenzen (Konto:Dokument-ID, Komma-getrennt)",
+    "folderImport": "Aus Ordner importieren",
+    "folderPath": "Ordnerpfad",
+    "folderList": "Bilder auflisten",
+    "folderImportBtn": "Auswahl importieren",
+    "folderEmpty": "Keine Bilder in diesem Ordner",
+    "folderErr": "Ordner konnte nicht gelesen werden",
+    "folderListing": "Ordner wird gelesen …",
+    "folderImported": "{{imported}} Bilder importiert ({{skipped}} uebersprungen)"
   }
 }
