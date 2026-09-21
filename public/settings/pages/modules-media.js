@@ -76,6 +76,13 @@ function renderPage(container, cfg) {
                    placeholder="${t('settings.embyKeyPlaceholder')}">
             <p class="form-hint">${t('settings.embyKeyHint')}</p>
           </div>
+          <div class="form-group">
+            <label class="form-label" for="emby-user">${t('settings.embyUser')}</label>
+            <select class="form-input" id="emby-user">
+              <option value="">${t('settings.embyUserAuto')}</option>
+            </select>
+            <p class="form-hint">${t('settings.embyUserHint')}</p>
+          </div>
           <div id="emby-form-msg" class="form-hint" role="status" hidden></div>
           <div class="settings-form-actions">
             <button type="button" class="btn btn--ghost" id="emby-test">${t('settings.embyTest')}</button>
@@ -140,10 +147,32 @@ export async function render(container, { user }) {
     embyMsg.hidden = !text;
   };
 
+  function populateEmbyUsers(users, savedId) {
+    const sel = container.querySelector('#emby-user');
+    if (!sel || !Array.isArray(users) || !users.length) return;
+    const current = sel.value;
+    sel.replaceChildren();
+    const auto = document.createElement('option');
+    auto.value = '';
+    auto.textContent = t('settings.embyUserAuto');
+    sel.appendChild(auto);
+    for (const u of users) {
+      if (!u?.id) continue;
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.name || u.id;
+      sel.appendChild(opt);
+    }
+    const want = savedId || current;
+    if (want && users.some((u) => u.id === want)) sel.value = want;
+  }
+
   async function saveEmbyConfig() {
     const url = container.querySelector('#emby-url').value.trim();
     const key = container.querySelector('#emby-key').value.trim();
-    const res = await api.put('/media/emby/config', { url, apiKey: key });
+    const userSel = container.querySelector('#emby-user');
+    const userId = userSel ? userSel.value.trim() : '';
+    const res = await api.put('/media/emby/config', { url, apiKey: key, userId });
     return res.data || {};
   }
 
@@ -164,6 +193,7 @@ export async function render(container, { user }) {
     try {
       await saveEmbyConfig();
       const r = (await api.post('/media/emby/test')).data || {};
+      populateEmbyUsers(r.users, cfg.embyUserId);
       showEmbyMsg(t('settings.embyTestOk', { name: r.serverName || 'Emby', version: r.version || '' }));
     } catch (error) {
       showEmbyMsg((error?.message || t('common.errorGeneric')));
@@ -190,4 +220,11 @@ export async function render(container, { user }) {
       btn.disabled = false;
     }
   });
+
+  // Bereits konfiguriert? Nutzerliste stillschweigend laden, gespeicherten Nutzer vorauswählen.
+  if (cfg.embyConfigured) {
+    api.post('/media/emby/test')
+      .then((r) => populateEmbyUsers((r.data || {}).users, cfg.embyUserId))
+      .catch(() => { /* Server nicht erreichbar — Auto-Auswahl bleibt */ });
+  }
 }

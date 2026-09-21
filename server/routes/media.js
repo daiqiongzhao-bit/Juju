@@ -314,6 +314,7 @@ router.get('/config', (req, res) => {
         openlibraryEnable: cfg.openlibrary_enable === 1,
         embyConfigured: !!(cfg.emby_url && cfg.emby_api_key),
         embyUrl: cfg.emby_url || '',
+        embyUserId: cfg.emby_user_id || '',
       },
     });
   } catch (err) {
