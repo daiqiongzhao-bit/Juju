@@ -11,6 +11,8 @@
  * denselben Header (X-Emby-Token ist dort der empfohlene Legacy-Alias).
  */
 
+import { searchTmdb } from './media-metadata.js';
+
 const DEFAULT_TIMEOUT = 12000;
 
 function normalizeTitle(s) {
@@ -230,13 +232,9 @@ export async function importHistory(db, cfg, creatorUid) {
       .all()
       .map((r) => normalizeTitle(r.title) + '|' + r.media_type)
   );
-  const ins = db.prepare(
-    `INSERT INTO media_item
-       (media_type, title, cover_url, status, rating, comment, metadata_json, is_private, watch_date, tags, creator_uid)
-     VALUES (?, ?, NULL, ?, NULL, NULL, ?, 0, ?, NULL, ?)`
-  );
 
-  let imported = 0;
+  // 1) Sammeln, was eingefuegt wuerde (Cover-Suche folgt gebuendelt danach).
+  const pending = [];
   let skipped = 0;
   for (const it of items) {
     const ud = it.UserData || {};
@@ -253,13 +251,81 @@ export async function importHistory(db, cfg, creatorUid) {
       skipped++;
       continue;
     }
-    const watchDate = status === 'finished' ? (ud.LastPlayedDate || null) : null;
-    const meta = JSON.stringify({ year: it.ProductionYear || null, source: 'emby', emby_id: it.Id || null });
-    ins.run(mediaType, it.Name, status, meta, watchDate, creatorUid);
     existingKeys.add(key);
-    imported++;
+    pending.push({
+      mediaType,
+      title: it.Name,
+      status,
+      watchDate: status === 'finished' ? (ud.LastPlayedDate || null) : null,
+      year: it.ProductionYear || null,
+      embyId: it.Id || null,
+    });
   }
-  return { imported, skipped, total: items.length };
+
+  // 2) TMDB-Cover gebuendelt suchen (Konsequenz 5, Fehler -> NULL wie gehabt).
+  let covers = 0;
+  if (cfg.tmdb_api_key && pending.length) {
+    const results = await mapLimit(pending, 5, (p) => tmdbCoverFor(cfg, p.title, p.year, p.mediaType));
+    pending.forEach((p, i) => {
+      const hit = results[i];
+      if (hit && hit.posterUrl) {
+        p.coverUrl = hit.posterUrl;
+        p.tmdbId = hit.externalId || null;
+        covers++;
+      }
+    });
+  }
+
+  // 3) Einfuegen (better-sqlite3 ist synchron).
+  const ins = db.prepare(
+    `INSERT INTO media_item
+       (media_type, title, cover_url, status, rating, comment, metadata_json, is_private, watch_date, tags, creator_uid)
+     VALUES (?, ?, ?, ?, NULL, NULL, ?, 0, ?, NULL, ?)`
+  );
+  for (const p of pending) {
+    const meta = JSON.stringify({ year: p.year, source: 'emby', emby_id: p.embyId, tmdb_id: p.tmdbId || null });
+    ins.run(p.mediaType, p.title, p.coverUrl || null, p.status, meta, p.watchDate, creatorUid);
+  }
+  return { imported: pending.length, skipped, total: items.length, covers };
+}
+
+/**
+ * TMDB-Cover fuer einen Emby-Titel suchen (Kind + Titel/Originaltitel- oder
+ * Jahres-Match, sonst bestes Element der richtigen Art). Fehler -> null.
+ */
+async function tmdbCoverFor(cfg, title, year, mediaType) {
+  try {
+    const results = await searchTmdb(title, { apiKey: cfg.tmdb_api_key, proxyUrl: cfg.tmdb_proxy_url });
+    const sameKind = results.filter((r) => r.kind === mediaType && r.posterUrl);
+    if (!sameKind.length) return null;
+    const key = normalizeTitle(title);
+    const y = year ? parseInt(String(year), 10) : null;
+    const hit =
+      sameKind.find((r) => normalizeTitle(r.title) === key || normalizeTitle(r.originalTitle) === key) ||
+      (y
+        ? sameKind.find(
+            (r) => r.releaseDate && Math.abs(parseInt(String(r.releaseDate).slice(0, 4), 10) - y) <= 1
+          )
+        : null) ||
+      sameKind[0];
+    return hit ? { posterUrl: hit.posterUrl, externalId: hit.externalId } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Kleine Concurrency-Hilfe (Promise-Pool ohne Abhaengigkeiten). */
+async function mapLimit(arr, n, fn) {
+  const out = new Array(arr.length);
+  let i = 0;
+  async function worker() {
+    while (i < arr.length) {
+      const idx = i++;
+      out[idx] = await fn(arr[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(n, arr.length || 1) }, worker));
+  return out;
 }
 
 export { getConfig, isConfigured, trimUrl };
