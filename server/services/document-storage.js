@@ -18,7 +18,7 @@ const SELECTED_BACKEND_KEY = 'document_storage_selected_backend';
 const SELECTABLE_BACKENDS = new Set(['local', 'webdav', 'google_drive']);
 const DEFAULT_BASE_PATH = 'yuvomi-documents';
 const DEFAULT_TIMEOUT_MS = 8_000;
-const MAX_READ_BYTES = 5 * 1024 * 1024;
+const MAX_READ_BYTES = 100 * 1024 * 1024;
 
 const ENV_FIELDS = {
   enabled: 'DOCUMENT_STORAGE_WEBDAV_ENABLED',

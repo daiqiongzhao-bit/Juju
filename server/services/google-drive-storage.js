@@ -12,7 +12,7 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const APP_FOLDER_NAME = 'Juju';
 const DOCUMENTS_FOLDER_NAME = 'Documents';
 const DISPLAY_FOLDER_NAME = `${APP_FOLDER_NAME}/${DOCUMENTS_FOLDER_NAME}`;
-const MAX_READ_BYTES = 5 * 1024 * 1024;
+const MAX_READ_BYTES = 100 * 1024 * 1024;
 
 const defaultGoogleApiFactory = {
   createOAuth2: (clientId, clientSecret, redirectUri) => (

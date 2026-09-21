@@ -1683,7 +1683,7 @@ const MIGRATIONS = [
                                     CHECK(type IN ('household', 'couple', 'travel', 'event', 'shopping', 'general')),
         avatar_color        TEXT    NOT NULL DEFAULT '#0F766E',
         avatar_document_id  INTEGER REFERENCES family_documents(id) ON DELETE SET NULL,
-        default_currency    TEXT    NOT NULL DEFAULT 'EUR',
+        default_currency    TEXT    NOT NULL DEFAULT 'CNY',
         status              TEXT    NOT NULL DEFAULT 'active'
                                     CHECK(status IN ('active', 'archived')),
         created_by          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2368,7 +2368,7 @@ const MIGRATIONS = [
       CREATE TABLE IF NOT EXISTS subscription_settings (
         id             INTEGER PRIMARY KEY CHECK(id = 1),
         monthly_budget REAL    NOT NULL DEFAULT 0 CHECK(monthly_budget >= 0),
-        base_currency  TEXT    NOT NULL DEFAULT 'EUR',
+        base_currency  TEXT    NOT NULL DEFAULT 'CNY',
         updated_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
       );
       INSERT OR IGNORE INTO subscription_settings (id) VALUES (1);

@@ -510,7 +510,7 @@ export const CURRENCY_RE = /^[A-Z]{3}$/;
 
 /** Haushaltweite Budget-Währung aus sync_config (Fallback wie in /preferences). */
 export function budgetCurrency() {
-  return db.get().prepare("SELECT value FROM sync_config WHERE key = 'currency'").get()?.value || 'EUR';
+  return db.get().prepare("SELECT value FROM sync_config WHERE key = 'currency'").get()?.value || 'CNY';
 }
 
 /**

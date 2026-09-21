@@ -225,7 +225,7 @@ export function resolveHouseholdFormats(database) {
   return {
     locale: resolveHouseholdLocale(database),
     dateFormat: VALID_DATE_FORMATS.includes(dateFormat) ? dateFormat : 'dmy',
-    currency: cfgValue(database, 'currency') || 'EUR',
+    currency: cfgValue(database, 'currency') || 'CNY',
   };
 }
 

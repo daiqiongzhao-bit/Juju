@@ -8,11 +8,11 @@ const CURRENCY_MINOR_UNITS = {
   CLP: 0, JPY: 0, KRW: 0, VND: 0,
 };
 
-function minorUnit(currency = 'EUR') {
+function minorUnit(currency = 'CNY') {
   return CURRENCY_MINOR_UNITS[String(currency).toUpperCase()] ?? 2;
 }
 
-function parseMoneyToMinor(value, currency = 'EUR', field = 'amount') {
+function parseMoneyToMinor(value, currency = 'CNY', field = 'amount') {
   if (typeof value === 'number') {
     throw new Error(`${field} must be sent as a decimal string to avoid floating point loss.`);
   }
@@ -34,7 +34,7 @@ function parseMoneyToMinor(value, currency = 'EUR', field = 'amount') {
   return Number(signed);
 }
 
-function minorToDecimal(value, currency = 'EUR') {
+function minorToDecimal(value, currency = 'CNY') {
   const scale = minorUnit(currency);
   const n = BigInt(value ?? 0);
   const negative = n < 0n;

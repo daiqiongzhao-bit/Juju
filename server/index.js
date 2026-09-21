@@ -131,7 +131,7 @@ app.use(compression());
 // --------------------------------------------------------
 // Request-Parsing
 // --------------------------------------------------------
-app.use(express.json({ limit: '7mb' }));
+app.use(express.json({ limit: '160mb' }));
 app.use(express.urlencoded({ extended: true, limit: '7mb' }));
 
 // JSON-Parse-Fehler abfangen (gibt sonst HTML zurück)

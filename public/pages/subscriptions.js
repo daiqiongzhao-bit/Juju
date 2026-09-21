@@ -22,7 +22,7 @@ let state = {
   subscriptions: [],
   summary: null,
   meta: { categories: [], payment_methods: [], billing_cycles: [] },
-  settings: { monthly_budget: 0, base_currency: 'EUR' },
+  settings: { monthly_budget: 0, base_currency: 'CNY' },
   rates: null,
   query: '',
   categoryId: '',

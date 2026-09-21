@@ -24,7 +24,7 @@ import { api } from '/api.js';
 import { t, formatDate } from '/i18n.js';
 import { esc } from '/utils/html.js';
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 // Spiegelt die Upload-Allowlist des Servers (server/routes/documents.js).
 // Der Server bleibt die Instanz, die ablehnt - das accept-Attribut erspart dem

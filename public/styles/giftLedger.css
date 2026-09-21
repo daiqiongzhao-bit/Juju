@@ -15,17 +15,30 @@
 .gl-tab .gl-count{font-size:11px;opacity:.8}
 
 /* Filters */
-.gl-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.gl-filters input{padding:7px 10px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--bg,#fff);color:var(--text,#222);min-width:220px}
+.gl-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.gl-filters input{padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:10px;background:var(--bg,#fff);color:var(--text,#222);min-width:220px}
+
+/* Summary strip (nur sichtbare Zeilen, clientseitig berechnet) */
+.gl-summary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg,#fff);border:1px solid var(--border,#eee);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--color-text-secondary,#666)}
+.gl-summary__item strong{font-size:15px;color:var(--text,#222)}
+.gl-summary__dot{opacity:.5}
+.gl-summary__sum{color:var(--accent,#3b82f6)}
+.gl-summary__hint{font-size:11px;color:#999}
 
 /* List */
 .gl-list{display:flex;flex-direction:column;gap:10px}
-.gl-card{background:var(--bg,#fff);border:1px solid var(--border,#ddd);border-radius:12px;padding:12px 14px;position:relative;display:flex;gap:12px;align-items:flex-start;cursor:pointer;transition:.15s}
+.gl-card{background:var(--bg,#fff);border:1px solid var(--border,#ddd);border-radius:12px;padding:14px 16px;position:relative;display:flex;gap:12px;align-items:center;cursor:pointer;transition:.15s;overflow:hidden}
 .gl-card:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.10)}
 .gl-card.selected{outline:2px solid var(--accent,#3b82f6);outline-offset:-2px}
-.gl-card__check{margin-top:3px}
+.gl-card__accent{position:absolute;left:0;top:0;bottom:0;width:4px}
+.gl-card--red .gl-card__accent{background:linear-gradient(180deg,#ef4444,#f97316)}
+.gl-card--white .gl-card__accent{background:linear-gradient(180deg,#9ca3af,#d4d4d8)}
+.gl-card__check{position:relative;z-index:1}
+.gl-card__check input{width:16px;height:16px;accent-color:var(--accent,#3b82f6)}
 .gl-card__body{flex:1;min-width:0}
 .gl-card__title{font-weight:600;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gl-card__amount{font-size:17px;font-weight:700;color:var(--text,#1f2937);font-variant-numeric:tabular-nums;white-space:nowrap}
+.gl-card__amount--empty{color:#c4c8cf;font-weight:400}
 
 /* Type badge: red = joyful (wedding/birth), white = mourning (funeral) */
 .gl-type{display:inline-block;padding:1px 9px;border-radius:10px;font-size:11px}
@@ -33,9 +46,16 @@
 .gl-type.white{background:#fff7ed;color:#c2410c}
 
 .gl-lock{font-size:12px;color:#888}
-.gl-meta{font-size:12px;color:#888;margin-top:4px;display:flex;gap:12px;flex-wrap:wrap}
+.gl-meta{font-size:12px;color:#888;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
+.gl-chip{display:inline-flex;align-items:center;gap:4px;background:var(--hover,#f5f5f5);border-radius:8px;padding:2px 8px}
 .gl-note{font-size:13px;color:var(--text,#333);white-space:pre-wrap;margin-top:6px}
-.gl-empty{text-align:center;color:#999;padding:40px}
+
+/* Empty state */
+.gl-empty{text-align:center;color:#999;padding:48px 20px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.gl-empty__icon{font-size:44px;line-height:1;margin-bottom:4px;opacity:.85}
+.gl-empty__title{font-size:15px;font-weight:600;color:var(--text,#444)}
+.gl-empty__desc{font-size:13px;color:#999;max-width:320px}
+.gl-empty .gl-btn{margin-top:12px}
 
 /* Buttons */
 button.gl-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--accent,#3b82f6);background:var(--accent,#3b82f6);color:#fff;cursor:pointer;font-size:13px}

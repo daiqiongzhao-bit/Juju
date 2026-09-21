@@ -133,6 +133,19 @@ export const SETTINGS_LEAVES = freezeEntries([
     loader: () => import('/settings/pages/modules-rewards.js'),
   },
   {
+    // Medienanreicherung: TMDB-Key/Proxy + OpenLibrary-Schalter. War vorher ein
+    // Modal hinter dem "⚙ TMDB"-Button der Medienbibliothek; als haushaltweite
+    // Admin-Konfiguration gehört es in die Einstellungen.
+    id: 'modules-media',
+    domainId: 'modules',
+    path: '/settings/modules/media',
+    labelKey: 'settings.pageMediaIntegration',
+    descriptionKey: 'settings.pageMediaIntegrationDescription',
+    icon: 'clapperboard',
+    adminOnly: true,
+    loader: () => import('/settings/pages/modules-media.js'),
+  },
+  {
     id: 'sync-calendar',
     domainId: 'sync',
     path: '/settings/sync/calendar',

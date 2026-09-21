@@ -17,13 +17,18 @@ const TYPE_TABS = [
 const STATUSES = ['wish', 'doing', 'finished'];
 
 // Cover-Hosts, die der Server fuer das Frontend proxyt (GET /api/v1/media/img).
-// TMDB / OpenLibrary sind in manchen Netzen (z. B. CN) nicht direkt erreichbar.
-const COVER_PROXY_HOSTS = ['image.tmdb.org', 'openlibrary.org', 'covers.openlibrary.org'];
+// TMDB / OpenLibrary / iTunes-CDN / Google Books sind in manchen Netzen (z. B.
+// CN) nicht direkt erreichbar.
+const COVER_PROXY_HOSTS = ['image.tmdb.org', 'openlibrary.org', 'covers.openlibrary.org', 'books.google.com'];
+const COVER_PROXY_SUFFIXES = ['.mzstatic.com'];
 function coverSrc(url) {
   if (!url) return url;
   try {
     const u = new URL(url, location.origin);
-    if (u.protocol === 'https:' && COVER_PROXY_HOSTS.includes(u.hostname)) {
+    const allowed =
+      u.protocol === 'https:'
+      && (COVER_PROXY_HOSTS.includes(u.hostname) || COVER_PROXY_SUFFIXES.some((sfx) => u.hostname.endsWith(sfx)));
+    if (allowed) {
       return '/api/v1/media/img?src=' + encodeURIComponent(url);
     }
   } catch {
@@ -65,7 +70,6 @@ export async function render(container, { user } = {}) {
         <button class="mk-btn ghost" id="mk-group">${esc(t('media.groupByStatus'))}</button>
         <button class="mk-btn ghost" id="mk-select">${esc(t('media.selectMode'))}</button>
         <button class="mk-btn ghost" id="mk-export">${esc(t('media.export'))}</button>
-        ${user && user.role === 'admin' ? `<button class="mk-btn ghost" id="mk-tmdb-config">⚙ TMDB</button>` : ''}
         <button class="mk-btn" id="mk-add">+ ${esc(t('media.add'))}</button>
       </div>
       <div class="mk-tabs" id="mk-tabs"></div>
@@ -148,8 +152,6 @@ export async function render(container, { user } = {}) {
     load();
   });
 
-  const tmdbCfgBtn = container.querySelector('#mk-tmdb-config');
-  if (tmdbCfgBtn) tmdbCfgBtn.addEventListener('click', () => openTmdbConfig());
   container.querySelector('#mk-export').addEventListener('click', () => {
     window.open('/api/v1/media/export', '_blank');
   });
@@ -371,32 +373,64 @@ export async function render(container, { user } = {}) {
   }
 
   function openAdd() {
+    // Datenquelle je Medientyp: Film/Serie -> TMDB, Musik -> iTunes,
+    // Buch -> OpenLibrary + Google Books. "手动录入" ist immer dabei.
+    const typeLabels = Object.fromEntries(TYPE_TABS.filter((x) => x.key !== 'all').map((x) => [x.key, x.label()]));
+    const SOURCES_BY_TYPE = {
+      movie: [{ key: 'tmdb', label: 'TMDB' }],
+      music: [{ key: 'itunes', label: 'iTunes' }],
+      book: [{ key: 'openlib', label: 'OpenLibrary' }, { key: 'gbooks', label: 'Google Books' }],
+    };
+    const SEARCH_EP = { tmdb: '/media/search/tmdb', openlib: '/media/search/openlib', gbooks: '/media/search/gbooks', itunes: '/media/search/itunes' };
+    const MANUAL_KEY = 'manual';
+
+    let addType = 'movie';
+    let addSource = 'tmdb';
+    let addRating = 0;
+    let addData = []; // letzte Suchergebnisse
+
     const body = document.createElement('div');
-    body.className = 'mk-modal-body';
+    body.className = 'mk-modal-body mk-add';
+
+    const sourceChipsHtml = () =>
+      [...SOURCES_BY_TYPE[addType], { key: MANUAL_KEY, label: t('media.manual') }]
+        .map((s) => `<button type="button" class="mk-seg__btn ${s.key === addSource ? 'active' : ''}" data-src="${s.key}">${esc(s.label)}</button>`)
+        .join('');
+
     body.innerHTML = `
-      <div class="mk-tabs" id="a-tabs">
-        <div class="mk-tab active" data-src="tmdb">TMDB</div>
-        <div class="mk-tab" data-src="openlib">OpenLibrary</div>
-        <div class="mk-tab" data-src="manual">${esc(t('media.manual'))}</div>
+      <div class="mk-add__section">
+        <div class="mk-add__label">${esc(t('media.type.label'))}</div>
+        <div class="mk-seg" id="a-type-seg">
+          ${Object.entries(typeLabels).map(([k, v]) => `<button type="button" class="mk-seg__btn ${k === addType ? 'active' : ''}" data-type="${k}">${esc(v)}</button>`).join('')}
+        </div>
       </div>
-      <div id="a-search" style="margin:10px 0">
-        <input id="a-q" placeholder="${esc(t('media.searchPlaceholder'))}" style="width:70%"> <button class="mk-btn" id="a-go">${esc(t('media.search'))}</button>
+      <div class="mk-add__section">
+        <div class="mk-add__label">${esc(t('media.source'))}</div>
+        <div class="mk-seg mk-seg--sm" id="a-src-seg">${sourceChipsHtml()}</div>
       </div>
-      <div class="mk-search-results" id="a-results"></div>
-      <div id="a-form" style="margin-top:10px">
-        <div class="mk-field"><label>${esc(t('media.type.label'))}</label>
-          <select id="a-type">${TYPE_TABS.filter((x) => x.key !== 'all').map(
-            (x) => `<option value="${x.key}">${esc(x.label())}</option>`
-          ).join('')}</select></div>
-        <div class="mk-field"><label>${esc(t('media.title'))}</label><input id="a-title"></div>
-        <div class="mk-field"><label>${esc(t('media.cover'))} (URL)</label><input id="a-cover" placeholder="https://..."></div>
-        <div class="mk-field"><label>${esc(t('media.status.label'))}</label>
-          <select id="a-status">${STATUSES.map((s) => `<option value="${s}">${esc(t('media.status.' + s))}</option>`).join('')}</select></div>
-        <div class="mk-field"><label>${esc(t('media.rating'))}</label><div id="a-stars">${starsInput(0)}</div></div>
+      <div class="mk-add__search" id="a-search">
+        <input id="a-q" placeholder="${esc(t('media.searchPlaceholder'))}">
+        <button class="mk-btn" id="a-go">${esc(t('media.search'))}</button>
+      </div>
+      <div class="mk-search-results" id="a-results" hidden></div>
+      <div class="mk-add__form">
+        <div class="mk-grid2">
+          <div class="mk-field"><label>${esc(t('media.title'))}</label><input id="a-title"></div>
+          <div class="mk-field"><label>${esc(t('media.cover'))} (URL)</label><input id="a-cover" placeholder="https://..."></div>
+        </div>
+        <div class="mk-grid2">
+          <div class="mk-field"><label>${esc(t('media.status.label'))}</label>
+            <select id="a-status">${STATUSES.map((s) => `<option value="${s}">${esc(t('media.status.' + s))}</option>`).join('')}</select></div>
+          <div class="mk-field"><label>${esc(t('media.rating'))}</label><div id="a-stars">${starsInput(0)}</div></div>
+        </div>
         <div class="mk-field"><label>${esc(t('media.comment'))}</label><textarea id="a-comment" rows="2"></textarea></div>
         <div class="mk-field"><label>${esc(t('media.members'))}</label>${memberPicker([])}</div>
-        <div class="mk-field"><label><input type="checkbox" id="a-private"> ${esc(t('media.private'))}</label></div>
-        <div style="display:flex;gap:8px"><div class="mk-spacer" style="flex:1"></div><button class="mk-btn" id="a-save">${esc(t('media.save'))}</button></div>
+        <div class="mk-field mk-field--inline"><label><input type="checkbox" id="a-private"> ${esc(t('media.private'))}</label></div>
+      </div>
+      <div class="mk-add__footer">
+        <span id="a-msg" class="mk-add__msg"></span>
+        <div class="mk-spacer" style="flex:1"></div>
+        <button class="mk-btn" id="a-save">${esc(t('media.save'))}</button>
       </div>
     `;
     openModal({
@@ -404,86 +438,121 @@ export async function render(container, { user } = {}) {
       content: '',
       onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
     });
-    let rating = 0;
     wireStars(body.querySelector('#a-stars'));
     body.querySelector('#a-stars').addEventListener('click', (e) => {
-      if (e.target.dataset.v) rating = parseInt(e.target.dataset.v, 10);
+      if (e.target.dataset.v) addRating = parseInt(e.target.dataset.v, 10);
     });
 
-    const tabs = body.querySelector('#a-tabs');
     const results = body.querySelector('#a-results');
     const searchBox = body.querySelector('#a-search');
-    tabs.querySelectorAll('.mk-tab').forEach((el) =>
+    const msg = body.querySelector('#a-msg');
+
+    function syncSearchVisibility() {
+      const manual = addSource === MANUAL_KEY;
+      searchBox.style.display = manual ? 'none' : '';
+      results.hidden = manual || !addData.length;
+      if (manual) body.querySelector('#a-title').focus();
+    }
+
+    function paintSources() {
+      body.querySelector('#a-src-seg').innerHTML = sourceChipsHtml();
+      body.querySelectorAll('#a-src-seg .mk-seg__btn').forEach((el) =>
+        el.addEventListener('click', () => {
+          addSource = el.dataset.src;
+          body.querySelectorAll('#a-src-seg .mk-seg__btn').forEach((x) => x.classList.toggle('active', x === el));
+          addData = [];
+          results.innerHTML = '';
+          results.hidden = true;
+          syncSearchVisibility();
+        })
+      );
+    }
+
+    body.querySelectorAll('#a-type-seg .mk-seg__btn').forEach((el) =>
       el.addEventListener('click', () => {
-        tabs.querySelectorAll('.mk-tab').forEach((x) => x.classList.toggle('active', x === el));
-        const src = el.dataset.src;
-        searchBox.style.display = src === 'manual' ? 'none' : '';
+        addType = el.dataset.type;
+        body.querySelectorAll('#a-type-seg .mk-seg__btn').forEach((x) => x.classList.toggle('active', x === el));
+        addSource = SOURCES_BY_TYPE[addType][0].key;
+        addData = [];
         results.innerHTML = '';
-        if (src === 'manual') {
-          body.querySelector('#a-title').focus();
-        }
+        results.hidden = true;
+        paintSources();
+        syncSearchVisibility();
       })
     );
+    paintSources();
+    syncSearchVisibility();
 
-    body.querySelector('#a-go').addEventListener('click', async () => {
-      const src = tabs.querySelector('.mk-tab.active').dataset.src;
+    async function doSearch() {
       const q = body.querySelector('#a-q').value.trim();
-      if (!q) return;
+      if (!q || addSource === MANUAL_KEY) return;
+      results.hidden = false;
       results.innerHTML = `<div class="mk-empty">${esc(t('media.loading'))}</div>`;
       try {
-        let data = [];
-        if (src === 'tmdb') data = (await api.get('/media/search/tmdb?q=' + encodeURIComponent(q))).data || [];
-        else if (src === 'openlib') data = (await api.get('/media/search/openlib?q=' + encodeURIComponent(q))).data || [];
-        results.innerHTML = data.length
-          ? data
+        addData = (await api.get(SEARCH_EP[addSource] + '?q=' + encodeURIComponent(q))).data || [];
+        results.innerHTML = addData.length
+          ? addData
               .map(
                 (d, i) => `<div class="mk-search-row" data-i="${i}">${
-                  d.posterUrl || d.coverUrl ? `<img src="${esc(coverSrc(d.posterUrl || d.coverUrl))}">` : '<div>📄</div>'
-                }<div><div><b>${esc(d.title)}</b></div><div style="font-size:12px;color:#888">${esc(
-                  d.releaseDate || d.publishDate || d.authors || ''
-                )}</div></div></div>`
+                  d.posterUrl || d.coverUrl ? `<img src="${esc(coverSrc(d.posterUrl || d.coverUrl))}">` : '<div class="mk-search-row__ph">📄</div>'
+                }<div class="mk-search-row__body"><div><b>${esc(d.title)}</b></div><div style="font-size:12px;color:#888">${esc(
+                  [d.releaseDate || d.publishDate || '', d.authors || ''].filter(Boolean).join(' · ')
+                )}</div>${d.overview ? `<div class="mk-search-row__ov">${esc(String(d.overview).slice(0, 80))}</div>` : ''}</div></div>`
               )
               .join('')
           : `<div class="mk-empty">${esc(t('media.noResult'))}</div>`;
         results.querySelectorAll('.mk-search-row').forEach((el) =>
           el.addEventListener('click', () => {
-            const d = data[parseInt(el.dataset.i, 10)];
+            const d = addData[parseInt(el.dataset.i, 10)];
             body.querySelector('#a-title').value = d.title || '';
             body.querySelector('#a-cover').value = d.posterUrl || d.coverUrl || '';
-            body.querySelector('#a-type').value = d.kind === 'book' ? 'book' : d.kind === 'music' ? 'music' : 'movie';
-            body.querySelector('#a-comment').value = d.overview || '';
+            body.querySelector('#a-comment').value = [d.authors, d.overview].filter(Boolean).join('\n').slice(0, 500);
+            results.querySelectorAll('.mk-search-row').forEach((x) => x.classList.remove('picked'));
+            el.classList.add('picked');
           })
         );
       } catch {
         results.innerHTML = `<div class="mk-empty">${esc(t('media.searchFailed'))}</div>`;
+      }
+    }
+    body.querySelector('#a-go').addEventListener('click', doSearch);
+    body.querySelector('#a-q').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doSearch();
       }
     });
 
     body.querySelector('#a-save').addEventListener('click', async () => {
       const title = body.querySelector('#a-title').value.trim();
       if (!title) {
-        alert(t('media.titleRequired') || 'Titel erforderlich');
+        msg.textContent = t('media.titleRequired') || 'Titel erforderlich';
+        msg.classList.add('mk-add__msg--err');
+        body.querySelector('#a-title').focus();
         return;
       }
-      const tags = [];
       const payload = {
-        mediaType: body.querySelector('#a-type').value,
+        mediaType: addType,
         title,
         coverUrl: body.querySelector('#a-cover').value.trim() || null,
         status: body.querySelector('#a-status').value,
-        rating,
+        rating: addRating,
         comment: body.querySelector('#a-comment').value,
         isPrivate: body.querySelector('#a-private').checked,
         members: getPickedMembers(body),
-        tags,
+        tags: [],
       };
+      const saveBtn = body.querySelector('#a-save');
+      saveBtn.disabled = true;
       try {
         await api.post('/media/add', payload);
         // force:true → nach erfolgreichem Speichern NICHT nach „Änderungen verwerfen?" fragen
         closeModal({ force: true });
         load();
       } catch {
-        alert(t('common.error') || 'Fehler');
+        saveBtn.disabled = false;
+        msg.textContent = t('common.error') || 'Fehler';
+        msg.classList.add('mk-add__msg--err');
       }
     });
   }
@@ -494,47 +563,4 @@ export async function render(container, { user } = {}) {
     `<option value="">${esc(t('media.allMembers'))}</option>` +
     state.members.map((m) => `<option value="${m.id}">${esc(m.name || m.display_name || '#' + m.id)}</option>`).join('');
   await load();
-
-  async function openTmdbConfig() {
-    const body = document.createElement('div');
-    body.className = 'mk-modal-body';
-    body.innerHTML = `
-      <div class="mk-field"><label>TMDB API Key</label>
-        <input id="c-key" type="password" placeholder="输入 TMDB v3 API Key" autocomplete="off"></div>
-      <div class="mk-field"><label>TMDB 代理 URL（可选，用于国内网络访问）</label>
-        <input id="c-proxy" placeholder="https://...（可选）"></div>
-      <div class="mk-field"><label><input type="checkbox" id="c-ol"> 启用 OpenLibrary（书籍搜索）</label></div>
-      <div id="c-msg" style="font-size:12px;min-height:16px"></div>
-      <div style="display:flex;gap:8px"><div class="mk-spacer" style="flex:1"></div>
-        <button class="mk-btn ghost" id="c-cancel">${esc(t('common.cancel') || '取消')}</button>
-        <button class="mk-btn" id="c-save">${esc(t('common.save') || '保存')}</button></div>
-    `;
-    openModal({ title: t('media.tmdbConfig') || 'TMDB 设置', content: '', onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body) });
-    const msg = body.querySelector('#c-msg');
-    try {
-      const cfg = (await api.get('/media/config')).data || {};
-      body.querySelector('#c-proxy').value = cfg.tmdbProxyUrl || '';
-      body.querySelector('#c-ol').checked = !!cfg.openlibraryEnable;
-      msg.style.color = cfg.tmdbConfigured ? '#16a34a' : '#b45309';
-      msg.textContent = cfg.tmdbConfigured ? 'TMDB 已配置：如需更换请填写新 Key，留空则保留原 Key' : '尚未配置 TMDB Key';
-    } catch { /* 配置读取失败不影响表单 */ }
-    body.querySelector('#c-cancel').addEventListener('click', () => closeModal());
-    body.querySelector('#c-save').addEventListener('click', async () => {
-      const key = body.querySelector('#c-key').value.trim();
-      const proxy = body.querySelector('#c-proxy').value.trim();
-      const ol = body.querySelector('#c-ol').checked;
-      msg.style.color = '#666'; msg.textContent = '保存中…';
-      try {
-        const r = await api.put('/media/config', { tmdbApiKey: key, tmdbProxyUrl: proxy, openlibraryEnable: ol });
-        const d = r.data || {};
-        msg.style.color = '#16a34a';
-        msg.textContent = d.tmdbConfigured ? '已保存：TMDB 配置成功' : '已保存：TMDB Key 为空（已清空）';
-        setTimeout(() => closeModal({ force: true }), 900);
-      } catch (e) {
-        msg.style.color = '#dc2626';
-        const status = e && e.status ? e.status : (e && e.code);
-        msg.textContent = status === 403 ? '需要管理员权限' : ('保存失败：' + (e?.message || '未知错误'));
-      }
-    });
-  }
 }

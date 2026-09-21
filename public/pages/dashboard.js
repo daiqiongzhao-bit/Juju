@@ -521,7 +521,7 @@ function budgetCategoryLabel(category) {
   return key ? t(`budget.${key}`) : (category || '-');
 }
 
-function formatCurrency(amount, currency = 'EUR') {
+function formatCurrency(amount, currency = 'CNY') {
   return getNumberFormat({
     style: 'currency',
     currency,
@@ -1895,7 +1895,7 @@ export async function render(container, { user }) {
   let widgetConfig = DEFAULT_WIDGET_CONFIG;
   let savedWidgetConfig = DEFAULT_WIDGET_CONFIG;
   let isCustomizing = false;
-  let currency     = 'EUR';
+  let currency     = 'CNY';
   let visibleMealTypes = MEAL_ORDER;
   let loadFailed   = false;
   let loadErrorStatus = null;

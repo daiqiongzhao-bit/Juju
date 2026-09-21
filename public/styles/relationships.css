@@ -467,3 +467,132 @@
   .rel-graph-actions { justify-content: flex-start; }
   .rel-search-input { width: 120px; }
 }
+
+/* --- Genealogy (族谱) --- */
+.rel-gen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rel-gen__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rel-gen__modes {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rel-gen__root {
+  width: auto;
+  min-width: 170px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+.rel-gen__zoom {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.rel-gen__canvas {
+  overflow: auto;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--color-border, #cbd5e1) 45%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+  max-height: 66vh;
+  min-height: 320px;
+}
+.rel-gen__svg {
+  display: block;
+  min-width: 100%;
+  height: auto;
+  transition: width 0.15s ease;
+}
+.rel-gen__link {
+  fill: none;
+  stroke: var(--color-border, #cbd5e1);
+  stroke-width: 1.6;
+}
+.rel-gen__spouse {
+  stroke: var(--_module-birthdays, #f59e0b);
+  stroke-width: 1.4;
+  opacity: 0.9;
+}
+.rel-gen__node { cursor: pointer; }
+.rel-gen__rect {
+  stroke: #fff;
+  stroke-width: 2;
+  opacity: 0.92;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.12));
+  transition: filter 0.12s ease;
+}
+.rel-gen__node:hover .rel-gen__rect,
+.rel-gen__node:focus-visible .rel-gen__rect {
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.22)) brightness(1.05);
+}
+.rel-gen__name {
+  font-size: 13px;
+  font-weight: 600;
+  fill: #fff;
+  pointer-events: none;
+}
+.rel-gen__legend {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--color-text-tertiary, #94a3b8);
+}
+.rel-gen__swatch {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 3px solid var(--color-border, #cbd5e1);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.rel-gen__swatch--couple { border-top: 3px double var(--_module-birthdays, #f59e0b); }
+
+/* 世代列表 */
+.rel-gen-list {
+  padding: 8px 4px;
+  font-size: 14px;
+}
+.rel-gen-list ul.rel-gen-list__children {
+  list-style: none;
+  margin: 4px 0 4px 14px;
+  padding-left: 16px;
+  border-left: 2px solid var(--color-border, #e2e8f0);
+}
+.rel-gen-list__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 3px 0;
+}
+.rel-gen-list__person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 3px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text, #1f2937);
+}
+.rel-gen-list__person:hover { background: var(--color-hover, #f1f5f9); }
+.rel-gen-list__spouse {
+  font-size: 13px;
+  color: var(--color-text-secondary, #64748b);
+  background: var(--color-hover, #f8fafc);
+  border-radius: 8px;
+  padding: 3px 8px;
+}

@@ -153,6 +153,7 @@ async function refreshActiveTab() {
   if (state.activeTab === 'people') return renderPeople();
   if (state.activeTab === 'common') return renderCommon();
   if (state.activeTab === 'tree') return renderTree();
+  if (state.activeTab === 'genealogy') return renderGenealogy();
   if (state.activeTab === 'timeline') return renderTimeline();
   if (state.activeTab === 'anniversaries') return renderAnniversaries();
 }
@@ -283,6 +284,7 @@ export async function render(container, { user } = {}) {
         <button class="sub-tab" role="tab" data-tab-id="people">${t('relationships.tab.people')}</button>
         <button class="sub-tab" role="tab" data-tab-id="common">${t('relationships.tab.common')}</button>
         <button class="sub-tab" role="tab" data-tab-id="tree">${t('relationships.tab.tree')}</button>
+        <button class="sub-tab" role="tab" data-tab-id="genealogy">${t('relationships.tab.genealogy')}</button>
         <button class="sub-tab" role="tab" data-tab-id="timeline">${t('relationships.tab.timeline')}</button>
         <button class="sub-tab" role="tab" data-tab-id="anniversaries">${t('relationships.tab.anniversaries')}</button>
       </div>
@@ -291,6 +293,7 @@ export async function render(container, { user } = {}) {
       <section class="rel-panel" id="rel-panel-people" role="tabpanel" hidden></section>
       <section class="rel-panel" id="rel-panel-common" role="tabpanel" hidden></section>
       <section class="rel-panel" id="rel-panel-tree" role="tabpanel" hidden></section>
+      <section class="rel-panel" id="rel-panel-genealogy" role="tabpanel" hidden></section>
       <section class="rel-panel" id="rel-panel-timeline" role="tabpanel" hidden></section>
       <section class="rel-panel" id="rel-panel-anniversaries" role="tabpanel" hidden></section>
     </div>`;
@@ -308,7 +311,7 @@ export async function render(container, { user } = {}) {
 
 async function switchTab(id) {
   state.activeTab = id;
-  const panels = ['network', 'people', 'common', 'tree', 'timeline', 'anniversaries'];
+  const panels = ['network', 'people', 'common', 'tree', 'genealogy', 'timeline', 'anniversaries'];
   for (const p of panels) {
     const el = _container.querySelector(`#rel-panel-${p}`);
     if (el) el.hidden = p !== id;
@@ -317,6 +320,7 @@ async function switchTab(id) {
   if (id === 'people') return renderPeople();
   if (id === 'common') return renderCommon();
   if (id === 'tree') return renderTree();
+  if (id === 'genealogy') return renderGenealogy();
   if (id === 'timeline') return renderTimeline();
   if (id === 'anniversaries') return renderAnniversaries();
 }
@@ -889,6 +893,376 @@ function paintTreeBody(panel, tree, sharedIds) {
   body.querySelectorAll('[data-contact]').forEach((node) => {
     node.addEventListener('click', () => {
       const c = contactById(Number(node.dataset.contact));
+      if (c) openContactModal(c);
+    });
+  });
+}
+
+// --------------------------------------------------------
+// Tab: Genealogy (族谱视图)
+// Stammbaum aus parent-child-/spouse-Kanten: 'child' heisst
+// „contact_a ist Kind von contact_b". Drei Darstellungen:
+// top (Weltallschema oben-unten), side (Mindmap links-rechts),
+// list (Generationenliste). Startperson waehlbar, Zoom im SVG.
+// --------------------------------------------------------
+const GEN_LAYOUT_KEY = 'juju-rel-gen-layout';
+const genState = { layout: 'top', rootId: null, zoom: 1 };
+
+async function renderGenealogy() {
+  const panel = _container.querySelector('#rel-panel-genealogy');
+  panel.innerHTML = `<div class="rel-loading">${t('common.loading')}</div>`;
+  await ensureContacts();
+  let graph;
+  try {
+    const res = await api.get('/relationships/graph');
+    graph = res?.data || { nodes: [], edges: [] };
+  } catch {
+    graph = { nodes: [], edges: [] };
+  }
+  const gen = buildGenData(graph);
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(GEN_LAYOUT_KEY) || '{}');
+    if (['top', 'side', 'list'].includes(saved.layout)) genState.layout = saved.layout;
+    if (saved.rootId === null || typeof saved.rootId === 'number') genState.rootId = saved.rootId;
+  } catch { /* ignore */ }
+  if (genState.rootId !== null && !gen.persons.has(genState.rootId)) genState.rootId = null;
+
+  if (!gen.persons.size) {
+    panel.innerHTML = `<div class="empty-state">
+      <div class="empty-state__title">${t('relationships.gen.emptyTitle')}</div>
+      <div class="empty-state__description">${t('relationships.gen.emptyDesc')}</div>
+    </div>`;
+    return;
+  }
+
+  panel.innerHTML = `
+    <div class="rel-gen card">
+      <div class="rel-gen__toolbar">
+        <div class="rel-gen__modes">
+          <button class="btn btn--sm ${genState.layout === 'top' ? 'btn--primary' : 'btn--secondary'}" data-mode="top">${t('relationships.gen.top')}</button>
+          <button class="btn btn--sm ${genState.layout === 'side' ? 'btn--primary' : 'btn--secondary'}" data-mode="side">${t('relationships.gen.side')}</button>
+          <button class="btn btn--sm ${genState.layout === 'list' ? 'btn--primary' : 'btn--secondary'}" data-mode="list">${t('relationships.gen.list')}</button>
+        </div>
+        <select class="form-input rel-gen__root" id="gen-root" aria-label="${t('relationships.gen.root')}">
+          <option value="">${t('relationships.gen.rootAll')}</option>
+          ${graph.nodes.map((n) => `<option value="${n.id}" ${genState.rootId === n.id ? 'selected' : ''}>${esc(n.name || '?')}</option>`).join('')}
+        </select>
+        <div class="rel-gen__zoom" ${genState.layout === 'list' ? 'hidden' : ''}>
+          <button class="btn btn--secondary btn--sm" data-zoom="out" aria-label="-">－</button>
+          <button class="btn btn--secondary btn--sm" data-zoom="reset">${t('relationships.resetView')}</button>
+          <button class="btn btn--secondary btn--sm" data-zoom="in" aria-label="+">＋</button>
+        </div>
+      </div>
+      <div class="rel-gen__canvas" id="gen-canvas"></div>
+      <div class="rel-gen__legend">
+        <span><span class="rel-gen__swatch rel-gen__swatch--couple"></span>${t('relationships.gen.spouseLine')}</span>
+        <span><span class="rel-gen__swatch rel-gen__swatch--child"></span>${t('relationships.gen.childLine')}</span>
+      </div>
+    </div>`;
+
+  const paint = () => {
+    const zoomBox = panel.querySelector('.rel-gen__zoom');
+    if (zoomBox) zoomBox.hidden = genState.layout === 'list';
+    if (genState.layout === 'list') renderGenList(panel, gen);
+    else drawGenTree(panel, gen);
+  };
+  paint();
+
+  panel.querySelectorAll('[data-mode]').forEach((btn) => btn.addEventListener('click', () => {
+    genState.layout = btn.dataset.mode;
+    saveGenPrefs();
+    panel.querySelectorAll('[data-mode]').forEach((b) => {
+      b.classList.toggle('btn--primary', b === btn);
+      b.classList.toggle('btn--secondary', b !== btn);
+    });
+    paint();
+  }));
+  panel.querySelector('#gen-root').addEventListener('change', (e) => {
+    genState.rootId = e.target.value ? Number(e.target.value) : null;
+    saveGenPrefs();
+    paint();
+  });
+  panel.querySelectorAll('[data-zoom]').forEach((btn) => btn.addEventListener('click', () => {
+    if (btn.dataset.zoom === 'in') genState.zoom = Math.min(2, Math.round((genState.zoom + 0.2) * 10) / 10);
+    if (btn.dataset.zoom === 'out') genState.zoom = Math.max(0.4, Math.round((genState.zoom - 0.2) * 10) / 10);
+    if (btn.dataset.zoom === 'reset') genState.zoom = 1;
+    const svg = panel.querySelector('svg.rel-gen__svg');
+    if (svg) svg.style.width = `${Math.round(genState.zoom * 100)}%`;
+  }));
+}
+
+function saveGenPrefs() {
+  try {
+    localStorage.setItem(GEN_LAYOUT_KEY, JSON.stringify({ layout: genState.layout, rootId: genState.rootId }));
+  } catch { /* ignore */ }
+}
+
+function buildGenData(graph) {
+  const persons = new Map((graph.nodes || []).map((n) => [n.id, n]));
+  const parentIds = new Map(); // childId -> Set parentId
+  const childIds = new Map();  // parentId -> Set childId
+  const spouseIds = new Map(); // personId -> Set spouseId
+  const push = (m, k, v) => { if (!m.has(k)) m.set(k, new Set()); m.get(k).add(v); };
+  for (const e of graph.edges || []) {
+    if (e.relation_type === 'child') {
+      push(childIds, e.contact_b, e.contact_a);
+      push(parentIds, e.contact_a, e.contact_b);
+    } else if (e.relation_type === 'spouse' || e.relation_type === 'partner') {
+      push(spouseIds, e.contact_a, e.contact_b);
+      push(spouseIds, e.contact_b, e.contact_a);
+    }
+  }
+  return { persons, parentIds, childIds, spouseIds };
+}
+
+function genUnitSpouse(gen, personId) {
+  for (const s of gen.spouseIds.get(personId) || new Set()) return s;
+  return null;
+}
+
+function genUnitChildren(gen, personId, spouseId) {
+  const set = new Set();
+  for (const p of spouseId != null ? [personId, spouseId] : [personId]) {
+    for (const c of gen.childIds.get(p) || new Set()) set.add(c);
+  }
+  return [...set];
+}
+
+function genRootIds(gen) {
+  if (genState.rootId !== null && gen.persons.has(genState.rootId)) return [genState.rootId];
+  const roots = [];
+  for (const id of gen.persons.keys()) {
+    const parents = gen.parentIds.get(id);
+    if (!parents || !parents.size) roots.push(id);
+  }
+  if (!roots.length) {
+    // Fallback: verschachtelte Daten ohne echte Wurzel -> alle mit Kindern
+    for (const [id, kids] of gen.childIds) if (kids.size) roots.push(id);
+    if (!roots.length) roots.push(...gen.persons.keys());
+  }
+  return roots;
+}
+
+// Layout im abstrakten Koordinatensystem (u = quer, v = Generationstiefe),
+// danach je Modus auf x/y abgebildet.
+function layoutGenTree(gen, rootIds, mode) {
+  const NODE_W = 132, NODE_H = 46, SPOUSE_GAP = 16, SIB_GAP = 20, DEPTH_GAP = 88, MARGIN = 28;
+  const pos = new Map();   // id -> {u, v}
+  const links = [];        // {from, to} Eltern->Kind (Pixel werden spaeter gezeichnet)
+  const placed = new Set();
+
+  const measure = (id, seen) => {
+    if (seen.has(id) || placed.has(id)) return { w: 0, unit: null };
+    seen.add(id);
+    const sp = genUnitSpouse(gen, id);
+    const ownW = sp ? NODE_W * 2 + SPOUSE_GAP : NODE_W;
+    const kids = genUnitChildren(gen, id, sp).filter((c) => !seen.has(c) && c !== id);
+    const childTrees = kids.map((k) => measure(k, seen)).filter((t) => t.unit);
+    const childrenW = childTrees.reduce((a, t) => a + t.w, 0) + Math.max(0, childTrees.length - 1) * SIB_GAP;
+    return { w: Math.max(ownW, childrenW), unit: { id, spouse: sp, kids: childTrees.map((t) => t.unit.id), childTrees, ownW, childrenW } };
+  };
+
+  const assign = (unit, uLeft, depth) => {
+    placed.add(unit.id);
+    if (unit.spouse != null) placed.add(unit.spouse);
+    const unitW = Math.max(unit.ownW, unit.childrenW);
+    const childStart = uLeft + (unitW - unit.childrenW) / 2;
+    let cx = childStart;
+    for (const ct of unit.childTrees) {
+      assign(ct.unit, cx, depth + 1);
+      cx += ct.w + SIB_GAP;
+      links.push({ from: unit.id, to: ct.unit.id, viaSpouse: unit.spouse != null });
+    }
+    // Paar-Block zentrieren
+    const center = uLeft + unitW / 2;
+    if (unit.spouse != null) {
+      pos.set(unit.id, { u: center - SPOUSE_GAP / 2 - NODE_W / 2, v: depth });
+      pos.set(unit.spouse, { u: center + SPOUSE_GAP / 2 + NODE_W / 2, v: depth });
+    } else {
+      pos.set(unit.id, { u: center, v: depth });
+    }
+    unit._w = unitW;
+  };
+
+  const seen = new Set();
+  const rootUnits = rootIds.map((r) => measure(r, seen)).filter((t) => t.unit);
+  // Gesamtspanne: Wurzel-Einheiten nebeneinander
+  const totalW = rootUnits.reduce((a, t) => a + t.w, 0) + Math.max(0, rootUnits.length - 1) * (SIB_GAP + 40);
+  let rx = 0;
+  for (const t of rootUnits) {
+    assign(t.unit, rx, 0);
+    rx += t.w + SIB_GAP + 40;
+  }
+
+  // u/v -> Pixel
+  const xy = (p) => mode === 'top'
+    ? { x: MARGIN + p.u, y: MARGIN + p.v * DEPTH_GAP }
+    : { x: MARGIN + p.v * DEPTH_GAP, y: MARGIN + p.u };
+  const px = new Map();
+  let maxX = 0, maxY = 0;
+  for (const [id, p] of pos) {
+    const pt = xy(p);
+    px.set(id, pt);
+    maxX = Math.max(maxX, pt.x + NODE_W);
+    maxY = Math.max(maxY, pt.y + NODE_H);
+  }
+  return { pos: px, links, couples: null, width: maxX + MARGIN, height: maxY + MARGIN, nodeW: NODE_W, nodeH: NODE_H, mode };
+}
+
+function drawGenTree(panel, gen) {
+  const canvas = panel.querySelector('#gen-canvas');
+  if (!canvas) return;
+  const rootIds = genRootIds(gen);
+  const layout = layoutGenTree(gen, rootIds, genState.layout);
+  const { pos, links, nodeW: W, nodeH: H, mode } = layout;
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'rel-gen__svg');
+  svg.setAttribute('viewBox', `0 0 ${Math.ceil(layout.width)} ${Math.ceil(layout.height)}`);
+  svg.setAttribute('preserveAspectRatio', 'xMinYMin meet');
+  svg.style.width = `${Math.round(genState.zoom * 100)}%`;
+
+  const edgeLayer = document.createElementNS(NS, 'g');
+  const nodeLayer = document.createElementNS(NS, 'g');
+  svg.appendChild(edgeLayer);
+  svg.appendChild(nodeLayer);
+
+  const midOf = (id) => {
+    const p = pos.get(id);
+    return p ? { x: p.x + W / 2, y: p.y + H / 2 } : null;
+  };
+
+  for (const l of links) {
+    const a = pos.get(l.from);
+    const b = pos.get(l.to);
+    if (!a || !b) continue;
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('class', 'rel-gen__link');
+    if (mode === 'top') {
+      const y1 = a.y + H, y2 = b.y, x1 = a.x + W / 2, x2 = b.x + W / 2;
+      const ym = (y1 + y2) / 2;
+      path.setAttribute('d', `M ${x1} ${y1} L ${x1} ${ym} L ${x2} ${ym} L ${x2} ${y2}`);
+    } else {
+      const x1 = a.x + W, x2 = b.x, y1 = a.y + H / 2, y2 = b.y + H / 2;
+      const xm = (x1 + x2) / 2;
+      path.setAttribute('d', `M ${x1} ${y1} L ${xm} ${y1} L ${xm} ${y2} L ${x2} ${y2}`);
+    }
+    edgeLayer.appendChild(path);
+  }
+
+  // Paare: doppelte Querlinie zwischen den Partnern
+  const drawn = new Set();
+  for (const [id, p] of pos) {
+    if (drawn.has(id)) continue;
+    const sp = genUnitSpouse(gen, id);
+    if (sp != null && pos.has(sp) && !drawn.has(sp)) {
+      const b = pos.get(sp);
+      const left = p.x < b.x ? p : b;
+      const right = p.x < b.x ? b : p;
+      for (const off of [-3, 3]) {
+        const line = document.createElementNS(NS, 'line');
+        line.setAttribute('class', 'rel-gen__spouse');
+        line.setAttribute('x1', left.x + W);
+        line.setAttribute('y1', left.y + H / 2 + off);
+        line.setAttribute('x2', right.x);
+        line.setAttribute('y2', right.y + H / 2 + off);
+        edgeLayer.appendChild(line);
+      }
+    }
+    drawn.add(id);
+  }
+
+  for (const [id, p] of pos) {
+    const person = gen.persons.get(id) || { name: '?', relationship_type: null };
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'rel-gen__node');
+    g.setAttribute('transform', `translate(${p.x},${p.y})`);
+    g.setAttribute('data-id', id);
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label', person.name || '?');
+
+    const rect = document.createElementNS(NS, 'rect');
+    rect.setAttribute('width', W);
+    rect.setAttribute('height', H);
+    rect.setAttribute('rx', 10);
+    rect.setAttribute('ry', 10);
+    rect.setAttribute('class', 'rel-gen__rect');
+    rect.setAttribute('fill', relColor(person.relationship_type));
+    g.appendChild(rect);
+
+    const name = document.createElementNS(NS, 'text');
+    name.setAttribute('class', 'rel-gen__name');
+    name.setAttribute('x', W / 2);
+    name.setAttribute('y', person.photo ? H / 2 + 4 : H / 2 + 5);
+    name.setAttribute('text-anchor', 'middle');
+    name.textContent = String(person.name || '?').slice(0, 9);
+    g.appendChild(name);
+    if (person.photo) {
+      const img = document.createElementNS(NS, 'image');
+      img.setAttribute('href', person.photo);
+      img.setAttribute('x', W - 20);
+      img.setAttribute('y', 4);
+      img.setAttribute('width', 16);
+      img.setAttribute('height', 16);
+      img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+      img.setAttribute('clip-path', 'inset(0 round 8px)');
+      g.appendChild(img);
+    }
+
+    nodeLayer.appendChild(g);
+  }
+
+  if (window.lucide) window.lucide.createIcons({ el: canvas });
+  canvas.innerHTML = '';
+  canvas.appendChild(svg);
+
+  svg.querySelectorAll('.rel-gen__node').forEach((el) => {
+    const open = () => {
+      const c = contactById(Number(el.dataset.id));
+      if (c) openContactModal(c);
+    };
+    el.addEventListener('click', open);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
+  });
+}
+
+function renderGenList(panel, gen) {
+  const canvas = panel.querySelector('#gen-canvas');
+  if (!canvas) return;
+
+  const unitHtml = (id, depth, seen) => {
+    if (seen.has(id)) return '';
+    seen.add(id);
+    const person = gen.persons.get(id) || { name: '?' };
+    const sp = genUnitSpouse(gen, id);
+    let spouseHtml = '';
+    if (sp != null && !seen.has(sp)) {
+      seen.add(sp);
+      const spouse = gen.persons.get(sp) || { name: '?' };
+      spouseHtml = `<span class="rel-gen-list__spouse">♡ ${esc(spouse.name || '?')}</span>`;
+    }
+    const kids = genUnitChildren(gen, id, sp).filter((k) => !seen.has(k));
+    const childrenHtml = kids.length
+      ? `<ul class="rel-gen-list__children">${kids.map((k) => `<li>${unitHtml(k, depth + 1, seen)}</li>`).join('')}</ul>`
+      : '';
+    return `<div class="rel-gen-list__row" data-id="${id}">
+      <button class="rel-gen-list__person" data-id="${id}">
+        ${avatarHtml(person, 26)}
+        <span>${esc(person.name || '?')}</span>
+      </button>
+      ${spouseHtml}
+      ${childrenHtml}
+    </div>`;
+  };
+
+  const seen = new Set();
+  canvas.innerHTML = `<div class="rel-gen-list">${genRootIds(gen).map((r) => unitHtml(r, 0, seen)).join('')}</div>`;
+  canvas.querySelectorAll('.rel-gen-list__person').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const c = contactById(Number(btn.dataset.id));
       if (c) openContactModal(c);
     });
   });

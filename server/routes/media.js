@@ -12,7 +12,7 @@ import { createLogger } from '../logger.js';
 import express from 'express';
 import * as db from '../db.js';
 import { str, oneOf, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT } from '../middleware/validate.js';
-import { searchTmdb, searchOpenLibrary } from '../services/media-metadata.js';
+import { searchTmdb, searchOpenLibrary, searchItunes, searchGoogleBooks } from '../services/media-metadata.js';
 import { notifyUsers, actorName } from '../services/notify-fanout.js';
 
 const log = createLogger('Media');
@@ -218,6 +218,32 @@ router.get('/search/openlib', async (req, res) => {
   }
 });
 
+// GET /api/v1/media/search/itunes  (Musik-Alben, ohne Key; vor /:id!)
+router.get('/search/itunes', async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    if (!q) return res.json({ data: [] });
+    const results = await searchItunes(q);
+    res.json({ data: results });
+  } catch (err) {
+    log.error('search/itunes', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// GET /api/v1/media/search/gbooks  (Google Books, ohne Key; vor /:id!)
+router.get('/search/gbooks', async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    if (!q) return res.json({ data: [] });
+    const results = await searchGoogleBooks(q);
+    res.json({ data: results });
+  } catch (err) {
+    log.error('search/gbooks', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
 // GET /api/v1/media/img?src=<urlencoded https-URL>   (vor /:id!)
 // Serverseitiger Cover-Proxy. TMDB-/OpenLibrary-Bilder liegen auf externen
 // Hosts, die in manchen Netzen (z. B. CN) nicht erreichbar sind. Der Server
@@ -227,7 +253,12 @@ const IMG_HOST_WHITELIST = new Set([
   'image.tmdb.org',
   'openlibrary.org',
   'covers.openlibrary.org',
+  'books.google.com',
 ]);
+// mzstatic (iTunes-CDN) nutzt viele regionalierte Subdomains -> Suffix-Regel.
+const IMG_HOST_SUFFIXES = ['.mzstatic.com'];
+const isAllowedImgHost = (hostname) =>
+  IMG_HOST_WHITELIST.has(hostname) || IMG_HOST_SUFFIXES.some((sfx) => hostname.endsWith(sfx));
 router.get('/img', async (req, res) => {
   try {
     const raw = (req.query.src || '').toString();
@@ -237,7 +268,7 @@ router.get('/img', async (req, res) => {
     } catch {
       return res.status(400).json({ error: 'Ungültige Bild-URL', code: 400 });
     }
-    if (target.protocol !== 'https:' || !IMG_HOST_WHITELIST.has(target.hostname)) {
+    if (target.protocol !== 'https:' || !isAllowedImgHost(target.hostname)) {
       return res.status(400).json({ error: 'Host nicht erlaubt', code: 400 });
     }
     const ctrl = new AbortController();

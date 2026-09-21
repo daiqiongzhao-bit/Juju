@@ -47,6 +47,7 @@ export async function render(container, { user } = {}) {
       <div class="gl-filters">
         <input id="gl-q" placeholder="${esc(t('giftLedger.searchPlaceholder'))}">
       </div>
+      <div class="gl-summary" id="gl-summary" hidden></div>
       <div class="gl-list" id="gl-list"><div class="gl-empty">${esc(t('giftLedger.loading'))}</div></div>
       <div class="gl-bar" id="gl-bar">
         <span id="gl-bar-count">${esc(t('giftLedger.selected', { count: 0 }))}</span>
@@ -62,6 +63,7 @@ export async function render(container, { user } = {}) {
   const tabsEl = container.querySelector('#gl-tabs');
   const bar = container.querySelector('#gl-bar');
   const qEl = container.querySelector('#gl-q');
+  const summaryEl = container.querySelector('#gl-summary');
 
   // Tabs
   tabsEl.innerHTML = TYPES.map(
@@ -99,6 +101,22 @@ export async function render(container, { user } = {}) {
       const c = countFor(el.dataset.count);
       el.textContent = c ? ` ${c}` : '';
     });
+    // Zusammenfassung nur ueber die aktuell sichtbaren Zeilen (kein
+    // Server-Aggregat über fremde/private Einträge).
+    const sum = state.items.reduce((acc, it) => acc + (typeof it.amount === 'number' ? it.amount : 0), 0);
+    const withAmount = state.items.filter((it) => typeof it.amount === 'number').length;
+    if (!state.items.length) {
+      summaryEl.hidden = true;
+      summaryEl.innerHTML = '';
+      return;
+    }
+    summaryEl.hidden = false;
+    summaryEl.innerHTML = `
+      <span class="gl-summary__item"><strong>${state.items.length}</strong> ${esc(t('giftLedger.summaryEntries'))}</span>
+      <span class="gl-summary__dot">·</span>
+      <span class="gl-summary__item">${esc(t('giftLedger.summarySum'))} <strong class="gl-summary__sum">¥${esc(formatAmount(Math.round(sum * 100) / 100))}</strong></span>
+      ${withAmount < state.items.length ? `<span class="gl-summary__hint">${esc(t('giftLedger.summaryPartial', { count: state.items.length - withAmount }))}</span>` : ''}
+    `;
   }
 
   function toggleSelectMode(force) {
@@ -125,9 +143,11 @@ export async function render(container, { user } = {}) {
     const check = state.selectMode
       ? `<div class="gl-card__check"><input type="checkbox" data-id="${it.id}" ${state.selected.has(it.id) ? 'checked' : ''}></div>`
       : '';
-    const lock = it.is_private ? `<span class="gl-lock">🔒</span>` : '';
-    const amount = formatAmount(it.amount);
-    return `<div class="gl-card ${state.selectMode && state.selected.has(it.id) ? 'selected' : ''}" data-id="${it.id}">
+    const lock = it.is_private ? `<span class="gl-lock" title="${esc(t('giftLedger.private'))}">🔒</span>` : '';
+    const hasAmount = it.amount !== null && it.amount !== undefined && it.amount !== '';
+    const amount = hasAmount ? formatAmount(it.amount) : null;
+    return `<div class="gl-card gl-card--${it.type} ${state.selectMode && state.selected.has(it.id) ? 'selected' : ''}" data-id="${it.id}">
+      <span class="gl-card__accent" aria-hidden="true"></span>
       ${check}
       <div class="gl-card__body">
         <div class="gl-card__title">
@@ -136,13 +156,13 @@ export async function render(container, { user } = {}) {
           ${lock}
         </div>
         <div class="gl-meta">
-          ${it.event_date ? `<span>📅 ${esc(it.event_date)}</span>` : ''}
-          ${it.giver ? `<span>🎁 ${esc(it.giver)}</span>` : ''}
-          ${it.relationship ? `<span>· ${esc(it.relationship)}</span>` : ''}
-          <span>💰 ${esc(amount)}</span>
+          ${it.event_date ? `<span class="gl-chip">📅 ${esc(it.event_date)}</span>` : ''}
+          ${it.giver ? `<span class="gl-chip">🎁 ${esc(it.giver)}</span>` : ''}
+          ${it.relationship ? `<span class="gl-chip">· ${esc(it.relationship)}</span>` : ''}
         </div>
         ${it.note ? `<div class="gl-note">${esc(it.note)}</div>` : ''}
       </div>
+      <div class="gl-card__amount ${hasAmount ? '' : 'gl-card__amount--empty'}">${amount !== null ? `¥${esc(amount)}` : '—'}</div>
     </div>`;
   }
 
@@ -156,7 +176,14 @@ export async function render(container, { user } = {}) {
       state.items = r;
       refreshCounts();
       if (!r.length) {
-        list.innerHTML = `<div class="gl-empty">${esc(t('giftLedger.empty'))}</div>`;
+        list.innerHTML = `
+          <div class="gl-empty">
+            <div class="gl-empty__icon" aria-hidden="true">🎁</div>
+            <div class="gl-empty__title">${esc(t('giftLedger.empty'))}</div>
+            <div class="gl-empty__desc">${esc(t('giftLedger.emptyDesc'))}</div>
+            <button class="gl-btn" id="gl-empty-add">+ ${esc(t('giftLedger.add'))}</button>
+          </div>`;
+        list.querySelector('#gl-empty-add').addEventListener('click', () => openForm());
         return;
       }
       list.innerHTML = r.map(itemHtml).join('');

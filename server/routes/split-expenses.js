@@ -59,7 +59,7 @@ function isSystemAdmin(req) {
 }
 
 function defaultCurrency() {
-  return db.get().prepare('SELECT value FROM sync_config WHERE key = ?').get('currency')?.value || 'EUR';
+  return db.get().prepare('SELECT value FROM sync_config WHERE key = ?').get('currency')?.value || 'CNY';
 }
 
 function memberRole(groupId, uid) {

@@ -5,11 +5,14 @@
  *  - Timeout (8 s) und fangen Fehler ab -> fallen auf leer zurück
  *  - TMDB-Proxy ist optional; ist er leer, wird direkt auf api.themoviedb.org zugegriffen
  *  - Schlüssel/Proxy kommen aus der Datenbank, niemals aus dem Frontend
+ *  - iTunes / Google Books brauchen keinen Key (öffentliche Suchendpunkte)
  */
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_IMG = 'https://image.tmdb.org/t/p/w500';
 const OL_BASE = 'https://openlibrary.org';
+const ITUNES_BASE = 'https://itunes.apple.com';
+const GB_BASE = 'https://www.googleapis.com/books/v1';
 
 async function fetchJson(url, timeoutMs = 8000) {
   const ctrl = new AbortController();
@@ -92,4 +95,45 @@ export async function searchOpenLibrary(query, { isbn } = {}) {
   }));
 }
 
-export default { searchTmdb, searchOpenLibrary };
+export async function searchItunes(query) {
+  // iTunes Search API: ohne Key, Album-Suche. country=CN richtet die Results
+  // auf den chinesischen Store aus (chinesische Titel, CNY-Preise irrelevant,
+  // wir holen nur Metadaten + Cover).
+  const url = `${ITUNES_BASE}/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=10&country=CN`;
+  const data = await fetchJson(url);
+  if (!data || !Array.isArray(data.results)) return [];
+  return data.results
+    .filter((r) => r.collectionName)
+    .map((r) => ({
+      externalId: String(r.collectionId || ''),
+      kind: 'music',
+      title: r.collectionName || '',
+      authors: r.artistName || '',
+      releaseDate: r.releaseDate ? String(r.releaseDate).slice(0, 10) : '',
+      posterUrl: r.artworkUrl100 ? String(r.artworkUrl100).replace('100x100', '600x600') : '',
+      overview: [r.primaryGenreName, r.trackCount ? `${r.trackCount} 曲目` : ''].filter(Boolean).join(' · '),
+    }));
+}
+
+export async function searchGoogleBooks(query) {
+  // Google Books API: ohne Key (Public-Endpunkt), maxResults<=10 zwingend.
+  const url = `${GB_BASE}/volumes?q=${encodeURIComponent(query)}&maxResults=10`;
+  const data = await fetchJson(url);
+  if (!data || !Array.isArray(data.items)) return [];
+  return data.items.map((it) => {
+    const v = it.volumeInfo || {};
+    let cover = (v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail)) || '';
+    cover = cover.replace(/^http:\/\//, 'https://');
+    return {
+      externalId: it.id || '',
+      kind: 'book',
+      title: v.title || '',
+      authors: Array.isArray(v.authors) ? v.authors.join(', ') : '',
+      publishDate: v.publishedDate || '',
+      coverUrl: cover,
+      overview: v.description || '',
+    };
+  });
+}
+
+export default { searchTmdb, searchOpenLibrary, searchItunes, searchGoogleBooks };

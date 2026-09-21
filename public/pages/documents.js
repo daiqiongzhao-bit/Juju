@@ -15,7 +15,7 @@ import { previewKind } from '/utils/document-preview.js';
 import { findPageFab } from '/utils/fab.js';
 
 const CATEGORIES = ['medical', 'school', 'identity', 'insurance', 'finance', 'home', 'vehicle', 'legal', 'travel', 'pets', 'warranty', 'taxes', 'work', 'other'];
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 const CATEGORY_ICONS = {
   medical: 'heart-pulse',
