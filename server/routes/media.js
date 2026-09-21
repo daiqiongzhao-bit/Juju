@@ -457,68 +457,6 @@ router.post('/emby/sync', async (req, res) => {
   }
 });
 
-// GET /api/v1/media/emby/libraries  -> Fotobibliotheken (jedes Familienmitglied)
-router.get('/emby/libraries', async (req, res) => {
-  try {
-    const cfg = requireEmbyConfig(req, res);
-    if (!cfg) return;
-    const data = await emby.photoLibraries(cfg);
-    res.json({ data });
-  } catch (err) {
-    log.error('GET /emby/libraries', err);
-    res.status(502).json({ error: 'Emby nicht erreichbar: ' + (err?.message || ''), code: 502 });
-  }
-});
-
-// GET /api/v1/media/emby/photos?libraryId=&start=&limit=
-router.get('/emby/photos', async (req, res) => {
-  try {
-    const cfg = requireEmbyConfig(req, res);
-    if (!cfg) return;
-    const libraryId = (req.query.libraryId || '').toString();
-    if (!libraryId) return res.status(400).json({ error: 'libraryId fehlt', code: 400 });
-    const start = Math.max(0, parseInt(req.query.start || '0', 10) || 0);
-    const limit = Math.min(120, Math.max(12, parseInt(req.query.limit || '60', 10) || 60));
-    const data = await emby.photoItems(cfg, { libraryId, startIndex: start, limit });
-    res.json({ data });
-  } catch (err) {
-    log.error('GET /emby/photos', err);
-    res.status(502).json({ error: 'Emby nicht erreichbar: ' + (err?.message || ''), code: 502 });
-  }
-});
-
-// GET /api/v1/media/emby/img?item=&tag=&w=  -> Bild-Proxy (Token bleibt serverseitig)
-router.get('/emby/img', async (req, res) => {
-  try {
-    const cfg = requireEmbyConfig(req, res);
-    if (!cfg) return;
-    const itemId = (req.query.item || '').toString().replace(/[^a-zA-Z0-9-]/g, '');
-    if (!itemId) return res.status(400).json({ error: 'item fehlt', code: 400 });
-    const tag = (req.query.tag || '').toString().replace(/[^a-zA-Z0-9]/g, '');
-    const w = Math.min(1920, Math.max(120, parseInt(req.query.w || '400', 10) || 400));
-    const url = emby.photoImageUrl(cfg, itemId, tag, w);
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000);
-    let upstream;
-    try {
-      upstream = await fetch(url, { signal: ctrl.signal, headers: { 'X-Emby-Token': cfg.emby_api_key } });
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!upstream.ok) return res.status(502).json({ error: 'Bild nicht verfügbar', code: 502 });
-    const ctype = (upstream.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
-    if (!ctype.startsWith('image/')) return res.status(415).json({ error: 'Kein Bild', code: 415 });
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.setHeader('Content-Type', ctype);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.end(buf);
-  } catch (err) {
-    log.error('GET /emby/img', err);
-    res.status(502).json({ error: 'Bild-Proxy Fehler', code: 502 });
-  }
-});
-
 // GET /api/v1/media/:id  (param route NACH allen statischen Routen)
 router.get('/:id', (req, res) => {
   try {

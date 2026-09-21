@@ -150,9 +150,9 @@
     "emptyDesc": "记录红白喜事的人情往来，收礼送礼一目了然。",
     "summaryEntries": "条记录",
     "summarySum": "礼金合计",
-    "summaryPartial": "另有 {count} 条未填金额",
+    "summaryPartial": "另有 {{count}} 条未填金额",
     "stats": "统计",
-    "statsYear": "{year} 年统计",
+    "statsYear": "{{year}} 年统计",
     "statsTopRel": "本年度人情往来 Top（按对象）",
     "statsByYear": "历年概览"
   },
@@ -2386,10 +2386,10 @@
     "embyUserHint": "留空自动使用管理员账号；多账号家庭可选择同步哪个成员的观看状态。打开本页或点「测试连接」后加载用户列表",
     "embyTest": "测试连接",
     "embyTesting": "正在测试连接…",
-    "embyTestOk": "连接成功：{name} {version}",
+    "embyTestOk": "连接成功：{{name}} {{version}}",
     "embySync": "同步观看状态",
     "embySyncing": "正在同步（视 Emby 库大小可能需要十几秒）…",
-    "embySyncDone": "同步完成：Emby {emby} 个视频，本地匹配 {matched} 条，状态更新 {updated} 条（只升级不降级：看完 > 在看 > 想看）",
+    "embySyncDone": "同步完成：Emby {{emby}} 个视频，本地匹配 {{matched}} 条，状态更新 {{updated}} 条（只升级不降级：看完 > 在看 > 想看）",
     "embySavedOk": "Emby 配置已保存",
     "embySavedEmpty": "已保存，但 Emby 配置尚不完整"
   },
@@ -4174,11 +4174,7 @@
     "batchDelete": "删除所选",
     "confirmDeleteBatch": "确定删除选中的 {{count}} 个条目吗？",
     "groupByStatus": "按状态分组",
-    "source": "数据源",
-    "embyPhotos": "Emby 照片",
-    "embyNoLibraries": "未找到照片库（需在 Emby 中已建立照片媒体库）",
-    "embyError": "Emby 不可达或尚未配置（管理员可在 设置→模块→媒体元数据 中配置）",
-    "embyMore": "加载更多"
+    "source": "数据源"
   },
   "memory": {
     "title": "家庭回忆",

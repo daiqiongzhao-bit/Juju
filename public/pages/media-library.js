@@ -70,7 +70,6 @@ export async function render(container, { user } = {}) {
         <button class="mk-btn ghost" id="mk-group">${esc(t('media.groupByStatus'))}</button>
         <button class="mk-btn ghost" id="mk-select">${esc(t('media.selectMode'))}</button>
         <button class="mk-btn ghost" id="mk-export">${esc(t('media.export'))}</button>
-        <button class="mk-btn ghost" id="mk-emby">📷 ${esc(t('media.embyPhotos'))}</button>
         <button class="mk-btn" id="mk-add">+ ${esc(t('media.add'))}</button>
       </div>
       <div class="mk-tabs" id="mk-tabs"></div>
@@ -138,7 +137,6 @@ export async function render(container, { user } = {}) {
   });
 
   container.querySelector('#mk-add').addEventListener('click', () => openAdd());
-  container.querySelector('#mk-emby').addEventListener('click', () => openEmbyPhotos());
 
   // Batch-Auswahl-Modus
   container.querySelector('#mk-select').addEventListener('click', () => toggleSelectMode());
@@ -596,86 +594,6 @@ export async function render(container, { user } = {}) {
         msg.classList.add('mk-add__msg--err');
       }
     });
-  }
-
-  // Emby-Fotobibliotheken durchstöbern (Server proxyt API + Bilder, Token
-  // bleibt serverseitig). Konfiguration: Einstellungen → Module → Medien.
-  async function openEmbyPhotos() {
-    const body = document.createElement('div');
-    body.className = 'mk-modal-body mk-emby';
-    body.innerHTML = `<div class="mk-empty">${esc(t('media.loading'))}</div>`;
-    openModal({
-      title: t('media.embyPhotos'),
-      content: '',
-      onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
-    });
-
-    let libraries = [];
-    let currentLib = null;
-    let start = 0;
-    const PAGE = 60;
-    let total = 0;
-
-    try {
-      const r = (await api.get('/media/emby/libraries')).data || {};
-      libraries = r.libraries || [];
-      if (!libraries.length) {
-        body.innerHTML = `<div class="mk-empty">${esc(t('media.embyNoLibraries'))}</div>`;
-        return;
-      }
-      body.innerHTML = `
-        <div class="mk-emby__bar">
-          <select id="e-lib">${libraries.map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select>
-          <span class="mk-emby__count" id="e-count"></span>
-        </div>
-        <div class="mk-emby-grid" id="e-grid"></div>
-        <div class="mk-emby-more"><button class="mk-btn ghost" id="e-more" hidden>${esc(t('media.embyMore'))}</button></div>
-      `;
-      const grid = body.querySelector('#e-grid');
-      const moreBtn = body.querySelector('#e-more');
-      const countEl = body.querySelector('#e-count');
-
-      function photoCard(p) {
-        const src = `/api/v1/media/emby/img?item=${encodeURIComponent(p.id)}&tag=${encodeURIComponent(p.tag || '')}&w=400`;
-        const full = `/api/v1/media/emby/img?item=${encodeURIComponent(p.id)}&tag=${encodeURIComponent(p.tag || '')}&w=1600`;
-        return `<figure class="mk-emby-card" data-full="${esc(full)}" title="${esc(p.name || '')}">
-          <img src="${esc(src)}" alt="${esc(p.name || '')}" loading="lazy">
-          <figcaption>${esc(p.name || '')}</figcaption>
-        </figure>`;
-      }
-
-      async function loadPhotos(reset) {
-        if (reset) {
-          start = 0;
-          grid.innerHTML = `<div class="mk-empty">${esc(t('media.loading'))}</div>`;
-        }
-        try {
-          const r = (await api.get(`/media/emby/photos?libraryId=${encodeURIComponent(currentLib)}&start=${start}&limit=${PAGE}`)).data || {};
-          const items = r.items || [];
-          total = r.total || 0;
-          if (reset) grid.innerHTML = '';
-          grid.insertAdjacentHTML('beforeend', items.map(photoCard).join(''));
-          start += items.length;
-          countEl.textContent = `${Math.min(start, total)} / ${total}`;
-          moreBtn.hidden = start >= total;
-          grid.querySelectorAll('.mk-emby-card').forEach((el) =>
-            el.addEventListener('click', () => window.open(el.dataset.full, '_blank'))
-          );
-        } catch {
-          if (reset) grid.innerHTML = `<div class="mk-empty">${esc(t('media.embyError'))}</div>`;
-        }
-      }
-
-      body.querySelector('#e-lib').addEventListener('change', (e) => {
-        currentLib = e.target.value;
-        loadPhotos(true);
-      });
-      currentLib = libraries[0].id;
-      moreBtn.addEventListener('click', () => loadPhotos(false));
-      await loadPhotos(true);
-    } catch {
-      body.innerHTML = `<div class="mk-empty">${esc(t('media.embyError'))}</div>`;
-    }
   }
 
   // init

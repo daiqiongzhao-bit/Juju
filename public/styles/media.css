@@ -79,13 +79,3 @@ button.mk-btn.ghost{background:transparent;color:var(--accent,#3b82f6)}
 .mk-member-chip--row label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .mk-member-chip--row.checked{outline:1.5px solid var(--accent,#3b82f6);outline-offset:-1.5px}
 .mk-member-status{border:1px solid var(--border,#e5e7eb);border-radius:8px;font-size:11px;padding:2px 4px;background:var(--bg,#fff);color:var(--text,#333);max-width:76px}
-.mk-emby{min-height:200px}
-.mk-emby__bar{display:flex;gap:10px;align-items:center;margin-bottom:10px}
-.mk-emby__bar select{border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:6px 10px;font-size:13px}
-.mk-emby__count{font-size:12px;color:#888}
-.mk-emby-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;max-height:56vh;overflow:auto}
-.mk-emby-card{margin:0;cursor:pointer}
-.mk-emby-card img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block;background:var(--color-surface-raised,#eef2f7);transition:.15s}
-.mk-emby-card img:hover{transform:scale(1.03);box-shadow:0 4px 14px rgba(0,0,0,.15)}
-.mk-emby-card figcaption{font-size:11px;color:#888;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mk-emby-more{margin-top:10px;text-align:center}

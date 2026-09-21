@@ -150,9 +150,9 @@
     "emptyDesc": "Familienanlässe und Geldgeschenke an einem Ort im Blick.",
     "summaryEntries": "Einträge",
     "summarySum": "Summe",
-    "summaryPartial": "{count} ohne Betrag",
+    "summaryPartial": "{{count}} ohne Betrag",
     "stats": "Statistik",
-    "statsYear": "Jahresstatistik {year}",
+    "statsYear": "Jahresstatistik {{year}}",
     "statsTopRel": "Top-Beziehungen des Jahres",
     "statsByYear": "Jahresuebersicht"
   },
@@ -2400,10 +2400,10 @@
     "embyUserHint": "Leer lassen = Admin-Konto automatisch. Bei mehreren Konten auswaehlen, dessen Wiedergabestatus synchronisiert wird. Liste erscheint nach \"Verbindung testen\"",
     "embyTest": "Verbindung testen",
     "embyTesting": "Verbindung wird getestet …",
-    "embyTestOk": "Verbindung ok: {name} {version}",
+    "embyTestOk": "Verbindung ok: {{name}} {{version}}",
     "embySync": "Watched-Status synchronisieren",
     "embySyncing": "Synchronisierung laeuft (je nach Bibliothek bis zu einer Minute) …",
-    "embySyncDone": "Sync fertig: {emby} Emby-Titel, {matched} lokal gematcht, {updated} aktualisiert (nur Upgrades: finished > doing > wish)",
+    "embySyncDone": "Sync fertig: {{emby}} Emby-Titel, {{matched}} lokal gematcht, {{updated}} aktualisiert (nur Upgrades: finished > doing > wish)",
     "embySavedOk": "Emby-Konfiguration gespeichert",
     "embySavedEmpty": "Gespeichert, aber Emby ist noch nicht vollstaendig konfiguriert"
   },
@@ -4174,11 +4174,7 @@
     "batchDelete": "Auswahl löschen",
     "confirmDeleteBatch": "Die {{count}} ausgewählten Einträge löschen?",
     "groupByStatus": "Nach Status gruppieren",
-    "source": "Quelle",
-    "embyPhotos": "Emby-Fotos",
-    "embyNoLibraries": "Keine Fotobibliotheken gefunden",
-    "embyError": "Emby nicht erreichbar oder nicht konfiguriert (Admin: Einstellungen → Module → Medien-Metadaten)",
-    "embyMore": "Mehr laden"
+    "source": "Quelle"
   },
   "memory": {
     "title": "Familienerinnerungen",

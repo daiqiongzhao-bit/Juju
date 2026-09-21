@@ -192,48 +192,4 @@ export async function syncWatched(db, cfg) {
   };
 }
 
-// ------------------------------------------------------------
-// 3) Fotobibliotheken
-// ------------------------------------------------------------
-export async function photoLibraries(cfg) {
-  const userId = await resolveUserId(cfg);
-  const views = await embyFetch(cfg, `/Users/${userId}/Views`);
-  const libs = (Array.isArray(views?.Items) ? views.Items : [])
-    .filter((v) => v.CollectionType === 'photos' || (v.Type === 'CollectionFolder' && /photo|foto|bild/i.test(v.Name || '')))
-    .map((v) => ({ id: v.Id, name: v.Name, collectionType: v.CollectionType || '' }));
-  return { userId, libraries: libs };
-}
-
-export async function photoItems(cfg, { libraryId, startIndex = 0, limit = 60 }) {
-  const userId = await resolveUserId(cfg);
-  const data = await embyFetch(cfg, `/Users/${userId}/Items`, {
-    ParentId: libraryId,
-    IncludeItemTypes: 'Photo',
-    Recursive: 'true',
-    SortBy: 'DateCreated',
-    SortOrder: 'Descending',
-    StartIndex: startIndex,
-    Limit: limit,
-    Fields: 'DateCreated',
-  });
-  const items = (Array.isArray(data?.Items) ? data.Items : []).map((it) => ({
-    id: it.Id,
-    name: it.Name || '',
-    dateCreated: it.DateCreated || null,
-    width: it.Width || null,
-    height: it.Height || null,
-    tag: it.ImageTags?.Primary || null,
-  }));
-  return { items, total: data?.TotalRecordCount ?? items.length };
-}
-
-/** Baut die Bild-URL (serverseitig, Token bleibt im Server). */
-export function photoImageUrl(cfg, itemId, tag, maxW = 400) {
-  const url = new URL(`${trimUrl(cfg.emby_url)}/Items/${itemId}/Images/Primary`);
-  url.searchParams.set('maxWidth', String(maxW));
-  url.searchParams.set('quality', '88');
-  if (tag) url.searchParams.set('tag', String(tag));
-  return url.href;
-}
-
 export { getConfig, isConfigured, trimUrl };
