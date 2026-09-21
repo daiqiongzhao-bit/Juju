@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.12] - 2026-09-21
+
+### 修复
+
+- 修复弹窗面板背景全透明的全局问题（tokens.css 缺失 --color-surface-glass 公开别名，影响所有弹窗、登录卡片与仪表盘卡片）。
+- 影视书库：新增/详情弹窗底部操作栏改为规范 Modal Footer（固定底部、不再被滚动截断）。
+- 影视书库：参与成员改为彩色标签选择器，修复裸复选框布局错乱。
+- index.html 静态资源版本参数同步至当前版本。
+
+
+
 ## [0.0.11] - 2026-09-21
 
 ### 新增

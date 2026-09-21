@@ -131,6 +131,7 @@
   --_color-surface-raised:    #FBFBFD;
   --color-surface-raised:     var(--_color-surface-raised);
   --_color-surface-glass: rgba(255, 255, 255, 0.78);
+  --color-surface-glass:  var(--_color-surface-glass);
 
   /* KASTEN-IN-KASTEN-VOKABULAR (HIG-Rollout Runde 2, 2026-08-06).
    * Karten sind randlos auf dem Grouped-Grund. Was IN einer Karte liegt, bekommt

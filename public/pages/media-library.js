@@ -6,7 +6,7 @@
 import { api } from '/api.js';
 import { t } from '/i18n.js';
 import { esc } from '/utils/html.js';
-import { openModal, closeModal, confirmModal } from '/components/modal.js';
+import { openModal, closeModal, confirmModal, mountFooter } from '/components/modal.js';
 
 const TYPE_TABS = [
   { key: 'all', label: () => t('media.tabAll') },
@@ -283,7 +283,7 @@ export async function render(container, { user } = {}) {
     return `<div class="mk-member-picker">${state.members
       .map(
         (m) =>
-          `<label class="mk-tag"><input type="checkbox" data-uid="${m.id}" ${
+          `<label class="mk-member-chip"><input type="checkbox" data-uid="${m.id}" ${
             sel.has(m.id) ? 'checked' : ''
           }> ${esc(m.name || m.display_name || ('#' + m.id))}</label>`
       )
@@ -317,7 +317,7 @@ export async function render(container, { user } = {}) {
       <div class="mk-field"><label>${esc(t('media.comment'))}</label><textarea id="d-comment" rows="3">${esc(item.comment || '')}</textarea></div>
       <div class="mk-field"><label>${esc(t('media.members'))}</label>${memberPicker((item.members || []).map((m) => m.uid))}</div>
       <div class="mk-field"><label><input type="checkbox" id="d-private" ${item.is_private ? 'checked' : ''}> ${esc(t('media.private'))}</label></div>
-      <div style="display:flex;gap:8px;margin-top:10px">
+      <div class="modal-panel__footer">
         <button class="mk-btn ghost" id="d-del">${esc(t('media.delete'))}</button>
         <div class="mk-spacer" style="flex:1"></div>
         <button class="mk-btn" id="d-save">${esc(t('media.save'))}</button>
@@ -326,7 +326,10 @@ export async function render(container, { user } = {}) {
     openModal({
       title: item.title,
       content: '',
-      onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
+      onSave: (panel) => {
+        panel.querySelector('.modal-panel__body').replaceChildren(body);
+        mountFooter(panel);
+      },
     });
     wireStars(body.querySelector('#d-stars'));
     let rating = item.rating || 0;
@@ -427,16 +430,18 @@ export async function render(container, { user } = {}) {
         <div class="mk-field"><label>${esc(t('media.members'))}</label>${memberPicker([])}</div>
         <div class="mk-field mk-field--inline"><label><input type="checkbox" id="a-private"> ${esc(t('media.private'))}</label></div>
       </div>
-      <div class="mk-add__footer">
+      <div class="modal-panel__footer mk-add__footer">
         <span id="a-msg" class="mk-add__msg"></span>
-        <div class="mk-spacer" style="flex:1"></div>
         <button class="mk-btn" id="a-save">${esc(t('media.save'))}</button>
       </div>
     `;
     openModal({
       title: t('media.add'),
       content: '',
-      onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
+      onSave: (panel) => {
+        panel.querySelector('.modal-panel__body').replaceChildren(body);
+        mountFooter(panel);
+      },
     });
     wireStars(body.querySelector('#a-stars'));
     body.querySelector('#a-stars').addEventListener('click', (e) => {
