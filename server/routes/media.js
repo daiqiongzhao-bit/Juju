@@ -218,6 +218,53 @@ router.get('/search/openlib', async (req, res) => {
   }
 });
 
+// GET /api/v1/media/img?src=<urlencoded https-URL>   (vor /:id!)
+// Serverseitiger Cover-Proxy. TMDB-/OpenLibrary-Bilder liegen auf externen
+// Hosts, die in manchen Netzen (z. B. CN) nicht erreichbar sind. Der Server
+// holt das Bild und liefert es same-origin aus, damit die Bibliothek ueberall
+// Cover zeigt. Nur feste Host-Whitelist, nur https, nur image/*.
+const IMG_HOST_WHITELIST = new Set([
+  'image.tmdb.org',
+  'openlibrary.org',
+  'covers.openlibrary.org',
+]);
+router.get('/img', async (req, res) => {
+  try {
+    const raw = (req.query.src || '').toString();
+    let target;
+    try {
+      target = new URL(raw);
+    } catch {
+      return res.status(400).json({ error: 'Ungültige Bild-URL', code: 400 });
+    }
+    if (target.protocol !== 'https:' || !IMG_HOST_WHITELIST.has(target.hostname)) {
+      return res.status(400).json({ error: 'Host nicht erlaubt', code: 400 });
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    let upstream;
+    try {
+      upstream = await fetch(target.href, { signal: ctrl.signal, redirect: 'follow' });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!upstream.ok) return res.status(502).json({ error: 'Bild nicht verfügbar', code: 502 });
+    const ctype = (upstream.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+    if (!ctype.startsWith('image/')) {
+      return res.status(415).json({ error: 'Kein Bild', code: 415 });
+    }
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.setHeader('Content-Type', ctype);
+    // Cover sind unveraenderlich -> aggressiv cachen (Browser + CDN/nginx).
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.end(buf);
+  } catch (err) {
+    log.error('GET /img', err);
+    res.status(502).json({ error: 'Bild-Proxy Fehler', code: 502 });
+  }
+});
+
 // GET /api/v1/media/config  (kein API-Key im Klartext; vor /:id!)
 router.get('/config', (req, res) => {
   try {
@@ -342,6 +389,39 @@ router.post('/add', (req, res) => {
   }
 });
 
+// PUT /api/v1/media/config  (nur Admin; MUSS vor /:id stehen, sonst matcht
+// der generische /:id-Handler "config" und antwortet mit 404)
+router.put('/config', (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const cfg = getConfig();
+    const vKey = str(req.body.tmdbApiKey ?? req.body.tmdb_api_key, 'TMDB Key', { max: 512, required: false });
+    const vProxy = str(req.body.tmdbProxyUrl ?? req.body.tmdb_proxy_url, 'Proxy', { max: 2048, required: false });
+    if (vKey.error) return res.status(400).json({ error: vKey.error, code: 400 });
+    // Empty key means "keep existing" — only overwrite when a non-empty key is supplied.
+    const newTmdbKey = vKey.value && vKey.value.trim().length ? vKey.value : cfg.tmdb_api_key;
+    const olEnable = req.body.openlibraryEnable;
+    const olValue = olEnable === false || olEnable === 0 ? 0 : 1;
+    db.get()
+      .prepare(
+        `UPDATE system_media_config
+         SET tmdb_api_key = ?, tmdb_proxy_url = ?, openlibrary_enable = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE id = ?`
+      )
+      .run(newTmdbKey || null, vProxy.value || null, olValue, cfg.id);
+    res.json({
+      data: {
+        tmdbConfigured: !!newTmdbKey,
+        tmdbProxyUrl: vProxy.value || '',
+        openlibraryEnable: olValue === 1,
+      },
+    });
+  } catch (err) {
+    log.error('PUT /config', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
 // PUT /api/v1/media/:id
 router.put('/:id', (req, res) => {
   try {
@@ -456,38 +536,6 @@ router.post('/:id/member', (req, res) => {
     res.json({ data: getItem(id) });
   } catch (err) {
     log.error('POST /:id/member', err);
-    res.status(500).json({ error: 'Interner Fehler', code: 500 });
-  }
-});
-
-// PUT /api/v1/media/config  (nur Admin)
-router.put('/config', (req, res) => {
-  try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
-    const cfg = getConfig();
-    const vKey = str(req.body.tmdbApiKey ?? req.body.tmdb_api_key, 'TMDB Key', { max: 512, required: false });
-    const vProxy = str(req.body.tmdbProxyUrl ?? req.body.tmdb_proxy_url, 'Proxy', { max: 2048, required: false });
-    if (vKey.error) return res.status(400).json({ error: vKey.error, code: 400 });
-    // Empty key means "keep existing" — only overwrite when a non-empty key is supplied.
-    const newTmdbKey = vKey.value && vKey.value.trim().length ? vKey.value : cfg.tmdb_api_key;
-    const olEnable = req.body.openlibraryEnable;
-    const olValue = olEnable === false || olEnable === 0 ? 0 : 1;
-    db.get()
-      .prepare(
-        `UPDATE system_media_config
-         SET tmdb_api_key = ?, tmdb_proxy_url = ?, openlibrary_enable = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
-         WHERE id = ?`
-      )
-      .run(newTmdbKey || null, vProxy.value || null, olValue, cfg.id);
-    res.json({
-      data: {
-        tmdbConfigured: !!newTmdbKey,
-        tmdbProxyUrl: vProxy.value || '',
-        openlibraryEnable: olValue === 1,
-      },
-    });
-  } catch (err) {
-    log.error('PUT /config', err);
     res.status(500).json({ error: 'Interner Fehler', code: 500 });
   }
 });

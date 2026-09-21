@@ -16,6 +16,22 @@ const TYPE_TABS = [
 ];
 const STATUSES = ['wish', 'doing', 'finished'];
 
+// Cover-Hosts, die der Server fuer das Frontend proxyt (GET /api/v1/media/img).
+// TMDB / OpenLibrary sind in manchen Netzen (z. B. CN) nicht direkt erreichbar.
+const COVER_PROXY_HOSTS = ['image.tmdb.org', 'openlibrary.org', 'covers.openlibrary.org'];
+function coverSrc(url) {
+  if (!url) return url;
+  try {
+    const u = new URL(url, location.origin);
+    if (u.protocol === 'https:' && COVER_PROXY_HOSTS.includes(u.hostname)) {
+      return '/api/v1/media/img?src=' + encodeURIComponent(url);
+    }
+  } catch {
+    /* relative/ungültige URL unverändert lassen */
+  }
+  return url;
+}
+
 function starsInput(current) {
   let html = '<span class="mk-stars" data-stars>';
   for (let i = 1; i <= 5; i++) {
@@ -156,7 +172,7 @@ export async function render(container, { user } = {}) {
 
   function cardHtml(it) {
     const cover = it.cover_url
-      ? `<img src="${esc(it.cover_url)}" alt="">`
+      ? `<img src="${esc(coverSrc(it.cover_url))}" alt="">`
       : `<div>🎬</div>`;
     const stars = it.rating ? `<span class="mk-stars">${'★'.repeat(it.rating)}</span>` : '';
     return `<div class="mk-card" data-id="${it.id}">
@@ -220,7 +236,7 @@ export async function render(container, { user } = {}) {
     body.innerHTML = `
       <h3>${esc(item.title)}</h3>
       <div class="mk-field"><label>${esc(t('media.cover'))}</label>${
-      item.cover_url ? `<img src="${esc(item.cover_url)}" style="max-width:120px;border-radius:8px">` : '—'
+      item.cover_url ? `<img src="${esc(coverSrc(item.cover_url))}" style="max-width:120px;border-radius:8px">` : '—'
     }</div>
       <div class="mk-field"><label>${esc(t('media.status.label'))}</label>
         <select id="d-status">${STATUSES.map(
@@ -262,7 +278,8 @@ export async function render(container, { user } = {}) {
       try {
         await api.put('/media/' + id, payload);
         await api.post('/media/' + id + '/member', { members: payload.members });
-        closeModal();
+        // force:true → nach erfolgreichem Speichern NICHT nach „Änderungen verwerfen?" fragen
+        closeModal({ force: true });
         load();
       } catch (e) {
         alert(t('common.error') || 'Fehler');
@@ -272,7 +289,7 @@ export async function render(container, { user } = {}) {
       if (!(await confirmModal(t('media.confirmDelete') || 'Wirklich löschen?'))) return;
       try {
         await api.delete('/media/' + id);
-        closeModal();
+        closeModal({ force: true });
         load();
       } catch {}
     });
@@ -354,7 +371,7 @@ export async function render(container, { user } = {}) {
           ? data
               .map(
                 (d, i) => `<div class="mk-search-row" data-i="${i}">${
-                  d.posterUrl || d.coverUrl ? `<img src="${esc(d.posterUrl || d.coverUrl)}">` : '<div>📄</div>'
+                  d.posterUrl || d.coverUrl ? `<img src="${esc(coverSrc(d.posterUrl || d.coverUrl))}">` : '<div>📄</div>'
                 }<div><div><b>${esc(d.title)}</b></div><div style="font-size:12px;color:#888">${esc(
                   d.releaseDate || d.publishDate || d.authors || ''
                 )}</div></div></div>`
@@ -395,7 +412,8 @@ export async function render(container, { user } = {}) {
       };
       try {
         await api.post('/media/add', payload);
-        closeModal();
+        // force:true → nach erfolgreichem Speichern NICHT nach „Änderungen verwerfen?" fragen
+        closeModal({ force: true });
         load();
       } catch {
         alert(t('common.error') || 'Fehler');
@@ -444,7 +462,7 @@ export async function render(container, { user } = {}) {
         const d = r.data || {};
         msg.style.color = '#16a34a';
         msg.textContent = d.tmdbConfigured ? '已保存：TMDB 配置成功' : '已保存：TMDB Key 为空（已清空）';
-        setTimeout(() => closeModal(), 900);
+        setTimeout(() => closeModal({ force: true }), 900);
       } catch (e) {
         msg.style.color = '#dc2626';
         const status = e && e.status ? e.status : (e && e.code);

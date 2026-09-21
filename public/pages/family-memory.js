@@ -10,6 +10,23 @@ import { openModal, closeModal, confirmModal } from '/components/modal.js';
 
 const TYPES = ['commonMedia', 'travel', 'lifeEvent'];
 
+// Cover-Hosts, die der Server fuer das Frontend proxyt (GET /api/v1/media/img).
+// Gemeinsame Medien spiegeln TMDB-Cover als photo_ref in die Erinnerung; ohne
+// Proxy bleiben diese Bilder in manchen Netzen (z. B. CN) leer.
+const COVER_PROXY_HOSTS = ['image.tmdb.org', 'openlibrary.org', 'covers.openlibrary.org'];
+function coverSrc(url) {
+  if (!url) return url;
+  try {
+    const u = new URL(url, location.origin);
+    if (u.protocol === 'https:' && COVER_PROXY_HOSTS.includes(u.hostname)) {
+      return '/api/v1/media/img?src=' + encodeURIComponent(url);
+    }
+  } catch {
+    /* relative/ungültige URL unverändert lassen */
+  }
+  return url;
+}
+
 async function loadMembersList() {
   for (const ep of ['/family/members', '/users', '/family']) {
     try {
@@ -128,7 +145,7 @@ export async function render(container, { user } = {}) {
       .map((p) => {
         if (typeof p === 'string') {
           return /^https?:\/\//.test(p)
-            ? `<img src="${esc(p)}" alt="" loading="lazy">`
+            ? `<img src="${esc(coverSrc(p))}" alt="" loading="lazy">`
             : `<span class="fm-photo-ref">${esc(p)}</span>`;
         }
         if (p && p.kind === 'dms') {
@@ -237,7 +254,8 @@ export async function render(container, { user } = {}) {
       };
       try {
         await api.put('/memory/' + id, payload);
-        closeModal();
+        // force:true → nach erfolgreichem Speichern NICHT nach „Änderungen verwerfen?" fragen
+        closeModal({ force: true });
         load();
       } catch {
         alert(t('common.error') || 'Fehler');
@@ -247,7 +265,7 @@ export async function render(container, { user } = {}) {
       if (!(await confirmModal(t('memory.confirmDelete') || 'Wirklich löschen?'))) return;
       try {
         await api.delete('/memory/' + id);
-        closeModal();
+        closeModal({ force: true });
         load();
       } catch {}
     });
@@ -294,7 +312,8 @@ export async function render(container, { user } = {}) {
       };
       try {
         await api.post('/memory/add', payload);
-        closeModal();
+        // force:true → nach erfolgreichem Speichern NICHT nach „Änderungen verwerfen?" fragen
+        closeModal({ force: true });
         load();
       } catch {
         alert(t('common.error') || 'Fehler');
