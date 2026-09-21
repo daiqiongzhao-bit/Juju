@@ -127,8 +127,8 @@
         "searchPlaceholder": "Anlass, Schenker oder Notiz suchen…",
         "type": {
             "label": "Art",
-            "white": "Freudiger Anlass",
-            "red": "Trauerfall"
+            "white": "Trauerfall",
+            "red": "Freudiger Anlass"
         },
         "eventName": "Anlass / Bezeichnung",
         "eventNamePh": "z. B. Hochzeit, Geburtstag, Beerdigung",

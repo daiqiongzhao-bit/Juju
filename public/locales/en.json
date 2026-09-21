@@ -127,8 +127,8 @@
         "searchPlaceholder": "Search occasion, giver or note…",
         "type": {
             "label": "Type",
-            "white": "Joyful (wedding, birth)",
-            "red": "Mourning (funeral)"
+            "white": "Mourning (funeral)",
+            "red": "Joyful (wedding, birth)"
         },
         "eventName": "Occasion / event name",
         "eventNamePh": "e.g. Wedding, Birthday, Funeral",

@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Cerca occasione, donatore o nota…",
         "type": {
             "label": "Tipo",
-            "white": "Lieto (matrimonio)",
-            "red": "Lutto (funerale)"
+            "white": "Lutto (funerale)",
+            "red": "Lieto (matrimonio)"
         },
         "eventName": "Occasione / nome",
         "eventNamePh": "es. matrimonio, compleanno, funerale",

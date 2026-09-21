@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Pesquisar ocasião, ofertante ou nota…",
         "type": {
             "label": "Tipo",
-            "white": "Feliz (casamento)",
-            "red": "Luto (funeral)"
+            "white": "Luto (funeral)",
+            "red": "Feliz (casamento)"
         },
         "eventName": "Ocasião / nome",
         "eventNamePh": "ex. casamento, aniversário, funeral",

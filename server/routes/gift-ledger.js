@@ -60,8 +60,13 @@ router.get('/list', (req, res) => {
       params.push(type);
     }
     if (q) {
-      where.push('(event_name LIKE ? OR giver LIKE ? OR relationship LIKE ? OR note LIKE ?)');
-      const like = `%${q}%`;
+      where.push(
+        "(event_name LIKE ? ESCAPE '\\' OR giver LIKE ? ESCAPE '\\' OR relationship LIKE ? ESCAPE '\\' OR note LIKE ? ESCAPE '\\')"
+      );
+      // LIKE-Wildcards im Suchtext neutralisieren: sonst würde ein einzelnes „%"
+      // alle Zeilen treffen und „_" pro Zeichen matchen (kein Injection-Risiko,
+      // da parametrisiert — aber unerwartetes Filterverhalten).
+      const like = `%${String(q).replace(/[\\%_]/g, (m) => '\\' + m)}%`;
       params.push(like, like, like, like);
     }
     const whereSql = ' WHERE ' + where.join(' AND ');

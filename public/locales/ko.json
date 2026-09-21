@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "사유, 보낸 사람 또는 메모 검색…",
         "type": {
             "label": "유형",
-            "white": "경사",
-            "red": "조사"
+            "white": "조사",
+            "red": "경사"
         },
         "eventName": "사유 / 이름",
         "eventNamePh": "예: 결혼식, 생일, 장례식",

@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "内容・贈り主・メモで検索…",
         "type": {
             "label": "種類",
-            "white": "慶事",
-            "red": "弔事"
+            "white": "弔事",
+            "red": "慶事"
         },
         "eventName": "内容／名称",
         "eventNamePh": "例：結婚式、誕生日、葬儀",

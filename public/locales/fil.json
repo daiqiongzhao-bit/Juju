@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Maghanap ng okasyon, nagbigay o tala…",
         "type": {
             "label": "Uri",
-            "white": "Masaya (kasal)",
-            "red": "Pagluluksa (libing)"
+            "white": "Pagluluksa (libing)",
+            "red": "Masaya (kasal)"
         },
         "eventName": "Okasyon / pangalan",
         "eventNamePh": "hal. kasal, kaarawan, libing",

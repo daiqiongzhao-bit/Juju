@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Sök tillfälle, givare eller anteckning…",
         "type": {
             "label": "Typ",
-            "white": "Glad (bröllop)",
-            "red": "Sorg (begravning)"
+            "white": "Sorg (begravning)",
+            "red": "Glad (bröllop)"
         },
         "eventName": "Tillfälle / namn",
         "eventNamePh": "t.ex. bröllop, födelsedag, begravning",

@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Szukaj okazji, darczyńcy lub notatki…",
         "type": {
             "label": "Typ",
-            "white": "Radosna (ślub)",
-            "red": "Żałobna (pogrzeb)"
+            "white": "Żałobna (pogrzeb)",
+            "red": "Radosna (ślub)"
         },
         "eventName": "Okazja / nazwa",
         "eventNamePh": "np. ślub, urodziny, pogrzeb",

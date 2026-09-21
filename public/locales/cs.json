@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Hledat příležitost, dárce nebo poznámku…",
         "type": {
             "label": "Typ",
-            "white": "Radostná (svatba)",
-            "red": "Smuteční (pohřeb)"
+            "white": "Smuteční (pohřeb)",
+            "red": "Radostná (svatba)"
         },
         "eventName": "Příležitost / název",
         "eventNamePh": "např. svatba, narozeniny, pohřeb",

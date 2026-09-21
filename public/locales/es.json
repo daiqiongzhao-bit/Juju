@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Buscar motivo, donante o nota…",
         "type": {
             "label": "Tipo",
-            "white": "Alegre (boda)",
-            "red": "Duelo (funeral)"
+            "white": "Duelo (funeral)",
+            "red": "Alegre (boda)"
         },
         "eventName": "Motivo / nombre",
         "eventNamePh": "p. ej. boda, cumpleaños, funeral",

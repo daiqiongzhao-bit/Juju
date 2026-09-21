@@ -1,6 +1,10 @@
 /**
  * Seite: Geschenk-/Geld-Register (Gift Ledger)
- * 红事 (white) / 白事 (red) Anlässe mit Datum, Schenker, Betrag, Verhältnis, Notiz.
+ * 红事 (red, freudiger Anlass) / 白事 (white, Trauerfall) mit Datum, Schenker,
+ * Betrag, Verhältnis, Notiz.
+ *
+ * Konvention: `red` = 红事/喜事 (Hochzeit, Geburt) — `white` = 白事/丧事 (Trauerfeier).
+ * Die DB-CHECK-Constraint erlaubt genau diese beiden Werte.
  */
 
 import { api } from '/api.js';
@@ -10,8 +14,9 @@ import { openModal, closeModal, confirmModal } from '/components/modal.js';
 
 const TYPES = [
   { key: 'all', label: () => t('giftLedger.tabAll') },
-  { key: 'white', label: () => t('giftLedger.type.white') },
+  // 红事 (red) zuerst — der häufigere Anlass und die Standardauswahl im Formular.
   { key: 'red', label: () => t('giftLedger.type.red') },
+  { key: 'white', label: () => t('giftLedger.type.white') },
 ];
 
 function typeLabel(type) {
@@ -32,45 +37,6 @@ function formatAmount(n) {
 export async function render(container, { user } = {}) {
   container.innerHTML = `
     <div class="gl-page">
-      <style>
-        .gl-page{max-width:1000px;margin:0 auto;padding:18px}
-        .gl-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-        .gl-head h2{margin:0;font-size:20px}
-        .gl-spacer{flex:1}
-        .gl-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-        .gl-tab{padding:6px 14px;border:1px solid var(--border,#ddd);border-radius:20px;cursor:pointer;background:var(--bg,#fff);color:var(--text,#222);display:flex;gap:6px;align-items:center}
-        .gl-tab.active{background:var(--accent,#3b82f6);color:#fff;border-color:var(--accent,#3b82f6)}
-        .gl-tab .gl-count{font-size:11px;opacity:.8}
-        .gl-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-        .gl-filters input{padding:7px 10px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--bg,#fff);color:var(--text,#222);min-width:220px}
-        .gl-list{display:flex;flex-direction:column;gap:10px}
-        .gl-card{background:var(--bg,#fff);border:1px solid var(--border,#ddd);border-radius:12px;padding:12px 14px;position:relative;display:flex;gap:12px;align-items:flex-start;cursor:pointer;transition:.15s}
-        .gl-card:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.10)}
-        .gl-card.selected{outline:2px solid var(--accent,#3b82f6);outline-offset:-2px}
-        .gl-card__check{margin-top:3px}
-        .gl-card__body{flex:1;min-width:0}
-        .gl-card__title{font-weight:600;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-        .gl-type{display:inline-block;padding:1px 9px;border-radius:10px;font-size:11px}
-        .gl-type.red{background:#fef2f2;color:#b91c1c}
-        .gl-type.white{background:#fff7ed;color:#c2410c}
-        .gl-lock{font-size:12px;color:#888}
-        .gl-meta{font-size:12px;color:#888;margin-top:4px;display:flex;gap:12px;flex-wrap:wrap}
-        .gl-note{font-size:13px;color:var(--text,#333);white-space:pre-wrap;margin-top:6px}
-        .gl-empty{text-align:center;color:#999;padding:40px}
-        button.gl-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--accent,#3b82f6);background:var(--accent,#3b82f6);color:#fff;cursor:pointer;font-size:13px}
-        button.gl-btn.ghost{background:transparent;color:var(--accent,#3b82f6)}
-        button.gl-btn.danger{background:#dc2626;border-color:#dc2626}
-        .gl-bar{position:sticky;bottom:12px;display:none;align-items:center;gap:10px;background:var(--accent,#3b82f6);color:#fff;padding:10px 16px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.2);margin-top:14px}
-        .gl-bar.show{display:flex}
-        .gl-modal-body{padding:16px;max-width:560px;max-height:80vh;overflow:auto}
-        .gl-field{margin-bottom:12px}
-        .gl-field label{display:block;font-size:12px;color:#777;margin-bottom:4px}
-        .gl-field input,.gl-field textarea,.gl-field select{width:100%;padding:8px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--bg,#fff);color:var(--text,#222);box-sizing:border-box}
-        .gl-radios{display:flex;gap:10px}
-        .gl-radios label{display:flex;gap:6px;align-items:center;font-size:14px;border:1px solid var(--border,#ddd);border-radius:8px;padding:8px 12px;cursor:pointer}
-        .gl-radios label.active-red{border-color:#dc2626;background:#fef2f2}
-        .gl-radios label.active-white{border-color:#ea580c;background:#fff7ed}
-      </style>
       <div class="gl-head">
         <h2>${esc(t('giftLedger.title'))}</h2>
         <div class="gl-spacer"></div>

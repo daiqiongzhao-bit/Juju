@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Rechercher occasion, donateur ou note…",
         "type": {
             "label": "Type",
-            "white": "Heureux (mariage)",
-            "red": "Deuil (funérailles)"
+            "white": "Deuil (funérailles)",
+            "red": "Heureux (mariage)"
         },
         "eventName": "Occasion / nom",
         "eventNamePh": "ex. mariage, anniversaire, funérailles",

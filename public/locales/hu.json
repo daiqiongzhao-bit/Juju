@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Keresés alkalom, adományozó vagy megjegyzés szerint…",
         "type": {
             "label": "Típus",
-            "white": "Örömteli (esküvő)",
-            "red": "Gyászos (temetés)"
+            "white": "Gyászos (temetés)",
+            "red": "Örömteli (esküvő)"
         },
         "eventName": "Alkalom / név",
         "eventNamePh": "pl. esküvő, születésnap, temetés",

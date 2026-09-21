@@ -45,44 +45,6 @@ async function loadMembersList() {
 export async function render(container, { user } = {}) {
   container.innerHTML = `
     <div class="fm-page">
-      <style>
-        .fm-page{max-width:1000px;margin:0 auto;padding:18px}
-        .fm-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-        .fm-head h2{margin:0;font-size:20px}
-        .fm-spacer{flex:1}
-        .fm-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-        .fm-filters input,.fm-filters select{padding:7px 10px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--bg,#fff);color:var(--text,#222)}
-        .fm-timeline{position:relative;border-left:3px solid var(--accent,#3b82f6);margin-left:8px;padding-left:18px}
-        .fm-item{background:var(--bg,#fff);border:1px solid var(--border,#ddd);border-radius:12px;padding:12px 14px;margin-bottom:14px;position:relative}
-        .fm-item h3{margin:0 0 4px;font-size:16px}
-        .fm-meta{font-size:12px;color:#888;margin-bottom:6px}
-        .fm-desc{font-size:14px;color:var(--text,#333);white-space:pre-wrap}
-        .fm-photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-        .fm-photos img{width:90px;height:90px;object-fit:cover;border-radius:8px}
-        .fm-photo-ref{font-size:11px;color:#666;background:#f1f5f9;border-radius:6px;padding:4px 6px;display:inline-block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .fm-tag{display:inline-block;background:#f1f5f9;border-radius:8px;padding:1px 7px;font-size:11px;margin:2px}
-        .fm-type{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;background:#eef2ff;color:#4338ca;margin-left:6px}
-        .fm-empty{text-align:center;color:#999;padding:40px}
-        .fm-views{display:flex;gap:6px}
-        .fm-view{padding:5px 12px;border:1px solid var(--border,#ddd);border-radius:16px;cursor:pointer;font-size:12px;background:var(--bg,#fff);color:var(--text,#222)}
-        .fm-view.active{background:var(--accent,#3b82f6);color:#fff;border-color:var(--accent,#3b82f6)}
-        .fm-album{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
-        .fm-album-card{border:1px solid var(--border,#ddd);border-radius:12px;overflow:hidden;cursor:pointer;background:var(--bg,#fff);transition:.15s;display:flex;flex-direction:column}
-        .fm-album-card:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
-        .fm-album-cover{aspect-ratio:1/1;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:28px;color:#9aa;overflow:hidden}
-        .fm-album-cover img{width:100%;height:100%;object-fit:cover}
-        .fm-album-body{padding:8px 10px}
-        .fm-album-title{font-weight:600;font-size:13px;line-height:1.3;max-height:34px;overflow:hidden}
-        .fm-album-meta{font-size:11px;color:#888;margin-top:4px}
-        .fm-album-count{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px}
-        .fm-album-card{position:relative}
-        button.fm-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--accent,#3b82f6);background:var(--accent,#3b82f6);color:#fff;cursor:pointer;font-size:13px}
-        button.fm-btn.ghost{background:transparent;color:var(--accent,#3b82f6)}
-        .fm-modal-body{padding:16px;max-width:560px;max-height:80vh;overflow:auto}
-        .fm-field{margin-bottom:12px}
-        .fm-field label{display:block;font-size:12px;color:#777;margin-bottom:4px}
-        .fm-field input,.fm-field textarea,.fm-field select{width:100%;padding:8px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--bg,#fff);color:var(--text,#222);box-sizing:border-box}
-      </style>
       <div class="fm-head">
         <h2>${esc(t('memory.title'))}</h2>
         <div class="fm-spacer"></div>

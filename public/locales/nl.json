@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Zoek gelegenheid, gever of notitie…",
         "type": {
             "label": "Type",
-            "white": "Blij (bruiloft)",
-            "red": "Rouw (begrafenis)"
+            "white": "Rouw (begrafenis)",
+            "red": "Blij (bruiloft)"
         },
         "eventName": "Gelegenheid / naam",
         "eventNamePh": "bv. bruiloft, verjaardag, begrafenis",

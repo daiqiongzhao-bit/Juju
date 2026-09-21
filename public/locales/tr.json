@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Sebep, veren veya not ara…",
         "type": {
             "label": "Tür",
-            "white": "Sevinçli (düğün)",
-            "red": "Yas (cenaze)"
+            "white": "Yas (cenaze)",
+            "red": "Sevinçli (düğün)"
         },
         "eventName": "Sebep / ad",
         "eventNamePh": "örn. düğün, doğum günü, cenaze",

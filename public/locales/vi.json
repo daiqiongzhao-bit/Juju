@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Tìm dịp, người tặng hoặc ghi chú…",
         "type": {
             "label": "Loại",
-            "white": "Vui (đám cưới)",
-            "red": "Buồn (tang lễ)"
+            "white": "Buồn (tang lễ)",
+            "red": "Vui (đám cưới)"
         },
         "eventName": "Dịp / tên",
         "eventNamePh": "vd. đám cưới, sinh nhật, tang lễ",

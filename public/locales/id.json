@@ -4121,8 +4121,8 @@
         "searchPlaceholder": "Cari acara, pemberi, atau catatan…",
         "type": {
             "label": "Jenis",
-            "white": "Suka cita (pernikahan)",
-            "red": "Duka (pemakaman)"
+            "white": "Duka (pemakaman)",
+            "red": "Suka cita (pernikahan)"
         },
         "eventName": "Acara / nama",
         "eventNamePh": "mis. pernikahan, ulang tahun, pemakaman",

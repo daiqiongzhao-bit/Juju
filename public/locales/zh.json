@@ -127,8 +127,8 @@
         "searchPlaceholder": "搜索事由、送礼人或备注…",
         "type": {
             "label": "类型",
-            "white": "红事",
-            "red": "白事"
+            "white": "白事",
+            "red": "红事"
         },
         "eventName": "事由／事件名称",
         "eventNamePh": "例如：婚礼、寿宴、追悼会",
