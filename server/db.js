@@ -5126,6 +5126,16 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_gift_ledger_creator ON gift_ledger(creator_uid);
     `,
   },
+  {
+    version: 140,
+    description: 'Media per-member watch status + Emby integration config',
+    up: `
+      ALTER TABLE media_member_rel ADD COLUMN member_status TEXT;
+      ALTER TABLE system_media_config ADD COLUMN emby_url TEXT;
+      ALTER TABLE system_media_config ADD COLUMN emby_api_key TEXT;
+      ALTER TABLE system_media_config ADD COLUMN emby_user_id TEXT;
+    `,
+  },
 
 ];
 

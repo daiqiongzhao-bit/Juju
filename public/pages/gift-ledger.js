@@ -40,6 +40,7 @@ export async function render(container, { user } = {}) {
       <div class="gl-head">
         <h2>${esc(t('giftLedger.title'))}</h2>
         <div class="gl-spacer"></div>
+        <button class="gl-btn ghost" id="gl-stats">${esc(t('giftLedger.stats'))}</button>
         <button class="gl-btn ghost" id="gl-select">${esc(t('giftLedger.selectMode'))}</button>
         <button class="gl-btn" id="gl-add">+ ${esc(t('giftLedger.add'))}</button>
       </div>
@@ -48,6 +49,7 @@ export async function render(container, { user } = {}) {
         <input id="gl-q" placeholder="${esc(t('giftLedger.searchPlaceholder'))}">
       </div>
       <div class="gl-summary" id="gl-summary" hidden></div>
+      <div class="gl-stats-panel" id="gl-stats-panel" hidden></div>
       <div class="gl-list" id="gl-list"><div class="gl-empty">${esc(t('giftLedger.loading'))}</div></div>
       <div class="gl-bar" id="gl-bar">
         <span id="gl-bar-count">${esc(t('giftLedger.selected', { count: 0 }))}</span>
@@ -91,6 +93,100 @@ export async function render(container, { user } = {}) {
   container.querySelector('#gl-select').addEventListener('click', () => toggleSelectMode());
   container.querySelector('#gl-bar-cancel').addEventListener('click', () => toggleSelectMode(false));
   container.querySelector('#gl-bar-del').addEventListener('click', () => doBatchDelete());
+  container.querySelector('#gl-stats').addEventListener('click', () => toggleStats());
+
+  // --------------------------------------------------------
+  // Statistik: Monatsbalken + Jahressummen + Top-Beziehungen
+  // --------------------------------------------------------
+  const statsPanel = container.querySelector('#gl-stats-panel');
+  const statsState = { open: false, year: new Date().getFullYear() };
+
+  async function toggleStats() {
+    statsState.open = !statsState.open;
+    container.querySelector('#gl-stats').classList.toggle('active', statsState.open);
+    statsPanel.hidden = !statsState.open;
+    if (statsState.open) await loadStats();
+  }
+
+  async function loadStats() {
+    statsPanel.innerHTML = `<div class="gl-empty">${esc(t('giftLedger.loading'))}</div>`;
+    try {
+      const d = (await api.get('/gift-ledger/summary?year=' + statsState.year)).data || {};
+      const maxMonth = Math.max(1, ...d.months.map((m) => m.redTotal + m.whiteTotal));
+      const yearOptions = [];
+      if (d.years?.length) {
+        for (const y of d.years) yearOptions.push(y.year);
+        if (!yearOptions.includes(String(statsState.year))) yearOptions.push(String(statsState.year));
+      }
+      if (!yearOptions.includes(String(statsState.year))) yearOptions.push(String(statsState.year));
+      yearOptions.sort().reverse();
+
+      const fmt = (n) => formatAmount(Math.round(n * 100) / 100);
+      const monthRows = d.months
+        .map((m) => {
+          const total = m.redTotal + m.whiteTotal;
+          if (!total && !m.redCount && !m.whiteCount) return '';
+          const redW = maxMonth ? (m.redTotal / maxMonth) * 100 : 0;
+          const whiteW = maxMonth ? (m.whiteTotal / maxMonth) * 100 : 0;
+          return `<div class="gl-stat-month">
+            <span class="gl-stat-month__label">${esc(m.month.slice(5))}月</span>
+            <span class="gl-stat-month__bars">
+              <span class="gl-stat-bar gl-stat-bar--red" style="width:${redW.toFixed(1)}%"></span>
+              <span class="gl-stat-bar gl-stat-bar--white" style="width:${whiteW.toFixed(1)}%"></span>
+            </span>
+            <span class="gl-stat-month__total">¥${esc(fmt(total))}<small> (${m.redCount + m.whiteCount})</small></span>
+          </div>`;
+        })
+        .join('');
+
+      const relRows = (d.relationships || [])
+        .map(
+          (r) => `<div class="gl-stat-rel">
+            <span class="gl-type ${r.type}">${esc(typeLabel(r.type))}</span>
+            <span class="gl-stat-rel__name">${esc(r.relationship)}</span>
+            <span class="gl-stat-rel__meta">${r.count}</span>
+            <span class="gl-stat-rel__total">¥${esc(fmt(r.total))}</span>
+          </div>`
+        )
+        .join('');
+
+      const yearList = (d.years || [])
+        .map(
+          (y) => `<div class="gl-stat-year ${String(y.year) === String(statsState.year) ? 'active' : ''}" data-year="${esc(y.year)}">
+            <span class="gl-stat-year__label">${esc(y.year)}</span>
+            <span class="gl-stat-year__red">红 ¥${esc(fmt(y.redTotal))}</span>
+            <span class="gl-stat-year__white">白 ¥${esc(fmt(y.whiteTotal))}</span>
+          </div>`
+        )
+        .join('');
+
+      statsPanel.innerHTML = `
+        <div class="gl-stats-head">
+          <strong>${esc(t('giftLedger.statsYear', { year: statsState.year }))}</strong>
+          <select id="gl-stats-year">${yearOptions.map((y) => `<option value="${esc(y)}" ${String(y) === String(statsState.year) ? 'selected' : ''}>${esc(y)}</option>`).join('')}</select>
+          <span class="gl-spacer" style="flex:1"></span>
+          <span class="gl-stat-kpi gl-stat-kpi--red">${esc(t('giftLedger.type.red'))} <strong>¥${esc(fmt(d.yearTotals?.redTotal || 0))}</strong><small>${d.yearTotals?.redCount || 0}</small></span>
+          <span class="gl-stat-kpi gl-stat-kpi--white">${esc(t('giftLedger.type.white'))} <strong>¥${esc(fmt(d.yearTotals?.whiteTotal || 0))}</strong><small>${d.yearTotals?.whiteCount || 0}</small></span>
+        </div>
+        <div class="gl-stats-months">${monthRows || `<div class="gl-empty">${esc(t('giftLedger.empty'))}</div>`}</div>
+        ${relRows ? `<div class="gl-stats-rels"><h4>${esc(t('giftLedger.statsTopRel'))}</h4>${relRows}</div>` : ''}
+        ${yearList ? `<div class="gl-stats-years"><h4>${esc(t('giftLedger.statsByYear'))}</h4>${yearList}</div>` : ''}
+      `;
+
+      statsPanel.querySelector('#gl-stats-year').addEventListener('change', (e) => {
+        statsState.year = parseInt(e.target.value, 10);
+        loadStats();
+      });
+      statsPanel.querySelectorAll('.gl-stat-year').forEach((el) =>
+        el.addEventListener('click', () => {
+          statsState.year = parseInt(el.dataset.year, 10);
+          loadStats();
+        })
+      );
+    } catch {
+      statsPanel.innerHTML = `<div class="gl-empty">${esc(t('common.error') || 'Fehler')}</div>`;
+    }
+  }
 
   function countFor(key) {
     if (key === 'all') return state.items.length;

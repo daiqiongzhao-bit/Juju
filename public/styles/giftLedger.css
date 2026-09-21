@@ -77,3 +77,34 @@ button.gl-btn.danger{background:#dc2626;border-color:#dc2626}
 .gl-radios label{display:flex;gap:6px;align-items:center;font-size:14px;border:1px solid var(--border,#ddd);border-radius:8px;padding:8px 12px;cursor:pointer}
 .gl-radios label.active-red{border-color:#dc2626;background:#fef2f2}
 .gl-radios label.active-white{border-color:#ea580c;background:#fff7ed}
+
+/* ---- Statistics (v0.0.13) ---- */
+.gl-stats-panel{margin:12px 0;background:var(--bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.gl-stats-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.gl-stats-head select{border:1px solid var(--border,#ddd);border-radius:8px;padding:4px 8px;font-size:13px}
+.gl-stat-kpi{display:inline-flex;flex-direction:column;align-items:flex-end;border-radius:10px;padding:6px 12px;font-size:12px}
+.gl-stat-kpi strong{font-size:16px}
+.gl-stat-kpi small{opacity:.65}
+.gl-stat-kpi--red{background:rgba(220,38,38,.08);color:#b91c1c}
+.gl-stat-kpi--white{background:rgba(100,116,139,.10);color:#475569}
+.gl-stats-months{display:flex;flex-direction:column;gap:4px}
+.gl-stat-month{display:flex;align-items:center;gap:8px;font-size:12px}
+.gl-stat-month__label{width:34px;color:#6b7280;flex-shrink:0}
+.gl-stat-month__bars{flex:1;display:flex;flex-direction:column;gap:2px}
+.gl-stat-bar{display:block;height:7px;border-radius:4px;min-width:0}
+.gl-stat-bar--red{background:linear-gradient(90deg,#ef4444,#dc2626)}
+.gl-stat-bar--white{background:linear-gradient(90deg,#94a3b8,#64748b)}
+.gl-stat-month__total{width:110px;text-align:right;font-weight:600;flex-shrink:0}
+.gl-stat-month__total small{font-weight:400;color:#9ca3af}
+.gl-stats-rels,.gl-stats-years{margin-top:14px}
+.gl-stats-rels h4,.gl-stats-years h4{margin:0 0 8px;font-size:13px;color:#6b7280}
+.gl-stat-rel{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;border-bottom:1px dashed var(--border,#eee)}
+.gl-stat-rel__name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gl-stat-rel__meta{color:#9ca3af;font-size:12px}
+.gl-stat-rel__total{font-weight:700}
+.gl-stat-year{display:flex;align-items:center;gap:14px;padding:6px 10px;border-radius:8px;font-size:13px;cursor:pointer}
+.gl-stat-year:hover{background:rgba(59,130,246,.06)}
+.gl-stat-year.active{background:rgba(59,130,246,.12)}
+.gl-stat-year__label{font-weight:700;width:48px}
+.gl-stat-year__red{color:#b91c1c}
+.gl-stat-year__white{color:#475569}

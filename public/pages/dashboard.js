@@ -208,7 +208,7 @@ function maybeHintCustomize(container) {
 // Reihenfolge = Standard-Layout. Die primären Inhalte (tasks, calendar) führen,
 // damit sie beim Wieder-Einblenden oben stehen; das einzige passive Widget
 // (weather) steht bewusst am Ende, statt die sichtbare Grid-Spitze zu belegen.
-const WIDGET_IDS = ['tasks', 'calendar', 'meals', 'shopping', 'birthdays', 'budget', 'rewards', 'health', 'cycle', 'housekeeping', 'family', 'notes', 'weather', 'clock'];
+const WIDGET_IDS = ['tasks', 'calendar', 'meals', 'shopping', 'birthdays', 'budget', 'rewards', 'health', 'cycle', 'housekeeping', 'media', 'gifts', 'family', 'notes', 'weather', 'clock'];
 
 // Vier kuratierte Formen statt sechs: über vier Auswahlmöglichkeiten pro Widget
 // (× bis zu 12 Widgets) kippt der Anpassen-Modus in Mikro-Entscheidungs-Overhead
@@ -367,12 +367,14 @@ function widgetLabel(id) {
     housekeeping: () => t('nav.housekeeping'),
     family:   () => t('dashboard.familyMembers'),
     clock:    () => t('dashboard.clock'),
+    media:    () => t('nav.media'),
+    gifts:    () => t('nav.giftLedger'),
   };
   return (map[id] ?? (() => id))();
 }
 
 function widgetIcon(id) {
-  const map = { tasks: 'check-square', calendar: 'calendar', birthdays: 'cake', budget: 'wallet', rewards: 'award', health: 'heart-pulse', cycle: 'calendar-heart', housekeeping: 'paintbrush', family: 'users', shopping: 'shopping-cart', meals: 'utensils', notes: 'pin', weather: 'cloud-sun', clock: 'clock' };
+  const map = { tasks: 'check-square', calendar: 'calendar', birthdays: 'cake', budget: 'wallet', rewards: 'award', health: 'heart-pulse', cycle: 'calendar-heart', housekeeping: 'paintbrush', family: 'users', shopping: 'shopping-cart', meals: 'utensils', notes: 'pin', weather: 'cloud-sun', clock: 'clock', media: 'film', gifts: 'gift' };
   return map[id] ?? 'layout-dashboard';
 }
 
@@ -1009,6 +1011,85 @@ function renderHealthWidget(health) {
 }
 
 // --------------------------------------------------------
+// Medien-Widget (gerade am Schauen) + Geschenkregister-Widget (Monatssummen)
+// --------------------------------------------------------
+
+// Cover-Proxy: dieselbe Whitelist-Logik wie pages/media-library.js (klein
+// gehalten, damit das Dashboard keine Media-Page importieren muss).
+const DASH_COVER_PROXY_HOSTS = ['image.tmdb.org', 'openlibrary.org', 'covers.openlibrary.org', 'books.google.com'];
+function dashCoverSrc(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(url, location.origin);
+    if (u.protocol === 'https:' && (DASH_COVER_PROXY_HOSTS.includes(u.hostname) || u.hostname.endsWith('.mzstatic.com'))) {
+      return '/api/v1/media/img?src=' + encodeURIComponent(url);
+    }
+  } catch { /* ignorieren */ }
+  return url;
+}
+
+function renderMediaWidget(media) {
+  const watching = Array.isArray(media?.watching) ? media.watching : [];
+  if (!watching.length) {
+    return `<div class="widget widget--media">
+      ${widgetHeader('film', t('nav.media'), null, '/media')}
+      <div class="widget__empty">
+        <i data-lucide="film" class="empty-state__icon" aria-hidden="true"></i>
+        <div>${t('dashboard.mediaEmpty')}</div>
+        ${emptyStateCta('/media', t('dashboard.mediaGo'))}
+      </div>
+    </div>`;
+  }
+  const cards = watching.map((m) => {
+    const cover = m.cover_url
+      ? `<img src="${esc(dashCoverSrc(m.cover_url))}" alt="" loading="lazy" style="width:52px;height:74px;object-fit:cover;border-radius:8px;flex-shrink:0">`
+      : `<span style="width:52px;height:74px;border-radius:8px;background:var(--color-surface-raised, #eef2f7);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="film" aria-hidden="true" style="width:20px;height:20px;opacity:.5"></i></span>`;
+    return `
+      <div class="media-widget-row" data-route="/media?item=${m.id}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;padding:6px 4px;border-radius:10px;cursor:pointer">
+        ${cover}
+        <span style="min-width:0;display:flex;flex-direction:column;gap:2px">
+          <span style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.title)}</span>
+          <span style="font-size:11px;opacity:.65">${esc(t('media.type.' + (m.media_type || 'movie')))}</span>
+        </span>
+      </div>`;
+  }).join('');
+  return `<div class="widget widget--media">
+    ${widgetHeader('film', t('nav.media'), media.doingCount || watching.length, '/media')}
+    <div class="widget__body" style="display:flex;flex-direction:column;gap:2px;overflow:hidden">${cards}</div>
+  </div>`;
+}
+
+function renderGiftsWidget(gifts) {
+  const redCount = Number(gifts?.redCount) || 0;
+  const whiteCount = Number(gifts?.whiteCount) || 0;
+  if (!redCount && !whiteCount) {
+    return `<div class="widget widget--gifts">
+      ${widgetHeader('gift', t('nav.giftLedger'), null, '/gift-ledger')}
+      <div class="widget__empty">
+        <i data-lucide="gift" class="empty-state__icon" aria-hidden="true"></i>
+        <div>${t('dashboard.giftsEmpty')}</div>
+        ${emptyStateCta('/gift-ledger', t('giftLedger.add'))}
+      </div>
+    </div>`;
+  }
+  const row = (type, count, total, color, bg) => `
+    <div data-route="/gift-ledger" role="button" tabindex="0" style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:10px;background:${bg};cursor:pointer">
+      <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+      <span style="font-size:13px;font-weight:600">${esc(t('giftLedger.type.' + type))}</span>
+      <span style="flex:1"></span>
+      <span style="font-size:12px;opacity:.7">${count}</span>
+      <span style="font-size:14px;font-weight:700">${esc(formatCurrency(total))}</span>
+    </div>`;
+  return `<div class="widget widget--gifts">
+    ${widgetHeader('gift', t('nav.giftLedger'), redCount + whiteCount, '/gift-ledger')}
+    <div class="widget__body" style="display:flex;flex-direction:column;gap:6px">
+      ${row('red', redCount, gifts.redTotal || 0, '#dc2626', 'rgba(220,38,38,.08)')}
+      ${row('white', whiteCount, gifts.whiteTotal || 0, '#64748b', 'rgba(100,116,139,.10)')}
+    </div>
+  </div>`;
+}
+
+// --------------------------------------------------------
 // Zyklus-Widget (owner-only, opt-in)
 // --------------------------------------------------------
 // Strikt privat: Die Vorhersage wird client-seitig aus den nutzer-eigenen
@@ -1340,6 +1421,8 @@ function renderDashboardLayout(cfg, data, weather, currency, { editing = false, 
     health: () => renderHealthWidget(data.health ?? {}),
     cycle: () => renderCycleWidget(data.cycle),
     housekeeping: () => renderHousekeepingWidget(data.housekeeping ?? {}, currency),
+    media: () => renderMediaWidget(data.media ?? {}),
+    gifts: () => renderGiftsWidget(data.gifts ?? {}),
     family: () => renderFamilyWidget(data.users ?? []),
     meals: () => renderTodayMeals(data.todayMeals ?? [], visibleMealTypes),
     notes: () => renderPinnedNotes(data.pinnedNotes ?? []),

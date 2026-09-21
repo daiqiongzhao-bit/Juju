@@ -53,6 +53,39 @@ function renderPage(container, cfg) {
       </div>
 
       <div class="settings-card">
+        <h3 class="settings-card__title">${t('settings.embyCardTitle')}</h3>
+        <p class="settings-card-description">${t('settings.embyCardDesc')}</p>
+
+        <div class="settings-sync-info">
+          <span class="form-label">Emby</span>
+          <span class="settings-sync-info__status${cfg.embyConfigured ? ' settings-sync-info__status--connected' : ''}">
+            ${cfg.embyConfigured ? t('settings.embyStatusOk') : t('settings.embyStatusMissing')}
+          </span>
+        </div>
+
+        <form class="settings-form settings-form--compact" id="emby-config-form" novalidate autocomplete="off">
+          <div class="form-group">
+            <label class="form-label" for="emby-url">${t('settings.embyUrl')}</label>
+            <input class="form-input" id="emby-url" type="url" value="${cfg.embyUrl || ''}"
+                   placeholder="http://192.168.1.10:8096">
+            <p class="form-hint">${t('settings.embyUrlHint')}</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="emby-key">${t('settings.embyKey')}</label>
+            <input class="form-input" id="emby-key" type="password" autocomplete="new-password"
+                   placeholder="${t('settings.embyKeyPlaceholder')}">
+            <p class="form-hint">${t('settings.embyKeyHint')}</p>
+          </div>
+          <div id="emby-form-msg" class="form-hint" role="status" hidden></div>
+          <div class="settings-form-actions">
+            <button type="button" class="btn btn--ghost" id="emby-test">${t('settings.embyTest')}</button>
+            <button type="submit" class="btn btn--primary">${t('common.save')}</button>
+            <button type="button" class="btn btn--primary" id="emby-sync">${t('settings.embySync')}</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="settings-card">
         <h3 class="settings-card__title">${t('settings.mediaFreeSourcesTitle')}</h3>
         <p class="settings-card-description">${t('settings.mediaFreeSourcesDesc')}</p>
         <ul style="margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.9;color:var(--color-text-secondary,#555)">
@@ -98,4 +131,63 @@ export async function render(container, { user }) {
   });
 
   window.lucide?.createIcons({ el: container });
+
+  // ---- Emby: Konfiguration / Test / Watched-Sync ----
+  const embyMsg = container.querySelector('#emby-form-msg');
+  const showEmbyMsg = (text) => {
+    if (!embyMsg) return;
+    embyMsg.textContent = text || '';
+    embyMsg.hidden = !text;
+  };
+
+  async function saveEmbyConfig() {
+    const url = container.querySelector('#emby-url').value.trim();
+    const key = container.querySelector('#emby-key').value.trim();
+    const res = await api.put('/media/emby/config', { url, apiKey: key });
+    return res.data || {};
+  }
+
+  container.querySelector('#emby-config-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    showEmbyMsg('');
+    try {
+      const d = await saveEmbyConfig();
+      window.yuvomi?.showToast(d.configured ? t('settings.embySavedOk') : t('settings.embySavedEmpty'), 'success');
+      await render(container, { user });
+    } catch (error) {
+      showEmbyMsg(error?.message || t('common.errorGeneric'));
+    }
+  });
+
+  container.querySelector('#emby-test')?.addEventListener('click', async () => {
+    showEmbyMsg(t('settings.embyTesting'));
+    try {
+      await saveEmbyConfig();
+      const r = (await api.post('/media/emby/test')).data || {};
+      showEmbyMsg(t('settings.embyTestOk', { name: r.serverName || 'Emby', version: r.version || '' }));
+    } catch (error) {
+      showEmbyMsg((error?.message || t('common.errorGeneric')));
+    }
+  });
+
+  container.querySelector('#emby-sync')?.addEventListener('click', async (event) => {
+    const btn = event.currentTarget;
+    showEmbyMsg(t('settings.embySyncing'));
+    btn.disabled = true;
+    try {
+      await saveEmbyConfig();
+      const r = (await api.post('/media/emby/sync')).data || {};
+      showEmbyMsg(
+        t('settings.embySyncDone', {
+          matched: r.matched || 0,
+          updated: r.updated || 0,
+          emby: r.embyItems || 0,
+        })
+      );
+    } catch (error) {
+      showEmbyMsg(error?.message || t('common.errorGeneric'));
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }

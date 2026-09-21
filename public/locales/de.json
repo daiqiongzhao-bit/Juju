@@ -150,7 +150,11 @@
     "emptyDesc": "Familienanlässe und Geldgeschenke an einem Ort im Blick.",
     "summaryEntries": "Einträge",
     "summarySum": "Summe",
-    "summaryPartial": "{count} ohne Betrag"
+    "summaryPartial": "{count} ohne Betrag",
+    "stats": "Statistik",
+    "statsYear": "Jahresstatistik {year}",
+    "statsTopRel": "Top-Beziehungen des Jahres",
+    "statsByYear": "Jahresuebersicht"
   },
   "search": {
     "emptyHint": "Ab 2 Zeichen durchsuchst du Aufgaben, Termine, Notizen, Kontakte, Einkauf und Gesundheit.",
@@ -266,7 +270,10 @@
     "housekeepingVisitsMonth": "{{count}} Besuche im Monat",
     "housekeepingUnpaid": "{{amount}} offen",
     "widgetError": "Konnte nicht geladen werden",
-    "savingsGoal": "Sparziel"
+    "savingsGoal": "Sparziel",
+    "mediaEmpty": "Gerade nichts im Stream",
+    "mediaGo": "Zur Medienbibliothek",
+    "giftsEmpty": "Keine Geschenkeintraege diesen Monat"
   },
   "tasks": {
     "manageCategories": "Kategorien verwalten",
@@ -2378,7 +2385,24 @@
     "mediaFreeSourcesDesc": "Diese Quellen brauchen keinen Key; der Hinzufügen-Dialog wählt sie je Medientyp automatisch.",
     "mediaSourceMovies": "Film-/Serien-Suche mit Postern",
     "mediaSourceMusic": "Album-Suche mit Covern",
-    "mediaSourceBooks": "Buchsuche mit Covern"
+    "mediaSourceBooks": "Buchsuche mit Covern",
+    "embyCardTitle": "Emby-Integration",
+    "embyCardDesc": "Emby-/Jellyfin-Server anbinden: Gesehene-Status in die Medienbibliothek uebernehmen und Fotobibliotheken durchstoebern.",
+    "embyStatusOk": "Konfiguriert",
+    "embyStatusMissing": "Nicht konfiguriert",
+    "embyUrl": "Server-Adresse",
+    "embyUrlHint": "Inklusive Port, z. B. http://192.168.1.10:8096 (Emby oder Jellyfin)",
+    "embyKey": "API-Key",
+    "embyKeyPlaceholder": "In Emby: Dashboard → API-Keys",
+    "embyKeyHint": "Leer lassen = bestehenden Key behalten",
+    "embyTest": "Verbindung testen",
+    "embyTesting": "Verbindung wird getestet …",
+    "embyTestOk": "Verbindung ok: {name} {version}",
+    "embySync": "Watched-Status synchronisieren",
+    "embySyncing": "Synchronisierung laeuft (je nach Bibliothek bis zu einer Minute) …",
+    "embySyncDone": "Sync fertig: {emby} Emby-Titel, {matched} lokal gematcht, {updated} aktualisiert (nur Upgrades: finished > doing > wish)",
+    "embySavedOk": "Emby-Konfiguration gespeichert",
+    "embySavedEmpty": "Gespeichert, aber Emby ist noch nicht vollstaendig konfiguriert"
   },
   "login": {
     "tagline": "Willkommen zurück bei eurem Familienplaner.",
@@ -2658,7 +2682,7 @@
     "descriptionLabel": "Beschreibung",
     "categoryLabel": "Kategorie",
     "fileLabel": "Datei",
-    "fileHint": "PDF, Bilder, Text und Office-Dateien bis zu 100 MB.",
+    "fileHint": "PDF, Bilder, Text und Office-Dateien bis zu 5 MB.",
     "visibilityLabel": "Sichtbarkeit",
     "statusLabel": "Status",
     "allowedMembersLabel": "Erlaubte Mitglieder",
@@ -2673,7 +2697,7 @@
     "deletedToast": "Dokument gelöscht.",
     "deleteConfirm": "Dokument \"{{name}}\" löschen?",
     "fileRequired": "Bitte wähle eine Datei aus.",
-    "fileTooLarge": "Die Datei darf höchstens 100 MB groß sein.",
+    "fileTooLarge": "Die Datei darf höchstens 5 MB groß sein.",
     "fileReadError": "Die Datei konnte nicht gelesen werden.",
     "statusActive": "Aktiv",
     "statusArchived": "Archiviert",
@@ -4068,7 +4092,7 @@
   },
   "documentAttach": {
     "label": "Anhänge",
-    "hint": "Vorhandene Dokumente verknüpfen oder neue Dateien hochladen (max. 100 MB).",
+    "hint": "Vorhandene Dokumente verknüpfen oder neue Dateien hochladen (max. 5 MB).",
     "emptyState": "Noch nichts angehängt",
     "uploadAction": "Datei hochladen",
     "pickAction": "Vorhandenes Dokument",
@@ -4147,7 +4171,11 @@
     "batchDelete": "Auswahl löschen",
     "confirmDeleteBatch": "Die {{count}} ausgewählten Einträge löschen?",
     "groupByStatus": "Nach Status gruppieren",
-    "source": "Quelle"
+    "source": "Quelle",
+    "embyPhotos": "Emby-Fotos",
+    "embyNoLibraries": "Keine Fotobibliotheken gefunden",
+    "embyError": "Emby nicht erreichbar oder nicht konfiguriert (Admin: Einstellungen → Module → Medien-Metadaten)",
+    "embyMore": "Mehr laden"
   },
   "memory": {
     "title": "Familienerinnerungen",

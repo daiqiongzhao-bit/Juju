@@ -387,6 +387,57 @@ router.get('/', (req, res) => {
     result.housekeeping = { configured: false, present: false, presentSince: null, workerName: null, visitsThisMonth: 0, unpaidAmount: 0, lastVisit: null };
   }
 
+  // Medienbibliothek: „gerade am Schauen" (Status doing) mit Cover — das
+  // Widget zeigt den aktuellen Media-Dieb-Stapel der Familie. Sichtbarkeit
+  // wie /media/list: private Einträge nur für Ersteller/Admin.
+  try {
+    const admin = !!(req.user && (req.user.role === 'admin' || req.user.isAdmin === 1 || req.user.is_admin === 1));
+    const adminParam = admin ? 1 : 0;
+    const watching = d.prepare(`
+      SELECT id, media_type, title, cover_url, status, updated_at
+      FROM media_item
+      WHERE status = 'doing' AND (is_private = 0 OR creator_uid = @me OR @admin = 1)
+      ORDER BY updated_at DESC LIMIT 8
+    `).all({ me: userId, admin: adminParam });
+    const counts = d.prepare(`
+      SELECT status, COUNT(*) AS n FROM media_item
+      WHERE (is_private = 0 OR creator_uid = @me OR @admin = 1)
+      GROUP BY status
+    `).all({ me: userId, admin: adminParam });
+    result.media = {
+      watching,
+      doingCount: counts.find((c) => c.status === 'doing')?.n || 0,
+      finishedCount: counts.find((c) => c.status === 'finished')?.n || 0,
+    };
+  } catch (err) {
+    log.error('media error:', err.message);
+    result.media = { watching: [], doingCount: 0, finishedCount: 0 };
+  }
+
+  // Geschenkregister: Monatssummen je Typ (red = 红事, white = 白事) —
+  // identische Privat-Scoping-Regel wie /gift-ledger/list.
+  try {
+    const admin = !!(req.user && (req.user.role === 'admin' || req.user.isAdmin === 1 || req.user.is_admin === 1));
+    const adminParam = admin ? 1 : 0;
+    const rows = d.prepare(`
+      SELECT type, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+      FROM gift_ledger
+      WHERE substr(event_date, 1, 7) = @month
+        AND (is_private = 0 OR creator_uid = @me OR @admin = 1)
+      GROUP BY type
+    `).all({ month: currentMonth, me: userId, admin: adminParam });
+    result.gifts = {
+      month: currentMonth,
+      redCount: rows.find((r) => r.type === 'red')?.count || 0,
+      redTotal: Number(rows.find((r) => r.type === 'red')?.total || 0),
+      whiteCount: rows.find((r) => r.type === 'white')?.count || 0,
+      whiteTotal: Number(rows.find((r) => r.type === 'white')?.total || 0),
+    };
+  } catch (err) {
+    log.error('gifts error:', err.message);
+    result.gifts = { month: currentMonth, redCount: 0, redTotal: 0, whiteCount: 0, whiteTotal: 0 };
+  }
+
   res.json(result);
   } catch (err) {
     log.error('Critical error:', err.message);

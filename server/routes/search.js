@@ -21,7 +21,7 @@ const router = express.Router();
 router.get('/', (req, res) => {
   try {
     const q = String(req.query.q ?? '').trim();
-    if (q.length < 2) return res.json({ tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [], gifts: [] });
+    if (q.length < 2) return res.json({ tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [], gifts: [], media: [], documents: [], recipes: [] });
 
     const userId = req.authUserId || req.session.userId;
     const u = req.user || {};

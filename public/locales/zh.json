@@ -150,7 +150,11 @@
     "emptyDesc": "记录红白喜事的人情往来，收礼送礼一目了然。",
     "summaryEntries": "条记录",
     "summarySum": "礼金合计",
-    "summaryPartial": "另有 {count} 条未填金额"
+    "summaryPartial": "另有 {count} 条未填金额",
+    "stats": "统计",
+    "statsYear": "{year} 年统计",
+    "statsTopRel": "本年度人情往来 Top（按对象）",
+    "statsByYear": "历年概览"
   },
   "dashboard": {
     "title": "概览",
@@ -252,7 +256,10 @@
     "housekeepingVisitsMonth": "本月 {{count}} 次到访",
     "housekeepingUnpaid": "{{amount}} 待付",
     "widgetError": "无法加载",
-    "savingsGoal": "储蓄目标"
+    "savingsGoal": "储蓄目标",
+    "mediaEmpty": "当前没有在看的影视",
+    "mediaGo": "去影音书库",
+    "giftsEmpty": "本月暂无礼金记录"
   },
   "tasks": {
     "manageCategories": "管理类别",
@@ -2364,7 +2371,24 @@
     "mediaFreeSourcesDesc": "以下数据源无需任何配置，新增弹窗会按类型自动切换。",
     "mediaSourceMovies": "影视 / 剧集搜索与海报",
     "mediaSourceMusic": "音乐专辑搜索与封面",
-    "mediaSourceBooks": "书籍搜索与封面"
+    "mediaSourceBooks": "书籍搜索与封面",
+    "embyCardTitle": "Emby 集成",
+    "embyCardDesc": "连接 Emby / Jellyfin 服务器：把「已看 / 在看」状态同步到影音书库，并在影音书库中浏览 Emby 照片库。",
+    "embyStatusOk": "已配置",
+    "embyStatusMissing": "未配置",
+    "embyUrl": "服务器地址",
+    "embyUrlHint": "含端口，如 http://192.168.1.10:8096（Emby 或 Jellyfin 均可）",
+    "embyKey": "API Key",
+    "embyKeyPlaceholder": "在 Emby 控制台 → API密钥 中生成",
+    "embyKeyHint": "保存时留空表示保留现有 Key",
+    "embyTest": "测试连接",
+    "embyTesting": "正在测试连接…",
+    "embyTestOk": "连接成功：{name} {version}",
+    "embySync": "同步观看状态",
+    "embySyncing": "正在同步（视 Emby 库大小可能需要十几秒）…",
+    "embySyncDone": "同步完成：Emby {emby} 个视频，本地匹配 {matched} 条，状态更新 {updated} 条（只升级不降级：看完 > 在看 > 想看）",
+    "embySavedOk": "Emby 配置已保存",
+    "embySavedEmpty": "已保存，但 Emby 配置尚不完整"
   },
   "login": {
     "tagline": "欢迎回到您的家庭计划工具。",
@@ -2645,7 +2669,7 @@
     "descriptionLabel": "描述",
     "categoryLabel": "类别",
     "fileLabel": "文件",
-    "fileHint": "PDF、图片、文本和Office文件，最大100 MB。",
+    "fileHint": "PDF、图片、文本和Office文件，最大5 MB。",
     "visibilityLabel": "可见性",
     "statusLabel": "状态",
     "allowedMembersLabel": "允许的成员",
@@ -2660,7 +2684,7 @@
     "deletedToast": "文档已删除。",
     "deleteConfirm": "删除文档\"{{name}}\"？",
     "fileRequired": "请选择要上传的文件。",
-    "fileTooLarge": "文件最大为100 MB。",
+    "fileTooLarge": "文件最大为5 MB。",
     "fileReadError": "无法读取文件。",
     "statusActive": "活跃",
     "statusArchived": "已归档",
@@ -4068,7 +4092,7 @@
   },
   "documentAttach": {
     "label": "附件",
-    "hint": "关联已有文档或上传新文件（最大 100 MB）。",
+    "hint": "关联已有文档或上传新文件（最大 5 MB）。",
     "emptyState": "尚无附件",
     "uploadAction": "上传文件",
     "pickAction": "已有文档",
@@ -4147,7 +4171,11 @@
     "batchDelete": "删除所选",
     "confirmDeleteBatch": "确定删除选中的 {{count}} 个条目吗？",
     "groupByStatus": "按状态分组",
-    "source": "数据源"
+    "source": "数据源",
+    "embyPhotos": "Emby 照片",
+    "embyNoLibraries": "未找到照片库（需在 Emby 中已建立照片媒体库）",
+    "embyError": "Emby 不可达或尚未配置（管理员可在 设置→模块→媒体元数据 中配置）",
+    "embyMore": "加载更多"
   },
   "memory": {
     "title": "家庭回忆",

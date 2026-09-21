@@ -54,7 +54,7 @@ export function buildMatchQuery(q) {
 export function runSearch(database, q, userId, isAdmin = false) {
   const match = buildMatchQuery(q);
   if (!match) {
-    return { tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [], gifts: [] };
+    return { tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [], gifts: [], media: [], documents: [], recipes: [] };
   }
   const limit = SEARCH_LIMIT;
 
@@ -145,7 +145,41 @@ export function runSearch(database, q, userId, isAdmin = false) {
            OR g.relationship LIKE @like ESCAPE '\\' OR g.note LIKE @like ESCAPE '\\')
     ORDER BY (g.event_date IS NULL), g.event_date DESC, g.created_at DESC
     LIMIT @limit
+  `  ).all({ like: giftLike, userId, limit, isAdmin: isAdmin ? 1 : 0 });
+
+  // Medienbibliothek: LIKE-Scan wie Geschenkregister (kein FTS-Eintrag).
+  // Sichtbarkeit wie GET /media/list: private Zeilen nur für Ersteller/Admin.
+  const media = database.prepare(`
+    SELECT mi.id, mi.title, mi.media_type, mi.cover_url, mi.status
+    FROM media_item mi
+    WHERE (mi.is_private = 0 OR mi.creator_uid = @userId OR @isAdmin = 1)
+      AND (mi.title LIKE @like ESCAPE '\\' OR mi.comment LIKE @like ESCAPE '\\')
+    ORDER BY mi.updated_at DESC
+    LIMIT @limit
   `).all({ like: giftLike, userId, limit, isAdmin: isAdmin ? 1 : 0 });
 
-  return { tasks, events, notes, contacts, items, meds, activities, gifts };
+  // Familiendokumente: LIKE-Scan auf Name/Beschreibung. Sichtbarkeit wie die
+  // Dokumenten-Liste: 'private' nur für Ersteller/Admin, 'restricted' und
+  // 'family' für alle angemeldeten Familienmitglieder (Lesen der Metadaten).
+  const documents = database.prepare(`
+    SELECT fd.id, fd.name AS title, fd.category, fd.original_name, fd.mime_type
+    FROM family_documents fd
+    WHERE fd.status = 'active'
+      AND (fd.visibility != 'private' OR fd.created_by = @userId OR @isAdmin = 1)
+      AND (fd.name LIKE @like ESCAPE '\\' OR fd.description LIKE @like ESCAPE '\\'
+           OR fd.original_name LIKE @like ESCAPE '\\')
+    ORDER BY fd.updated_at DESC
+    LIMIT @limit
+  `).all({ like: giftLike, userId, limit, isAdmin: isAdmin ? 1 : 0 });
+
+  // Rezepte: Titel + Notizen (Zutaten bewusst nicht durchsucht — zu rauschend).
+  const recipes = database.prepare(`
+    SELECT r.id, r.title, r.notes
+    FROM recipes r
+    WHERE r.title LIKE @like ESCAPE '\\' OR r.notes LIKE @like ESCAPE '\\'
+    ORDER BY r.updated_at DESC
+    LIMIT @limit
+  `).all({ like: giftLike, limit });
+
+  return { tasks, events, notes, contacts, items, meds, activities, gifts, media, documents, recipes };
 }

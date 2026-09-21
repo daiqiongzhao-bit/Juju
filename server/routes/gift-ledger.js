@@ -105,6 +105,108 @@ router.get('/stats', (req, res) => {
   }
 });
 
+// GET /api/v1/gift-ledger/summary?year=YYYY  (vor /:id!)
+// Monats- und Jahresstatistik NUR über die sichtbaren Zeilen (gleiche
+// Privat-Scoping-Regel wie /list): niemand sieht Aggregatdaten fremder
+// privater Einträge. red = 红事 (Geld geschenkt/erhalten je nach Perspektive),
+// white = 白事. Geliefert werden: 12 Monatszeilen (Summe/Anzahl je Typ),
+// Jahressummen je Typ und Top-Beziehungen des Jahres.
+router.get('/summary', (req, res) => {
+  try {
+    const me = uid(req);
+    const year = parseInt(req.query.year, 10);
+    const now = new Date();
+    const y = Number.isFinite(year) && year >= 1970 && year <= 2100 ? year : now.getFullYear();
+    const vis = privacyClause(req);
+
+    const months = db
+      .get()
+      .prepare(
+        `SELECT substr(event_date, 1, 7) AS month, type,
+                COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+         FROM gift_ledger
+         WHERE ${vis} AND event_date IS NOT NULL AND substr(event_date, 1, 4) = ?
+         GROUP BY month, type ORDER BY month ASC`
+      )
+      .all(me, String(y));
+
+    const monthRows = [];
+    for (let m = 1; m <= 12; m++) {
+      const key = `${y}-${String(m).padStart(2, '0')}`;
+      const red = months.find((r) => r.month === key && r.type === 'red');
+      const white = months.find((r) => r.month === key && r.type === 'white');
+      monthRows.push({
+        month: key,
+        redCount: red?.count || 0,
+        redTotal: Number(red?.total || 0),
+        whiteCount: white?.count || 0,
+        whiteTotal: Number(white?.total || 0),
+      });
+    }
+
+    const yearRow = db
+      .get()
+      .prepare(
+        `SELECT type, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+         FROM gift_ledger
+         WHERE ${vis} AND event_date IS NOT NULL AND substr(event_date, 1, 4) = ?
+         GROUP BY type`
+      )
+      .all(me, String(y));
+    const yearTotals = {
+      redCount: yearRow.find((r) => r.type === 'red')?.count || 0,
+      redTotal: Number(yearRow.find((r) => r.type === 'red')?.total || 0),
+      whiteCount: yearRow.find((r) => r.type === 'white')?.count || 0,
+      whiteTotal: Number(yearRow.find((r) => r.type === 'white')?.total || 0),
+    };
+
+    // Jahresübergreifende Übersicht (für den Jahreswechsel-Reiter).
+    const years = db
+      .get()
+      .prepare(
+        `SELECT substr(event_date, 1, 4) AS year, type,
+                COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+         FROM gift_ledger
+         WHERE ${vis} AND event_date IS NOT NULL
+         GROUP BY year, type ORDER BY year DESC LIMIT 40`
+      )
+      .all(me);
+    const yearMap = new Map();
+    for (const r of years) {
+      if (!yearMap.has(r.year)) yearMap.set(r.year, { year: r.year, redCount: 0, redTotal: 0, whiteCount: 0, whiteTotal: 0 });
+      const row = yearMap.get(r.year);
+      if (r.type === 'red') { row.redCount = r.count; row.redTotal = Number(r.total); }
+      else { row.whiteCount = r.count; row.whiteTotal = Number(r.total); }
+    }
+
+    const relationships = db
+      .get()
+      .prepare(
+        `SELECT COALESCE(NULLIF(relationship, ''), '?') AS relationship, type,
+                COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+         FROM gift_ledger
+         WHERE ${vis} AND event_date IS NOT NULL AND substr(event_date, 1, 4) = ?
+         GROUP BY relationship, type
+         ORDER BY SUM(amount) DESC LIMIT 10`
+      )
+      .all(me, String(y))
+      .map((r) => ({ ...r, total: Number(r.total) }));
+
+    res.json({
+      data: {
+        year: y,
+        months: monthRows,
+        yearTotals,
+        years: [...yearMap.values()].slice(0, 10),
+        relationships,
+      },
+    });
+  } catch (err) {
+    log.error('GET /summary', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
 // GET /api/v1/gift-ledger/:id
 router.get('/:id', (req, res) => {
   try {

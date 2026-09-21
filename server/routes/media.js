@@ -13,6 +13,7 @@ import express from 'express';
 import * as db from '../db.js';
 import { str, oneOf, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT } from '../middleware/validate.js';
 import { searchTmdb, searchOpenLibrary, searchItunes, searchGoogleBooks } from '../services/media-metadata.js';
+import * as emby from '../services/media-emby.js';
 import { notifyUsers, actorName } from '../services/notify-fanout.js';
 
 const log = createLogger('Media');
@@ -53,14 +54,20 @@ function loadMembers(mediaId) {
     .prepare(
       `SELECT m.member_uid AS uid,
               COALESCE(u.display_name, u.username, '?') AS name,
-              m.is_shared_memory AS shared
+              m.is_shared_memory AS shared,
+              m.member_status AS member_status
        FROM media_member_rel m
        JOIN users u ON u.id = m.member_uid
        WHERE m.media_id = ?
        ORDER BY m.id ASC`
     )
     .all(mediaId)
-    .map((r) => ({ uid: r.uid, name: r.name, shared: r.shared === 1 }));
+    .map((r) => ({
+      uid: r.uid,
+      name: r.name,
+      shared: r.shared === 1,
+      memberStatus: STATUSES.includes(r.member_status) ? r.member_status : null,
+    }));
 }
 
 function getItem(id) {
@@ -305,6 +312,8 @@ router.get('/config', (req, res) => {
         tmdbConfigured: !!cfg.tmdb_api_key,
         tmdbProxyUrl: cfg.tmdb_proxy_url || '',
         openlibraryEnable: cfg.openlibrary_enable === 1,
+        embyConfigured: !!(cfg.emby_url && cfg.emby_api_key),
+        embyUrl: cfg.emby_url || '',
       },
     });
   } catch (err) {
@@ -329,6 +338,183 @@ router.get('/export', (req, res) => {
   } catch (err) {
     log.error('GET /export', err);
     res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// PUT /api/v1/media/:id/member-status  { uid, status }
+// Per-Mitglied-Watch-Status (Migration 140): jedes Familienmitglied kann
+// denselben Eintrag individuell markieren (wish/doing/finished/null=reset).
+router.put('/:id/member-status', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const item = db.get().prepare('SELECT * FROM media_item WHERE id = ?').get(id);
+    if (!item) return res.status(404).json({ error: 'Eintrag nicht gefunden', code: 404 });
+    const memberUid = Number(req.body.uid);
+    if (!Number.isFinite(memberUid)) return res.status(400).json({ error: 'uid fehlt', code: 400 });
+    const rel = db
+      .get()
+      .prepare('SELECT id FROM media_member_rel WHERE media_id = ? AND member_uid = ?')
+      .get(id, memberUid);
+    if (!rel) return res.status(404).json({ error: 'Mitglied nicht verknüpft', code: 404 });
+    const raw = req.body.status;
+    if (raw !== null && raw !== undefined && raw !== '' && !STATUSES.includes(raw)) {
+      return res.status(400).json({ error: 'Ungültiger Status', code: 400 });
+    }
+    db.get()
+      .prepare('UPDATE media_member_rel SET member_status = ? WHERE media_id = ? AND member_uid = ?')
+      .run(raw ? raw : null, id, memberUid);
+    res.json({ data: getItem(id) });
+  } catch (err) {
+    log.error('PUT /:id/member-status', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// ------------------------------------------------------------
+// Emby-Integration
+// ------------------------------------------------------------
+
+function requireEmbyConfig(req, res) {
+  const cfg = emby.getConfig(db.get());
+  if (!emby.isConfigured(cfg)) {
+    res.status(400).json({ error: 'Emby nicht konfiguriert', code: 400 });
+    return null;
+  }
+  return cfg;
+}
+
+// GET /api/v1/media/emby/config  (nur Admin; Key wird nie im Klartext zurückgegeben)
+router.get('/emby/config', (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const cfg = emby.getConfig(db.get());
+    res.json({
+      data: {
+        configured: emby.isConfigured(cfg),
+        url: cfg.emby_url || '',
+        userId: cfg.emby_user_id || '',
+      },
+    });
+  } catch (err) {
+    log.error('GET /emby/config', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// PUT /api/v1/media/emby/config  (nur Admin; leerer Key = bestehenden behalten)
+router.put('/emby/config', (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const cfg = emby.getConfig(db.get());
+    const vUrl = String(req.body.url ?? '').trim().replace(/\/+$/, '');
+    const vKey = String(req.body.apiKey ?? '').trim();
+    const vUser = String(req.body.userId ?? '').trim();
+    if (vUrl && !/^https?:\/\//.test(vUrl)) {
+      return res.status(400).json({ error: 'URL muss mit http(s):// beginnen', code: 400 });
+    }
+    const newKey = vKey.length ? vKey : cfg.emby_api_key;
+    db.get()
+      .prepare(
+        `UPDATE system_media_config
+         SET emby_url = ?, emby_api_key = ?, emby_user_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE id = ?`
+      )
+      .run(vUrl || null, newKey || null, vUser || null, cfg.id);
+    const updated = emby.getConfig(db.get());
+    res.json({ data: { configured: emby.isConfigured(updated), url: updated.emby_url || '', userId: updated.emby_user_id || '' } });
+  } catch (err) {
+    log.error('PUT /emby/config', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// POST /api/v1/media/emby/test  (nur Admin): Verbindung + Benutzerliste
+router.post('/emby/test', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const cfg = requireEmbyConfig(req, res);
+    if (!cfg) return;
+    const info = await emby.testConnection(cfg);
+    res.json({ data: info });
+  } catch (err) {
+    log.error('POST /emby/test', err);
+    res.status(502).json({ error: 'Emby nicht erreichbar: ' + (err?.message || ''), code: 502 });
+  }
+});
+
+// POST /api/v1/media/emby/sync  (nur Admin): Watched-Status übernehmen
+router.post('/emby/sync', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const cfg = requireEmbyConfig(req, res);
+    if (!cfg) return;
+    const result = await emby.syncWatched(db.get(), cfg);
+    res.json({ data: result });
+  } catch (err) {
+    log.error('POST /emby/sync', err);
+    res.status(502).json({ error: 'Sync fehlgeschlagen: ' + (err?.message || ''), code: 502 });
+  }
+});
+
+// GET /api/v1/media/emby/libraries  -> Fotobibliotheken (jedes Familienmitglied)
+router.get('/emby/libraries', async (req, res) => {
+  try {
+    const cfg = requireEmbyConfig(req, res);
+    if (!cfg) return;
+    const data = await emby.photoLibraries(cfg);
+    res.json({ data });
+  } catch (err) {
+    log.error('GET /emby/libraries', err);
+    res.status(502).json({ error: 'Emby nicht erreichbar: ' + (err?.message || ''), code: 502 });
+  }
+});
+
+// GET /api/v1/media/emby/photos?libraryId=&start=&limit=
+router.get('/emby/photos', async (req, res) => {
+  try {
+    const cfg = requireEmbyConfig(req, res);
+    if (!cfg) return;
+    const libraryId = (req.query.libraryId || '').toString();
+    if (!libraryId) return res.status(400).json({ error: 'libraryId fehlt', code: 400 });
+    const start = Math.max(0, parseInt(req.query.start || '0', 10) || 0);
+    const limit = Math.min(120, Math.max(12, parseInt(req.query.limit || '60', 10) || 60));
+    const data = await emby.photoItems(cfg, { libraryId, startIndex: start, limit });
+    res.json({ data });
+  } catch (err) {
+    log.error('GET /emby/photos', err);
+    res.status(502).json({ error: 'Emby nicht erreichbar: ' + (err?.message || ''), code: 502 });
+  }
+});
+
+// GET /api/v1/media/emby/img?item=&tag=&w=  -> Bild-Proxy (Token bleibt serverseitig)
+router.get('/emby/img', async (req, res) => {
+  try {
+    const cfg = requireEmbyConfig(req, res);
+    if (!cfg) return;
+    const itemId = (req.query.item || '').toString().replace(/[^a-zA-Z0-9-]/g, '');
+    if (!itemId) return res.status(400).json({ error: 'item fehlt', code: 400 });
+    const tag = (req.query.tag || '').toString().replace(/[^a-zA-Z0-9]/g, '');
+    const w = Math.min(1920, Math.max(120, parseInt(req.query.w || '400', 10) || 400));
+    const url = emby.photoImageUrl(cfg, itemId, tag, w);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    let upstream;
+    try {
+      upstream = await fetch(url, { signal: ctrl.signal, headers: { 'X-Emby-Token': cfg.emby_api_key } });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!upstream.ok) return res.status(502).json({ error: 'Bild nicht verfügbar', code: 502 });
+    const ctype = (upstream.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+    if (!ctype.startsWith('image/')) return res.status(415).json({ error: 'Kein Bild', code: 415 });
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.setHeader('Content-Type', ctype);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.end(buf);
+  } catch (err) {
+    log.error('GET /emby/img', err);
+    res.status(502).json({ error: 'Bild-Proxy Fehler', code: 502 });
   }
 });
 
@@ -592,14 +778,14 @@ router.post('/:id/member', (req, res) => {
     const item = db.get().prepare('SELECT * FROM media_item WHERE id = ?').get(id);
     if (!item) return res.status(404).json({ error: 'Eintrag nicht gefunden', code: 404 });
     const members = Array.isArray(req.body.members)
-      ? req.body.members.map(Number).filter((n) => Number.isFinite(n))
+      ? req.body.members.map((m) => (typeof m === 'object' && m !== null ? { uid: Number(m.uid), status: m.status } : { uid: Number(m), status: null })).filter((m) => Number.isFinite(m.uid) && m.uid > 0)
       : [];
     db.get().transaction(() => {
       db.get().prepare('DELETE FROM media_member_rel WHERE media_id = ?').run(id);
       const ins = db
         .get()
-        .prepare('INSERT OR IGNORE INTO media_member_rel (media_id, member_uid, is_shared_memory) VALUES (?, ?, 0)');
-      for (const m of members) ins.run(id, m);
+        .prepare('INSERT OR IGNORE INTO media_member_rel (media_id, member_uid, is_shared_memory, member_status) VALUES (?, ?, 0, ?)');
+      for (const m of members) ins.run(id, m.uid, STATUSES.includes(m.status) ? m.status : null);
     })();
     syncSharedMemory(id);
     res.json({ data: getItem(id) });

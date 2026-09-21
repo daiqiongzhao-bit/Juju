@@ -5151,11 +5151,13 @@ function renderSearchResults(container, data, onClose) {
 
   container.replaceChildren();
 
-  const { tasks = [], events = [], notes = [], contacts = [], items = [], meds = [], activities = [], gifts = [] } = data;
+  const { tasks = [], events = [], notes = [], contacts = [], items = [], meds = [], activities = [], gifts = [], media = [], documents = [], recipes = [] } = data;
 
   const total = tasks.length + events.length + notes.length + contacts.length + items.length
 
-    + meds.length + activities.length + gifts.length;
+    + meds.length + activities.length + gifts.length
+
+    + media.length + documents.length + recipes.length;
 
 
 
@@ -5285,6 +5287,22 @@ function renderSearchResults(container, data, onClose) {
     (i) => [i.event_date ? formatDate(i.event_date) : '', i.giver || '', i.amount != null ? String(i.amount) : '']
 
       .filter(Boolean).join(' · '));
+
+  // Medienbibliothek: Titel + Typ.
+  const MEDIA_TYPE_LABEL = (mt) => t('media.type.' + (mt || 'movie')) || mt;
+  makeSection('nav.media', media, (i) => `/media?item=${i.id}`, null,
+
+    (i) => MEDIA_TYPE_LABEL(i.media_type));
+
+  // Familiendokumente.
+  makeSection('nav.documents', documents, (i) => '/documents', null,
+
+    (i) => i.original_name || '');
+
+  // Rezepte.
+  makeSection('nav.recipes', recipes, (i) => '/recipes', null,
+
+    (i) => (i.notes ? String(i.notes).slice(0, 60) : ''));
 
 
 

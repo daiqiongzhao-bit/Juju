@@ -70,6 +70,7 @@ export async function render(container, { user } = {}) {
         <button class="mk-btn ghost" id="mk-group">${esc(t('media.groupByStatus'))}</button>
         <button class="mk-btn ghost" id="mk-select">${esc(t('media.selectMode'))}</button>
         <button class="mk-btn ghost" id="mk-export">${esc(t('media.export'))}</button>
+        <button class="mk-btn ghost" id="mk-emby">📷 ${esc(t('media.embyPhotos'))}</button>
         <button class="mk-btn" id="mk-add">+ ${esc(t('media.add'))}</button>
       </div>
       <div class="mk-tabs" id="mk-tabs"></div>
@@ -137,6 +138,7 @@ export async function render(container, { user } = {}) {
   });
 
   container.querySelector('#mk-add').addEventListener('click', () => openAdd());
+  container.querySelector('#mk-emby').addEventListener('click', () => openEmbyPhotos());
 
   // Batch-Auswahl-Modus
   container.querySelector('#mk-select').addEventListener('click', () => toggleSelectMode());
@@ -293,6 +295,33 @@ export async function render(container, { user } = {}) {
     return Array.from(root.querySelectorAll('.mk-member-picker input:checked')).map((x) => parseInt(x.dataset.uid, 10));
   }
 
+  // Per-Mitglied-Watch-Status (Migration 140): uid -> gewählter Status ('' = reset).
+  function getMemberStatuses(root) {
+    const out = [];
+    for (const sel of root.querySelectorAll('.mk-member-status')) {
+      const uid = parseInt(sel.dataset.uid, 10);
+      out.push({ uid, status: sel.value || null });
+    }
+    return out;
+  }
+
+  // Mitglieder-Chips mit individuellem Status-Select (Detail-Ansicht).
+  function memberPickerWithStatus(item) {
+    return `<div class="mk-member-picker" id="d-members">${state.members
+      .map((m) => {
+        const rel = (item.members || []).find((x) => x.uid === m.id);
+        const st = rel?.memberStatus || '';
+        return `<div class="mk-member-chip mk-member-chip--row ${rel ? 'checked' : ''}" data-uid="${m.id}">
+          <label><input type="checkbox" data-uid="${m.id}" ${rel ? 'checked' : ''}> ${esc(m.name || m.display_name || '#' + m.id)}</label>
+          <select class="mk-member-status" data-uid="${m.id}">
+            <option value="">—</option>
+            ${STATUSES.map((s) => `<option value="${s}" ${st === s ? 'selected' : ''}>${esc(t('media.status.' + s))}</option>`).join('')}
+          </select>
+        </div>`;
+      })
+      .join('')}</div>`;
+  }
+
   async function openDetail(id) {
     let item;
     try {
@@ -315,7 +344,7 @@ export async function render(container, { user } = {}) {
       <div class="mk-field"><label>${esc(t('media.watchDate'))}</label><input id="d-watch" type="date" value="${esc((item.watch_date || '').slice(0, 10))}"></div>
       <div class="mk-field"><label>${esc(t('media.tags'))}</label><input id="d-tags" value="${esc((item.tags || []).join(', '))}"></div>
       <div class="mk-field"><label>${esc(t('media.comment'))}</label><textarea id="d-comment" rows="3">${esc(item.comment || '')}</textarea></div>
-      <div class="mk-field"><label>${esc(t('media.members'))}</label>${memberPicker((item.members || []).map((m) => m.uid))}</div>
+      <div class="mk-field"><label>${esc(t('media.members'))}</label>${memberPickerWithStatus(item)}</div>
       <div class="mk-field"><label><input type="checkbox" id="d-private" ${item.is_private ? 'checked' : ''}> ${esc(t('media.private'))}</label></div>
       <div class="modal-panel__footer">
         <button class="mk-btn ghost" id="d-del">${esc(t('media.delete'))}</button>
@@ -350,6 +379,13 @@ export async function render(container, { user } = {}) {
       try {
         await api.put('/media/' + id, payload);
         await api.post('/media/' + id + '/member', { members: payload.members });
+        // Individuelle Mitglieder-Status nachziehen (best-effort, blockiert nicht)
+        for (const ms of getMemberStatuses(body)) {
+          if (!payload.members.includes(ms.uid)) continue;
+          try {
+            await api.put('/media/' + id + '/member-status', { uid: ms.uid, status: ms.status });
+          } catch { /* einzelne Fehlschläge ignorieren */ }
+        }
         // force:true → nach erfolgreichem Speichern NICHT nach „Änderungen verwerfen?" fragen
         closeModal({ force: true });
         load();
@@ -560,6 +596,86 @@ export async function render(container, { user } = {}) {
         msg.classList.add('mk-add__msg--err');
       }
     });
+  }
+
+  // Emby-Fotobibliotheken durchstöbern (Server proxyt API + Bilder, Token
+  // bleibt serverseitig). Konfiguration: Einstellungen → Module → Medien.
+  async function openEmbyPhotos() {
+    const body = document.createElement('div');
+    body.className = 'mk-modal-body mk-emby';
+    body.innerHTML = `<div class="mk-empty">${esc(t('media.loading'))}</div>`;
+    openModal({
+      title: t('media.embyPhotos'),
+      content: '',
+      onSave: (panel) => panel.querySelector('.modal-panel__body').replaceChildren(body),
+    });
+
+    let libraries = [];
+    let currentLib = null;
+    let start = 0;
+    const PAGE = 60;
+    let total = 0;
+
+    try {
+      const r = (await api.get('/media/emby/libraries')).data || {};
+      libraries = r.libraries || [];
+      if (!libraries.length) {
+        body.innerHTML = `<div class="mk-empty">${esc(t('media.embyNoLibraries'))}</div>`;
+        return;
+      }
+      body.innerHTML = `
+        <div class="mk-emby__bar">
+          <select id="e-lib">${libraries.map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select>
+          <span class="mk-emby__count" id="e-count"></span>
+        </div>
+        <div class="mk-emby-grid" id="e-grid"></div>
+        <div class="mk-emby-more"><button class="mk-btn ghost" id="e-more" hidden>${esc(t('media.embyMore'))}</button></div>
+      `;
+      const grid = body.querySelector('#e-grid');
+      const moreBtn = body.querySelector('#e-more');
+      const countEl = body.querySelector('#e-count');
+
+      function photoCard(p) {
+        const src = `/api/v1/media/emby/img?item=${encodeURIComponent(p.id)}&tag=${encodeURIComponent(p.tag || '')}&w=400`;
+        const full = `/api/v1/media/emby/img?item=${encodeURIComponent(p.id)}&tag=${encodeURIComponent(p.tag || '')}&w=1600`;
+        return `<figure class="mk-emby-card" data-full="${esc(full)}" title="${esc(p.name || '')}">
+          <img src="${esc(src)}" alt="${esc(p.name || '')}" loading="lazy">
+          <figcaption>${esc(p.name || '')}</figcaption>
+        </figure>`;
+      }
+
+      async function loadPhotos(reset) {
+        if (reset) {
+          start = 0;
+          grid.innerHTML = `<div class="mk-empty">${esc(t('media.loading'))}</div>`;
+        }
+        try {
+          const r = (await api.get(`/media/emby/photos?libraryId=${encodeURIComponent(currentLib)}&start=${start}&limit=${PAGE}`)).data || {};
+          const items = r.items || [];
+          total = r.total || 0;
+          if (reset) grid.innerHTML = '';
+          grid.insertAdjacentHTML('beforeend', items.map(photoCard).join(''));
+          start += items.length;
+          countEl.textContent = `${Math.min(start, total)} / ${total}`;
+          moreBtn.hidden = start >= total;
+          grid.querySelectorAll('.mk-emby-card').forEach((el) =>
+            el.addEventListener('click', () => window.open(el.dataset.full, '_blank'))
+          );
+        } catch {
+          if (reset) grid.innerHTML = `<div class="mk-empty">${esc(t('media.embyError'))}</div>`;
+        }
+      }
+
+      body.querySelector('#e-lib').addEventListener('change', (e) => {
+        currentLib = e.target.value;
+        loadPhotos(true);
+      });
+      currentLib = libraries[0].id;
+      moreBtn.addEventListener('click', () => loadPhotos(false));
+      await loadPhotos(true);
+    } catch {
+      body.innerHTML = `<div class="mk-empty">${esc(t('media.embyError'))}</div>`;
+    }
   }
 
   // init
