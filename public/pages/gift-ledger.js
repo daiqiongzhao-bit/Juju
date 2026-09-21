@@ -277,9 +277,7 @@ export async function render(container, { user } = {}) {
             <div class="gl-empty__icon" aria-hidden="true">🎁</div>
             <div class="gl-empty__title">${esc(t('giftLedger.empty'))}</div>
             <div class="gl-empty__desc">${esc(t('giftLedger.emptyDesc'))}</div>
-            <button class="gl-btn" id="gl-empty-add">+ ${esc(t('giftLedger.add'))}</button>
           </div>`;
-        list.querySelector('#gl-empty-add').addEventListener('click', () => openForm());
         return;
       }
       list.innerHTML = r.map(itemHtml).join('');
