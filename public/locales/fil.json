@@ -112,7 +112,8 @@
         "pantry": "Despensa",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Talaan ng regalo"
     },
     "search": {
         "emptyHint": "Mag-type ng hindi bababa sa 2 karakter para maghanap ng mga gawain, kaganapan, tala, kontak, pamimili at kalusugan.",
@@ -124,7 +125,9 @@
         "scopesLabel": "Tumalon sa",
         "loading": "Naghahanap…",
         "resultCountOne": "{{count}} resulta",
-        "resultCountMany": "{{count}} resulta"
+        "resultCountMany": "{{count}} resulta",
+        "recentLabel": "Mga kamakailang paghahanap",
+        "recentClear": "Burahin"
     },
     "dashboard": {
         "title": "Pangkalahatang-tanaw",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Pumili",
+        "cancelSelect": "Kanselahin ang pagpili",
+        "selected": "{{count}} napili",
+        "batchDelete": "Tanggalin ang napili",
+        "confirmDeleteBatch": "Tanggalin ang {{count}} napiling item?",
+        "groupByStatus": "Igrupo ayon sa status"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Timeline",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Talaan ng regalo",
+        "add": "Bagong entry",
+        "edit": "I-edit ang entry",
+        "save": "I-save",
+        "delete": "Tanggalin",
+        "loading": "Naglo-load…",
+        "empty": "Wala pang entry",
+        "tabAll": "Lahat",
+        "searchPlaceholder": "Maghanap ng okasyon, nagbigay o tala…",
+        "type": {
+            "label": "Uri",
+            "white": "Masaya (kasal)",
+            "red": "Pagluluksa (libing)"
+        },
+        "eventName": "Okasyon / pangalan",
+        "eventNamePh": "hal. kasal, kaarawan, libing",
+        "eventNameRequired": "Maglagay ng okasyon",
+        "eventDate": "Petsa",
+        "giver": "Nagbigay",
+        "amount": "Halaga",
+        "amountInvalid": "Di-wastong halaga",
+        "relationship": "Relasyon",
+        "note": "Tala",
+        "private": "Ako lang ang makakakita",
+        "privateHint": "Ang pribadong entry ay ikaw at ang admin lang ang makakakita.",
+        "selectMode": "Pumili",
+        "cancelSelect": "Kanselahin",
+        "selected": "{{count}} napili",
+        "batchDelete": "Tanggalin ang napili",
+        "confirmDelete": "Tanggalin ang entry na ito?",
+        "confirmDeleteBatch": "Tanggalin ang {{count}} napiling entry?"
     }
 }

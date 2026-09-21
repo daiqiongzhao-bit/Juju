@@ -112,7 +112,8 @@
         "pantry": "Skafferi",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Gåvoregister"
     },
     "dashboard": {
         "title": "Översikt",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "Gå till",
         "loading": "Söker…",
         "resultCountOne": "{{count}} resultat",
-        "resultCountMany": "{{count}} resultat"
+        "resultCountMany": "{{count}} resultat",
+        "recentLabel": "Senaste sökningar",
+        "recentClear": "Rensa"
     },
     "birthdays": {
         "inDays": "om {{days}} dagar",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Välj",
+        "cancelSelect": "Avbryt val",
+        "selected": "{{count}} valda",
+        "batchDelete": "Ta bort valda",
+        "confirmDeleteBatch": "Ta bort de {{count}} valda objekten?",
+        "groupByStatus": "Gruppera efter status"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Tidslinje",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Gåvoregister",
+        "add": "Ny post",
+        "edit": "Redigera post",
+        "save": "Spara",
+        "delete": "Ta bort",
+        "loading": "Laddar…",
+        "empty": "Inga poster ännu",
+        "tabAll": "Alla",
+        "searchPlaceholder": "Sök tillfälle, givare eller anteckning…",
+        "type": {
+            "label": "Typ",
+            "white": "Glad (bröllop)",
+            "red": "Sorg (begravning)"
+        },
+        "eventName": "Tillfälle / namn",
+        "eventNamePh": "t.ex. bröllop, födelsedag, begravning",
+        "eventNameRequired": "Ange ett tillfälle",
+        "eventDate": "Datum",
+        "giver": "Givare",
+        "amount": "Belopp",
+        "amountInvalid": "Ogiltigt belopp",
+        "relationship": "Relation",
+        "note": "Anteckning",
+        "private": "Endast synligt för mig",
+        "privateHint": "Privata poster visas endast för dig och administratörer.",
+        "selectMode": "Välj",
+        "cancelSelect": "Avbryt",
+        "selected": "{{count}} valda",
+        "batchDelete": "Ta bort valda",
+        "confirmDelete": "Ta bort denna post?",
+        "confirmDeleteBatch": "Ta bort de {{count}} valda posterna?"
     }
 }

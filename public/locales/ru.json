@@ -112,7 +112,8 @@
         "pantry": "Запасы",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Книга подарков"
     },
     "dashboard": {
         "title": "Обзор",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "Перейти к",
         "loading": "Поиск…",
         "resultCountOne": "{{count}} результат",
-        "resultCountMany": "{{count}} результатов"
+        "resultCountMany": "{{count}} результатов",
+        "recentLabel": "Недавние запросы",
+        "recentClear": "Очистить"
     },
     "birthdays": {
         "inDays": "через {{days}} дн.",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Выбрать",
+        "cancelSelect": "Отменить выбор",
+        "selected": "Выбрано: {{count}}",
+        "batchDelete": "Удалить выбранное",
+        "confirmDeleteBatch": "Удалить {{count}} выбранных элементов?",
+        "groupByStatus": "Группировать по статусу"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Хронология",
+        "viewAlbum": "Альбом"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Книга подарков",
+        "add": "Новая запись",
+        "edit": "Изменить запись",
+        "save": "Сохранить",
+        "delete": "Удалить",
+        "loading": "Загрузка…",
+        "empty": "Записей пока нет",
+        "tabAll": "Все",
+        "searchPlaceholder": "Поиск повода, дарителя или заметки…",
+        "type": {
+            "label": "Тип",
+            "white": "Радостное (свадьба)",
+            "red": "Траурное (похороны)"
+        },
+        "eventName": "Повод / название",
+        "eventNamePh": "напр. свадьба, юбилей, похороны",
+        "eventNameRequired": "Укажите повод",
+        "eventDate": "Дата",
+        "giver": "Даритель",
+        "amount": "Сумма",
+        "amountInvalid": "Неверная сумма",
+        "relationship": "Родство",
+        "note": "Заметка",
+        "private": "Видно только мне",
+        "privateHint": "Личные записи видны только вам и администраторам.",
+        "selectMode": "Выбрать",
+        "cancelSelect": "Отмена",
+        "selected": "Выбрано: {{count}}",
+        "batchDelete": "Удалить выбранное",
+        "confirmDelete": "Удалить эту запись?",
+        "confirmDeleteBatch": "Удалить {{count}} выбранных записей?"
     }
 }

@@ -112,7 +112,8 @@
         "pantry": "Voorraad",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Geschenkregister"
     },
     "dashboard": {
         "title": "Overzicht",
@@ -2400,7 +2401,9 @@
         "scopesLabel": "Ga naar",
         "loading": "Zoeken…",
         "resultCountOne": "{{count}} resultaat",
-        "resultCountMany": "{{count}} resultaten"
+        "resultCountMany": "{{count}} resultaten",
+        "recentLabel": "Recente zoekopdrachten",
+        "recentClear": "Wissen"
     },
     "onboarding": {
         "step1Title": "Welkom bij {{name}}",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Selecteren",
+        "cancelSelect": "Selectie opheffen",
+        "selected": "{{count}} geselecteerd",
+        "batchDelete": "Selectie verwijderen",
+        "confirmDeleteBatch": "De {{count}} geselecteerde items verwijderen?",
+        "groupByStatus": "Groeperen op status"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Tijdlijn",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Geschenkregister",
+        "add": "Nieuwe invoer",
+        "edit": "Invoer bewerken",
+        "save": "Opslaan",
+        "delete": "Verwijderen",
+        "loading": "Laden…",
+        "empty": "Nog geen invoer",
+        "tabAll": "Alle",
+        "searchPlaceholder": "Zoek gelegenheid, gever of notitie…",
+        "type": {
+            "label": "Type",
+            "white": "Blij (bruiloft)",
+            "red": "Rouw (begrafenis)"
+        },
+        "eventName": "Gelegenheid / naam",
+        "eventNamePh": "bv. bruiloft, verjaardag, begrafenis",
+        "eventNameRequired": "Voer een gelegenheid in",
+        "eventDate": "Datum",
+        "giver": "Gever",
+        "amount": "Bedrag",
+        "amountInvalid": "Ongeldig bedrag",
+        "relationship": "Relatie",
+        "note": "Notitie",
+        "private": "Alleen voor mij zichtbaar",
+        "privateHint": "Privé-invoer is alleen zichtbaar voor jou en beheerders.",
+        "selectMode": "Selecteren",
+        "cancelSelect": "Annuleren",
+        "selected": "{{count}} geselecteerd",
+        "batchDelete": "Selectie verwijderen",
+        "confirmDelete": "Deze invoer verwijderen?",
+        "confirmDeleteBatch": "De {{count}} geselecteerde invoeren verwijderen?"
     }
 }

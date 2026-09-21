@@ -112,7 +112,8 @@
         "pantry": "Kiler",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Hediye defteri"
     },
     "dashboard": {
         "title": "Genel Bakış",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "Doğrudan aç",
         "loading": "Aranıyor…",
         "resultCountOne": "{{count}} sonuç",
-        "resultCountMany": "{{count}} sonuç"
+        "resultCountMany": "{{count}} sonuç",
+        "recentLabel": "Son aramalar",
+        "recentClear": "Temizle"
     },
     "birthdays": {
         "inDays": "{{days}} gün sonra",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Seç",
+        "cancelSelect": "Seçimi iptal et",
+        "selected": "{{count}} seçildi",
+        "batchDelete": "Seçileni sil",
+        "confirmDeleteBatch": "Seçilen {{count}} öğe silinsin mi?",
+        "groupByStatus": "Duruma göre grupla"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Zaman çizelgesi",
+        "viewAlbum": "Albüm"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Hediye defteri",
+        "add": "Yeni kayıt",
+        "edit": "Kaydı düzenle",
+        "save": "Kaydet",
+        "delete": "Sil",
+        "loading": "Yükleniyor…",
+        "empty": "Henüz kayıt yok",
+        "tabAll": "Tümü",
+        "searchPlaceholder": "Sebep, veren veya not ara…",
+        "type": {
+            "label": "Tür",
+            "white": "Sevinçli (düğün)",
+            "red": "Yas (cenaze)"
+        },
+        "eventName": "Sebep / ad",
+        "eventNamePh": "örn. düğün, doğum günü, cenaze",
+        "eventNameRequired": "Bir sebep girin",
+        "eventDate": "Tarih",
+        "giver": "Veren",
+        "amount": "Tutar",
+        "amountInvalid": "Geçersiz tutar",
+        "relationship": "İlişki",
+        "note": "Not",
+        "private": "Yalnızca ben görebilirim",
+        "privateHint": "Özel kayıtlar yalnızca siz ve yöneticiler tarafından görülür.",
+        "selectMode": "Seç",
+        "cancelSelect": "İptal",
+        "selected": "{{count}} seçildi",
+        "batchDelete": "Seçileni sil",
+        "confirmDelete": "Bu kayıt silinsin mi?",
+        "confirmDeleteBatch": "Seçilen {{count}} kayıt silinsin mi?"
     }
 }

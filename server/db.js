@@ -5103,6 +5103,30 @@ const MIGRATIONS = [
     `,
   },
 
+  {
+    version: 139,
+    description: 'Gift ledger: red/white event records with amount and giver',
+    up: `
+      CREATE TABLE IF NOT EXISTS gift_ledger (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        type          TEXT    NOT NULL CHECK (type IN ('red', 'white')),
+        event_name    TEXT    NOT NULL,
+        event_date    TEXT,
+        giver         TEXT,
+        amount        REAL,
+        relationship  TEXT,
+        note          TEXT,
+        is_private    INTEGER NOT NULL DEFAULT 0,
+        creator_uid   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_gift_ledger_type    ON gift_ledger(type);
+      CREATE INDEX IF NOT EXISTS idx_gift_ledger_date    ON gift_ledger(event_date);
+      CREATE INDEX IF NOT EXISTS idx_gift_ledger_creator ON gift_ledger(creator_uid);
+    `,
+  },
+
 ];
 
 /**

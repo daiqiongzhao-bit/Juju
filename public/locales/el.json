@@ -112,7 +112,8 @@
         "pantry": "Απόθεμα",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Βιβλίο δώρων"
     },
     "dashboard": {
         "title": "Επισκόπηση",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "Μετάβαση σε",
         "loading": "Αναζήτηση…",
         "resultCountOne": "{{count}} αποτέλεσμα",
-        "resultCountMany": "{{count}} αποτελέσματα"
+        "resultCountMany": "{{count}} αποτελέσματα",
+        "recentLabel": "Πρόσφατες αναζητήσεις",
+        "recentClear": "Καθαρισμός"
     },
     "birthdays": {
         "inDays": "σε {{days}} ημέρες",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Επιλογή",
+        "cancelSelect": "Ακύρωση επιλογής",
+        "selected": "{{count}} επιλεγμένα",
+        "batchDelete": "Διαγραφή επιλεγμένων",
+        "confirmDeleteBatch": "Διαγραφή των {{count}} επιλεγμένων στοιχείων;",
+        "groupByStatus": "Ομαδοποίηση κατά κατάσταση"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Χρονολόγιο",
+        "viewAlbum": "Άλμπουμ"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Βιβλίο δώρων",
+        "add": "Νέα εγγραφή",
+        "edit": "Επεξεργασία εγγραφής",
+        "save": "Αποθήκευση",
+        "delete": "Διαγραφή",
+        "loading": "Φόρτωση…",
+        "empty": "Δεν υπάρχουν εγγραφές",
+        "tabAll": "Όλα",
+        "searchPlaceholder": "Αναζήτηση αφορμής, δότη ή σημείωσης…",
+        "type": {
+            "label": "Τύπος",
+            "white": "Χαράς (γάμος)",
+            "red": "Πένθους (κηδεία)"
+        },
+        "eventName": "Αφορμή / όνομα",
+        "eventNamePh": "π.χ. γάμος, γενέθλια, κηδεία",
+        "eventNameRequired": "Εισαγάγετε αφορμή",
+        "eventDate": "Ημερομηνία",
+        "giver": "Δότης",
+        "amount": "Ποσό",
+        "amountInvalid": "Μη έγκυρο ποσό",
+        "relationship": "Σχέση",
+        "note": "Σημείωση",
+        "private": "Ορατό μόνο σε μένα",
+        "privateHint": "Οι ιδιωτικές εγγραφές είναι ορατές μόνο σε εσάς και τους διαχειριστές.",
+        "selectMode": "Επιλογή",
+        "cancelSelect": "Άκυρο",
+        "selected": "{{count}} επιλεγμένα",
+        "batchDelete": "Διαγραφή επιλεγμένων",
+        "confirmDelete": "Διαγραφή αυτής της εγγραφής;",
+        "confirmDeleteBatch": "Διαγραφή των {{count}} επιλεγμένων εγγραφών;"
     }
 }

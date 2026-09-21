@@ -112,7 +112,8 @@
         "pantry": "Készlet",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Ajándéknyilvántartás"
     },
     "dashboard": {
         "title": "Áttekintés",
@@ -2400,7 +2401,9 @@
         "scopesLabel": "Ugrás ide",
         "loading": "Keresés…",
         "resultCountOne": "{{count}} találat",
-        "resultCountMany": "{{count}} találat"
+        "resultCountMany": "{{count}} találat",
+        "recentLabel": "Legutóbbi keresések",
+        "recentClear": "Törlés"
     },
     "onboarding": {
         "step1Title": "Üdvözöljük a {{name}} alkalmazásban",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Kijelölés",
+        "cancelSelect": "Kijelölés törlése",
+        "selected": "{{count}} kijelölve",
+        "batchDelete": "Kijelöltek törlése",
+        "confirmDeleteBatch": "Törli a {{count}} kijelölt elemet?",
+        "groupByStatus": "Csoportosítás állapot szerint"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Idővonal",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Ajándéknyilvántartás",
+        "add": "Új bejegyzés",
+        "edit": "Bejegyzés szerkesztése",
+        "save": "Mentés",
+        "delete": "Törlés",
+        "loading": "Betöltés…",
+        "empty": "Még nincs bejegyzés",
+        "tabAll": "Mind",
+        "searchPlaceholder": "Keresés alkalom, adományozó vagy megjegyzés szerint…",
+        "type": {
+            "label": "Típus",
+            "white": "Örömteli (esküvő)",
+            "red": "Gyászos (temetés)"
+        },
+        "eventName": "Alkalom / név",
+        "eventNamePh": "pl. esküvő, születésnap, temetés",
+        "eventNameRequired": "Adja meg az alkalmat",
+        "eventDate": "Dátum",
+        "giver": "Adományozó",
+        "amount": "Összeg",
+        "amountInvalid": "Érvénytelen összeg",
+        "relationship": "Kapcsolat",
+        "note": "Megjegyzés",
+        "private": "Csak nekem látható",
+        "privateHint": "A privát bejegyzéseket csak Ön és az adminok látják.",
+        "selectMode": "Kijelölés",
+        "cancelSelect": "Mégse",
+        "selected": "{{count}} kijelölve",
+        "batchDelete": "Kijelöltek törlése",
+        "confirmDelete": "Törli ezt a bejegyzést?",
+        "confirmDeleteBatch": "Törli a {{count}} kijelölt bejegyzést?"
     }
 }

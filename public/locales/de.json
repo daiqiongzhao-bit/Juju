@@ -112,7 +112,41 @@
         "rewards": "Belohnungen",
         "pantry": "Vorrat",
         "media": "Medienbibliothek",
-        "familyMemory": "Familienerinnerungen"
+        "familyMemory": "Familienerinnerungen",
+        "giftLedger": "Geschenkregister"
+    },
+    "giftLedger": {
+        "title": "Geschenkregister",
+        "add": "Eintrag hinzufügen",
+        "edit": "Eintrag bearbeiten",
+        "save": "Speichern",
+        "delete": "Löschen",
+        "loading": "Lädt…",
+        "empty": "Noch keine Geschenk-Einträge",
+        "tabAll": "Alle",
+        "searchPlaceholder": "Anlass, Schenker oder Notiz suchen…",
+        "type": {
+            "label": "Art",
+            "white": "Freudiger Anlass",
+            "red": "Trauerfall"
+        },
+        "eventName": "Anlass / Bezeichnung",
+        "eventNamePh": "z. B. Hochzeit, Geburtstag, Beerdigung",
+        "eventNameRequired": "Bitte einen Anlass angeben",
+        "eventDate": "Datum",
+        "giver": "Schenker",
+        "amount": "Betrag",
+        "amountInvalid": "Betrag ungültig",
+        "relationship": "Verhältnis",
+        "note": "Notiz",
+        "private": "Nur für mich sichtbar",
+        "privateHint": "Private Einträge sind nur für dich und Admins sichtbar.",
+        "selectMode": "Auswählen",
+        "cancelSelect": "Abbrechen",
+        "selected": "{{count}} ausgewählt",
+        "batchDelete": "Auswahl löschen",
+        "confirmDelete": "Diesen Eintrag löschen?",
+        "confirmDeleteBatch": "Die {{count}} ausgewählten Einträge löschen?"
     },
     "search": {
         "emptyHint": "Ab 2 Zeichen durchsuchst du Aufgaben, Termine, Notizen, Kontakte, Einkauf und Gesundheit.",
@@ -124,7 +158,9 @@
         "scopesLabel": "Direkt öffnen",
         "loading": "Suche läuft…",
         "resultCountOne": "{{count}} Ergebnis",
-        "resultCountMany": "{{count}} Ergebnisse"
+        "resultCountMany": "{{count}} Ergebnisse",
+        "recentLabel": "Letzte Suchen",
+        "recentClear": "Leeren"
     },
     "dashboard": {
         "title": "Übersicht",
@@ -4067,13 +4103,21 @@
         "search": "Suchen",
         "noResult": "Keine Treffer.",
         "searchFailed": "Suche fehlgeschlagen – bitte manuell eingeben.",
-        "titleRequired": "Titel erforderlich"
+        "titleRequired": "Titel erforderlich",
+        "selectMode": "Auswählen",
+        "cancelSelect": "Auswahl aufheben",
+        "selected": "{{count}} ausgewählt",
+        "batchDelete": "Auswahl löschen",
+        "confirmDeleteBatch": "Die {{count}} ausgewählten Einträge löschen?",
+        "groupByStatus": "Nach Status gruppieren"
     },
     "memory": {
         "title": "Familienerinnerungen",
         "subtitle": "Gemeinsame Momente: Medien, Reisen und Ereignisse.",
         "add": "Hinzufügen",
         "export": "JSON exportieren",
+        "viewTimeline": "Zeitleiste",
+        "viewAlbum": "Album",
         "loading": "Lädt…",
         "empty": "Noch keine Erinnerungen.",
         "allTypes": "Alle Typen",

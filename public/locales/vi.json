@@ -112,7 +112,8 @@
         "pantry": "Kho dự trữ",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Sổ lễ kim"
     },
     "dashboard": {
         "title": "Tổng quan",
@@ -2400,7 +2401,9 @@
         "scopesLabel": "Mở nhanh",
         "loading": "Đang tìm…",
         "resultCountOne": "{{count}} kết quả",
-        "resultCountMany": "{{count}} kết quả"
+        "resultCountMany": "{{count}} kết quả",
+        "recentLabel": "Tìm kiếm gần đây",
+        "recentClear": "Xóa"
     },
     "onboarding": {
         "step1Title": "Chào mừng đến với {{name}}",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Chọn",
+        "cancelSelect": "Hủy chọn",
+        "selected": "Đã chọn {{count}}",
+        "batchDelete": "Xóa mục đã chọn",
+        "confirmDeleteBatch": "Xóa {{count}} mục đã chọn?",
+        "groupByStatus": "Nhóm theo trạng thái"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Dòng thời gian",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Sổ lễ kim",
+        "add": "Thêm mục",
+        "edit": "Sửa mục",
+        "save": "Lưu",
+        "delete": "Xóa",
+        "loading": "Đang tải…",
+        "empty": "Chưa có mục nào",
+        "tabAll": "Tất cả",
+        "searchPlaceholder": "Tìm dịp, người tặng hoặc ghi chú…",
+        "type": {
+            "label": "Loại",
+            "white": "Vui (đám cưới)",
+            "red": "Buồn (tang lễ)"
+        },
+        "eventName": "Dịp / tên",
+        "eventNamePh": "vd. đám cưới, sinh nhật, tang lễ",
+        "eventNameRequired": "Vui lòng nhập dịp",
+        "eventDate": "Ngày",
+        "giver": "Người tặng",
+        "amount": "Số tiền",
+        "amountInvalid": "Số tiền không hợp lệ",
+        "relationship": "Quan hệ",
+        "note": "Ghi chú",
+        "private": "Chỉ mình tôi thấy",
+        "privateHint": "Mục riêng tư chỉ bạn và quản trị viên thấy.",
+        "selectMode": "Chọn",
+        "cancelSelect": "Hủy",
+        "selected": "Đã chọn {{count}}",
+        "batchDelete": "Xóa mục đã chọn",
+        "confirmDelete": "Xóa mục này?",
+        "confirmDeleteBatch": "Xóa {{count}} mục đã chọn?"
     }
 }

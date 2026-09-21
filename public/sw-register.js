@@ -7,7 +7,7 @@
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=0.0.9', { updateViaCache: 'none' })
+    navigator.serviceWorker.register('/sw.js?v=0.0.10', { updateViaCache: 'none' })
       .then((registration) => registration.update())
       .catch((err) => {
         console.warn('[SW] Registrierung fehlgeschlagen:', err);

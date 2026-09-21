@@ -51,10 +51,10 @@ export function buildMatchQuery(q) {
  * Gesundheitsdaten sind sensibel: nur eigene Zeilen ODER visibility='family'
  * sind sichtbar (spiegelt das Lese-Scoping der Health-List-Routen).
  */
-export function runSearch(database, q, userId) {
+export function runSearch(database, q, userId, isAdmin = false) {
   const match = buildMatchQuery(q);
   if (!match) {
-    return { tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [] };
+    return { tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [], gifts: [] };
   }
   const limit = SEARCH_LIMIT;
 
@@ -133,5 +133,19 @@ export function runSearch(database, q, userId) {
     LIMIT @limit
   `).all({ match, userId, limit });
 
-  return { tasks, events, notes, contacts, items, meds, activities };
+  // Geschenkregister: NICHT im FTS-Index (das Modul legt bewusst keinen
+  // search_index-Eintrag an), sondern LIKE-Scan auf die sichtbaren Spalten.
+  // Privat-Scoping: nur eigene Zeilen — plus alle Zeilen für Admins.
+  const giftLike = `%${String(q).replace(/[%_]/g, (m) => '\\' + m)}%`;
+  const gifts = database.prepare(`
+    SELECT g.id, g.event_name AS title, g.type, g.event_date, g.giver, g.amount, g.relationship
+    FROM gift_ledger g
+    WHERE (g.is_private = 0 OR g.creator_uid = @userId OR @isAdmin = 1)
+      AND (g.event_name LIKE @like ESCAPE '\\' OR g.giver LIKE @like ESCAPE '\\'
+           OR g.relationship LIKE @like ESCAPE '\\' OR g.note LIKE @like ESCAPE '\\')
+    ORDER BY (g.event_date IS NULL), g.event_date DESC, g.created_at DESC
+    LIMIT @limit
+  `).all({ like: giftLike, userId, limit, isAdmin: isAdmin ? 1 : 0 });
+
+  return { tasks, events, notes, contacts, items, meds, activities, gifts };
 }

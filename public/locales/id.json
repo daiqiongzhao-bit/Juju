@@ -112,7 +112,8 @@
         "pantry": "Persediaan",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Buku tamu"
     },
     "search": {
         "emptyHint": "Ketik minimal 2 karakter untuk mencari tugas, acara, catatan, kontak, belanja, dan kesehatan.",
@@ -124,7 +125,9 @@
         "scopesLabel": "Buka langsung",
         "loading": "Mencari…",
         "resultCountOne": "{{count}} hasil",
-        "resultCountMany": "{{count}} hasil"
+        "resultCountMany": "{{count}} hasil",
+        "recentLabel": "Pencarian terakhir",
+        "recentClear": "Hapus"
     },
     "dashboard": {
         "title": "Ringkasan",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Pilih",
+        "cancelSelect": "Batal pilih",
+        "selected": "{{count}} dipilih",
+        "batchDelete": "Hapus yang dipilih",
+        "confirmDeleteBatch": "Hapus {{count}} item yang dipilih?",
+        "groupByStatus": "Kelompokkan menurut status"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Linimasa",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Buku tamu",
+        "add": "Entri baru",
+        "edit": "Edit entri",
+        "save": "Simpan",
+        "delete": "Hapus",
+        "loading": "Memuat…",
+        "empty": "Belum ada entri",
+        "tabAll": "Semua",
+        "searchPlaceholder": "Cari acara, pemberi, atau catatan…",
+        "type": {
+            "label": "Jenis",
+            "white": "Suka cita (pernikahan)",
+            "red": "Duka (pemakaman)"
+        },
+        "eventName": "Acara / nama",
+        "eventNamePh": "mis. pernikahan, ulang tahun, pemakaman",
+        "eventNameRequired": "Masukkan acara",
+        "eventDate": "Tanggal",
+        "giver": "Pemberi",
+        "amount": "Jumlah",
+        "amountInvalid": "Jumlah tidak valid",
+        "relationship": "Hubungan",
+        "note": "Catatan",
+        "private": "Hanya saya yang melihat",
+        "privateHint": "Entri pribadi hanya terlihat oleh Anda dan admin.",
+        "selectMode": "Pilih",
+        "cancelSelect": "Batal",
+        "selected": "{{count}} dipilih",
+        "batchDelete": "Hapus yang dipilih",
+        "confirmDelete": "Hapus entri ini?",
+        "confirmDeleteBatch": "Hapus {{count}} entri yang dipilih?"
     }
 }

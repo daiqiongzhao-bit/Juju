@@ -112,7 +112,8 @@
         "pantry": "Запаси",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Книга подарунків"
     },
     "dashboard": {
         "title": "Огляд",
@@ -2356,7 +2357,9 @@
         "scopesLabel": "Перейти до",
         "loading": "Пошук…",
         "resultCountOne": "{{count}} результат",
-        "resultCountMany": "{{count}} результатів"
+        "resultCountMany": "{{count}} результатів",
+        "recentLabel": "Недавні пошуки",
+        "recentClear": "Очистити"
     },
     "birthdays": {
         "inDays": "через {{days}} дн.",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Вибрати",
+        "cancelSelect": "Скасувати вибір",
+        "selected": "Вибрано: {{count}}",
+        "batchDelete": "Видалити вибране",
+        "confirmDeleteBatch": "Видалити {{count}} вибраних елементів?",
+        "groupByStatus": "Групувати за статусом"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Хронологія",
+        "viewAlbum": "Альбом"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Книга подарунків",
+        "add": "Новий запис",
+        "edit": "Редагувати запис",
+        "save": "Зберегти",
+        "delete": "Видалити",
+        "loading": "Завантаження…",
+        "empty": "Записів ще немає",
+        "tabAll": "Усі",
+        "searchPlaceholder": "Пошук приводу, дарувальника або нотатки…",
+        "type": {
+            "label": "Тип",
+            "white": "Радісна (весілля)",
+            "red": "Жалобна (похорон)"
+        },
+        "eventName": "Привід / назва",
+        "eventNamePh": "напр. весілля, ювілей, похорон",
+        "eventNameRequired": "Укажіть привід",
+        "eventDate": "Дата",
+        "giver": "Дарувальник",
+        "amount": "Сума",
+        "amountInvalid": "Невірна сума",
+        "relationship": "Спорідненість",
+        "note": "Нотатка",
+        "private": "Видно лише мені",
+        "privateHint": "Приватні записи бачите лише ви та адміністратори.",
+        "selectMode": "Вибрати",
+        "cancelSelect": "Скасувати",
+        "selected": "Вибрано: {{count}}",
+        "batchDelete": "Видалити вибране",
+        "confirmDelete": "Видалити цей запис?",
+        "confirmDeleteBatch": "Видалити {{count}} вибраних записів?"
     }
 }

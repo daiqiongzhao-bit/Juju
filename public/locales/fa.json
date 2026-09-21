@@ -112,7 +112,8 @@
         "pantry": "انبار",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "دفتر هدیه"
     },
     "search": {
         "emptyHint": "برای جستجو در کارها، رویدادها، یادداشت‌ها، مخاطبین، خرید و سلامت دست‌کم ۲ نویسه بنویس.",
@@ -124,7 +125,9 @@
         "scopesLabel": "رفتن به",
         "loading": "در حال جستجو…",
         "resultCountOne": "{{count}} نتیجه",
-        "resultCountMany": "{{count}} نتیجه"
+        "resultCountMany": "{{count}} نتیجه",
+        "recentLabel": "جستجوهای اخیر",
+        "recentClear": "پاک کردن"
     },
     "dashboard": {
         "title": "نمای کلی",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "انتخاب",
+        "cancelSelect": "لغو انتخاب",
+        "selected": "{{count}} انتخاب‌شده",
+        "batchDelete": "حذف انتخاب‌شده‌ها",
+        "confirmDeleteBatch": "{{count}} مورد انتخاب‌شده حذف شود؟",
+        "groupByStatus": "گروه‌بندی بر اساس وضعیت"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "خط زمانی",
+        "viewAlbum": "آلبوم"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "دفتر هدیه",
+        "add": "ورودی جدید",
+        "edit": "ویرایش ورودی",
+        "save": "ذخیره",
+        "delete": "حذف",
+        "loading": "در حال بارگذاری…",
+        "empty": "هنوز ورودی‌ای نیست",
+        "tabAll": "همه",
+        "searchPlaceholder": "جستجوی مناسب، هدیه‌دهنده یا یادداشت…",
+        "type": {
+            "label": "نوع",
+            "white": "شادی (عروسی)",
+            "red": "عزا (تشییع)"
+        },
+        "eventName": "مناسبت / نام",
+        "eventNamePh": "مثلاً عروسی، تولد، تشییع",
+        "eventNameRequired": "لطفاً مناسبت را وارد کنید",
+        "eventDate": "تاریخ",
+        "giver": "هدیه‌دهنده",
+        "amount": "مبلغ",
+        "amountInvalid": "مبلغ نامعتبر",
+        "relationship": "نسبت",
+        "note": "یادداشت",
+        "private": "فقط برای من قابل مشاهده",
+        "privateHint": "ورودی‌های خصوصی فقط برای شما و مدیران قابل مشاهده است.",
+        "selectMode": "انتخاب",
+        "cancelSelect": "لغو",
+        "selected": "{{count}} انتخاب‌شده",
+        "batchDelete": "حذف انتخاب‌شده‌ها",
+        "confirmDelete": "این ورودی حذف شود؟",
+        "confirmDeleteBatch": "{{count}} ورودی انتخاب‌شده حذف شود؟"
     }
 }

@@ -15,7 +15,7 @@
  *   → bypassCacheUntil (in-memory + Cache API für SW-Restart-Robustheit)
  */
 
-const APP_RELEASE   = '0.0.9';
+const APP_RELEASE   = '0.0.10';
 const SHELL_CACHE   = `yuvomi-shell-${APP_RELEASE}`;
 const PAGES_CACHE   = `yuvomi-pages-${APP_RELEASE}`;
 const LOCALES_CACHE = `yuvomi-locales-${APP_RELEASE}`;
@@ -189,6 +189,7 @@ const PAGE_MODULES = [
   '/pages/budget.js',
   '/pages/documents.js',
   '/pages/rewards.js',
+  '/pages/gift-ledger.js',
   '/pages/health.js',
   '/pages/settings.js',
   '/pages/login.js',

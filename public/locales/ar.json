@@ -112,7 +112,8 @@
         "pantry": "المؤن",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "سجل الهدايا"
     },
     "dashboard": {
         "title": "لوحة التحكم",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "الانتقال إلى",
         "loading": "جارٍ البحث…",
         "resultCountOne": "{{count}} نتيجة",
-        "resultCountMany": "{{count}} نتائج"
+        "resultCountMany": "{{count}} نتائج",
+        "recentLabel": "عمليات البحث الأخيرة",
+        "recentClear": "مسح"
     },
     "birthdays": {
         "inDays": "خلال {{days}} أيام",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "تحديد",
+        "cancelSelect": "إلغاء التحديد",
+        "selected": "تم تحديد {{count}}",
+        "batchDelete": "حذف المحدد",
+        "confirmDeleteBatch": "حذف {{count}} عناصر محددة؟",
+        "groupByStatus": "تجميع حسب الحالة"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "الجدول الزمني",
+        "viewAlbum": "الألبوم"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "سجل الهدايا",
+        "add": "إدخال جديد",
+        "edit": "تعديل الإدخال",
+        "save": "حفظ",
+        "delete": "حذف",
+        "loading": "جارٍ التحميل…",
+        "empty": "لا توجد إدخالات بعد",
+        "tabAll": "الكل",
+        "searchPlaceholder": "ابحث عن المناسبة أو المُهدي أو الملاحظة…",
+        "type": {
+            "label": "النوع",
+            "white": "فرح (زفاف)",
+            "red": "عزاء (جنازة)"
+        },
+        "eventName": "المناسبة / الاسم",
+        "eventNamePh": "مثال: زفاف، عيد ميلاد، جنازة",
+        "eventNameRequired": "يرجى إدخال المناسبة",
+        "eventDate": "التاريخ",
+        "giver": "المُهدي",
+        "amount": "المبلغ",
+        "amountInvalid": "مبلغ غير صالح",
+        "relationship": "صلة القرابة",
+        "note": "ملاحظة",
+        "private": "مرئي لي فقط",
+        "privateHint": "الإدخالات الخاصة يراها أنت والمشرفون فقط.",
+        "selectMode": "تحديد",
+        "cancelSelect": "إلغاء",
+        "selected": "تم تحديد {{count}}",
+        "batchDelete": "حذف المحدد",
+        "confirmDelete": "حذف هذا الإدخال؟",
+        "confirmDeleteBatch": "حذف {{count}} إدخالات محددة؟"
     }
 }

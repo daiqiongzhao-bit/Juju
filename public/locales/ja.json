@@ -112,7 +112,8 @@
         "pantry": "在庫",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "ご祝儀・香典帳"
     },
     "dashboard": {
         "title": "ダッシュボード",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "直接開く",
         "loading": "検索中…",
         "resultCountOne": "{{count}} 件の結果",
-        "resultCountMany": "{{count}} 件の結果"
+        "resultCountMany": "{{count}} 件の結果",
+        "recentLabel": "最近の検索",
+        "recentClear": "クリア"
     },
     "birthdays": {
         "inDays": "あと{{days}}日",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "選択",
+        "cancelSelect": "選択解除",
+        "selected": "{{count}} 件選択中",
+        "batchDelete": "選択を削除",
+        "confirmDeleteBatch": "選択した {{count}} 件を削除しますか？",
+        "groupByStatus": "状態でグループ化"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "タイムライン",
+        "viewAlbum": "アルバム"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "ご祝儀・香典帳",
+        "add": "記録を追加",
+        "edit": "記録を編集",
+        "save": "保存",
+        "delete": "削除",
+        "loading": "読み込み中…",
+        "empty": "記録がありません",
+        "tabAll": "すべて",
+        "searchPlaceholder": "内容・贈り主・メモで検索…",
+        "type": {
+            "label": "種類",
+            "white": "慶事",
+            "red": "弔事"
+        },
+        "eventName": "内容／名称",
+        "eventNamePh": "例：結婚式、誕生日、葬儀",
+        "eventNameRequired": "内容を入力してください",
+        "eventDate": "日付",
+        "giver": "贈り主",
+        "amount": "金額",
+        "amountInvalid": "金額が正しくありません",
+        "relationship": "続柄",
+        "note": "メモ",
+        "private": "自分のみ表示",
+        "privateHint": "非公開の記録は本人と管理者のみ表示されます。",
+        "selectMode": "選択",
+        "cancelSelect": "キャンセル",
+        "selected": "{{count}} 件選択中",
+        "batchDelete": "選択を削除",
+        "confirmDelete": "この記録を削除しますか？",
+        "confirmDeleteBatch": "選択した {{count}} 件を削除しますか？"
     }
 }

@@ -112,7 +112,8 @@
         "pantry": "भंडार",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "उपहार बही"
     },
     "dashboard": {
         "title": "डैशबोर्ड",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "यहाँ जाएँ",
         "loading": "खोज जारी…",
         "resultCountOne": "{{count}} परिणाम",
-        "resultCountMany": "{{count}} परिणाम"
+        "resultCountMany": "{{count}} परिणाम",
+        "recentLabel": "हाल की खोजें",
+        "recentClear": "साफ़ करें"
     },
     "birthdays": {
         "inDays": "{{days}} दिनों में",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "चुनें",
+        "cancelSelect": "चयन रद्द करें",
+        "selected": "{{count}} चयनित",
+        "batchDelete": "चयनित हटाएँ",
+        "confirmDeleteBatch": "चयनित {{count}} आइटम हटाएँ?",
+        "groupByStatus": "स्थिति से समूहित करें"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "समयरेखा",
+        "viewAlbum": "एल्बम"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "उपहार बही",
+        "add": "नई प्रविष्टि",
+        "edit": "प्रविष्टि संपादित करें",
+        "save": "सहेजें",
+        "delete": "हटाएँ",
+        "loading": "लोड हो रहा है…",
+        "empty": "अभी कोई प्रविष्टि नहीं",
+        "tabAll": "सभी",
+        "searchPlaceholder": "अवसर, देने वाले या नोट खोजें…",
+        "type": {
+            "label": "प्रकार",
+            "white": "खुशी (विवाह)",
+            "red": "शोक (अंत्येष्टि)"
+        },
+        "eventName": "अवसर / नाम",
+        "eventNamePh": "जैसे विवाह, जन्मदिन, अंत्येष्टि",
+        "eventNameRequired": "कृपया अवसर दर्ज करें",
+        "eventDate": "दिनांक",
+        "giver": "देने वाला",
+        "amount": "राशि",
+        "amountInvalid": "अमान्य राशि",
+        "relationship": "संबंध",
+        "note": "नोट",
+        "private": "केवल मुझे दिखे",
+        "privateHint": "निजी प्रविष्टियाँ केवल आपको और एडमिन को दिखती हैं।",
+        "selectMode": "चुनें",
+        "cancelSelect": "रद्द करें",
+        "selected": "{{count}} चयनित",
+        "batchDelete": "चयनित हटाएँ",
+        "confirmDelete": "यह प्रविष्टि हटाएँ?",
+        "confirmDeleteBatch": "चयनित {{count}} प्रविष्टियाँ हटाएँ?"
     }
 }

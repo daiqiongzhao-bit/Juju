@@ -112,7 +112,8 @@
         "pantry": "Dispensa",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Registro regali"
     },
     "dashboard": {
         "title": "Panoramica",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "Vai a",
         "loading": "Ricerca…",
         "resultCountOne": "{{count}} risultato",
-        "resultCountMany": "{{count}} risultati"
+        "resultCountMany": "{{count}} risultati",
+        "recentLabel": "Ricerche recenti",
+        "recentClear": "Cancella"
     },
     "birthdays": {
         "inDays": "tra {{days}} giorni",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Seleziona",
+        "cancelSelect": "Annulla selezione",
+        "selected": "{{count}} selezionati",
+        "batchDelete": "Elimina selezione",
+        "confirmDeleteBatch": "Eliminare i {{count}} elementi selezionati?",
+        "groupByStatus": "Raggruppa per stato"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Cronologia",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Registro regali",
+        "add": "Nuova voce",
+        "edit": "Modifica voce",
+        "save": "Salva",
+        "delete": "Elimina",
+        "loading": "Caricamento…",
+        "empty": "Nessuna voce",
+        "tabAll": "Tutto",
+        "searchPlaceholder": "Cerca occasione, donatore o nota…",
+        "type": {
+            "label": "Tipo",
+            "white": "Lieto (matrimonio)",
+            "red": "Lutto (funerale)"
+        },
+        "eventName": "Occasione / nome",
+        "eventNamePh": "es. matrimonio, compleanno, funerale",
+        "eventNameRequired": "Inserisci un’occasione",
+        "eventDate": "Data",
+        "giver": "Donatore",
+        "amount": "Importo",
+        "amountInvalid": "Importo non valido",
+        "relationship": "Relazione",
+        "note": "Nota",
+        "private": "Visibile solo a me",
+        "privateHint": "Le voci private sono visibili solo a te e agli amministratori.",
+        "selectMode": "Seleziona",
+        "cancelSelect": "Annulla",
+        "selected": "{{count}} selezionati",
+        "batchDelete": "Elimina selezione",
+        "confirmDelete": "Eliminare questa voce?",
+        "confirmDeleteBatch": "Eliminare le {{count}} voci selezionate?"
     }
 }

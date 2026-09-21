@@ -112,7 +112,8 @@
         "pantry": "Spiżarnia",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Rejestr prezentów"
     },
     "search": {
         "emptyHint": "Wpisz co najmniej 2 znaki, aby przeszukać zadania, terminy, notatki, kontakty, zakupy i zdrowie.",
@@ -124,7 +125,9 @@
         "scopesLabel": "Przejdź do",
         "loading": "Wyszukiwanie…",
         "resultCountOne": "{{count}} wynik",
-        "resultCountMany": "{{count}} wyników"
+        "resultCountMany": "{{count}} wyników",
+        "recentLabel": "Ostatnie wyszukiwania",
+        "recentClear": "Wyczyść"
     },
     "dashboard": {
         "title": "Pulpit",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Wybierz",
+        "cancelSelect": "Anuluj wybór",
+        "selected": "Wybrano {{count}}",
+        "batchDelete": "Usuń wybrane",
+        "confirmDeleteBatch": "Usunąć {{count}} wybranych elementów?",
+        "groupByStatus": "Grupuj według statusu"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Oś czasu",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Rejestr prezentów",
+        "add": "Nowy wpis",
+        "edit": "Edytuj wpis",
+        "save": "Zapisz",
+        "delete": "Usuń",
+        "loading": "Ładowanie…",
+        "empty": "Brak wpisów",
+        "tabAll": "Wszystko",
+        "searchPlaceholder": "Szukaj okazji, darczyńcy lub notatki…",
+        "type": {
+            "label": "Typ",
+            "white": "Radosna (ślub)",
+            "red": "Żałobna (pogrzeb)"
+        },
+        "eventName": "Okazja / nazwa",
+        "eventNamePh": "np. ślub, urodziny, pogrzeb",
+        "eventNameRequired": "Podaj okazję",
+        "eventDate": "Data",
+        "giver": "Darczyńca",
+        "amount": "Kwota",
+        "amountInvalid": "Nieprawidłowa kwota",
+        "relationship": "Relacja",
+        "note": "Notatka",
+        "private": "Widoczne tylko dla mnie",
+        "privateHint": "Prywatne wpisy widzisz tylko Ty i administratorzy.",
+        "selectMode": "Wybierz",
+        "cancelSelect": "Anuluj",
+        "selected": "Wybrano {{count}}",
+        "batchDelete": "Usuń wybrane",
+        "confirmDelete": "Usunąć ten wpis?",
+        "confirmDeleteBatch": "Usunąć {{count}} wybranych wpisów?"
     }
 }

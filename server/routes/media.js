@@ -499,6 +499,44 @@ router.put('/:id', (req, res) => {
   }
 });
 
+// POST /api/v1/media/batch-delete  { ids: number[] }  (MUSS vor /:id stehen,
+// sonst matcht der generische /:id-Handler "batch-delete" und antwortet mit 404)
+// Jede ID wird einzeln auf Existenz + Besitzer-/Admin-Recht geprüft; nicht
+// berechtigte oder fehlende IDs werden still übersprungen.
+router.post('/batch-delete', (req, res) => {
+  try {
+    const me = uid(req);
+    const admin = isAdmin(req);
+    const ids = Array.isArray(req.body.ids)
+      ? req.body.ids.map(Number).filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    if (!ids.length) return res.status(400).json({ error: 'Keine IDs angegeben', code: 400 });
+
+    let deleted = 0;
+    const tx = db.get().transaction(() => {
+      for (const id of ids) {
+        const item = db.get().prepare('SELECT * FROM media_item WHERE id = ?').get(id);
+        if (!item) continue;
+        if (item.creator_uid !== me && !admin) continue;
+        // Rel-Tabelle zuerst: kein FK-CASCADE garantiert, sonst bleiben Waisen.
+        db.get().prepare('DELETE FROM media_member_rel WHERE media_id = ?').run(id);
+        const existing = db.get().prepare('SELECT id FROM memory_item WHERE source_media_id = ?').get(id);
+        if (existing) {
+          db.get().prepare('DELETE FROM memory_member_rel WHERE memory_id = ?').run(existing.id);
+          db.get().prepare('DELETE FROM memory_item WHERE id = ?').run(existing.id);
+        }
+        db.get().prepare('DELETE FROM media_item WHERE id = ?').run(id);
+        deleted++;
+      }
+    });
+    tx();
+    res.json({ data: { requested: ids.length, deleted } });
+  } catch (err) {
+    log.error('POST /batch-delete', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
 // DELETE /api/v1/media/:id
 router.delete('/:id', (req, res) => {
   try {

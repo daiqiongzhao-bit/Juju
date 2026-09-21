@@ -754,6 +754,48 @@ html:has(.search-overlay--visible) juju-install-prompt {
   flex-shrink: 0;
 }
 
+/* Suchverlauf: Chips der letzten Begriffe im Leerzustand + „Leeren". */
+.search-recent__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.search-recent__chip,
+.search-recent__clear {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full, 999px);
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.search-recent__clear {
+  color: var(--color-text-secondary);
+}
+
+@media (hover: hover) {
+  .search-recent__chip:hover,
+  .search-recent__clear:hover {
+    background-color: var(--color-surface-hover);
+    border-color: var(--color-border);
+  }
+}
+
+.search-recent__chip:active,
+.search-recent__clear:active {
+  background-color: var(--color-surface-hover);
+}
+
 /* ── Such-Overlay: Desktop-Command-Palette (≥768px) ──
  * Aus dem Mobile-Vollbild-Sheet wird eine zentrierte, oben verankerte Glas-
  * Karte über einem geblurten Modul-Scrim — dieselbe Grammatik wie .modal-overlay

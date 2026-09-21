@@ -139,6 +139,7 @@ const ROUTES = [
   { path: '/relationships', page: '/pages/relationships.js', requiresAuth: true, module: 'relationships', titleKey: 'nav.relationships' },
   { path: '/media', page: '/pages/media-library.js', requiresAuth: true, module: 'media', titleKey: 'nav.media' },
   { path: '/family-memory', page: '/pages/family-memory.js', requiresAuth: true, module: 'memory', titleKey: 'nav.familyMemory' },
+  { path: '/gift-ledger',   page: '/pages/gift-ledger.js',   requiresAuth: true, module: 'giftLedger', titleKey: 'nav.giftLedger' },
 
   { path: '/budget',   page: '/pages/budget.js',    requiresAuth: true, module: 'budget',    titleKey: 'nav.budget' },
 
@@ -3622,6 +3623,10 @@ const SHORTCUTS = [
 
   { key: '/',   description: () => t('shortcuts.search'),  action: () => _openSearch?.() },
 
+  // Ctrl/Cmd+K ist im initSearch-Handler verdrahtet (Modifikator-Kombis umgehen
+  // diesen Bare-Key-Dispatcher); hier nur als Hinweis für das Hilfe-Modal.
+  { key: 'ctrl+k', description: () => t('shortcuts.search'), action: () => _openSearch?.() },
+
   // Ein Selektor reicht: der Schnellaktionen-FAB des Dashboards war der einzige
 
   // Grund für den früheren Zweitweg über `#fab-main` (Audit A1-12), und er ist
@@ -4769,6 +4774,14 @@ function initSearch(container) {
 
     results.appendChild(hint);
 
+    renderRecentSearches(results, (value) => {
+
+      input.value = value;
+
+      input.dispatchEvent(new Event('input'));
+
+    });
+
 
 
     const scopes = document.createElement('div');
@@ -4834,6 +4847,10 @@ function initSearch(container) {
   }
 
 
+
+  // Der Ergebnis-Container kann den aktuellen Suchbegriff nicht selbst kennen;
+  // renderSearchResults holt ihn hierüber beim Klick auf einen Treffer ab.
+  results.__searchQuery = () => input.value.trim();
 
   function openSearch() {
 
@@ -4904,6 +4921,29 @@ function initSearch(container) {
     if (e.key === 'Escape' && overlay.classList.contains('search-overlay--visible')) {
 
       closeSearch();
+
+    }
+
+  });
+
+  // Ctrl/Cmd+K öffnet die globale Suche — der übliche Griff aus Kommandopaletten.
+  // Bare-Key-Shortcuts (initKeyboardShortcuts) lassen Modifikator-Kombis bewusst
+  // durch; dieser Handler greift sie hier gezielt ab, statt jene Regel zu lockern.
+  document.addEventListener('keydown', (e) => {
+
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+
+      e.preventDefault();
+
+      if (overlay.classList.contains('search-overlay--visible')) {
+
+        closeSearch();
+
+      } else {
+
+        openSearch();
+
+      }
 
     }
 
@@ -5037,15 +5077,85 @@ function initSearch(container) {
 
  */
 
+/* Verlauf der letzten Suchbegriffe (localStorage, max. 6, dedupliziert). */
+const RECENT_SEARCH_KEY = 'yuvomi.recentSearches';
+const RECENT_SEARCH_MAX = 6;
+
+function getRecentSearches() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_SEARCH_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter((s) => typeof s === 'string' && s.trim()).slice(0, RECENT_SEARCH_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberSearch(term) {
+  const value = String(term || '').trim();
+  if (value.length < 2) return;
+  const next = [value, ...getRecentSearches().filter((s) => s !== value)].slice(0, RECENT_SEARCH_MAX);
+  try {
+    localStorage.setItem(RECENT_SEARCH_KEY, JSON.stringify(next));
+  } catch { /* Speicher voll / Privatmodus - Verlauf ist ein Komfort-Feature */ }
+}
+
+function clearRecentSearches() {
+  try {
+    localStorage.removeItem(RECENT_SEARCH_KEY);
+  } catch { /* s. o. */ }
+}
+
+/**
+ * Rendert den Suchverlauf in den Hinweis-Bereich. Ohne Verlauf passiert nichts.
+ * Ein Klick übernimmt den Begriff ins Eingabefeld (löst dort den input-Handler aus).
+ */
+function renderRecentSearches(container, onPick) {
+  const recent = getRecentSearches();
+  if (!recent.length) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'search-section search-recent';
+
+  const heading = document.createElement('h3');
+  heading.className = 'search-section__heading';
+  heading.textContent = t('search.recentLabel');
+  wrap.appendChild(heading);
+
+  const list = document.createElement('div');
+  list.className = 'search-recent__list';
+
+  recent.forEach((term) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'search-recent__chip';
+    btn.textContent = term;
+    btn.addEventListener('click', () => onPick(term));
+    list.appendChild(btn);
+  });
+
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'search-recent__clear';
+  clear.textContent = t('search.recentClear');
+  clear.addEventListener('click', () => {
+    clearRecentSearches();
+    wrap.remove();
+  });
+  list.appendChild(clear);
+
+  wrap.appendChild(list);
+  container.appendChild(wrap);
+}
+
 function renderSearchResults(container, data, onClose) {
 
   container.replaceChildren();
 
-  const { tasks = [], events = [], notes = [], contacts = [], items = [], meds = [], activities = [] } = data;
+  const { tasks = [], events = [], notes = [], contacts = [], items = [], meds = [], activities = [], gifts = [] } = data;
 
   const total = tasks.length + events.length + notes.length + contacts.length + items.length
 
-    + meds.length + activities.length;
+    + meds.length + activities.length + gifts.length;
 
 
 
@@ -5127,6 +5237,10 @@ function renderSearchResults(container, data, onClose) {
 
       btn.addEventListener('click', () => {
 
+        // Begriff erst beim tatsächlichen Öffnen eines Treffers merken: eine
+        // Suche ohne Klick hat den Verlauf nicht verdient.
+        if (typeof container.__searchQuery === 'function') rememberSearch(container.__searchQuery());
+
         onClose();
 
         navigate(routeFn(item));
@@ -5164,6 +5278,13 @@ function renderSearchResults(container, data, onClose) {
   makeSection('health.tabs.activity', activities, () => '/health/activity', activityLabel,
 
     (i) => (i.performed_at ? formatDate(i.performed_at) : ''));
+
+  // Geschenkregister: Titel = Anlass, Zweitzeile = Datum · Schenker · Betrag.
+  makeSection('nav.giftLedger', gifts, (i) => `/gift-ledger?open=${i.id}`, null,
+
+    (i) => [i.event_date ? formatDate(i.event_date) : '', i.giver || '', i.amount != null ? String(i.amount) : '']
+
+      .filter(Boolean).join(' · '));
 
 
 
@@ -5268,6 +5389,7 @@ function navItems() {
     // Finanzen
 
     { path: '/budget',    label: t('nav.budget'),    icon: 'wallet',           module: 'budget',      section: NAV_SECTION.finance },
+    { path: '/gift-ledger', label: t('nav.giftLedger'), icon: 'gift',           module: 'giftLedger',  section: NAV_SECTION.finance },
 
     // Settings ist am Ende gepinnt (siehe unten).
 

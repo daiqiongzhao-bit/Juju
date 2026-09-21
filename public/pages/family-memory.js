@@ -63,6 +63,19 @@ export async function render(container, { user } = {}) {
         .fm-tag{display:inline-block;background:#f1f5f9;border-radius:8px;padding:1px 7px;font-size:11px;margin:2px}
         .fm-type{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;background:#eef2ff;color:#4338ca;margin-left:6px}
         .fm-empty{text-align:center;color:#999;padding:40px}
+        .fm-views{display:flex;gap:6px}
+        .fm-view{padding:5px 12px;border:1px solid var(--border,#ddd);border-radius:16px;cursor:pointer;font-size:12px;background:var(--bg,#fff);color:var(--text,#222)}
+        .fm-view.active{background:var(--accent,#3b82f6);color:#fff;border-color:var(--accent,#3b82f6)}
+        .fm-album{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+        .fm-album-card{border:1px solid var(--border,#ddd);border-radius:12px;overflow:hidden;cursor:pointer;background:var(--bg,#fff);transition:.15s;display:flex;flex-direction:column}
+        .fm-album-card:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
+        .fm-album-cover{aspect-ratio:1/1;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:28px;color:#9aa;overflow:hidden}
+        .fm-album-cover img{width:100%;height:100%;object-fit:cover}
+        .fm-album-body{padding:8px 10px}
+        .fm-album-title{font-weight:600;font-size:13px;line-height:1.3;max-height:34px;overflow:hidden}
+        .fm-album-meta{font-size:11px;color:#888;margin-top:4px}
+        .fm-album-count{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px}
+        .fm-album-card{position:relative}
         button.fm-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--accent,#3b82f6);background:var(--accent,#3b82f6);color:#fff;cursor:pointer;font-size:13px}
         button.fm-btn.ghost{background:transparent;color:var(--accent,#3b82f6)}
         .fm-modal-body{padding:16px;max-width:560px;max-height:80vh;overflow:auto}
@@ -73,6 +86,10 @@ export async function render(container, { user } = {}) {
       <div class="fm-head">
         <h2>${esc(t('memory.title'))}</h2>
         <div class="fm-spacer"></div>
+        <div class="fm-views">
+          <div class="fm-view active" data-view="timeline">${esc(t('memory.viewTimeline'))}</div>
+          <div class="fm-view" data-view="album">${esc(t('memory.viewAlbum'))}</div>
+        </div>
         <button class="fm-btn ghost" id="fm-export">${esc(t('memory.export'))}</button>
         <button class="fm-btn" id="fm-add">+ ${esc(t('memory.add'))}</button>
       </div>
@@ -88,8 +105,19 @@ export async function render(container, { user } = {}) {
     </div>
   `;
 
-  const state = { type: '', member: '', tag: '', q: '', members: [] };
+  const state = { type: '', member: '', tag: '', q: '', members: [], view: 'timeline' };
   const list = container.querySelector('#fm-list');
+
+  // Ansicht umschalten: „timeline" (Standard) oder „album" (Kachelraster).
+  container.querySelectorAll('.fm-view').forEach((el) =>
+    el.addEventListener('click', () => {
+      state.view = el.dataset.view;
+      container.querySelectorAll('.fm-view').forEach((x) => x.classList.toggle('active', x === el));
+      list.classList.toggle('fm-timeline', state.view === 'timeline');
+      list.classList.toggle('fm-album', state.view === 'album');
+      load();
+    })
+  );
 
   const typeEl = container.querySelector('#fm-type');
   const memberEl = container.querySelector('#fm-member');
@@ -167,6 +195,21 @@ export async function render(container, { user } = {}) {
     </div>`;
   }
 
+  function albumHtml(it) {
+    // Erstes Foto als Kachel-Cover (Cover-Proxy für TMDB/OpenLibrary-Fall).
+    const first = (it.photo_refs || []).find((p) => typeof p === 'string' && /^https?:\/\//.test(p));
+    const count = (it.photo_refs || []).length;
+    const cover = first ? `<img src="${esc(coverSrc(first))}" alt="" loading="lazy">` : `<div>📷</div>`;
+    const lock = it.is_locked ? ' 🔒' : '';
+    return `<div class="fm-album-card" data-id="${it.id}">
+      <div class="fm-album-cover">${cover}${count > 1 ? `<span class="fm-album-count">${count}</span>` : ''}</div>
+      <div class="fm-album-body">
+        <div class="fm-album-title">${esc(it.title)}${lock}</div>
+        <div class="fm-album-meta">${esc((it.event_time || '').slice(0, 10) || '')}</div>
+      </div>
+    </div>`;
+  }
+
   async function load() {
     list.innerHTML = `<div class="fm-empty">${esc(t('memory.loading'))}</div>`;
     try {
@@ -183,10 +226,17 @@ export async function render(container, { user } = {}) {
         list.innerHTML = `<div class="fm-empty">${esc(t('memory.empty'))}</div>`;
         return;
       }
-      list.innerHTML = items.map(itemHtml).join('');
-      list.querySelectorAll('.fm-item').forEach((el) =>
-        el.addEventListener('click', () => openDetail(parseInt(el.dataset.id, 10)))
-      );
+      if (state.view === 'album') {
+        list.innerHTML = items.map(albumHtml).join('');
+        list.querySelectorAll('.fm-album-card').forEach((el) =>
+          el.addEventListener('click', () => openDetail(parseInt(el.dataset.id, 10)))
+        );
+      } else {
+        list.innerHTML = items.map(itemHtml).join('');
+        list.querySelectorAll('.fm-item').forEach((el) =>
+          el.addEventListener('click', () => openDetail(parseInt(el.dataset.id, 10)))
+        );
+      }
     } catch {
       list.innerHTML = `<div class="fm-empty">${esc(t('common.error') || 'Fehler')}</div>`;
     }

@@ -112,7 +112,8 @@
         "pantry": "Spíž",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Kniha dárků"
     },
     "dashboard": {
         "title": "Přehled",
@@ -2245,7 +2246,9 @@
         "scopesLabel": "Přejít na",
         "loading": "Vyhledávání…",
         "resultCountOne": "{{count}} výsledek",
-        "resultCountMany": "{{count}} výsledků"
+        "resultCountMany": "{{count}} výsledků",
+        "recentLabel": "Nedávná hledání",
+        "recentClear": "Vymazat"
     },
     "shortcuts": {
         "search": "Otevřít vyhledávání",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Vybrat",
+        "cancelSelect": "Zrušit výběr",
+        "selected": "Vybráno {{count}}",
+        "batchDelete": "Smazat vybrané",
+        "confirmDeleteBatch": "Smazat {{count}} vybraných položek?",
+        "groupByStatus": "Seskupit podle stavu"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Časová osa",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Kniha dárků",
+        "add": "Nový záznam",
+        "edit": "Upravit záznam",
+        "save": "Uložit",
+        "delete": "Smazat",
+        "loading": "Načítání…",
+        "empty": "Zatím žádné záznamy",
+        "tabAll": "Vše",
+        "searchPlaceholder": "Hledat příležitost, dárce nebo poznámku…",
+        "type": {
+            "label": "Typ",
+            "white": "Radostná (svatba)",
+            "red": "Smuteční (pohřeb)"
+        },
+        "eventName": "Příležitost / název",
+        "eventNamePh": "např. svatba, narozeniny, pohřeb",
+        "eventNameRequired": "Zadejte příležitost",
+        "eventDate": "Datum",
+        "giver": "Dárce",
+        "amount": "Částka",
+        "amountInvalid": "Neplatná částka",
+        "relationship": "Vztah",
+        "note": "Poznámka",
+        "private": "Viditelné jen pro mě",
+        "privateHint": "Soukromé záznamy vidíte jen vy a administrátoři.",
+        "selectMode": "Vybrat",
+        "cancelSelect": "Zrušit",
+        "selected": "Vybráno {{count}}",
+        "batchDelete": "Smazat vybrané",
+        "confirmDelete": "Smazat tento záznam?",
+        "confirmDeleteBatch": "Smazat {{count}} vybraných záznamů?"
     }
 }

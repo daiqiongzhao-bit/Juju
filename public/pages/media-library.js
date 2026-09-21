@@ -70,8 +70,15 @@ export async function render(container, { user } = {}) {
         .mk-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
         .mk-filters input,.mk-filters select{padding:7px 10px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--bg,#fff);color:var(--text,#222)}
         .mk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
-        .mk-card{background:var(--bg,#fff);border:1px solid var(--border,#ddd);border-radius:12px;overflow:hidden;cursor:pointer;transition:.15s;display:flex;flex-direction:column}
+        .mk-card{background:var(--bg,#fff);border:1px solid var(--border,#ddd);border-radius:12px;overflow:hidden;cursor:pointer;transition:.15s;display:flex;flex-direction:column;position:relative}
         .mk-card:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
+        .mk-card.selected{outline:2px solid var(--accent,#3b82f6);outline-offset:-2px}
+        .mk-card__check{position:absolute;top:6px;left:6px;z-index:2;background:rgba(255,255,255,.9);border-radius:6px;padding:2px 4px;line-height:0}
+        .mk-group{margin-bottom:22px}
+        .mk-group__head{font-size:13px;font-weight:600;color:#666;margin:0 0 8px;display:flex;gap:8px;align-items:center}
+        .mk-group__head .mk-badge{background:#e0e7ff}
+        .mk-bar{position:sticky;bottom:12px;display:none;align-items:center;gap:10px;background:var(--accent,#3b82f6);color:#fff;padding:10px 16px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.2);margin-top:14px;z-index:5}
+        .mk-bar.show{display:flex}
         .mk-cover{aspect-ratio:2/3;background:#eef;display:flex;align-items:center;justify-content:center;font-size:30px;color:#9aa}
         .mk-cover img{width:100%;height:100%;object-fit:cover}
         .mk-card-body{padding:8px 10px}
@@ -98,6 +105,8 @@ export async function render(container, { user } = {}) {
       <div class="mk-head">
         <h2>${esc(t('media.title'))}</h2>
         <div class="mk-spacer"></div>
+        <button class="mk-btn ghost" id="mk-group">${esc(t('media.groupByStatus'))}</button>
+        <button class="mk-btn ghost" id="mk-select">${esc(t('media.selectMode'))}</button>
         <button class="mk-btn ghost" id="mk-export">${esc(t('media.export'))}</button>
         ${user && user.role === 'admin' ? `<button class="mk-btn ghost" id="mk-tmdb-config">⚙ TMDB</button>` : ''}
         <button class="mk-btn" id="mk-add">+ ${esc(t('media.add'))}</button>
@@ -112,11 +121,18 @@ export async function render(container, { user } = {}) {
         <input id="mk-tag" placeholder="${esc(t('media.tag'))}" style="width:120px">
       </div>
       <div class="mk-grid" id="mk-grid"><div class="mk-empty">${esc(t('media.loading'))}</div></div>
+      <div class="mk-bar" id="mk-bar">
+        <span id="mk-bar-count"></span>
+        <div class="mk-spacer" style="flex:1"></div>
+        <button class="mk-btn ghost" id="mk-bar-cancel" style="border-color:#fff;color:#fff">${esc(t('media.cancelSelect'))}</button>
+        <button class="mk-btn" id="mk-bar-del" style="background:#7f1d1d;border-color:#7f1d1d">${esc(t('media.batchDelete'))}</button>
+      </div>
     </div>
   `;
 
-  const state = { type: 'all', status: '', member: '', tag: '', q: '', page: 1, members: [] };
+  const state = { type: 'all', status: '', member: '', tag: '', q: '', page: 1, members: [], selectMode: false, selected: new Set(), groupByStatus: false };
   const grid = container.querySelector('#mk-grid');
+  const bar = container.querySelector('#mk-bar');
 
   // Tabs
   const tabsEl = container.querySelector('#mk-tabs');
@@ -160,6 +176,21 @@ export async function render(container, { user } = {}) {
   });
 
   container.querySelector('#mk-add').addEventListener('click', () => openAdd());
+
+  // Batch-Auswahl-Modus
+  container.querySelector('#mk-select').addEventListener('click', () => toggleSelectMode());
+  container.querySelector('#mk-bar-cancel').addEventListener('click', () => toggleSelectMode(false));
+  container.querySelector('#mk-bar-del').addEventListener('click', () => doBatchDelete());
+
+  // Gruppieren nach Status (wish/doing/finished)
+  container.querySelector('#mk-group').addEventListener('click', (e) => {
+    state.groupByStatus = !state.groupByStatus;
+    e.currentTarget.classList.toggle('active', state.groupByStatus);
+    e.currentTarget.style.background = state.groupByStatus ? 'var(--accent,#3b82f6)' : 'transparent';
+    e.currentTarget.style.color = state.groupByStatus ? '#fff' : 'var(--accent,#3b82f6)';
+    load();
+  });
+
   const tmdbCfgBtn = container.querySelector('#mk-tmdb-config');
   if (tmdbCfgBtn) tmdbCfgBtn.addEventListener('click', () => openTmdbConfig());
   container.querySelector('#mk-export').addEventListener('click', () => {
@@ -175,13 +206,75 @@ export async function render(container, { user } = {}) {
       ? `<img src="${esc(coverSrc(it.cover_url))}" alt="">`
       : `<div>🎬</div>`;
     const stars = it.rating ? `<span class="mk-stars">${'★'.repeat(it.rating)}</span>` : '';
-    return `<div class="mk-card" data-id="${it.id}">
+    const check = state.selectMode
+      ? `<div class="mk-card__check"><input type="checkbox" data-id="${it.id}" ${state.selected.has(it.id) ? 'checked' : ''}></div>`
+      : '';
+    return `<div class="mk-card ${state.selectMode && state.selected.has(it.id) ? 'selected' : ''}" data-id="${it.id}">
+      ${check}
       <div class="mk-cover">${cover}</div>
       <div class="mk-card-body">
         <div class="mk-card-title">${esc(it.title)}</div>
         <div class="mk-meta">${statusBadge(it.status)} ${stars}</div>
       </div>
     </div>`;
+  }
+
+  // Wiret Klick/Checkbox-Auswahl für die aktuell gerenderten Karten.
+  function wireCards() {
+    grid.querySelectorAll('.mk-card').forEach((el) => {
+      const id = parseInt(el.dataset.id, 10);
+      if (state.selectMode) {
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('.mk-card__check')) return;
+          const cb = el.querySelector('.mk-card__check input');
+          if (!cb) return;
+          cb.checked = !cb.checked;
+          cb.dispatchEvent(new Event('change'));
+        });
+      } else {
+        el.addEventListener('click', () => openDetail(id));
+      }
+    });
+    if (state.selectMode) {
+      grid.querySelectorAll('.mk-card__check input').forEach((cb) => {
+        cb.addEventListener('change', () => {
+          const id = parseInt(cb.dataset.id, 10);
+          if (cb.checked) state.selected.add(id);
+          else state.selected.delete(id);
+          cb.closest('.mk-card').classList.toggle('selected', cb.checked);
+          updateBar();
+        });
+      });
+    }
+  }
+
+  function toggleSelectMode(force) {
+    state.selectMode = typeof force === 'boolean' ? force : !state.selectMode;
+    if (!state.selectMode) state.selected.clear();
+    const btn = container.querySelector('#mk-select');
+    btn.textContent = state.selectMode ? t('media.cancelSelect') : t('media.selectMode');
+    btn.classList.toggle('active', state.selectMode);
+    btn.style.background = state.selectMode ? 'var(--accent,#3b82f6)' : 'transparent';
+    btn.style.color = state.selectMode ? '#fff' : 'var(--accent,#3b82f6)';
+    bar.classList.toggle('show', state.selectMode);
+    updateBar();
+    load();
+  }
+
+  function updateBar() {
+    const el = container.querySelector('#mk-bar-count');
+    if (el) el.textContent = t('media.selected', { count: state.selected.size });
+  }
+
+  async function doBatchDelete() {
+    if (!state.selected.size) return;
+    if (!(await confirmModal(t('media.confirmDeleteBatch', { count: state.selected.size })))) return;
+    try {
+      await api.post('/media/batch-delete', { ids: [...state.selected] });
+      toggleSelectMode(false);
+    } catch {
+      alert(t('common.error') || 'Fehler');
+    }
   }
 
   async function load() {
@@ -200,10 +293,27 @@ export async function render(container, { user } = {}) {
         grid.innerHTML = `<div class="mk-empty">${esc(t('media.empty'))}</div>`;
         return;
       }
-      grid.innerHTML = items.map(cardHtml).join('');
-      grid.querySelectorAll('.mk-card').forEach((el) =>
-        el.addEventListener('click', () => openDetail(parseInt(el.dataset.id, 10)))
-      );
+      if (state.groupByStatus) {
+        // Nach Status gruppieren, innerhalb der Gruppe die Server-Sortierung
+        // (updated_at DESC) beibehalten — Object.groupBy wäre ES2024, hier bewusst
+        // ein einfacher Bucket-Aufbau für breitere Browser-Unterstützung.
+        const buckets = new Map(STATUSES.map((s) => [s, []]));
+        for (const it of items) {
+          if (!buckets.has(it.status)) buckets.set(it.status, []);
+          buckets.get(it.status).push(it);
+        }
+        grid.innerHTML = [...buckets.entries()]
+          .filter(([, arr]) => arr.length)
+          .map(
+            ([status, arr]) =>
+              `<div class="mk-group"><h3 class="mk-group__head">${statusBadge(status)}<span>${arr.length}</span></h3>
+                 <div class="mk-grid">${arr.map(cardHtml).join('')}</div></div>`
+          )
+          .join('');
+      } else {
+        grid.innerHTML = items.map(cardHtml).join('');
+      }
+      wireCards();
     } catch (e) {
       grid.innerHTML = `<div class="mk-empty">${esc(t('common.error') || 'Fehler')}</div>`;
     }

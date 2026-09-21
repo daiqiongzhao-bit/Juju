@@ -112,7 +112,8 @@
         "pantry": "재고",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "축의금·조의금 장부"
     },
     "search": {
         "emptyHint": "2자 이상 입력하면 할 일, 일정, 메모, 연락처, 쇼핑, 건강을 검색합니다.",
@@ -124,7 +125,9 @@
         "scopesLabel": "바로 열기",
         "loading": "검색 중…",
         "resultCountOne": "결과 {{count}}개",
-        "resultCountMany": "결과 {{count}}개"
+        "resultCountMany": "결과 {{count}}개",
+        "recentLabel": "최근 검색",
+        "recentClear": "지우기"
     },
     "dashboard": {
         "title": "개요",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "선택",
+        "cancelSelect": "선택 취소",
+        "selected": "{{count}}개 선택됨",
+        "batchDelete": "선택 삭제",
+        "confirmDeleteBatch": "선택한 {{count}}개 항목을 삭제할까요?",
+        "groupByStatus": "상태별 그룹"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "타임라인",
+        "viewAlbum": "앨범"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "축의금·조의금 장부",
+        "add": "기록 추가",
+        "edit": "기록 편집",
+        "save": "저장",
+        "delete": "삭제",
+        "loading": "불러오는 중…",
+        "empty": "기록이 없습니다",
+        "tabAll": "전체",
+        "searchPlaceholder": "사유, 보낸 사람 또는 메모 검색…",
+        "type": {
+            "label": "유형",
+            "white": "경사",
+            "red": "조사"
+        },
+        "eventName": "사유 / 이름",
+        "eventNamePh": "예: 결혼식, 생일, 장례식",
+        "eventNameRequired": "사유를 입력하세요",
+        "eventDate": "날짜",
+        "giver": "보낸 사람",
+        "amount": "금액",
+        "amountInvalid": "금액이 올바르지 않습니다",
+        "relationship": "관계",
+        "note": "메모",
+        "private": "나만 보기",
+        "privateHint": "비공개 기록은 본인과 관리자만 볼 수 있습니다.",
+        "selectMode": "선택",
+        "cancelSelect": "취소",
+        "selected": "{{count}}개 선택됨",
+        "batchDelete": "선택 삭제",
+        "confirmDelete": "이 기록을 삭제할까요?",
+        "confirmDeleteBatch": "선택한 {{count}}개 기록을 삭제할까요?"
     }
 }

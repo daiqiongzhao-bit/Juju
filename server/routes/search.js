@@ -16,15 +16,17 @@ const router = express.Router();
  * GET /api/v1/search?q=<query>
  * Durchsucht Aufgaben, Kalender-Events, Notizen, Kontakte, Einkaufsartikel,
  * Gesundheits-Medikamente und -Aktivitäten (Health: nur eigene oder family-sichtbare Zeilen).
- * Response: { tasks, events, notes, contacts, items, meds, activities }
+ * Response: { tasks, events, notes, contacts, items, meds, activities, gifts }
  */
 router.get('/', (req, res) => {
   try {
     const q = String(req.query.q ?? '').trim();
-    if (q.length < 2) return res.json({ tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [] });
+    if (q.length < 2) return res.json({ tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [], gifts: [] });
 
     const userId = req.authUserId || req.session.userId;
-    res.json(runSearch(db.get(), q, userId));
+    const u = req.user || {};
+    const isAdmin = !!(u.role === 'admin' || u.isAdmin === 1 || u.is_admin === 1);
+    res.json(runSearch(db.get(), q, userId, isAdmin));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error.', code: 500 });
   }

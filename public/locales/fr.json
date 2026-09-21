@@ -112,7 +112,8 @@
         "pantry": "Réserve",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Registre des cadeaux"
     },
     "dashboard": {
         "title": "Accueil",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "Aller à",
         "loading": "Recherche…",
         "resultCountOne": "{{count}} résultat",
-        "resultCountMany": "{{count}} résultats"
+        "resultCountMany": "{{count}} résultats",
+        "recentLabel": "Recherches récentes",
+        "recentClear": "Effacer"
     },
     "birthdays": {
         "inDays": "dans {{days}} jours",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Sélectionner",
+        "cancelSelect": "Annuler la sélection",
+        "selected": "{{count}} sélectionné(s)",
+        "batchDelete": "Supprimer la sélection",
+        "confirmDeleteBatch": "Supprimer les {{count}} éléments sélectionnés ?",
+        "groupByStatus": "Grouper par statut"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Chronologie",
+        "viewAlbum": "Album"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Registre des cadeaux",
+        "add": "Nouvelle entrée",
+        "edit": "Modifier l’entrée",
+        "save": "Enregistrer",
+        "delete": "Supprimer",
+        "loading": "Chargement…",
+        "empty": "Aucune entrée",
+        "tabAll": "Tout",
+        "searchPlaceholder": "Rechercher occasion, donateur ou note…",
+        "type": {
+            "label": "Type",
+            "white": "Heureux (mariage)",
+            "red": "Deuil (funérailles)"
+        },
+        "eventName": "Occasion / nom",
+        "eventNamePh": "ex. mariage, anniversaire, funérailles",
+        "eventNameRequired": "Veuillez saisir une occasion",
+        "eventDate": "Date",
+        "giver": "Donateur",
+        "amount": "Montant",
+        "amountInvalid": "Montant invalide",
+        "relationship": "Lien",
+        "note": "Note",
+        "private": "Visible par moi seul",
+        "privateHint": "Les entrées privées ne sont visibles que par vous et les admins.",
+        "selectMode": "Sélectionner",
+        "cancelSelect": "Annuler",
+        "selected": "{{count}} sélectionné(s)",
+        "batchDelete": "Supprimer la sélection",
+        "confirmDelete": "Supprimer cette entrée ?",
+        "confirmDeleteBatch": "Supprimer les {{count}} entrées sélectionnées ?"
     }
 }

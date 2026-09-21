@@ -112,7 +112,8 @@
         "pantry": "Despensa",
         "media": "Media Library",
         "familyMemory": "Family Memory",
-        "relationships": "Relationships"
+        "relationships": "Relationships",
+        "giftLedger": "Registro de regalos"
     },
     "dashboard": {
         "title": "Inicio",
@@ -2322,7 +2323,9 @@
         "scopesLabel": "Ir a",
         "loading": "Buscando…",
         "resultCountOne": "{{count}} resultado",
-        "resultCountMany": "{{count}} resultados"
+        "resultCountMany": "{{count}} resultados",
+        "recentLabel": "Búsquedas recientes",
+        "recentClear": "Borrar"
     },
     "birthdays": {
         "inDays": "en {{days}} días",
@@ -3946,7 +3949,13 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Seleccionar",
+        "cancelSelect": "Cancelar selección",
+        "selected": "{{count}} seleccionados",
+        "batchDelete": "Eliminar selección",
+        "confirmDeleteBatch": "¿Eliminar los {{count}} elementos seleccionados?",
+        "groupByStatus": "Agrupar por estado"
     },
     "memory": {
         "title": "Family Memory",
@@ -3975,7 +3984,9 @@
         "delete": "Delete",
         "confirmDelete": "Delete for sure?",
         "titleRequired": "Title required",
-        "dmsRefs": "DMS references (account:document id)"
+        "dmsRefs": "DMS references (account:document id)",
+        "viewTimeline": "Cronología",
+        "viewAlbum": "Álbum"
     },
     "relationships": {
         "subtitle": "Your network of people — connections, shared contacts, moments and anniversaries.",
@@ -4097,5 +4108,38 @@
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} of {{name}} on {{date}}"
+    },
+    "giftLedger": {
+        "title": "Registro de regalos",
+        "add": "Nueva entrada",
+        "edit": "Editar entrada",
+        "save": "Guardar",
+        "delete": "Eliminar",
+        "loading": "Cargando…",
+        "empty": "Aún no hay registros",
+        "tabAll": "Todo",
+        "searchPlaceholder": "Buscar motivo, donante o nota…",
+        "type": {
+            "label": "Tipo",
+            "white": "Alegre (boda)",
+            "red": "Duelo (funeral)"
+        },
+        "eventName": "Motivo / nombre",
+        "eventNamePh": "p. ej. boda, cumpleaños, funeral",
+        "eventNameRequired": "Introduce un motivo",
+        "eventDate": "Fecha",
+        "giver": "Donante",
+        "amount": "Importe",
+        "amountInvalid": "Importe no válido",
+        "relationship": "Relación",
+        "note": "Nota",
+        "private": "Solo visible para mí",
+        "privateHint": "Las entradas privadas solo son visibles para ti y los administradores.",
+        "selectMode": "Seleccionar",
+        "cancelSelect": "Cancelar",
+        "selected": "{{count}} seleccionados",
+        "batchDelete": "Eliminar selección",
+        "confirmDelete": "¿Eliminar este registro?",
+        "confirmDeleteBatch": "¿Eliminar los {{count}} registros seleccionados?"
     }
 }

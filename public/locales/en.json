@@ -112,7 +112,41 @@
         "rewards": "Rewards",
         "pantry": "Pantry",
         "media": "Media Library",
-        "familyMemory": "Family Memory"
+        "familyMemory": "Family Memory",
+        "giftLedger": "Gift Ledger"
+    },
+    "giftLedger": {
+        "title": "Gift Ledger",
+        "add": "New entry",
+        "edit": "Edit entry",
+        "save": "Save",
+        "delete": "Delete",
+        "loading": "Loading…",
+        "empty": "No gift records yet",
+        "tabAll": "All",
+        "searchPlaceholder": "Search occasion, giver or note…",
+        "type": {
+            "label": "Type",
+            "white": "Joyful (wedding, birth)",
+            "red": "Mourning (funeral)"
+        },
+        "eventName": "Occasion / event name",
+        "eventNamePh": "e.g. Wedding, Birthday, Funeral",
+        "eventNameRequired": "Please enter an occasion",
+        "eventDate": "Date",
+        "giver": "Giver",
+        "amount": "Amount",
+        "amountInvalid": "Invalid amount",
+        "relationship": "Relationship",
+        "note": "Note",
+        "private": "Only visible to me",
+        "privateHint": "Private entries are visible only to you and admins.",
+        "selectMode": "Select",
+        "cancelSelect": "Cancel",
+        "selected": "{{count}} selected",
+        "batchDelete": "Delete selected",
+        "confirmDelete": "Delete this gift record?",
+        "confirmDeleteBatch": "Delete the {{count}} selected gift records?"
     },
     "dashboard": {
         "title": "Overview",
@@ -2521,7 +2555,9 @@
         "scopesLabel": "Jump to",
         "loading": "Searching…",
         "resultCountOne": "{{count}} result",
-        "resultCountMany": "{{count}} results"
+        "resultCountMany": "{{count}} results",
+        "recentLabel": "Recent searches",
+        "recentClear": "Clear"
     },
     "onboarding": {
         "step1Title": "Welcome to {{name}}",
@@ -4067,13 +4103,21 @@
         "search": "Search",
         "noResult": "No results.",
         "searchFailed": "Search failed – please enter manually.",
-        "titleRequired": "Title required"
+        "titleRequired": "Title required",
+        "selectMode": "Select",
+        "cancelSelect": "Cancel selection",
+        "selected": "{{count}} selected",
+        "batchDelete": "Delete selected",
+        "confirmDeleteBatch": "Delete the {{count}} selected items?",
+        "groupByStatus": "Group by status"
     },
     "memory": {
         "title": "Family Memory",
         "subtitle": "Shared moments: media, trips and events.",
         "add": "Add",
         "export": "Export JSON",
+        "viewTimeline": "Timeline",
+        "viewAlbum": "Album",
         "loading": "Loading…",
         "empty": "No memories yet.",
         "allTypes": "All types",

@@ -112,7 +112,41 @@
         "rewards": "奖励",
         "pantry": "库存",
         "media": "影音书库",
-        "familyMemory": "家庭回忆"
+        "familyMemory": "家庭回忆",
+        "giftLedger": "礼金簿"
+    },
+    "giftLedger": {
+        "title": "礼金簿",
+        "add": "新增记录",
+        "edit": "编辑记录",
+        "save": "保存",
+        "delete": "删除",
+        "loading": "加载中…",
+        "empty": "暂无礼金记录",
+        "tabAll": "全部",
+        "searchPlaceholder": "搜索事由、送礼人或备注…",
+        "type": {
+            "label": "类型",
+            "white": "红事",
+            "red": "白事"
+        },
+        "eventName": "事由／事件名称",
+        "eventNamePh": "例如：婚礼、寿宴、追悼会",
+        "eventNameRequired": "请填写事由",
+        "eventDate": "日期",
+        "giver": "送礼人",
+        "amount": "金额",
+        "amountInvalid": "金额格式不正确",
+        "relationship": "关系",
+        "note": "备注",
+        "private": "仅自己可见",
+        "privateHint": "私密记录只对你和管理员可见。",
+        "selectMode": "批量选择",
+        "cancelSelect": "取消",
+        "selected": "已选 {{count}} 项",
+        "batchDelete": "删除所选",
+        "confirmDelete": "确定删除这条礼金记录吗？",
+        "confirmDeleteBatch": "确定删除选中的 {{count}} 条礼金记录吗？"
     },
     "dashboard": {
         "title": "概览",
@@ -2443,7 +2477,9 @@
         "scopesLabel": "直接打开",
         "loading": "搜索中…",
         "resultCountOne": "{{count}} 个结果",
-        "resultCountMany": "{{count}} 个结果"
+        "resultCountMany": "{{count}} 个结果",
+        "recentLabel": "最近搜索",
+        "recentClear": "清除"
     },
     "birthdays": {
         "inDays": "{{days}}天后",
@@ -4067,13 +4103,21 @@
         "search": "搜索",
         "noResult": "无结果。",
         "searchFailed": "搜索失败——请手动录入。",
-        "titleRequired": "请填写标题"
+        "titleRequired": "请填写标题",
+        "selectMode": "批量选择",
+        "cancelSelect": "取消选择",
+        "selected": "已选 {{count}} 项",
+        "batchDelete": "删除所选",
+        "confirmDeleteBatch": "确定删除选中的 {{count}} 个条目吗？",
+        "groupByStatus": "按状态分组"
     },
     "memory": {
         "title": "家庭回忆",
         "subtitle": "共同记忆：影音、旅行与生活事件。",
         "add": "新增",
         "export": "导出 JSON",
+        "viewTimeline": "时间线",
+        "viewAlbum": "相册",
         "loading": "加载中…",
         "empty": "暂无回忆。",
         "allTypes": "全部类型",
