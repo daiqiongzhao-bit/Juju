@@ -2402,7 +2402,19 @@
     "embyImporting": "正在导入（视 Emby 库大小可能需要几十秒）…",
     "embyImportDone": "导入完成：新导入 {{imported}} 条，跳过 {{skipped}} 条",
     "embySavedOk": "Emby 配置已保存",
-    "embySavedEmpty": "已保存，但 Emby 配置尚不完整"
+    "embySavedEmpty": "已保存，但 Emby 配置尚不完整",
+    "embyWebhookTitle": "实时同步（看完自动更新）",
+    "embyWebhookDesc": "在 Emby 安装「Webhook」插件，把播放事件指向下面的接收地址。看完即自动同步到媒体库，无需再手动点「同步」。",
+    "embyWebhookUrl": "Webhook 接收地址",
+    "embyWebhookUrlHint": "复制到 Emby Webhook 插件的「Webhook URL」。需要校验时在地址后加 ?secret=你的密钥",
+    "embyWebhookCopy": "复制地址",
+    "embyWebhookCopied": "地址已复制",
+    "embyWebhookSecret": "Webhook 密钥（可选）",
+    "embyWebhookSecretPlaceholder": "设置一个密钥用于校验签名；留空表示不校验",
+    "embyWebhookSecretSet": "已设置密钥：Emby 需在 Webhook 插件里填相同 Secret，否则请求会被拒绝",
+    "embyWebhookSecretUnset": "未设置密钥：任何能访问该地址的请求都会生效，仅建议内网使用",
+    "embyWebhookSecretHint": "设置密钥后，Emby 的 Webhook 插件需配置相同 Secret（HMAC-SHA256 签名）。不设置则只靠地址保密。",
+    "embyWebhookSecretSave": "保存密钥"
   },
   "login": {
     "tagline": "欢迎回到您的家庭计划工具。",

@@ -95,6 +95,33 @@ function renderPage(container, cfg) {
       </div>
 
       <div class="settings-card">
+        <h3 class="settings-card__title">${t('settings.embyWebhookTitle')}</h3>
+        <p class="settings-card-description">${t('settings.embyWebhookDesc')}</p>
+
+        <div class="form-group">
+          <label class="form-label" for="emby-webhook-url">${t('settings.embyWebhookUrl')}</label>
+          <div class="settings-copy-row">
+            <input class="form-input" id="emby-webhook-url" type="text" readonly
+                   value="${cfg.embyWebhookUrl ? location.origin + cfg.embyWebhookUrl : ''}">
+            <button type="button" class="btn btn--ghost" id="emby-webhook-copy">${t('settings.embyWebhookCopy')}</button>
+          </div>
+          <p class="form-hint">${t('settings.embyWebhookUrlHint')}</p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="emby-webhook-secret">${t('settings.embyWebhookSecret')}</label>
+          <input class="form-input" id="emby-webhook-secret" type="password" autocomplete="new-password"
+                 placeholder="${t('settings.embyWebhookSecretPlaceholder')}">
+          <p class="form-hint">${cfg.embyWebhookSecretSet ? t('settings.embyWebhookSecretSet') : t('settings.embyWebhookSecretUnset')}</p>
+          <p class="form-hint">${t('settings.embyWebhookSecretHint')}</p>
+        </div>
+        <div id="emby-webhook-msg" class="form-hint" role="status" hidden></div>
+        <div class="settings-form-actions">
+          <button type="button" class="btn btn--primary" id="emby-webhook-save">${t('settings.embyWebhookSecretSave')}</button>
+        </div>
+      </div>
+
+      <div class="settings-card">
         <h3 class="settings-card__title">${t('settings.mediaFreeSourcesTitle')}</h3>
         <p class="settings-card-description">${t('settings.mediaFreeSourcesDesc')}</p>
         <ul style="margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.9;color:var(--color-text-secondary,#555)">
@@ -169,12 +196,14 @@ export async function render(container, { user }) {
     if (want && users.some((u) => u.id === want)) sel.value = want;
   }
 
-  async function saveEmbyConfig() {
+  async function saveEmbyConfig(secret) {
     const url = container.querySelector('#emby-url').value.trim();
     const key = container.querySelector('#emby-key').value.trim();
     const userSel = container.querySelector('#emby-user');
     const userId = userSel ? userSel.value.trim() : '';
-    const res = await api.put('/media/emby/config', { url, apiKey: key, userId });
+    const body = { url, apiKey: key, userId };
+    if (secret !== undefined) body.webhookSecret = secret;
+    const res = await api.put('/media/emby/config', body);
     return res.data || {};
   }
 
@@ -237,6 +266,36 @@ export async function render(container, { user }) {
       showEmbyMsg(error?.message || t('common.errorGeneric'));
     } finally {
       btn.disabled = false;
+    }
+  });
+
+  // ---- Emby Webhook: Secret speichern + URL kopieren ----
+  const webhookMsg = container.querySelector('#emby-webhook-msg');
+  const showWebhookMsg = (text) => {
+    if (!webhookMsg) return;
+    webhookMsg.textContent = text || '';
+    webhookMsg.hidden = !text;
+  };
+  container.querySelector('#emby-webhook-copy')?.addEventListener('click', async () => {
+    const inp = container.querySelector('#emby-webhook-url');
+    if (!inp) return;
+    try {
+      await navigator.clipboard.writeText(inp.value);
+      window.yuvomi?.showToast(t('settings.embyWebhookCopied'), 'success');
+    } catch {
+      inp.select();
+      document.execCommand('copy');
+    }
+  });
+  container.querySelector('#emby-webhook-save')?.addEventListener('click', async () => {
+    const secret = container.querySelector('#emby-webhook-secret').value;
+    showWebhookMsg('');
+    try {
+      await saveEmbyConfig(secret);
+      window.yuvomi?.showToast(t('settings.embyWebhookSecretSaved'), 'success');
+      await render(container, { user });
+    } catch (error) {
+      showWebhookMsg(error?.message || t('common.errorGeneric'));
     }
   });
 

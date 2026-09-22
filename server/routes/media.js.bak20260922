@@ -315,8 +315,6 @@ router.get('/config', (req, res) => {
         embyConfigured: !!(cfg.emby_url && cfg.emby_api_key),
         embyUrl: cfg.emby_url || '',
         embyUserId: cfg.emby_user_id || '',
-        embyWebhookUrl: '/webhook/emby',
-        embyWebhookSecretSet: !!(cfg.emby_webhook_secret && cfg.emby_webhook_secret.length),
       },
     });
   } catch (err) {
@@ -396,8 +394,6 @@ router.get('/emby/config', (req, res) => {
         configured: emby.isConfigured(cfg),
         url: cfg.emby_url || '',
         userId: cfg.emby_user_id || '',
-        webhookUrl: '/webhook/emby',
-        webhookSecretSet: !!(cfg.emby_webhook_secret && cfg.emby_webhook_secret.length),
       },
     });
   } catch (err) {
@@ -411,27 +407,22 @@ router.put('/emby/config', (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
     const cfg = emby.getConfig(db.get());
-    const vUrl = req.body.url;
-    const vKey = req.body.apiKey;
-    const vUser = req.body.userId;
-    const vSecret = req.body.webhookSecret;
-    const urlVal = vUrl !== undefined ? (String(vUrl).trim().replace(/\/+$/, '') || null) : cfg.emby_url;
-    const keyVal = vKey !== undefined ? String(vKey).trim() : cfg.emby_api_key;
-    const userVal = vUser !== undefined ? (String(vUser).trim() || null) : cfg.emby_user_id;
-    const secretVal = vSecret !== undefined ? (String(vSecret).trim() || null) : cfg.emby_webhook_secret;
-    if (urlVal && !/^https?:\/\//.test(urlVal)) {
+    const vUrl = String(req.body.url ?? '').trim().replace(/\/+$/, '');
+    const vKey = String(req.body.apiKey ?? '').trim();
+    const vUser = String(req.body.userId ?? '').trim();
+    if (vUrl && !/^https?:\/\//.test(vUrl)) {
       return res.status(400).json({ error: 'URL muss mit http(s):// beginnen', code: 400 });
     }
-    const newKey = keyVal && keyVal.length ? keyVal : cfg.emby_api_key;
+    const newKey = vKey.length ? vKey : cfg.emby_api_key;
     db.get()
       .prepare(
         `UPDATE system_media_config
-         SET emby_url = ?, emby_api_key = ?, emby_user_id = ?, emby_webhook_secret = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         SET emby_url = ?, emby_api_key = ?, emby_user_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
          WHERE id = ?`
       )
-      .run(urlVal, newKey || null, userVal, secretVal, cfg.id);
+      .run(vUrl || null, newKey || null, vUser || null, cfg.id);
     const updated = emby.getConfig(db.get());
-    res.json({ data: { configured: emby.isConfigured(updated), url: updated.emby_url || '', userId: updated.emby_user_id || '', webhookSecretSet: !!(updated.emby_webhook_secret && updated.emby_webhook_secret.length) } });
+    res.json({ data: { configured: emby.isConfigured(updated), url: updated.emby_url || '', userId: updated.emby_user_id || '' } });
   } catch (err) {
     log.error('PUT /emby/config', err);
     res.status(500).json({ error: 'Interner Fehler', code: 500 });

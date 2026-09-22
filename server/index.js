@@ -66,6 +66,7 @@ import permissionsRouter from './routes/permissions.js';
 import changelogRouter from './routes/changelog.js';
 import updateRouter from './routes/update.js';
 import mediaRouter from './routes/media.js';
+import { handleEmbyWebhook } from './services/media-emby.js';
 import memoryRouter from './routes/memory.js';
 import giftLedgerRouter from './routes/gift-ledger.js';
 import inAppNotificationsRouter from './routes/in-app-notifications.js';
@@ -131,7 +132,7 @@ app.use(compression());
 // --------------------------------------------------------
 // Request-Parsing
 // --------------------------------------------------------
-app.use(express.json({ limit: '160mb' }));
+app.use(express.json({ limit: '160mb', verify: (req, _res, buf) => { if (buf && buf.length) req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true, limit: '7mb' }));
 
 // JSON-Parse-Fehler abfangen (gibt sonst HTML zurück)
@@ -358,6 +359,13 @@ app.get('/feed/calendar/:token.ics', feedLimiter, (req, res) => {
 app.use('/mcp', apiLimiter, requireAuth, mcpRouter);
 
 // Alle weiteren API-Routen erfordern Authentifizierung + CSRF-Schutz
+// Oeffentlicher Emby-Webhook (ausserhalb /api/v1 -> kein Auth/CSRF; Geheimnis = HMAC oder ?secret=)
+app.post('/webhook/emby', (req, res) => {
+  handleEmbyWebhook(req, res).catch((err) => {
+    console.error('POST /webhook/emby', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Webhook-Fehler', code: 500 });
+  });
+});
 app.use('/api/v1', requireAuth);
 // System-Metadaten: authentifiziert, aber bewusst vor Guest-/Token-Scope-Gates
 // wie /version behandelt. Keine Haushaltsdaten, nur upstream Release Notes.

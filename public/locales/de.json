@@ -2416,7 +2416,19 @@
     "embyImporting": "Import laeuft (je nach Bibliothek bis zu einer Minute) …",
     "embyImportDone": "Import fertig: {{imported}} neu, {{skipped}} uebersprungen",
     "embySavedOk": "Emby-Konfiguration gespeichert",
-    "embySavedEmpty": "Gespeichert, aber Emby ist noch nicht vollstaendig konfiguriert"
+    "embySavedEmpty": "Gespeichert, aber Emby ist noch nicht vollstaendig konfiguriert",
+    "embyWebhookTitle": "Echtzeit-Sync (nach dem Ansehen automatisch)",
+    "embyWebhookDesc": "Installiere das \"Webhook\"-Plugin in Emby und richte dessen Ereignisse auf die untenstehende Adresse. Nach dem Ansehen wird automatisch in die Mediathek synchronisiert - kein manueller Sync noetig.",
+    "embyWebhookUrl": "Webhook-Empfangsadresse",
+    "embyWebhookUrlHint": "In Emby Webhook-Plugin als \"Webhook URL\" eintragen. Fuer Signaturpruefung ?secret=DEIN_GEHEIMNIS anhaengen",
+    "embyWebhookCopy": "Adresse kopieren",
+    "embyWebhookCopied": "Adresse kopiert",
+    "embyWebhookSecret": "Webhook-Geheimnis (optional)",
+    "embyWebhookSecretPlaceholder": "Geheimnis zur Signaturpruefung; leer = keine Pruefung",
+    "embyWebhookSecretSet": "Geheimnis gesetzt: Emby muss dasselbe Secret im Webhook-Plugin setzen, sonst wird abgelehnt",
+    "embyWebhookSecretUnset": "Kein Geheimnis gesetzt: jede Anfrage an diese Adresse wird akzeptiert - nur im Intranet empfohlen",
+    "embyWebhookSecretHint": "Mit Geheimnis signiert Emby HMAC-SHA256. Ohne Geheimnis schuetzt nur die Adresse selbst.",
+    "embyWebhookSecretSave": "Geheimnis speichern"
   },
   "login": {
     "tagline": "Willkommen zurück bei eurem Familienplaner.",

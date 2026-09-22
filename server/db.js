@@ -5137,6 +5137,15 @@ const MIGRATIONS = [
     `,
   },
 
+  {
+    version: 141,
+    description: 'Emby webhook: media_item.progress + system_media_config.emby_webhook_secret (#media)',
+    up: `
+      ALTER TABLE media_item ADD COLUMN progress INTEGER;
+      ALTER TABLE system_media_config ADD COLUMN emby_webhook_secret TEXT;
+    `,
+  },
+
 ];
 
 /**
