@@ -479,12 +479,14 @@ export async function handleEmbyWebhook(req, res) {
     emby_id: item.Id || null,
     tmdb_id: tmdbId || providerTmdb || null,
   });
+  const creatorRow = database.prepare('SELECT id FROM users ORDER BY id ASC LIMIT 1').get();
+  const creatorUid = creatorRow ? creatorRow.id : 1;
   const ins = database.prepare(
     `INSERT INTO media_item
        (media_type, title, cover_url, status, rating, comment, metadata_json, is_private, watch_date, tags, creator_uid, progress)
      VALUES (?, ?, ?, ?, NULL, NULL, ?, 0, ?, NULL, ?, ?)`
   );
-  const info = ins.run(mediaType, title, coverUrl || null, status, meta, watchDate, 0, progress);
+  const info = ins.run(mediaType, title, coverUrl || null, status, meta, watchDate, creatorUid, progress);
   return res.json({ ok: true, created: info.lastInsertRowid, status });
 }
 
