@@ -14,7 +14,9 @@
 import { searchTmdb } from './media-metadata.js';
 import * as db from '../db.js';
 import { createHmac } from 'crypto';
+import { createLogger } from '../logger.js';
 
+const log = createLogger('Emby');
 const DEFAULT_TIMEOUT = 12000;
 
 function normalizeTitle(s) {
@@ -410,7 +412,21 @@ export async function handleEmbyWebhook(req, res) {
   if (finished) status = 'finished';
   else if (udUnplayed || event === 'userdata.unplayed') status = 'wish';
   else if (event === 'playback.start' || event === 'playback.progress' || event === 'playback.stop') status = 'doing';
-  else return res.json({ ok: true, ignored: 'event' });
+  else status = null;
+
+  log.info('emby webhook', {
+    event,
+    title,
+    type: item.Type || null,
+    hasUD: !!ud,
+    played: ud ? ud.Played : null,
+    pct: progress,
+    status,
+    itemKeys: status ? undefined : Object.keys(item || {}),
+    payloadKeys: status ? undefined : Object.keys(payload),
+  });
+
+  if (!status) return res.json({ ok: true, ignored: 'event' });
 
   const database = db.get();
   let existing = null;
