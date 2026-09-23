@@ -317,6 +317,7 @@ router.get('/config', (req, res) => {
         embyUserId: cfg.emby_user_id || '',
         embyWebhookUrl: '/webhook/emby',
         embyWebhookSecretSet: !!(cfg.emby_webhook_secret && cfg.emby_webhook_secret.length),
+        embyWebhookLastReceived: cfg.emby_webhook_last_received || null,
       },
     });
   } catch (err) {

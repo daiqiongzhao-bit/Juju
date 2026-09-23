@@ -110,11 +110,20 @@ function renderPage(container, cfg) {
 
         <div class="form-group">
           <label class="form-label" for="emby-webhook-secret">${t('settings.embyWebhookSecret')}</label>
-          <input class="form-input" id="emby-webhook-secret" type="password" autocomplete="new-password"
-                 placeholder="${t('settings.embyWebhookSecretPlaceholder')}">
+          <div class="settings-copy-row">
+            <input class="form-input" id="emby-webhook-secret" type="password" autocomplete="new-password"
+                   placeholder="${t('settings.embyWebhookSecretPlaceholder')}">
+            <button type="button" class="btn btn--ghost" id="emby-webhook-gen">${t('settings.embyWebhookSecretGen')}</button>
+          </div>
           <p class="form-hint">${cfg.embyWebhookSecretSet ? t('settings.embyWebhookSecretSet') : t('settings.embyWebhookSecretUnset')}</p>
           <p class="form-hint">${t('settings.embyWebhookSecretHint')}</p>
         </div>
+
+        <div class="form-group">
+          <span class="form-label">${t('settings.embyWebhookLastReceived')}</span>
+          <span class="settings-sync-info__status" id="emby-webhook-last">${cfg.embyWebhookLastReceived ? cfg.embyWebhookLastReceived : t('settings.embyWebhookLastReceivedNone')}</span>
+        </div>
+
         <div id="emby-webhook-msg" class="form-hint" role="status" hidden></div>
         <div class="settings-form-actions">
           <button type="button" class="btn btn--primary" id="emby-webhook-save">${t('settings.embyWebhookSecretSave')}</button>
@@ -242,6 +251,7 @@ export async function render(container, { user }) {
         t('settings.embySyncDone', {
           matched: r.matched || 0,
           updated: r.updated || 0,
+          downgraded: r.downgraded || 0,
           emby: r.embyItems || 0,
         })
       );
@@ -287,6 +297,17 @@ export async function render(container, { user }) {
       document.execCommand('copy');
     }
   });
+  container.querySelector('#emby-webhook-gen')?.addEventListener('click', () => {
+    const inp = container.querySelector('#emby-webhook-secret');
+    if (!inp) return;
+    const gen = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    inp.value = gen;
+    inp.type = 'text';
+    window.yuvomi?.showToast(t('settings.embyWebhookSecretGenDone'), 'success');
+  });
+
   container.querySelector('#emby-webhook-save')?.addEventListener('click', async () => {
     const secret = container.querySelector('#emby-webhook-secret').value;
     showWebhookMsg('');
@@ -294,6 +315,12 @@ export async function render(container, { user }) {
       await saveEmbyConfig(secret);
       window.yuvomi?.showToast(t('settings.embyWebhookSecretSaved'), 'success');
       await render(container, { user });
+      // Vollständige URL (inkl. Secret) zur Kopie in Emby anzeigen.
+      const secretVal = (secret || '').trim();
+      const urlInp = container.querySelector('#emby-webhook-url');
+      if (urlInp && cfg.embyWebhookUrl && secretVal) {
+        urlInp.value = location.origin + cfg.embyWebhookUrl + '?secret=' + encodeURIComponent(secretVal);
+      }
     } catch (error) {
       showWebhookMsg(error?.message || t('common.errorGeneric'));
     }

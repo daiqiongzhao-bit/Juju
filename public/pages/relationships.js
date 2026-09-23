@@ -909,9 +909,9 @@ const GEN_LAYOUT_KEY = 'juju-rel-gen-layout';
 const genState = { layout: 'top', rootId: null, zoom: 1, linkMode: false, linkFirst: null };
 
 async function renderGenealogy() {
+  // 人际树：把整张关系网自动排成树（按连通分量生成一棵/多棵树），不限定血缘关系。
   const panel = _container.querySelector('#rel-panel-genealogy');
   panel.innerHTML = `<div class="rel-loading">${t('common.loading')}</div>`;
-  await ensureContacts();
   let graph;
   try {
     const res = await api.get('/relationships/graph');
@@ -919,16 +919,8 @@ async function renderGenealogy() {
   } catch {
     graph = { nodes: [], edges: [] };
   }
-  const gen = buildGenData(graph);
-
-  try {
-    const saved = JSON.parse(localStorage.getItem(GEN_LAYOUT_KEY) || '{}');
-    if (['top', 'side', 'list'].includes(saved.layout)) genState.layout = saved.layout;
-    if (saved.rootId === null || typeof saved.rootId === 'number') genState.rootId = saved.rootId;
-  } catch { /* ignore */ }
-  if (genState.rootId !== null && !gen.persons.has(genState.rootId)) genState.rootId = null;
-
-  if (!gen.persons.size) {
+  const nodeMap = new Map((graph.nodes || []).map((n) => [n.id, n]));
+  if (!nodeMap.size) {
     panel.innerHTML = `<div class="empty-state">
       <div class="empty-state__title">${t('relationships.gen.emptyTitle')}</div>
       <div class="empty-state__description">${t('relationships.gen.emptyDesc')}</div>
@@ -936,78 +928,306 @@ async function renderGenealogy() {
     return;
   }
 
+  const forest = buildRelForest(graph);
+  const hasChildren = new Set();
+  const markHas = (node) => {
+    if ((node.children || []).length) hasChildren.add(node.id);
+    for (const k of node.children || []) markHas(k);
+  };
+  for (const root of forest) markHas(root);
+
   panel.innerHTML = `
-    <div class="rel-gen card">
-      <div class="rel-gen__toolbar">
-        <div class="rel-gen__modes">
-          <button class="btn btn--sm ${genState.layout === 'top' ? 'btn--primary' : 'btn--secondary'}" data-mode="top">${t('relationships.gen.top')}</button>
-          <button class="btn btn--sm ${genState.layout === 'side' ? 'btn--primary' : 'btn--secondary'}" data-mode="side">${t('relationships.gen.side')}</button>
-          <button class="btn btn--sm ${genState.layout === 'list' ? 'btn--primary' : 'btn--secondary'}" data-mode="list">${t('relationships.gen.list')}</button>
-        </div>
-        <select class="form-input rel-gen__root" id="gen-root" aria-label="${t('relationships.gen.root')}">
-          <option value="">${t('relationships.gen.rootAll')}</option>
-          ${graph.nodes.map((n) => `<option value="${n.id}" ${genState.rootId === n.id ? 'selected' : ''}>${esc(n.name || '?')}</option>`).join('')}
-        </select>
-        <div class="rel-gen__zoom" ${genState.layout === 'list' ? 'hidden' : ''}>
+    <div class="rel-rtree card">
+      <div class="rel-rtree__toolbar">
+        <span class="rel-rtree__hint">${t('relationships.gen.hint')}</span>
+        <div class="rel-rtree__actions">
+          <button class="btn btn--secondary btn--sm" data-action="rt-expand">${t('relationships.tree.expandAll')}</button>
+          <button class="btn btn--secondary btn--sm" data-action="rt-collapse">${t('relationships.tree.collapseAll')}</button>
           <button class="btn btn--secondary btn--sm" data-zoom="out" aria-label="-">－</button>
           <button class="btn btn--secondary btn--sm" data-zoom="reset">${t('relationships.resetView')}</button>
           <button class="btn btn--secondary btn--sm" data-zoom="in" aria-label="+">＋</button>
         </div>
-        <div class="rel-gen__actions" style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn--sm ${genState.linkMode ? 'btn--primary' : 'btn--secondary'}" data-action="gen-link">${t('relationships.gen.linkMode')}</button>
-          <button class="btn btn--sm btn--secondary" data-action="gen-add-person">+ ${t('relationships.gen.addPerson')}</button>
-        </div>
       </div>
-      <div class="rel-gen__canvas" id="gen-canvas"></div>
-      <div class="rel-gen__legend">
-        <span><span class="rel-gen__swatch rel-gen__swatch--couple"></span>${t('relationships.gen.spouseLine')}</span>
-        <span><span class="rel-gen__swatch rel-gen__swatch--child"></span>${t('relationships.gen.childLine')}</span>
+      <div class="rel-rtree__canvas" id="rt-canvas"></div>
+      <div class="rel-rtree__legend">
+        <span class="rel-muted">${t('relationships.gen.legend')}</span>
+        ${(state.options?.relationTypes || []).map((rt) => `<span class="rel-rtree__legend-item"><span class="rel-rtree__swatch" style="background:${relColor(rt)}"></span>${esc(relLabel(rt))}</span>`).join('')}
       </div>
     </div>`;
 
-  const paint = () => {
-    const zoomBox = panel.querySelector('.rel-gen__zoom');
-    if (zoomBox) zoomBox.hidden = genState.layout === 'list';
-    if (genState.layout === 'list') renderGenList(panel, gen);
-    else drawGenTree(panel, gen);
-  };
-  paint();
+  const repaint = () => paintRelForest(panel, forest, nodeMap, hasChildren);
+  repaint();
 
-  panel.querySelectorAll('[data-mode]').forEach((btn) => btn.addEventListener('click', () => {
-    genState.layout = btn.dataset.mode;
-    saveGenPrefs();
-    panel.querySelectorAll('[data-mode]').forEach((b) => {
-      b.classList.toggle('btn--primary', b === btn);
-      b.classList.toggle('btn--secondary', b !== btn);
-    });
-    paint();
-  }));
-  panel.querySelector('#gen-root').addEventListener('change', (e) => {
-    genState.rootId = e.target.value ? Number(e.target.value) : null;
-    saveGenPrefs();
-    paint();
-  });
-  // Verbindungsmodus: zwei Knoten anklicken -> Beziehungs-Dialog
-  panel.querySelector('[data-action="gen-link"]')?.addEventListener('click', (e) => {
-    genState.linkMode = !genState.linkMode;
-    clearGenLinkPick(panel);
-    e.currentTarget.classList.toggle('btn--primary', genState.linkMode);
-    e.currentTarget.classList.toggle('btn--secondary', !genState.linkMode);
-    if (genState.linkMode) toast(t('relationships.gen.linkHint'), 'info');
-  });
-  // Neue Person direkt aus der Genealogie anlegen
-  panel.querySelector('[data-action="gen-add-person"]')?.addEventListener('click', () => openGenAddPersonModal());
-  panel.querySelectorAll('[data-zoom]').forEach((btn) => btn.addEventListener('click', () => {
-    if (btn.dataset.zoom === 'in') genState.zoom = Math.min(3, Math.round((genState.zoom + 0.2) * 10) / 10);
-    if (btn.dataset.zoom === 'out') genState.zoom = Math.max(0.3, Math.round((genState.zoom - 0.2) * 10) / 10);
-    if (btn.dataset.zoom === 'reset') {
-      genState.zoom = 1;
-      const cv = panel.querySelector('#gen-canvas');
-      if (cv) { cv.scrollLeft = 0; cv.scrollTop = 0; }
+  panel.querySelector('[data-action="rt-expand"]').addEventListener('click', () => { rtreeState.collapsed.clear(); repaint(); });
+  panel.querySelector('[data-action="rt-collapse"]').addEventListener('click', () => { collapseAll(forest); repaint(); });
+  panel.querySelectorAll('[data-zoom]').forEach((btn) => btn.addEventListener('click', () => { zoomRtree(panel, btn.dataset.zoom); }));
+  wireRtreeCanvas(panel);
+}
+
+// --------------------------------------------------------
+// 人际树（关系网自动成树）
+// --------------------------------------------------------
+const RTREE_KEY = 'juju-rel-rtree';
+const rtreeState = { zoom: 1, collapsed: new Set() };
+
+function buildRelForest(graph) {
+  const nodes = graph.nodes || [];
+  const adj = new Map();
+  const addAdj = (a, b, rt) => {
+    if (!adj.has(a)) adj.set(a, []);
+    adj.get(a).push({ to: b, rt });
+  };
+  for (const e of graph.edges || []) {
+    addAdj(e.contact_a, e.contact_b, e.relation_type);
+    addAdj(e.contact_b, e.contact_a, e.relation_type);
+  }
+  const degree = new Map();
+  for (const n of nodes) degree.set(n.id, (adj.get(n.id) || []).length);
+  const ordered = [...nodes].sort((x, y) => (degree.get(y.id) || 0) - (degree.get(x.id) || 0));
+  const visited = new Set();
+  const trees = [];
+  for (const n of ordered) {
+    if (visited.has(n.id)) continue;
+    const root = { id: n.id, children: [], edgeType: null };
+    visited.add(n.id);
+    const queue = [root];
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const nb of adj.get(cur.id) || []) {
+        if (visited.has(nb.to)) continue;
+        visited.add(nb.to);
+        const child = { id: nb.to, children: [], edgeType: nb.rt };
+        cur.children.push(child);
+        queue.push(child);
+      }
     }
-    const svg = panel.querySelector('svg.rel-gen__svg');
-    if (svg) svg.style.width = `${Math.round(genState.zoom * 100)}%`;
-  }));
+    trees.push(root);
+  }
+  return trees;
+}
+
+function countNodes(root) {
+  let c = 1;
+  for (const k of root.children || []) c += countNodes(k);
+  return c;
+}
+
+function collapseAll(forest) {
+  const add = (node) => { rtreeState.collapsed.add(node.id); for (const k of node.children || []) add(k); };
+  for (const root of forest) add(root);
+}
+
+function layoutRelTree(root, nodeMap, collapsed) {
+  const NODE_W = 150, NODE_H = 50, H_GAP = 22, V_GAP = 96, MARGIN = 28;
+  const pos = new Map();
+  const links = [];
+  let leaf = 0;
+  const nameOf = (id) => (nodeMap.get(id) || { name: '?' }).name || '?';
+  const assign = (node, depth, parentId) => {
+    node._parentId = parentId;
+    const kids = collapsed.has(node.id) ? [] : (node.children || []).slice().sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id)));
+    node._kids = kids;
+    if (!kids.length) {
+      const x = leaf * (NODE_W + H_GAP);
+      leaf++;
+      pos.set(node.id, { x, y: depth });
+    } else {
+      for (const k of kids) assign(k, depth + 1, node.id);
+      const xs = kids.map((k) => pos.get(k.id).x);
+      const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+      pos.set(node.id, { x, y: depth });
+    }
+    if (parentId != null) links.push({ from: parentId, to: node.id, rt: node.edgeType });
+  };
+  assign(root, 0, null);
+  const px = new Map();
+  let maxX = 0, maxY = 0;
+  for (const [id, p] of pos) {
+    const X = MARGIN + p.x;
+    const Y = MARGIN + p.y * V_GAP;
+    px.set(id, { x: X, y: Y });
+    maxX = Math.max(maxX, X + NODE_W);
+    maxY = Math.max(maxY, Y + NODE_H);
+  }
+  return { pos: px, links, width: maxX + MARGIN, height: maxY + MARGIN, nodeW: NODE_W, nodeH: NODE_H };
+}
+
+function paintRelForest(panel, forest, nodeMap, hasChildren) {
+  const canvas = panel.querySelector('#rt-canvas');
+  if (!canvas) return;
+  canvas.innerHTML = '';
+  const W = 150, H = 50;
+  forest.forEach((root) => {
+    const lay = layoutRelTree(root, nodeMap, rtreeState.collapsed);
+    const comp = document.createElement('div');
+    comp.className = 'rel-rtree__comp';
+    const rootName = (nodeMap.get(root.id) || { name: '?' }).name || '?';
+    const head = document.createElement('div');
+    head.className = 'rel-rtree__comp-head';
+    head.innerHTML = `<span class="rel-rtree__comp-name">${esc(rootName)}</span><span class="rel-rtree__comp-meta">${countNodes(root)} 人</span>`;
+    comp.appendChild(head);
+    comp.appendChild(buildRtreeSvg(lay, nodeMap, hasChildren, W, H));
+    canvas.appendChild(comp);
+  });
+  if (window.lucide) window.lucide.createIcons({ el: canvas });
+
+  canvas.querySelectorAll('.rel-rtree__node').forEach((el) => {
+    const id = Number(el.dataset.id);
+    const open = () => { const c = contactById(id); if (c) openContactModal(c); };
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.rel-rtree__toggle')) return;
+      open();
+    });
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
+  });
+  canvas.querySelectorAll('.rel-rtree__toggle').forEach((tg) => {
+    tg.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = Number(tg.dataset.id);
+      if (rtreeState.collapsed.has(id)) rtreeState.collapsed.delete(id);
+      else rtreeState.collapsed.add(id);
+      paintRelForest(panel, forest, nodeMap, hasChildren);
+    });
+  });
+}
+
+function buildRtreeSvg(lay, nodeMap, hasChildren, W, H) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'rel-rtree__svg');
+  svg.setAttribute('viewBox', `0 0 ${Math.ceil(lay.width)} ${Math.ceil(lay.height)}`);
+  svg.setAttribute('preserveAspectRatio', 'xMinYMin meet');
+  svg.style.minWidth = '0';
+  svg.style.transition = 'none';
+  svg.style.width = `${Math.round(rtreeState.zoom * 100)}%`;
+  const edgeLayer = document.createElementNS(NS, 'g');
+  const labelLayer = document.createElementNS(NS, 'g');
+  const nodeLayer = document.createElementNS(NS, 'g');
+  svg.appendChild(edgeLayer);
+  svg.appendChild(labelLayer);
+  svg.appendChild(nodeLayer);
+
+  for (const l of lay.links) {
+    const a = lay.pos.get(l.from);
+    const b = lay.pos.get(l.to);
+    if (!a || !b) continue;
+    const x1 = a.x + W / 2, y1 = a.y + H, x2 = b.x + W / 2, y2 = b.y;
+    const ym = (y1 + y2) / 2;
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('class', 'rel-rtree__link');
+    path.setAttribute('stroke', relColor(l.rt));
+    path.setAttribute('d', `M ${x1} ${y1} L ${x1} ${ym} L ${x2} ${ym} L ${x2} ${y2}`);
+    edgeLayer.appendChild(path);
+    const lbl = document.createElementNS(NS, 'text');
+    lbl.setAttribute('class', 'rel-rtree__edge-label');
+    lbl.setAttribute('x', (x1 + x2) / 2);
+    lbl.setAttribute('y', ym - 3);
+    lbl.setAttribute('text-anchor', 'middle');
+    lbl.textContent = relLabel(l.rt);
+    labelLayer.appendChild(lbl);
+  }
+
+  for (const [id, p] of lay.pos) {
+    const node = nodeMap.get(id) || { name: '?', photo: null, relationship_type: null };
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'rel-rtree__node');
+    g.setAttribute('transform', `translate(${p.x},${p.y})`);
+    g.setAttribute('data-id', id);
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label', node.name || '?');
+
+    const rect = document.createElementNS(NS, 'rect');
+    rect.setAttribute('width', W);
+    rect.setAttribute('height', H);
+    rect.setAttribute('rx', 10);
+    rect.setAttribute('ry', 10);
+    rect.setAttribute('class', 'rel-rtree__rect');
+    rect.setAttribute('fill', relColor(node.relationship_type));
+    g.appendChild(rect);
+
+    const name = document.createElementNS(NS, 'text');
+    name.setAttribute('class', 'rel-rtree__name');
+    name.setAttribute('x', W / 2);
+    name.setAttribute('y', H / 2 + 5);
+    name.setAttribute('text-anchor', 'middle');
+    name.textContent = String(node.name || '?').slice(0, 10);
+    g.appendChild(name);
+
+    if (node.photo) {
+      const img = document.createElementNS(NS, 'image');
+      img.setAttribute('href', node.photo);
+      img.setAttribute('x', W - 22);
+      img.setAttribute('y', 4);
+      img.setAttribute('width', 18);
+      img.setAttribute('height', 18);
+      img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+      g.appendChild(img);
+    }
+
+    if (hasChildren.has(id)) {
+      const tg = document.createElementNS(NS, 'g');
+      tg.setAttribute('class', 'rel-rtree__toggle');
+      tg.setAttribute('data-id', id);
+      tg.setAttribute('transform', `translate(${W / 2}, ${H})`);
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('r', 9);
+      c.setAttribute('class', 'rel-rtree__toggle-bg');
+      tg.appendChild(c);
+      const sign = document.createElementNS(NS, 'text');
+      sign.setAttribute('class', 'rel-rtree__toggle-sign');
+      sign.setAttribute('text-anchor', 'middle');
+      sign.setAttribute('y', 4);
+      sign.textContent = rtreeState.collapsed.has(id) ? '+' : '−';
+      tg.appendChild(sign);
+      g.appendChild(tg);
+    }
+
+    nodeLayer.appendChild(g);
+  }
+  return svg;
+}
+
+function zoomRtree(panel, mode) {
+  if (mode === 'in') rtreeState.zoom = Math.min(3, Math.round((rtreeState.zoom + 0.15) * 100) / 100);
+  if (mode === 'out') rtreeState.zoom = Math.max(0.4, Math.round((rtreeState.zoom - 0.15) * 100) / 100);
+  if (mode === 'reset') rtreeState.zoom = 1;
+  panel.querySelectorAll('svg.rel-rtree__svg').forEach((svg) => { svg.style.width = `${Math.round(rtreeState.zoom * 100)}%`; });
+}
+
+function wireRtreeCanvas(panel) {
+  const canvas = panel.querySelector('#rt-canvas');
+  if (!canvas || canvas.dataset.rtWired === '1') return;
+  canvas.dataset.rtWired = '1';
+  canvas.addEventListener('wheel', (ev) => {
+    const svg = panel.querySelector('svg.rel-rtree__svg');
+    if (!svg) return;
+    ev.preventDefault();
+    const step = ev.deltaY > 0 ? -0.12 : 0.12;
+    const old = rtreeState.zoom;
+    const next = Math.min(3, Math.max(0.4, Math.round((old + step) * 100) / 100));
+    if (next === old) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = ev.clientX - rect.left;
+    const cy = ev.clientY - rect.top;
+    const ux = (canvas.scrollLeft + cx) / old;
+    const uy = (canvas.scrollTop + cy) / old;
+    rtreeState.zoom = next;
+    panel.querySelectorAll('svg.rel-rtree__svg').forEach((s) => { s.style.width = `${Math.round(next * 100)}%`; });
+    canvas.scrollLeft = Math.max(0, ux * next - cx);
+    canvas.scrollTop = Math.max(0, uy * next - cy);
+  }, { passive: false });
+  canvas.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    if (!panel.querySelector('svg.rel-rtree__svg')) return;
+    if (ev.target.closest('.rel-rtree__node')) return;
+    const sx = ev.clientX, sy = ev.clientY, sl = canvas.scrollLeft, st = canvas.scrollTop;
+    canvas.classList.add('rel-rtree__canvas--dragging');
+    const move = (e) => { canvas.scrollLeft = sl - (e.clientX - sx); canvas.scrollTop = st - (e.clientY - sy); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); canvas.classList.remove('rel-rtree__canvas--dragging'); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
 }
 
 function saveGenPrefs() {
@@ -1483,6 +1703,7 @@ function openGenAddPersonModal() {
 }
 
 // --------------------------------------------------------
+
 // Tab: Timeline (Interaktionen)
 // --------------------------------------------------------
 async function renderTimeline() {

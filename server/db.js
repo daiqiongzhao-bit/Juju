@@ -5146,6 +5146,14 @@ const MIGRATIONS = [
     `,
   },
 
+  {
+    version: 142,
+    description: 'Emby webhook: record last received time (system_media_config.emby_webhook_last_received) (#media)',
+    up: `
+      ALTER TABLE system_media_config ADD COLUMN emby_webhook_last_received TEXT;
+    `,
+  },
+
 ];
 
 /**
@@ -5228,6 +5236,9 @@ const CRITICAL_COLUMNS = [
   // #rel: Beziehungs-Ebene. Fehlt die Spalte, scheitert das Relationships-Modul
   // still beim Lesen/Schreiben von contact.relationship_type.
   { table: 'contacts', column: 'relationship_type', type: 'TEXT' },
+  // #media: Emby-Webhook-Zeitstempel. Fehlt die Spalte, scheitert das Schreiben
+  // des "letzten Empfangs" still und die Einstellungen-Anzeige bricht ab.
+  { table: 'system_media_config', column: 'emby_webhook_last_received', type: 'TEXT' },
 ];
 
 /**

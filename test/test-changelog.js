@@ -67,7 +67,7 @@ test('changelog router fetches and sanitizes GitHub release JSON', async () => {
     appVersion: '1.2.1',
     now: () => 1000,
     fetchFn: async (url, options) => {
-      assert.match(url, /api\.github\.com\/repos\/daiqiongzhao-bit\/yuvomi\/releases/);
+      assert.match(url, /api\.github\.com\/repos\/daiqiongzhao-bit\/Juju\/releases/);
       assert.equal(options.headers.Accept, 'application/vnd.github+json');
       return {
         ok: true,

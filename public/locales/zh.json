@@ -975,7 +975,7 @@
       "tree": "关系树",
       "timeline": "互动时间线",
       "anniversaries": "纪念日",
-      "genealogy": "族谱"
+      "genealogy": "人际树"
     },
     "networkEmptyTitle": "还没有任何连接",
     "networkEmptyDesc": "连接两位联系人，即可构建你的人际关系网络。",
@@ -1088,8 +1088,10 @@
       "list": "世代列表",
       "root": "起始成员",
       "rootAll": "自动（全部始祖）",
-      "emptyTitle": "暂无族谱数据",
-      "emptyDesc": "在成员资料里建立「子女」「配偶」关系后，这里会自动生成族谱。",
+      "emptyTitle": "还没有人际关系数据",
+      "emptyDesc": "在联系人之间建立关系后，这里会自动把整张关系网排成树。",
+      "hint": "整张关系网自动展开为树；点击节点查看联系人，点击节点下方的 ＋ / － 折叠或展开分支。",
+      "legend": "关系类型",
       "spouseLine": "配偶连线",
       "childLine": "亲子连线",
       "linkMode": "连线",
@@ -2396,7 +2398,7 @@
     "embyTestOk": "连接成功：{{name}} {{version}}",
     "embySync": "同步观看状态",
     "embySyncing": "正在同步（视 Emby 库大小可能需要十几秒）…",
-    "embySyncDone": "同步完成：Emby {{emby}} 个视频，本地匹配 {{matched}} 条，状态更新 {{updated}} 条（只升级不降级：看完 > 在看 > 想看）",
+    "embySyncDone": "同步完成：Emby {{emby}} 个视频，本地匹配 {{matched}} 条，状态更新 {{updated}} 条，取消已看重置 {{downgraded}} 条",
     "embyImport": "导入观看历史",
     "embyImportConfirm": "将按 Emby 的已看/在看状态把影片和剧集导入媒体库（自动去重，跳过已存在条目）。确认继续？",
     "embyImporting": "正在导入（视 Emby 库大小可能需要几十秒）…",
@@ -2413,8 +2415,13 @@
     "embyWebhookSecretPlaceholder": "设置一个密钥用于校验签名；留空表示不校验",
     "embyWebhookSecretSet": "已设置密钥：Emby 需在 Webhook 插件里填相同 Secret，否则请求会被拒绝",
     "embyWebhookSecretUnset": "未设置密钥：任何能访问该地址的请求都会生效，仅建议内网使用",
+    "embyWebhookSecretGen": "生成密钥",
+    "embyWebhookSecretGenDone": "已生成随机密钥，记得点「保存密钥」生效",
     "embyWebhookSecretHint": "设置密钥后，Emby 的 Webhook 插件需配置相同 Secret（HMAC-SHA256 签名）。不设置则只靠地址保密。",
-    "embyWebhookSecretSave": "保存密钥"
+    "embyWebhookSecretSave": "保存密钥",
+    "embyWebhookSecretSaved": "密钥已保存",
+    "embyWebhookLastReceived": "最近接收时间",
+    "embyWebhookLastReceivedNone": "尚未收到任何事件"
   },
   "login": {
     "tagline": "欢迎回到您的家庭计划工具。",

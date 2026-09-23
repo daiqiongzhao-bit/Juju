@@ -2,7 +2,9 @@
  * Modul: Emby-Integration (service)
  * Zweck: Anbindung an einen Emby/Jellyfin-Server:
  *   1) Watched-State-Sync: "gespielt / am Schauen" aus Emby in die
- *      Medienbibliothek uebernehmen (nur Status-Upgrades, nie Downgrades).
+ *      Medienbibliothek uebernehmen. Status-Upgrades (wish < doing < finished)
+ *      werden uebernommen; meldet Emby explizit "nicht gesehen", wird ein
+ *      lokales finished/doing auf wish zurueckgesetzt (Downgrade).
  *   2) Fotobibliotheken: Durchsuchen der Foto-Views ueber denselben Server.
  * Konfiguration liegt in system_media_config (emby_url / emby_api_key /
  * emby_user_id) — niemals im Frontend.
@@ -125,6 +127,8 @@ function embyStatusOf(item) {
   if (ud.Played) return 'finished';
   if (item.Type === 'Series' && ud.UnplayedItemCount === 0 && (ud.PlayedItemCount || 0) > 0) return 'finished';
   if ((ud.PlayedPercentage || 0) > 0 || (ud.PlayedItemCount || 0) > 0) return 'doing';
+  // Emby meldet explizit "nicht gesehen" -> downgrade (wish) bei Sync.
+  if (ud.Played === false) return 'unplayed';
   return null;
 }
 
@@ -155,10 +159,13 @@ export async function syncWatched(db, cfg) {
 
   let matched = 0;
   let updated = 0;
+  let downgraded = 0;
   const updatedSamples = [];
+  const downgradedSamples = [];
   const unmatched = [];
   const rank = { wish: 0, doing: 1, finished: 2 };
   const upd = db.prepare("UPDATE media_item SET status = ?, watch_date = COALESCE(watch_date, strftime('%Y-%m-%d','now')), updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?");
+  const down = db.prepare("UPDATE media_item SET status = 'wish', progress = NULL, watch_date = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?");
 
   for (const row of localRows) {
     const key = normalizeTitle(row.title);
@@ -184,7 +191,14 @@ export async function syncWatched(db, cfg) {
       continue;
     }
     matched++;
-    if (rank[hit.status] > rank[row.status] && row.status !== 'finished') {
+    // Emby meldet explizit "nicht gesehen" -> Downgrade (wish), nur wenn aktuell higher.
+    if (hit.status === 'unplayed') {
+      if (row.status === 'finished' || row.status === 'doing') {
+        down.run(row.id);
+        downgraded++;
+        if (downgradedSamples.length < 10) downgradedSamples.push({ title: row.title, from: row.status, to: 'wish' });
+      }
+    } else if (rank[hit.status] > rank[row.status] && row.status !== 'finished') {
       upd.run(hit.status, row.id);
       updated++;
       if (updatedSamples.length < 10) updatedSamples.push({ title: row.title, from: row.status, to: hit.status });
@@ -196,7 +210,9 @@ export async function syncWatched(db, cfg) {
     localItems: totalRows,
     matched,
     updated,
+    downgraded,
     updatedSamples,
+    downgradedSamples,
     unmatchedSample: unmatched.slice(0, 10),
     unmatchedCount: unmatched.length,
   };
@@ -332,6 +348,28 @@ async function mapLimit(arr, n, fn) {
   return out;
 }
 
+/**
+ * Aggregiert den Watching-Status einer Serie aus Emby (fuer Episode-Webhooks).
+ * Zaehlt gesehene/ungesehene Episoden und liefert 'finished' | 'doing' | 'wish'.
+ * Gibt null zurueck, wenn keine Episoden abrufbar sind (kein Aggregate moeglich).
+ */
+async function aggregateSeriesStatus(cfg, seriesId) {
+  const userId = await resolveUserId(cfg);
+  const data = await embyFetch(cfg, `/Shows/${seriesId}/Episodes`, {
+    query: { userId, Fields: 'UserData', Recursive: 'true', IncludeItemTypes: 'Episode', Limit: 1000 },
+  });
+  const eps = Array.isArray(data?.Items) ? data.Items : [];
+  if (!eps.length) return null;
+  let played = 0;
+  for (const e of eps) {
+    const ud = e.UserData || {};
+    if (ud.Played) played++;
+  }
+  if (played === eps.length) return 'finished';
+  if (played === 0) return 'wish';
+  return 'doing';
+}
+
 // ------------------------------------------------------------
 // 3) Real-time Webhook (Emby -> Juju, push)
 //    Oeffentlicher Endpunkt /webhook/emby (siehe server/index.js).
@@ -386,6 +424,13 @@ export async function handleEmbyWebhook(req, res) {
   const payload = parseWebhookPayload(req);
   if (!payload) return res.status(400).json({ error: 'Ungueltige Payload', code: 400 });
 
+  // Letzten Webhook-Empfang vermerken (Einstellungen-Anzeige). Nicht fatal.
+  try {
+    db.get()
+      .prepare("UPDATE system_media_config SET emby_webhook_last_received = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?")
+      .run(cfg.id);
+  } catch { /* non-fatal */ }
+
   const event = String(payload.Event || '').toLowerCase();
   const item = payload.Item || {};
   const user = payload.User || {};
@@ -393,8 +438,16 @@ export async function handleEmbyWebhook(req, res) {
     return res.json({ ok: true, ignored: 'other-user' });
   }
 
-  const mediaType = item.Type === 'Series' || item.Type === 'Episode' ? 'tv' : 'movie';
-  const title = String(item.Name || '').trim();
+  const itemType = String(item.Type || '');
+  const isEpisode = itemType === 'Episode';
+  const isSeries = itemType === 'Series';
+  const mediaType = isSeries || isEpisode ? 'tv' : 'movie';
+  // Bei Episoden auf Serien-Ebene aggregieren (SeriesName = Serientitel).
+  let title = String(item.Name || '').trim();
+  if (isEpisode) {
+    const seriesName = String(item.SeriesName || '').trim();
+    if (seriesName) title = seriesName;
+  }
   const year = item.ProductionYear || item.Year || null;
   const providerTmdb =
     (item.ProviderIds && (item.ProviderIds.Tmdb || item.ProviderIds.tmdb)) || null;
@@ -414,23 +467,36 @@ export async function handleEmbyWebhook(req, res) {
   else if (event === 'playback.start' || event === 'playback.progress' || event === 'playback.stop') status = 'doing';
   else status = null;
 
+  if (!status) {
+    // Nicht zutreffendes Event: nur debug (Lärm reduzieren).
+    log.debug('emby webhook ignored', { event, title, type: itemType || null, hasUD: !!ud });
+    return res.json({ ok: true, ignored: 'event' });
+  }
   log.info('emby webhook', {
     event,
     title,
-    type: item.Type || null,
+    type: itemType || null,
     hasUD: !!ud,
     played: ud ? ud.Played : null,
     pct: progress,
     status,
-    itemKeys: status ? undefined : Object.keys(item || {}),
-    payloadKeys: status ? undefined : Object.keys(payload),
   });
 
-  if (!status) return res.json({ ok: true, ignored: 'event' });
+  // Episode -> Serien-Status aggregieren (nur bei klaren Statuswechseln,
+  // um Emby nicht bei jedem Progress-Event zu befragen).
+  let applyStatus = status;
+  if (isEpisode && item.SeriesId && (status === 'finished' || status === 'wish')) {
+    try {
+      const agg = await aggregateSeriesStatus(cfg, String(item.SeriesId));
+      if (agg) applyStatus = agg;
+    } catch { /* Emby nicht erreichbar -> Event-Status beibehalten */ }
+  }
 
   const database = db.get();
   let existing = null;
-  if (providerTmdb) {
+  // Bei Episoden stimmen die ProviderIds i.d.R. auf die Folge, nicht die Serie ->
+  // nur Titel-Match (SeriesName) verwenden.
+  if (!isEpisode && providerTmdb) {
     const rows = database
       .prepare("SELECT id, status, metadata_json FROM media_item WHERE media_type = ? AND metadata_json LIKE ?")
       .all(mediaType, '%"tmdb_id":"' + String(providerTmdb).replace(/"/g, '') + '"%');
@@ -445,15 +511,15 @@ export async function handleEmbyWebhook(req, res) {
 
   if (existing) {
     const cur = existing.status;
-    if (status === 'wish') {
+    if (applyStatus === 'wish') {
       database
         .prepare(
           "UPDATE media_item SET status='wish', progress=NULL, watch_date=NULL, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?"
         )
         .run(existing.id);
-    } else if (WEBHOOK_STATUS_RANK[status] > WEBHOOK_STATUS_RANK[cur]) {
+    } else if (WEBHOOK_STATUS_RANK[applyStatus] > WEBHOOK_STATUS_RANK[cur]) {
       const watchDate =
-        status === 'finished'
+        applyStatus === 'finished'
           ? (item.UserData && item.UserData.LastPlayedDate
               ? String(item.UserData.LastPlayedDate).slice(0, 10)
               : new Date().toISOString().slice(0, 10))
@@ -462,7 +528,7 @@ export async function handleEmbyWebhook(req, res) {
         .prepare(
           "UPDATE media_item SET status=?, progress=?, watch_date=COALESCE(watch_date,?), updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?"
         )
-        .run(status, progress, watchDate, existing.id);
+        .run(applyStatus, progress, watchDate, existing.id);
     } else {
       database
         .prepare(
@@ -470,13 +536,19 @@ export async function handleEmbyWebhook(req, res) {
         )
         .run(progress, existing.id);
     }
-    return res.json({ ok: true, updated: existing.id, status });
+    return res.json({ ok: true, updated: existing.id, status: applyStatus });
   }
 
-  // Nicht gefunden: bei "fertig gesehen" ODER "abgehakt/nicht gesehen" neu anlegen
-  // (Emby-Status vollstaendig spiegeln); reines "doing" wird NICHT angelegt (kein Spam).
-  if (status !== 'finished' && status !== 'wish') {
-    return res.json({ ok: true, ignored: 'not-found-not-doing' });
+  // Nicht gefunden: bei "fertig gesehen" / "abgehakt" neu anlegen; bei Serien
+  // auch "doing" (aggregierter Stand), damit der Serien-Eintrag den Emby-Stand
+  // vollstaendig spiegelt. Reines "doing" bei Film/Einzel-Episode wird NICHT
+  // angelegt (kein Spam).
+  const canCreate =
+    applyStatus === 'finished' ||
+    applyStatus === 'wish' ||
+    ((isSeries || isEpisode) && applyStatus === 'doing');
+  if (!canCreate) {
+    return res.json({ ok: true, ignored: 'not-found-not-eligible' });
   }
   let coverUrl = null;
   let tmdbId = null;
@@ -487,16 +559,17 @@ export async function handleEmbyWebhook(req, res) {
       tmdbId = cover.externalId || null;
     }
   }
-  const watchDate = status === 'finished'
+  const watchDate = applyStatus === 'finished'
     ? (item.UserData && item.UserData.LastPlayedDate
         ? String(item.UserData.LastPlayedDate).slice(0, 10)
         : new Date().toISOString().slice(0, 10))
     : null;
-  const finalProgress = status === 'wish' ? null : progress;
+  const finalProgress = applyStatus === 'wish' ? null : progress;
   const meta = JSON.stringify({
     year: year || null,
     source: 'emby-webhook',
     emby_id: item.Id || null,
+    emby_series_id: item.SeriesId || null,
     tmdb_id: tmdbId || providerTmdb || null,
   });
   const creatorRow = database.prepare('SELECT id FROM users ORDER BY id ASC LIMIT 1').get();
@@ -506,8 +579,8 @@ export async function handleEmbyWebhook(req, res) {
        (media_type, title, cover_url, status, rating, comment, metadata_json, is_private, watch_date, tags, creator_uid, progress)
      VALUES (?, ?, ?, ?, NULL, NULL, ?, 0, ?, NULL, ?, ?)`
   );
-  const info = ins.run(mediaType, title, coverUrl || null, status, meta, watchDate, creatorUid, finalProgress);
-  return res.json({ ok: true, created: info.lastInsertRowid, status });
+  const info = ins.run(mediaType, title, coverUrl || null, applyStatus, meta, watchDate, creatorUid, finalProgress);
+  return res.json({ ok: true, created: info.lastInsertRowid, status: applyStatus });
 }
 
 export { getConfig, isConfigured, trimUrl };
