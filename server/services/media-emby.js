@@ -473,9 +473,10 @@ export async function handleEmbyWebhook(req, res) {
     return res.json({ ok: true, updated: existing.id, status });
   }
 
-  // Nicht gefunden: nur bei "fertig gesehen" neu anlegen (kein Spam).
-  if (status !== 'finished') {
-    return res.json({ ok: true, ignored: 'not-found-not-finished' });
+  // Nicht gefunden: bei "fertig gesehen" ODER "abgehakt/nicht gesehen" neu anlegen
+  // (Emby-Status vollstaendig spiegeln); reines "doing" wird NICHT angelegt (kein Spam).
+  if (status !== 'finished' && status !== 'wish') {
+    return res.json({ ok: true, ignored: 'not-found-not-doing' });
   }
   let coverUrl = null;
   let tmdbId = null;
@@ -486,9 +487,12 @@ export async function handleEmbyWebhook(req, res) {
       tmdbId = cover.externalId || null;
     }
   }
-  const watchDate = item.UserData && item.UserData.LastPlayedDate
-    ? String(item.UserData.LastPlayedDate).slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
+  const watchDate = status === 'finished'
+    ? (item.UserData && item.UserData.LastPlayedDate
+        ? String(item.UserData.LastPlayedDate).slice(0, 10)
+        : new Date().toISOString().slice(0, 10))
+    : null;
+  const finalProgress = status === 'wish' ? null : progress;
   const meta = JSON.stringify({
     year: year || null,
     source: 'emby-webhook',
@@ -502,7 +506,7 @@ export async function handleEmbyWebhook(req, res) {
        (media_type, title, cover_url, status, rating, comment, metadata_json, is_private, watch_date, tags, creator_uid, progress)
      VALUES (?, ?, ?, ?, NULL, NULL, ?, 0, ?, NULL, ?, ?)`
   );
-  const info = ins.run(mediaType, title, coverUrl || null, status, meta, watchDate, creatorUid, progress);
+  const info = ins.run(mediaType, title, coverUrl || null, status, meta, watchDate, creatorUid, finalProgress);
   return res.json({ ok: true, created: info.lastInsertRowid, status });
 }
 
