@@ -111,9 +111,24 @@ function loadMultiValueFields(contactId) {
   }));
 
   const extras = db.get().prepare(`
-    SELECT vehicle_plate, school, custom_tags FROM contacts WHERE id = ?
+    SELECT vehicle_plate, school, custom_tags, gender, hometown, wechat, douyin, qq, contact_groups, call_them, call_me, hidden
+    FROM contacts WHERE id = ?
   `).get(contactId) || {};
-  return { phones, emails, addresses, vehiclePlate: extras.vehicle_plate ?? null, school: extras.school ?? null, customTags: extras.custom_tags ?? null };
+  return {
+    phones, emails, addresses,
+    vehiclePlate: extras.vehicle_plate ?? null,
+    school: extras.school ?? null,
+    customTags: extras.custom_tags ?? null,
+    gender: extras.gender ?? null,
+    hometown: extras.hometown ?? null,
+    wechat: extras.wechat ?? null,
+    douyin: extras.douyin ?? null,
+    qq: extras.qq ?? null,
+    contactGroups: extras.contact_groups ?? null,
+    callThem: extras.call_them ?? null,
+    callMe: extras.call_me ?? null,
+    hidden: extras.hidden === 1,
+  };
 }
 
 /**
@@ -354,7 +369,16 @@ router.post('/', (req, res) => {
     // Geburtstag (ISO YYYY-MM-DD, optional) - u. a. aus vCard-BDAY beim Import.
     // Speist den bestehenden #518-Geburtstags-Import (GET /birthdays/import/candidates).
     const vBirthday = date(req.body.birthday, 'Geburtstag', false);
+    const vGender   = str(req.body.gender, 'Gender', { max: MAX_SHORT, required: false });
+    const vHometown = str(req.body.hometown, 'Hometown', { max: MAX_TITLE, required: false });
+    const vWechat   = str(req.body.wechat, 'WeChat', { max: MAX_SHORT, required: false });
+    const vDouyin   = str(req.body.douyin, 'Douyin', { max: MAX_SHORT, required: false });
+    const vQq       = str(req.body.qq, 'QQ', { max: MAX_SHORT, required: false });
+    const vGroups   = str(req.body.contactGroups, 'Groups', { max: MAX_TEXT, required: false });
+    const vCallThem = str(req.body.callThem, 'Call them', { max: MAX_SHORT, required: false });
+    const vCallMe   = str(req.body.callMe, 'Call me', { max: MAX_SHORT, required: false });
     const errors   = collectErrors([vName, vCat, vPhone, vEmail, vAddress, vNotes, vBirthday,
+                                    vGender, vHometown, vWechat, vDouyin, vQq, vGroups, vCallThem, vCallMe,
                                     ...namePartChecks(nameParts.parts)]);
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
 
@@ -384,11 +408,16 @@ router.post('/', (req, res) => {
     const transaction = db.get().transaction(() => {
       const result = db.get().prepare(`
         INSERT INTO contacts (name, category, phone, email, address, notes, birthday,
-                              first_name, last_name, middle_name, name_prefix, name_suffix, vehicle_plate, school, custom_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              first_name, last_name, middle_name, name_prefix, name_suffix,
+                              vehicle_plate, school, custom_tags,
+                              gender, hometown, wechat, douyin, qq, contact_groups, call_them, call_me)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(vName.value, vCat.value || FALLBACK_CATEGORY, vPhone.value, vEmail.value,
              vAddress.value, vNotes.value, vBirthday.value,
              nameParts.parts.firstName, nameParts.parts.lastName, nameParts.parts.middleName,
-             nameParts.parts.namePrefix, nameParts.parts.nameSuffix, req.body.vehiclePlate || null, req.body.school || null, req.body.customTags || null);
+             nameParts.parts.namePrefix, nameParts.parts.nameSuffix, req.body.vehiclePlate || null, req.body.school || null, req.body.customTags || null,
+             vGender.value ?? null, vHometown.value ?? null, vWechat.value ?? null, vDouyin.value ?? null,
+             vQq.value ?? null, vGroups.value ?? null, vCallThem.value ?? null, vCallMe.value ?? null);
 
       const contactId = result.lastInsertRowid;
 
@@ -484,6 +513,14 @@ router.put('/:id', (req, res) => {
     if (req.body.address  !== undefined) checks.push(str(req.body.address,  'Adresse', { max: MAX_TEXT,  required: false }));
     if (req.body.notes    !== undefined) checks.push(str(req.body.notes,    'Notizen', { max: MAX_TEXT,  required: false }));
     if (req.body.birthday !== undefined) checks.push(date(req.body.birthday, 'Geburtstag', false));
+    if (req.body.gender   !== undefined) checks.push(str(req.body.gender,   'Gender',   { max: MAX_SHORT, required: false }));
+    if (req.body.hometown !== undefined) checks.push(str(req.body.hometown, 'Hometown', { max: MAX_TITLE, required: false }));
+    if (req.body.wechat   !== undefined) checks.push(str(req.body.wechat,   'WeChat',   { max: MAX_SHORT, required: false }));
+    if (req.body.douyin   !== undefined) checks.push(str(req.body.douyin,   'Douyin',   { max: MAX_SHORT, required: false }));
+    if (req.body.qq       !== undefined) checks.push(str(req.body.qq,       'QQ',       { max: MAX_SHORT, required: false }));
+    if (req.body.contactGroups !== undefined) checks.push(str(req.body.contactGroups, 'Groups', { max: MAX_TEXT, required: false }));
+    if (req.body.callThem !== undefined) checks.push(str(req.body.callThem, 'Call them', { max: MAX_SHORT, required: false }));
+    if (req.body.callMe   !== undefined) checks.push(str(req.body.callMe,   'Call me',   { max: MAX_SHORT, required: false }));
     const errors = collectErrors(checks);
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
 
@@ -528,7 +565,15 @@ router.put('/:id', (req, res) => {
             name_suffix = ?,
             vehicle_plate = ?,
             school = ?,
-            custom_tags = ?
+            custom_tags = ?,
+            gender = ?,
+            hometown = ?,
+            wechat = ?,
+            douyin = ?,
+            qq = ?,
+            contact_groups = ?,
+            call_them = ?,
+            call_me = ?
         WHERE id = ?
       `).run(
         derivedName ?? req.body.name?.trim() ?? null,
@@ -546,6 +591,14 @@ router.put('/:id', (req, res) => {
         req.body.vehiclePlate !== undefined ? (req.body.vehiclePlate?.trim() || null) : contact.vehicle_plate,
         req.body.school !== undefined ? (req.body.school?.trim() || null) : contact.school,
         req.body.customTags !== undefined ? (req.body.customTags ?? null) : contact.custom_tags,
+        req.body.gender !== undefined ? (req.body.gender?.trim() || null) : contact.gender,
+        req.body.hometown !== undefined ? (req.body.hometown?.trim() || null) : contact.hometown,
+        req.body.wechat !== undefined ? (req.body.wechat?.trim() || null) : contact.wechat,
+        req.body.douyin !== undefined ? (req.body.douyin?.trim() || null) : contact.douyin,
+        req.body.qq !== undefined ? (req.body.qq?.trim() || null) : contact.qq,
+        req.body.contactGroups !== undefined ? (req.body.contactGroups?.trim() || null) : contact.contact_groups,
+        req.body.callThem !== undefined ? (req.body.callThem?.trim() || null) : contact.call_them,
+        req.body.callMe !== undefined ? (req.body.callMe?.trim() || null) : contact.call_me,
         id
       );
 

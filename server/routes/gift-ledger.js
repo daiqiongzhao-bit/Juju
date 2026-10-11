@@ -34,7 +34,15 @@ function serialize(row) {
     ...row,
     amount: row.amount === null || row.amount === undefined ? null : Number(row.amount),
     is_private: row.is_private === 1,
+    returned: row.returned === 1,
   };
+}
+
+// Optionale Kontakt-Verknüpfung parsen (#relationships): giver/related contact id.
+function parseContactId(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const n = parseInt(v, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 // WHERE-Klausel für Besitzer-/Privat-Scoping (gleiche Semantik wie Medien).
@@ -68,6 +76,13 @@ router.get('/list', (req, res) => {
       // da parametrisiert — aber unerwartetes Filterverhalten).
       const like = `%${String(q).replace(/[\\%_]/g, (m) => '\\' + m)}%`;
       params.push(like, like, like, like);
+    }
+    if (req.query.contactId) {
+      const cid = parseContactId(req.query.contactId);
+      if (cid) {
+        where.push('(giver_contact_id = ? OR related_contact_id = ?)');
+        params.push(cid, cid);
+      }
     }
     const whereSql = ' WHERE ' + where.join(' AND ');
     const total = db.get().prepare(`SELECT COUNT(*) AS n FROM gift_ledger${whereSql}`).get(...params).n;
@@ -238,11 +253,15 @@ router.post('/add', (req, res) => {
     const errors = collectErrors([vType, vName, vDate, vGiver, vAmount, vRel, vNote, vPrivate].filter(Boolean));
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
 
+    const giverContactId = parseContactId(req.body.giverContactId);
+    const relatedContactId = parseContactId(req.body.relatedContactId);
+    const returned = req.body.returned ? 1 : 0;
+
     const info = db
       .get()
       .prepare(
-        `INSERT INTO gift_ledger (type, event_name, event_date, giver, amount, relationship, note, is_private, creator_uid)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO gift_ledger (type, event_name, event_date, giver, amount, relationship, note, is_private, creator_uid, giver_contact_id, related_contact_id, returned)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         vType.value,
@@ -253,7 +272,10 @@ router.post('/add', (req, res) => {
         vRel.value || null,
         vNote.value || null,
         vPrivate && vPrivate.value ? 1 : 0,
-        me
+        me,
+        giverContactId,
+        relatedContactId,
+        returned
       );
     res.status(201).json({ data: serialize(db.get().prepare('SELECT * FROM gift_ledger WHERE id = ?').get(info.lastInsertRowid)) });
   } catch (err) {
@@ -286,6 +308,13 @@ router.put('/:id', (req, res) => {
     const errors = collectErrors([vType, vName, vDate, vGiver, vAmount, vRel, vNote, vPrivate].filter(Boolean));
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
 
+    const giverContactId = req.body.giverContactId !== undefined ? parseContactId(req.body.giverContactId) : row.giver_contact_id;
+    const relatedContactId = req.body.relatedContactId !== undefined ? parseContactId(req.body.relatedContactId) : row.related_contact_id;
+    const returnedVal = req.body.returned !== undefined ? (req.body.returned ? 1 : 0) : row.returned;
+    let returnedAt = req.body.returned_at !== undefined ? (req.body.returned_at || null) : row.returned_at;
+    if (returnedVal === 1 && !returnedAt) returnedAt = new Date().toISOString();
+    if (returnedVal === 0) returnedAt = null;
+
     db.get()
       .prepare(
         `UPDATE gift_ledger SET
@@ -297,6 +326,10 @@ router.put('/:id', (req, res) => {
            relationship = ?,
            note         = ?,
            is_private   = ?,
+           giver_contact_id = ?,
+           related_contact_id = ?,
+           returned = ?,
+           returned_at = ?,
            updated_at   = strftime('%Y-%m-%dT%H:%M:%SZ','now')
          WHERE id = ?`
       )
@@ -309,6 +342,10 @@ router.put('/:id', (req, res) => {
         vRel ? vRel.value || null : row.relationship,
         vNote ? vNote.value || null : row.note,
         vPrivate ? (vPrivate.value ? 1 : 0) : row.is_private,
+        giverContactId,
+        relatedContactId,
+        returnedVal,
+        returnedAt,
         id
       );
     res.json({ data: serialize(db.get().prepare('SELECT * FROM gift_ledger WHERE id = ?').get(id)) });

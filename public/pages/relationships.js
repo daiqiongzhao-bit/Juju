@@ -125,10 +125,16 @@ async function ensureContacts() {
   if (state.contacts.length) return;
   try {
     const res = await api.get('/contacts');
-    state.contacts = Array.isArray(res?.data) ? res.data : [];
+    const all = Array.isArray(res?.data) ? res.data : [];
+    // Phase D: 隐藏联系人对非管理员不可见（与 /graph、/reminders 等服务端过滤一致）
+    state.contacts = isAdminUser() ? all : all.filter((c) => !c.hidden);
   } catch {
     state.contacts = [];
   }
+}
+
+function isAdminUser() {
+  return _user?.role === 'admin' || _user?.is_admin === true || _user?.isAdmin === true;
 }
 
 function contactById(id) {
@@ -156,6 +162,8 @@ async function refreshActiveTab() {
   if (state.activeTab === 'genealogy') return renderGenealogy();
   if (state.activeTab === 'timeline') return renderTimeline();
   if (state.activeTab === 'anniversaries') return renderAnniversaries();
+  if (state.activeTab === 'reminders') return renderReminders();
+  if (state.activeTab === 'insights') return renderInsights();
 }
 
 async function runUndo() {
@@ -287,6 +295,8 @@ export async function render(container, { user } = {}) {
         <button class="sub-tab" role="tab" data-tab-id="genealogy">${t('relationships.tab.genealogy')}</button>
         <button class="sub-tab" role="tab" data-tab-id="timeline">${t('relationships.tab.timeline')}</button>
         <button class="sub-tab" role="tab" data-tab-id="anniversaries">${t('relationships.tab.anniversaries')}</button>
+        <button class="sub-tab" role="tab" data-tab-id="reminders">${t('relationships.tab.reminders')}</button>
+        <button class="sub-tab" role="tab" data-tab-id="insights">${t('relationships.tab.insights')}</button>
       </div>
 
       <section class="rel-panel" id="rel-panel-network" role="tabpanel"></section>
@@ -296,6 +306,8 @@ export async function render(container, { user } = {}) {
       <section class="rel-panel" id="rel-panel-genealogy" role="tabpanel" hidden></section>
       <section class="rel-panel" id="rel-panel-timeline" role="tabpanel" hidden></section>
       <section class="rel-panel" id="rel-panel-anniversaries" role="tabpanel" hidden></section>
+      <section class="rel-panel" id="rel-panel-reminders" role="tabpanel" hidden></section>
+      <section class="rel-panel" id="rel-panel-insights" role="tabpanel" hidden></section>
     </div>`;
 
   const tablist = container.querySelector('.sub-tabs');
@@ -311,7 +323,7 @@ export async function render(container, { user } = {}) {
 
 async function switchTab(id) {
   state.activeTab = id;
-  const panels = ['network', 'people', 'common', 'tree', 'genealogy', 'timeline', 'anniversaries'];
+  const panels = ['network', 'people', 'common', 'tree', 'genealogy', 'timeline', 'anniversaries', 'reminders', 'insights'];
   for (const p of panels) {
     const el = _container.querySelector(`#rel-panel-${p}`);
     if (el) el.hidden = p !== id;
@@ -323,6 +335,8 @@ async function switchTab(id) {
   if (id === 'genealogy') return renderGenealogy();
   if (id === 'timeline') return renderTimeline();
   if (id === 'anniversaries') return renderAnniversaries();
+  if (id === 'reminders') return renderReminders();
+  if (id === 'insights') return renderInsights();
 }
 
 // --------------------------------------------------------
@@ -373,6 +387,7 @@ async function renderNetwork() {
           <button class="btn btn--secondary btn--sm" data-action="rel-redo">${t('relationships.redo')}</button>
           <button class="btn btn--secondary btn--sm" data-action="rel-layout">${t('relationships.reLayout')}</button>
           <button class="btn btn--secondary btn--sm" data-action="rel-export">${t('relationships.exportTree')}</button>
+          <button class="btn btn--secondary btn--sm" data-action="rel-path">${t('relationships.pathQuery')}</button>
         </div>
       </div>
       <svg class="rel-graph" viewBox="0 0 800 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${t('relationships.graphAria')}"></svg>
@@ -386,6 +401,7 @@ async function renderNetwork() {
   panel.querySelector('[data-action="rel-undo"]').addEventListener('click', () => runUndo());
   panel.querySelector('[data-action="rel-redo"]').addEventListener('click', () => runRedo());
   panel.querySelector('[data-action="rel-export"]').addEventListener('click', () => exportTreeJson());
+  panel.querySelector('[data-action="rel-path"]').addEventListener('click', () => openPathModal());
   panel.querySelector('[data-action="rel-reset"]').addEventListener('click', () => {
     const input = panel.querySelector('#rel-search');
     if (input) input.value = '';
@@ -1897,6 +1913,47 @@ async function openContactModal(contact) {
         <input class="form-input" id="rc-tags" type="text" maxlength="500" value="${esc(c.custom_tags || '')}" placeholder="${t('relationships.customTagsHint')}" autocomplete="off">
       </div>
 
+      <div class="rel-modal-subhead"><span>${t('relationships.extendedProfile')}</span></div>
+      <div class="rel-grid2">
+        <div class="form-group">
+          <label class="form-label" for="rc-gender">${t('relationships.gender')}</label>
+          <select class="form-input" id="rc-gender">
+            <option value="">${t('relationships.genderUnset')}</option>
+            <option value="male" ${(c.gender || '') === 'male' ? 'selected' : ''}>${t('relationships.genderMale')}</option>
+            <option value="female" ${(c.gender || '') === 'female' ? 'selected' : ''}>${t('relationships.genderFemale')}</option>
+            <option value="other" ${(c.gender || '') === 'other' ? 'selected' : ''}>${t('relationships.genderOther')}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-hometown">${t('relationships.hometown')}</label>
+          <input class="form-input" id="rc-hometown" type="text" maxlength="120" value="${esc(c.hometown || '')}" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-wechat">${t('relationships.wechat')}</label>
+          <input class="form-input" id="rc-wechat" type="text" maxlength="64" value="${esc(c.wechat || '')}" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-douyin">${t('relationships.douyin')}</label>
+          <input class="form-input" id="rc-douyin" type="text" maxlength="64" value="${esc(c.douyin || '')}" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-qq">${t('relationships.qq')}</label>
+          <input class="form-input" id="rc-qq" type="text" maxlength="64" value="${esc(c.qq || '')}" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-groups">${t('relationships.contactGroups')}</label>
+          <input class="form-input" id="rc-groups" type="text" maxlength="500" value="${esc(c.contact_groups || '')}" placeholder="${t('relationships.contactGroupsHint')}" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-callthem">${t('relationships.callThem')}</label>
+          <input class="form-input" id="rc-callthem" type="text" maxlength="60" value="${esc(c.call_them || '')}" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-callme">${t('relationships.callMe')}</label>
+          <input class="form-input" id="rc-callme" type="text" maxlength="60" value="${esc(c.call_me || '')}" autocomplete="off">
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="form-label">${t('relationships.photo')}</label>
         <div class="rel-photo-row">
@@ -1928,6 +1985,8 @@ async function openContactModal(contact) {
       <div class="rel-modal-quick">
         <button class="btn btn--secondary btn--sm" id="rc-add-interaction">${t('relationships.quickAddInteraction')}</button>
         <button class="btn btn--secondary btn--sm" id="rc-add-anniv">${t('relationships.quickAddAnniversary')}</button>
+        <button class="btn btn--secondary btn--sm" id="rc-add-prefs">${t('relationships.preferences')}</button>
+        <button class="btn btn--secondary btn--sm" id="rc-add-tags">${t('relationships.tagsGroups')}</button>
       </div>
     </div>
     <div class="modal-panel__footer">
@@ -1978,17 +2037,35 @@ async function openContactModal(contact) {
         closeModal({ force: true });
         switchTab('anniversaries').then(() => openAnniversaryModal(null, c.id));
       });
+      panel.querySelector('#rc-add-prefs').addEventListener('click', () => openPreferencesModal(c.id));
+      panel.querySelector('#rc-add-tags').addEventListener('click', () => openTagsModal(c.id));
 
       panel.querySelector('#rc-save').addEventListener('click', async () => {
         const type = panel.querySelector('#rc-type').value;
         const plate = panel.querySelector('#rc-plate').value.trim();
         const school = panel.querySelector('#rc-school').value.trim();
         const tags = panel.querySelector('#rc-tags').value.trim();
+        const gender = panel.querySelector('#rc-gender').value;
+        const hometown = panel.querySelector('#rc-hometown').value.trim();
+        const wechat = panel.querySelector('#rc-wechat').value.trim();
+        const douyin = panel.querySelector('#rc-douyin').value.trim();
+        const qq = panel.querySelector('#rc-qq').value.trim();
+        const groups = panel.querySelector('#rc-groups').value.trim();
+        const callThem = panel.querySelector('#rc-callthem').value.trim();
+        const callMe = panel.querySelector('#rc-callme').value.trim();
         const body = {};
         if (type !== (c.relationship_type || '')) body.relationship_type = type || null;
         if (plate !== (c.vehicle_plate || '')) body.vehiclePlate = plate || null;
         if (school !== (c.school || '')) body.school = school || null;
         if (tags !== (c.custom_tags || '')) body.customTags = tags || null;
+        if (gender !== (c.gender || '')) body.gender = gender || null;
+        if (hometown !== (c.hometown || '')) body.hometown = hometown || null;
+        if (wechat !== (c.wechat || '')) body.wechat = wechat || null;
+        if (douyin !== (c.douyin || '')) body.douyin = douyin || null;
+        if (qq !== (c.qq || '')) body.qq = qq || null;
+        if (groups !== (c.contact_groups || '')) body.contactGroups = groups || null;
+        if (callThem !== (c.call_them || '')) body.callThem = callThem || null;
+        if (callMe !== (c.call_me || '')) body.callMe = callMe || null;
         if (pendingPhoto) body.photo = pendingPhoto;
         if (!Object.keys(body).length) { closeModal({ force: true }); return; }
         const btn = panel.querySelector('#rc-save');
@@ -2003,6 +2080,14 @@ async function openContactModal(contact) {
               vehicle_plate: c.vehicle_plate || null,
               school: c.school || null,
               custom_tags: c.custom_tags || null,
+              gender: c.gender || null,
+              hometown: c.hometown || null,
+              wechat: c.wechat || null,
+              douyin: c.douyin || null,
+              qq: c.qq || null,
+              contact_groups: c.contact_groups || null,
+              call_them: c.call_them || null,
+              call_me: c.call_me || null,
             };
             pushHistory({
               label: t('relationships.contact'),
@@ -2011,6 +2096,14 @@ async function openContactModal(contact) {
                 vehiclePlate: prev.vehicle_plate,
                 school: prev.school,
                 customTags: prev.custom_tags,
+                gender: prev.gender,
+                hometown: prev.hometown,
+                wechat: prev.wechat,
+                douyin: prev.douyin,
+                qq: prev.qq,
+                contactGroups: prev.contact_groups,
+                callThem: prev.call_them,
+                callMe: prev.call_me,
               }),
               redo: () => api.patch(`/relationships/contacts/${c.id}`, metaBody),
             });
@@ -2075,6 +2168,30 @@ function openAddRelationshipModal(contactId, onDone) {
       </select>
     </div>
     <div class="form-group">
+      <label class="form-label" for="ar-strength">${t('relationships.strength')}</label>
+      <select class="form-input" id="ar-strength">
+        <option value="0">${t('relationships.strength0')}</option>
+        <option value="1">${t('relationships.strength1')}</option>
+        <option value="2" selected>${t('relationships.strength2')}</option>
+        <option value="3">${t('relationships.strength3')}</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="ar-met">${t('relationships.metAt')}</label>
+      <input class="form-input" id="ar-met" type="text" maxlength="20" placeholder="${t('relationships.metAtHint')}" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="ar-direction">${t('relationships.direction')}</label>
+      <select class="form-input" id="ar-direction">
+        <option value="both">${t('relationships.directionBoth')}</option>
+        <option value="oneway">${t('relationships.directionOneway')}</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="ar-label">${t('relationships.edgeLabel')}</label>
+      <input class="form-input" id="ar-label" type="text" maxlength="60" placeholder="${t('relationships.edgeLabelHint')}" autocomplete="off">
+    </div>
+    <div class="form-group">
       <label class="form-label" for="ar-note">${t('relationships.note')}</label>
       <textarea class="form-input" id="ar-note" rows="2"></textarea>
     </div>
@@ -2094,11 +2211,15 @@ function openAddRelationshipModal(contactId, onDone) {
       panel.querySelector('#ar-save').addEventListener('click', async () => {
         const otherId = Number(panel.querySelector('#ar-other').value);
         const relation_type = panel.querySelector('#ar-type').value;
+        const strength = Number(panel.querySelector('#ar-strength').value) || 0;
+        const met_at = panel.querySelector('#ar-met').value.trim() || null;
+        const direction = panel.querySelector('#ar-direction').value;
+        const label = panel.querySelector('#ar-label').value.trim() || null;
         const note = panel.querySelector('#ar-note').value.trim() || null;
         const btn = panel.querySelector('#ar-save');
         btn.disabled = true;
         try {
-          const res = await api.post('/relationships', { contact_a: contactId, contact_b: otherId, relation_type, note });
+          const res = await api.post('/relationships', { contact_a: contactId, contact_b: otherId, relation_type, strength, met_at, direction, label, note });
           if (res?.data) historyEdgeAdd(res.data);
           closeModal({ force: true });
           toast(t('relationships.relationshipAdded'));
@@ -2241,6 +2362,277 @@ async function openAnniversaryModal(editId = null, presetContactId = null) {
           btn.disabled = false;
         }
       });
+    },
+  });
+}
+
+// --------------------------------------------------------
+// Tab: 提醒中心 (Geburtstag / Jahrestag / 久未联系 / 该还礼)
+// --------------------------------------------------------
+async function renderReminders() {
+  const panel = _container.querySelector('#rel-panel-reminders');
+  panel.innerHTML = `<div class="rel-loading">${t('common.loading')}</div>`;
+  let data;
+  try {
+    const res = await api.get('/relationships/reminders');
+    data = res?.data || {};
+  } catch {
+    panel.innerHTML = `<div class="empty-state"><div class="empty-state__title">${t('common.unknownError')}</div></div>`;
+    return;
+  }
+  const { birthdays = [], anniversaries = [], stale = [], giftReturns = [], staleDays = 90 } = data;
+  const whenTxt = (r) => {
+    if (r.next) return r.next.daysUntil === 0 ? t('relationships.today') : `${r.next.date} · ${t('relationships.daysAhead', { count: r.next.daysUntil })}`;
+    if (r.daysSinceContact != null) return t('relationships.daysSinceContact', { count: r.daysSinceContact });
+    return t('relationships.neverContacted');
+  };
+  const row = (r) => {
+    const who = r.contact_name || r.name || '?';
+    return `<div class="rel-rem-row">
+      ${avatarHtml({ name: who, photo: r.contact_photo || r.photo }, 36)}
+      <div class="rel-rem-row__main">
+        <span class="rel-rem-row__name">${esc(who)}</span>
+        <span class="rel-rem-row__meta">${esc(r.title || r.event_name || '')}</span>
+      </div>
+      <span class="rel-rem-row__when">${esc(whenTxt(r))}</span>
+    </div>`;
+  };
+  const card = (title, items) => `
+    <div class="card rel-rem-card">
+      <div class="rel-rem-card__head">${esc(title)} <span class="rel-muted">(${items.length})</span></div>
+      ${items.length ? items.map(row).join('') : `<div class="rel-muted rel-rem-card__empty">${t('relationships.remEmpty')}</div>`}
+    </div>`;
+  panel.innerHTML = `
+    <div class="rel-rem-grid">
+      ${card(t('relationships.remBirthdays'), birthdays)}
+      ${card(t('relationships.remAnniversaries'), anniversaries)}
+      ${card(t('relationships.remStale', { count: staleDays }), stale)}
+      ${card(t('relationships.remGiftReturn'), giftReturns)}
+    </div>`;
+}
+
+// --------------------------------------------------------
+// Tab: 亲疏洞察 (Closeness + 久未联系)
+// --------------------------------------------------------
+async function renderInsights() {
+  const panel = _container.querySelector('#rel-panel-insights');
+  panel.innerHTML = `<div class="rel-loading">${t('common.loading')}</div>`;
+  let data;
+  try {
+    const res = await api.get('/relationships/insights');
+    data = res?.data || {};
+  } catch {
+    panel.innerHTML = `<div class="empty-state"><div class="empty-state__title">${t('common.unknownError')}</div></div>`;
+    return;
+  }
+  const { closeness = [], stale = [], staleDays = 90 } = data;
+  panel.innerHTML = `
+    <div class="rel-insights">
+      <div class="card rel-ins-card">
+        <div class="rel-ins-card__head">${t('relationships.insCloseness')}</div>
+        ${closeness.length ? closeness.slice(0, 40).map((c) => `
+          <div class="rel-ins-row">
+            ${avatarHtml(c, 32)}
+            <span class="rel-ins-row__name">${esc(c.name || '?')}</span>
+            <span class="rel-ins-row__meta">${esc(relLabel(c.relationship_type))}</span>
+            <span class="rel-ins-row__score">${t('relationships.insDegree', { count: c.degree })} · ${t('relationships.insStrength', { count: c.strengthSum })}</span>
+          </div>`).join('') : `<div class="rel-muted">${t('relationships.remEmpty')}</div>`}
+      </div>
+      <div class="card rel-ins-card">
+        <div class="rel-ins-card__head">${t('relationships.insStale', { count: staleDays })}</div>
+        ${stale.length ? stale.map((c) => `
+          <div class="rel-ins-row">
+            ${avatarHtml(c, 32)}
+            <span class="rel-ins-row__name">${esc(c.name || '?')}</span>
+            <span class="rel-ins-row__meta">${c.daysSinceContact != null ? t('relationships.daysSinceContact', { count: c.daysSinceContact }) : t('relationships.neverContacted')}</span>
+          </div>`).join('') : `<div class="rel-muted">${t('relationships.insStaleEmpty')}</div>`}
+      </div>
+    </div>`;
+}
+
+// --------------------------------------------------------
+// Pfadquery: "Wie kenne ich X?" / "Über wen kenne ich Y?"
+// --------------------------------------------------------
+function openPathModal() {
+  const content = `
+    <div class="form-group">
+      <label class="form-label" for="pq-from">${t('relationships.pathFrom')}</label>
+      <select class="form-input" id="pq-from">${contactOptionsHtml()}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="pq-to">${t('relationships.pathTo')}</label>
+      <select class="form-input" id="pq-to">${contactOptionsHtml()}</select>
+    </div>
+    <div id="pq-result" class="rel-path-result"></div>
+    <div class="modal-panel__footer">
+      <div></div>
+      <div class="contact-modal__footer-actions">
+        <button class="btn btn--secondary" id="pq-close">${t('common.cancel')}</button>
+        <button class="btn btn--primary" id="pq-go">${t('relationships.pathFind')}</button>
+      </div>
+    </div>`;
+  openModal({
+    title: t('relationships.pathQuery'),
+    content,
+    size: 'md',
+    onSave: (panel) => {
+      panel.querySelector('#pq-close').addEventListener('click', () => closeModal());
+      const run = async () => {
+        const from = Number(panel.querySelector('#pq-from').value);
+        const to = Number(panel.querySelector('#pq-to').value);
+        const box = panel.querySelector('#pq-result');
+        if (!from || !to || from === to) { box.innerHTML = `<div class="rel-muted">${t('relationships.pathPickTwo')}</div>`; return; }
+        box.innerHTML = `<div class="rel-loading">${t('common.loading')}</div>`;
+        try {
+          const res = await api.get(`/relationships/path?from=${from}&to=${to}`);
+          const d = res?.data || {};
+          if (!d.found || !d.path?.length) {
+            box.innerHTML = `<div class="rel-muted">${t('relationships.pathNone')}</div>`;
+            return;
+          }
+          const steps = d.path.map((p, i) => {
+            const via = p.via ? ` <span class="rel-path__rel">${esc(relLabel(p.via.relation_type))}${p.via.label ? ' · ' + esc(p.via.label) : ''}</span>` : '';
+            return `${i > 0 ? '<span class="rel-path__arrow">→</span>' : ''}<span class="rel-path__node">${esc(p.node?.name || '?')}</span>${via}`;
+          }).join('');
+          box.innerHTML = `<div class="rel-path">${steps}</div>`;
+        } catch (err) {
+          box.innerHTML = `<div class="rel-muted">${esc(err?.data?.error || t('common.unknownError'))}</div>`;
+        }
+      };
+      panel.querySelector('#pq-go').addEventListener('click', run);
+    },
+  });
+}
+
+// --------------------------------------------------------
+// 偏好与忌讳 (Preferences & Taboos)
+// --------------------------------------------------------
+function openPreferencesModal(contactId) {
+  const contact = contactById(contactId) || {};
+  const fields = [
+    ['pf-interests', 'interests', t('relationships.prefInterests'), 2],
+    ['pf-gift', 'gift_hint', t('relationships.prefGift'), 2],
+    ['pf-shoe', 'shoe_size', t('relationships.prefShoe'), 1],
+    ['pf-cloth', 'clothing_size', t('relationships.prefCloth'), 1],
+    ['pf-smoke', 'smoke', t('relationships.prefSmoke'), 1],
+    ['pf-alcohol', 'alcohol', t('relationships.prefAlcohol'), 1],
+    ['pf-diet', 'dietary', t('relationships.prefDiet'), 2],
+    ['pf-allergy', 'allergy', t('relationships.prefAllergy'), 2],
+    ['pf-taste', 'taste', t('relationships.prefTaste'), 2],
+    ['pf-taboo', 'taboo', t('relationships.prefTaboo'), 3],
+    ['pf-note', 'note', t('relationships.note'), 2],
+  ];
+  const content = `
+    <div class="rel-pref-head">${avatarHtml(contact, 40)} <strong>${esc(contact.name || '?')}</strong></div>
+    ${fields.map(([id, key, label, rows]) => `
+      <div class="form-group">
+        <label class="form-label" for="${id}">${label}</label>
+        <textarea class="form-input" id="${id}" data-key="${key}" rows="${rows}"></textarea>
+      </div>`).join('')}
+    <div class="modal-panel__footer">
+      <div></div>
+      <div class="contact-modal__footer-actions">
+        <button class="btn btn--secondary" id="pf-cancel">${t('common.cancel')}</button>
+        <button class="btn btn--primary" id="pf-save">${t('common.save')}</button>
+      </div>
+    </div>`;
+  openModal({
+    title: t('relationships.preferences'),
+    content,
+    size: 'md',
+    onSave: (panel) => {
+      panel.querySelector('#pf-cancel').addEventListener('click', () => closeModal());
+      panel.querySelector('#pf-save').addEventListener('click', async () => {
+        const body = {};
+        panel.querySelectorAll('textarea[data-key]').forEach((ta) => { body[ta.dataset.key] = ta.value.trim() || null; });
+        const btn = panel.querySelector('#pf-save');
+        btn.disabled = true;
+        try {
+          await api.put(`/relationships/preferences/${contactId}`, body);
+          closeModal({ force: true });
+          toast(t('relationships.savedToast'));
+        } catch (err) {
+          toast(err?.data?.error || t('common.unknownError'), 'danger');
+          btn.disabled = false;
+        }
+      });
+      // 预填现有值
+      api.get(`/relationships/preferences?contactId=${contactId}`).then((res) => {
+        const p = res?.data;
+        if (p) panel.querySelectorAll('textarea[data-key]').forEach((ta) => { ta.value = p[ta.dataset.key] || ''; });
+      }).catch(() => {});
+    },
+  });
+}
+
+// --------------------------------------------------------
+// 标签 / 分组 (Tags & Groups)
+// --------------------------------------------------------
+function openTagsModal(contactId) {
+  const contact = contactById(contactId) || {};
+  const content = `
+    <div class="rel-pref-head">${avatarHtml(contact, 40)} <strong>${esc(contact.name || '?')}</strong></div>
+    <div class="form-group">
+      <label class="form-label" for="tg-new">${t('relationships.tagsNew')}</label>
+      <div class="rel-tag-add">
+        <input class="form-input" id="tg-new" type="text" maxlength="40" placeholder="${t('relationships.tagsNewHint')}">
+        <button class="btn btn--secondary btn--sm" id="tg-add">${t('relationships.add')}</button>
+      </div>
+    </div>
+    <div class="rel-tag-list" id="tg-list"><div class="rel-loading">${t('common.loading')}</div></div>
+    <div class="modal-panel__footer">
+      <div></div>
+      <div class="contact-modal__footer-actions">
+        <button class="btn btn--secondary" id="tg-close">${t('common.cancel')}</button>
+      </div>
+    </div>`;
+  openModal({
+    title: t('relationships.tagsGroups'),
+    content,
+    size: 'md',
+    onSave: (panel) => {
+      const listBox = panel.querySelector('#tg-list');
+      const paint = async () => {
+        let all = [];
+        let mine = [];
+        try {
+          all = (await api.get('/relationships/tags').then((r) => r?.data || []));
+          mine = (await api.get(`/relationships/contacts/${contactId}/tags`).then((r) => r?.data || []));
+        } catch { /* ignore */ }
+        const mineIds = new Set(mine.map((x) => x.id));
+        listBox.innerHTML = all.length
+          ? all.map((tg) => `
+            <label class="rel-tag-chip ${mineIds.has(tg.id) ? 'is-on' : ''}">
+              <input type="checkbox" data-tag="${tg.id}" ${mineIds.has(tg.id) ? 'checked' : ''}>
+              <span>${esc(tg.name)}</span>
+            </label>`).join('')
+          : `<div class="rel-muted">${t('relationships.tagsEmpty')}</div>`;
+        listBox.querySelectorAll('input[data-tag]').forEach((cb) => {
+          cb.addEventListener('change', async () => {
+            const tagId = Number(cb.dataset.tag);
+            try {
+              if (cb.checked) await api.post(`/relationships/contacts/${contactId}/tags`, { tagId });
+              else await api.delete(`/relationships/contacts/${contactId}/tags/${tagId}`);
+              cb.closest('.rel-tag-chip').classList.toggle('is-on', cb.checked);
+            } catch (err) {
+              toast(err?.data?.error || t('common.unknownError'), 'danger');
+            }
+          });
+        });
+      };
+      paint();
+      panel.querySelector('#tg-add').addEventListener('click', async () => {
+        const name = panel.querySelector('#tg-new').value.trim();
+        if (!name) return;
+        try {
+          await api.post('/relationships/tags', { name });
+          panel.querySelector('#tg-new').value = '';
+          await paint();
+        } catch (err) {
+          toast(err?.data?.error || t('common.unknownError'), 'danger');
+        }
+      });
+      panel.querySelector('#tg-close').addEventListener('click', () => closeModal());
     },
   });
 }

@@ -2321,7 +2321,7 @@ only permitted tint for a tile *inside* a card.
 holds against both white and the grouped ground. Its tinted twin `--color-accent-light` carries
 focus glows and today-chips.
 
-**Seventeen module tints** (`--module-*`) give each module its own colour on nav icons, active
+**Per-module colour tints** (`--module-*`) give each module its own colour on nav icons, active
 segments, chips and the FAB; the router sets `--active-module-accent` on `<html>` and components
 read `var(--module-accent, var(--color-accent))`. The four kitchen modules deliberately share the
 meals tint — a colour change on a tab switch would be the strongest "you have left the context"

@@ -34,7 +34,36 @@ function formatAmount(n) {
   return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+// 关联联系人（#relationships）：giver/related contact id → 姓名映射（懒加载一次）
+let _user = null;
+let _contactNames = new Map();
+
+async function ensureContactNames() {
+  if (_contactNames.size) return;
+  try {
+    const res = await api.get('/contacts');
+    const all = Array.isArray(res?.data) ? res.data : [];
+    const admin = _user?.role === 'admin' || _user?.is_admin === true || _user?.isAdmin === true;
+    for (const c of all) {
+      if (!admin && c.hidden) continue; // Phase D: 隐藏联系人仅管理员可见
+      _contactNames.set(c.id, c.name || '?');
+    }
+  } catch { /* 联系人不可用时静默降级为自由文本 */ }
+}
+
+function contactName(id) {
+  return _contactNames.get(id) || null;
+}
+
+function contactOptions(selectedId) {
+  return [..._contactNames.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([id, name]) => `<option value="${id}" ${id === selectedId ? 'selected' : ''}>${esc(name)}</option>`)
+    .join('');
+}
+
 export async function render(container, { user } = {}) {
+  _user = user || null;
   container.innerHTML = `
     <div class="gl-page">
       <div class="gl-head">
@@ -254,7 +283,10 @@ export async function render(container, { user } = {}) {
         <div class="gl-meta">
           ${it.event_date ? `<span class="gl-chip">📅 ${esc(it.event_date)}</span>` : ''}
           ${it.giver ? `<span class="gl-chip">🎁 ${esc(it.giver)}</span>` : ''}
+          ${it.giver_contact_id ? `<span class="gl-chip">👤 ${esc(contactName(it.giver_contact_id) || '#' + it.giver_contact_id)}</span>` : ''}
+          ${it.related_contact_id ? `<span class="gl-chip">🎉 ${esc(contactName(it.related_contact_id) || '#' + it.related_contact_id)}</span>` : ''}
           ${it.relationship ? `<span class="gl-chip">· ${esc(it.relationship)}</span>` : ''}
+          ${it.returned ? `<span class="gl-chip gl-chip--returned">↩️ ${esc(t('giftLedger.returnedBadge'))}</span>` : ''}
         </div>
         ${it.note ? `<div class="gl-note">${esc(it.note)}</div>` : ''}
       </div>
@@ -264,6 +296,7 @@ export async function render(container, { user } = {}) {
 
   async function load() {
     if (!state.selectMode) list.innerHTML = `<div class="gl-empty">${esc(t('giftLedger.loading'))}</div>`;
+    await ensureContactNames();
     try {
       const params = new URLSearchParams();
       if (state.type !== 'all') params.set('type', state.type);
@@ -324,6 +357,7 @@ export async function render(container, { user } = {}) {
   }
 
   async function openForm(id) {
+    await ensureContactNames();
     const body = document.createElement('div');
     body.className = 'gl-modal-body';
     const editing = !!id;
@@ -337,9 +371,16 @@ export async function render(container, { user } = {}) {
       <div class="gl-field"><label>${esc(t('giftLedger.eventName'))}</label><input id="f-name" placeholder="${esc(t('giftLedger.eventNamePh') || '')}"></div>
       <div class="gl-field"><label>${esc(t('giftLedger.eventDate'))}</label><input id="f-date" type="date"></div>
       <div class="gl-field"><label>${esc(t('giftLedger.giver'))}</label><input id="f-giver" placeholder=""></div>
+      <div class="gl-field"><label>${esc(t('giftLedger.giverContact'))}</label>
+        <select id="f-giver-contact"><option value="">${esc(t('giftLedger.noContact'))}</option>${contactOptions(null)}</select>
+      </div>
+      <div class="gl-field"><label>${esc(t('giftLedger.relatedContact'))}</label>
+        <select id="f-related-contact"><option value="">${esc(t('giftLedger.noContact'))}</option>${contactOptions(null)}</select>
+      </div>
       <div class="gl-field"><label>${esc(t('giftLedger.amount'))}</label><input id="f-amount" type="number" step="0.01" min="0" inputmode="decimal"></div>
       <div class="gl-field"><label>${esc(t('giftLedger.relationship'))}</label><input id="f-rel"></div>
       <div class="gl-field"><label>${esc(t('giftLedger.note'))}</label><textarea id="f-note" rows="3"></textarea></div>
+      <div class="gl-field"><label><input type="checkbox" id="f-returned"> ${esc(t('giftLedger.returned'))}</label></div>
       <div class="gl-field"><label><input type="checkbox" id="f-private"> ${esc(t('giftLedger.private'))}</label>
         <div style="font-size:11px;color:#888;margin-top:4px">${esc(t('giftLedger.privateHint') || '')}</div>
       </div>
@@ -366,6 +407,13 @@ export async function render(container, { user } = {}) {
     };
     typeWrap.querySelectorAll('input').forEach((r) => r.addEventListener('change', syncRadio));
 
+    // 选中联系人时，若“送礼人”自由文本为空则自动填入姓名（仍可手动改）
+    body.querySelector('#f-giver-contact').addEventListener('change', (e) => {
+      const v = e.target.value;
+      const giverInput = body.querySelector('#f-giver');
+      if (v && !giverInput.value.trim()) giverInput.value = contactName(Number(v)) || '';
+    });
+
     if (editing) {
       let item;
       try {
@@ -378,6 +426,9 @@ export async function render(container, { user } = {}) {
       body.querySelector('#f-name').value = item.event_name || '';
       body.querySelector('#f-date').value = (item.event_date || '').slice(0, 10);
       body.querySelector('#f-giver').value = item.giver || '';
+      body.querySelector('#f-giver-contact').value = item.giver_contact_id || '';
+      body.querySelector('#f-related-contact').value = item.related_contact_id || '';
+      body.querySelector('#f-returned').checked = !!item.returned;
       body.querySelector('#f-amount').value = item.amount != null ? item.amount : '';
       body.querySelector('#f-rel').value = item.relationship || '';
       body.querySelector('#f-note').value = item.note || '';
@@ -405,6 +456,9 @@ export async function render(container, { user } = {}) {
         event_name: name,
         event_date: body.querySelector('#f-date').value || null,
         giver: body.querySelector('#f-giver').value.trim() || null,
+        giverContactId: body.querySelector('#f-giver-contact').value ? Number(body.querySelector('#f-giver-contact').value) : null,
+        relatedContactId: body.querySelector('#f-related-contact').value ? Number(body.querySelector('#f-related-contact').value) : null,
+        returned: body.querySelector('#f-returned').checked,
         amount: amountRaw === '' ? null : Number(amountRaw),
         relationship: body.querySelector('#f-rel').value.trim() || null,
         note: body.querySelector('#f-note').value.trim() || null,

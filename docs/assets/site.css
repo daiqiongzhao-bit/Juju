@@ -86,6 +86,10 @@
   --m-health: #9E1E88;
   --m-rewards: #BA4468;
   --m-split: #1975A5;
+  --m-relationships: #15803D;
+  --m-giftLedger: #B91C1C;
+  --m-memory: #0E7490;
+  --m-media: #B45309;
 
   /* The code plate keeps ONE palette in both themes - it is a terminal, and a
      terminal does not turn white. It now borrows the app's dark neutrals so it
@@ -171,6 +175,10 @@
   --m-health: #DB60CB;
   --m-rewards: #E68CA6;
   --m-split: #2FB6E8;
+  --m-relationships: #4ADE80;
+  --m-giftLedger: #F87171;
+  --m-memory: #22D3EE;
+  --m-media: #FBBF24;
 
   /* The code plate is deliberately NOT mirrored: it is the one surface that
      keeps its own palette in both themes. */
@@ -225,6 +233,10 @@
     --m-health: #DB60CB;
     --m-rewards: #E68CA6;
     --m-split: #2FB6E8;
+  --m-relationships: #4ADE80;
+  --m-giftLedger: #F87171;
+  --m-memory: #22D3EE;
+  --m-media: #FBBF24;
 
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.30);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.38);

@@ -5154,6 +5154,93 @@ const MIGRATIONS = [
     `,
   },
 
+  {
+    version: 143,
+    description: 'Relationships: enrich person profiles + edges (strength/met_at/direction/label) + tags (#relationships)',
+    up: `
+      ALTER TABLE contacts ADD COLUMN gender TEXT;
+      ALTER TABLE contacts ADD COLUMN hometown TEXT;
+      ALTER TABLE contacts ADD COLUMN wechat TEXT;
+      ALTER TABLE contacts ADD COLUMN douyin TEXT;
+      ALTER TABLE contacts ADD COLUMN qq TEXT;
+      ALTER TABLE contacts ADD COLUMN contact_groups TEXT;
+      ALTER TABLE contacts ADD COLUMN call_them TEXT;
+      ALTER TABLE contacts ADD COLUMN call_me TEXT;
+      ALTER TABLE contact_relationships ADD COLUMN strength INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE contact_relationships ADD COLUMN met_at TEXT;
+      ALTER TABLE contact_relationships ADD COLUMN direction TEXT NOT NULL DEFAULT 'both';
+      ALTER TABLE contact_relationships ADD COLUMN label TEXT;
+      CREATE TABLE IF NOT EXISTS contact_tags (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL UNIQUE,
+        color      TEXT,
+        kind       TEXT    NOT NULL DEFAULT 'tag',
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE TABLE IF NOT EXISTS contact_tag_map (
+        contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+        tag_id     INTEGER NOT NULL REFERENCES contact_tags(id) ON DELETE CASCADE,
+        PRIMARY KEY (contact_id, tag_id)
+      );
+    `,
+  },
+
+  {
+    version: 144,
+    description: 'Relationships: contact preferences & taboos (interests/gift/size/diet/taboos) (#relationships)',
+    up: `
+      CREATE TABLE IF NOT EXISTS contact_preferences (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_id     INTEGER NOT NULL UNIQUE REFERENCES contacts(id) ON DELETE CASCADE,
+        interests      TEXT,
+        gift_hint      TEXT,
+        shoe_size      TEXT,
+        clothing_size  TEXT,
+        smoke          TEXT,
+        alcohol        TEXT,
+        dietary        TEXT,
+        allergy        TEXT,
+        taste          TEXT,
+        taboo          TEXT,
+        note           TEXT,
+        updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+    `,
+  },
+
+  {
+    version: 145,
+    description: 'Gift ledger: optional contact linkage + return tracking (#relationships)',
+    up: `
+      ALTER TABLE gift_ledger ADD COLUMN giver_contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL;
+      ALTER TABLE gift_ledger ADD COLUMN related_contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL;
+      ALTER TABLE gift_ledger ADD COLUMN returned INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE gift_ledger ADD COLUMN returned_at TEXT;
+      CREATE INDEX IF NOT EXISTS idx_gift_ledger_giver_contact ON gift_ledger(giver_contact_id);
+      CREATE INDEX IF NOT EXISTS idx_gift_ledger_related_contact ON gift_ledger(related_contact_id);
+    `,
+  },
+
+  {
+    version: 146,
+    description: 'Relationships: collaboration - hide-node flag + operation audit log (#relationships)',
+    up: `
+      ALTER TABLE contacts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+      CREATE TABLE IF NOT EXISTS relationship_op_log (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        actor_uid  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        actor_name TEXT,
+        action     TEXT NOT NULL,
+        entity     TEXT NOT NULL,
+        entity_id  INTEGER,
+        summary    TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_rel_op_log_created ON relationship_op_log(created_at DESC);
+    `,
+  },
+
 ];
 
 /**
