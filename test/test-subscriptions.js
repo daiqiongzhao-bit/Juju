@@ -104,6 +104,12 @@ try {
     database.prepare("SELECT COUNT(*) AS n FROM reminders WHERE entity_type = 'subscription'").get().n,
     1,
   );
+  // 确定性的汇率缓存（基础币种 CNY，EUR→CNY = 2）：测试不依赖 Fixer 网络，
+  // getRates 走新鲜缓存分支，跨币种换算结果稳定可断言。
+  database.prepare(`
+    INSERT INTO subscription_exchange_rates (base_currency, quote_currency, rate, fetched_at)
+    VALUES ('CNY', 'EUR', 2, ?)
+  `).run(new Date().toISOString());
 
   const app = express();
   app.use(express.json());
@@ -140,8 +146,10 @@ try {
     assert.equal(created.enabled, true);
     assert.ok(created.budget_entry_id);
     const linkedExpense = database.prepare('SELECT * FROM budget_entries WHERE id = ?').get(created.budget_entry_id);
-    assert.equal(linkedExpense.title, 'Video service');
-    assert.equal(linkedExpense.amount, -120);
+    // 订阅币种（EUR）与账本基础币种（CNY）不同时，关联条目标题附加币种后缀（budgetEntryTitle）。
+    assert.equal(linkedExpense.title, 'Video service (EUR)');
+    // 金额按汇率缓存换算为 CNY：120 EUR × 2 = 240。
+    assert.equal(linkedExpense.amount, -240);
     assert.equal(linkedExpense.date, '2026-08-10');
     assert.equal(linkedExpense.category, 'subscriptions');
     assert.equal(linkedExpense.subcategory, 'subscription_entertainment');
@@ -150,7 +158,8 @@ try {
     assert.equal(listResponse.status, 200);
     const list = (await listResponse.json()).data;
     assert.equal(list.subscriptions.length, 2);
-    assert.equal(list.summary.monthly_total, 22.5);
+    // 月合计按基础币种 CNY 汇总：Video 10 EUR→20 + Example 12.5 EUR→25。
+    assert.equal(list.summary.monthly_total, 45);
 
     const disableResponse = await fetch(`${baseUrl}/${created.id}`, {
       method: 'PUT',
@@ -173,7 +182,7 @@ try {
     assert.equal(enableResponse.status, 200);
     const enabled = (await enableResponse.json()).data;
     const renewedExpense = database.prepare('SELECT * FROM budget_entries WHERE id = ?').get(enabled.budget_entry_id);
-    assert.equal(renewedExpense.amount, -144);
+    assert.equal(renewedExpense.amount, -288);
     assert.equal(renewedExpense.date, '2026-09-10');
 
     const renewResponse = await fetch(`${baseUrl}/${created.id}/renew`, {
@@ -231,7 +240,7 @@ try {
     assert.equal(updatedSub.status, 200);
     assert.equal(updatedSub.body.data.amount, 99);
     const updatedEntry = database.prepare('SELECT amount, visibility FROM budget_entries WHERE id = ?').get(updatedSub.body.data.budget_entry_id);
-    assert.equal(updatedEntry.amount, -99);
+    assert.equal(updatedEntry.amount, -198);
     assert.equal(updatedEntry.visibility, 'shared');
 
     // GET /meta + GET /settings (Lese-Handler).

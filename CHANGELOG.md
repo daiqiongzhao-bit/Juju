@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-12
+## [0.0.24] - 2026-10-12
 
 > 人际关系模块一次性增强：把原「个人关系网 App」方案的四块能力（档案与关系边增强、路径与洞察、偏好与提醒、协作与权限）全部并入 Juju 人际关系模块，既有功能全部保留。
 
@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 回填 v0.0.23「人际树」遗漏的英文词条（`relationships.gen.*`、`tab.genealogy`）——此前英文界面会显示原始 key。
 - 补齐人际关系页既有多处已引用但未定义的样式类（`rel-filter`、`rel-common__name`、`rel-anniv__contact/date`）。
+- 修复存量测试失败：订阅测试对「跨币种关联条目标题后缀」与「月度合计按基础币种汇总」的预期停留在旧行为（CI 自 v0.0.23 起即失败，且阻断其后整个测试链）；测试改为 seed 确定性汇率缓存（EUR→CNY = 2），断言换算后的确定值。
 
 ## [0.0.23] - 2026-09-23
 
