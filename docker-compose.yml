@@ -1,8 +1,8 @@
 services:
-  yuvomi:
+  juju:
     image: ghcr.io/daiqiongzhao-bit/Juju:latest
     build: .                          # optional: use --build to build locally instead
-    container_name: yuvomi
+    container_name: juju
     restart: unless-stopped
     ports:
       # Host-Port aus .env (OIKOS_HTTP_PORT); App im Container bleibt auf 3000.
@@ -21,6 +21,9 @@ services:
       - .env
     environment:
       - NODE_ENV=production
+      # The DB FILENAME stays yuvomi.db on purpose: existing installs already
+      # have that file on their /data volume - renaming it here would make the
+      # app start with an empty database on upgrade.
       - DB_PATH=${DB_PATH:-/data/yuvomi.db}
       - BACKUP_DIR=/backups
       # Local document storage (optional): set to true to store uploaded documents on the mounted /documents folder.
