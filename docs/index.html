@@ -20,6 +20,7 @@
   <meta property="og:url" content="https://github.com/daiqiongzhao-bit/Juju/">
   <meta property="og:site_name" content="Juju">
   <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="zh_CN">
   <meta property="og:locale:alternate" content="de_DE">
   <meta property="og:image:alt" content="Juju - the self-hosted family planner, shown on desktop and mobile">
   <meta name="twitter:card" content="summary_large_image">
@@ -668,7 +669,7 @@
       Juju
     </a>
     <div class="nav-right">
-      <button class="nav-btn" id="langBtn" type="button" aria-label="Switch language"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg><span id="langLbl">DE</span></button>
+      <button class="nav-btn" id="langBtn" type="button" aria-label="Switch language"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg><span id="langLbl">中文</span></button>
       <button class="nav-btn" id="themeBtn" type="button" aria-label="Toggle theme" aria-pressed="false"><svg aria-hidden="true" id="sunIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><svg aria-hidden="true" id="moonIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
       <a href="install.html" class="nav-btn nav-install"><span data-t="nav_install">Install</span></a>
       <a href="https://github.com/daiqiongzhao-bit/Juju" class="nav-btn nav-gh" target="_blank" rel="noopener"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg><span data-t="nav_gh">GitHub</span><span id="gh-stars-nav" data-gh-stars>&nbsp;★ 0</span></a>
@@ -1285,6 +1286,12 @@ openssl rand -hex 32
 (function(){
   'use strict';
 
+  /* Language cycle order. The nav button advances to the next entry, and its
+     label shows that next language; default (en) therefore offers 中文 first. */
+  var LANGS = ['en', 'zh', 'de'];
+  var LBL = { en: 'EN', zh: '中文', de: 'DE' };
+  var SWITCH_TO = { en: 'Switch to English', zh: '切换到中文', de: 'Auf Deutsch umschalten' };
+
   var T = {
     en: {
       skip_link:'Skip to content',
@@ -1521,11 +1528,129 @@ openssl rand -hex 32
       foot_project:'Projekt', foot_contrib:'Mitmachen', foot_changelog:'Changelog',
       foot_legal:'Rechtliches', foot_impressum:'Impressum', foot_privacy:'Datenschutz',
       foot_madewith:'Selbstgehostet · Privacy-First · Open Source'
+    },
+    zh: {
+      skip_link:'跳转到正文',
+      more_scope:'它不是一个相册、密码管理器或影音服务器：Juju 替代的是一个家庭日常依赖的那些应用，而不是你整台服务器。你已经在跑的服务可以保留。日历和通讯录通过 CalDAV 与 CardDAV 双向同步，文档可存放在 WebDAV 或 Google Drive，API 令牌加上 MCP 接口还能让你现有的其他系统与它对话。',
+      m_rel_t:'人际关系', m_rel_d:'在一个视图里看清整个人脉网络：联系人、亲密度，以及谁和谁相连。找出任意两个人之间的路径，发现谁已许久没有联系，绝不错过任何一个生日、纪念日或是你还欠着的那份礼物。',
+      m_gift_t:'人情账', m_gift_d:'红白喜事一本账：谁送了什么、值多少钱、是否已回礼——都关联到人际关系模块里的具体的人。',
+      m_memory_t:'家庭记忆', m_memory_d:'一条记录值得珍藏时刻的时间线：里程碑、旅行和日常故事，可配照片，按类型、家庭成员或标签筛选，支持时间线或相册两种视图。',
+      m_media_t:'媒体库', m_media_d:'属于你自己的电影、剧集、音乐和图书库，支持想看、在看、看完等状态，可选 Emby 同步以沿用你的观看进度，还有个人评分——无需任何流媒体订阅。',
+      m_pantry_t:'库存', m_pantry_d:'家中实际有什么：数量、存放位置和保质期，支持临期和库存偏低筛选，并与购物清单双向联动。',
+      m_family_t:'家庭', m_family_d:'成员档案，含角色、照片和联系方式，与通讯录和生日模块保持同步。',
+      m_api_t:'API 令牌', m_api_d:'基于文档化的 OpenAPI 3.0 规范的 Bearer 与 X-API-Key 令牌，外加一个位于 <code>/mcp</code> 的 MCP 接口，让你可以用自然语言（例如 Claude Desktop）驱动整套 API。',
+      ho_eyebrow:'为什么是“一个应用”',
+      ho_title:'模块之间 <em>彼此联动</em>',
+      ho_desc:'这正是那二十一个各自独立的应用做不到的事。一个模块里发生的事情，会准时出现在你需要它的地方，无需任何人重新输入。',
+      ho_1_a:'规划一周的餐食', ho_1_b:'食材自动进入购物清单',
+      ho_1_d:'一键把整周计划里的每样食材发送到共享清单，并按货架顺序归类。再也不用把菜谱抄进便签应用。',
+      ho_2_a:'勾掉一项家务', ho_2_b:'积分落到孩子的账户',
+      ho_2_d:'任何任务都可以带积分值。完成后自动记到被指派的人头上，这些积分可以兑换你掌控的奖励目录里的真实奖励。',
+      ho_3_a:'归档一张收据', ho_3_b:'它挂在对应的交易上',
+      ho_3_d:'从你已有的文档里把它附到预算条目上，或当场上传。一次归档，两侧都能找到。',
+      alt_hero:'Juju 仪表盘，一屏呈现今天的任务、日历、餐食与购物',
+      alt_f_health:'健康 - 月经周期环，含经期与易孕窗口预测',
+      alt_hero_m:'Juju 手机端任务视图',
+      alt_f_health_m:'手机端健康体征',
+      alt_f_meals:'餐食计划',
+      alt_f_tasks:'任务看板',
+      alt_f_tasks_m:'手机端任务',
+      alt_f_meals_m:'手机端餐食',
+      alt_f_budget_m:'手机端预算',
+      alt_c_subs:'订阅管理',
+      alt_c_house:'家政',
+      alt_c_docs:'文档',
+      alt_c_bday:'生日',
+      alt_c_contacts:'联系人',
+      alt_c_recipes:'菜谱',
+      alt_c_pantry:'库存，含保质期与低库存提示',
+      alt_c_accounts:'账户，含余额与净资产',
+      alt_c_plan:'按分类的预算与支出进度',
+      alt_c_cal:'日历',
+      alt_c_budget:'预算',
+      alt_c_notes:'笔记',
+      qs_c1:'# 预构建镜像 - Docker', qs_c2:'# 运行两次：一个值用于 SESSION_SECRET，一个用于 DB_ENCRYPTION_KEY',
+      car_prev:'上一张截图', car_next:'下一张截图', track_label:'应用截图',
+      nav_main:'主导航', foot_nav:'页脚', code_label:'命令块',
+      copy:'复制', copied:'已复制！', copyfail:'复制失败',
+      nav_gh:'GitHub', nav_install:'安装',
+      hero_badge:'开源 · 隐私优先 · 无订阅',
+      hero_h1_pre:'你的家庭。你的数据。', hero_h1_em:'你的家。',
+      hero_sub:'一个私密的家，安放让家庭运转的一切。二十一个模块运行在你自己的服务器上，除非你开口，否则任何数据都不会离开它。',
+      long_eyebrow:'在你投入之前', long_title:'如果这个项目停止了，会怎样',
+      long_body:'<b>MIT 许可、可自托管。</b>如果明天这个项目停了，没有任何东西会回传家中，你的实例也会继续运行：我们的路径上根本没有一台属于我们的服务器。你的数据只是你自己磁盘上的一个 SQLite 文件，复制它本身就是完整的导出。定时备份会在其上再写入一份可恢复的归档，而文档化的 API 加上 MCP 接口可以把任何数据以你需要的形态取出来。',
+      tb_image_k:'镜像', tb_image_v:'约 500 MB',
+      tb_needs_k:'需要', tb_needs_v:'256 MB 内存和一个端口，默认 3000。',
+      tb_writes_k:'写入', tb_writes_v:'四个属于你的数据卷：数据、备份、模块、文档。',
+      tb_out_k:'对外', tb_out_v:'在你配置之前，什么都不会发。天气、日历同步和 WebDAV 备份在你填入凭据之前一律关闭。',
+      tb_data_k:'你的数据', tb_data_v:'一个 SQLite 文件，位于', tb_data_v2:'复制它就是完整的导出。',
+      hero_install:'安装 Juju', hero_demo:'看看实际效果', tag_nocloud:'无需云端',
+      chip_tasks:'任务完成', chip_shop:'共享清单',
+      gal_eyebrow:'先睹为快', gal_title:'这就是全部，<em>呈现在同一屏上。</em>',
+      gal_desc:'没有演示账号，没有销售电话。这是你的家人每天打开的那些界面，以你真正会使用的尺寸呈现。其余的都在下方。',
+      gal_dash_k:'仪表盘', gal_dash_c:'<b>今天该做的事，尽在一处。</b>任务、日历、今晚的晚餐和购物清单，无需再打开任何其他应用。',
+      gal_cal_k:'日历', gal_cal_c:'<b>Google、iCloud 和 Nextcloud，终于汇成同一个日历。</b>双向同步，让你在这里添加的日程会落在家里每一部手机上。',
+      proof_modules:'个模块', proof_langs:'种语言', proof_telemetry:'个跟踪器', proof_mit:'MIT 许可', prob_title:'听起来很耳熟？',
+      prob_1_t:'二十一个各不相同的应用', prob_1_d:'任务在这里、购物在那里、日历又不知在何处。彼此之间从不互通。',
+      prob_2_t:'永无止境的订阅', prob_2_d:'Notion、Google One、iCloud。每年又一张账单，无处可逃。',
+      prob_3_t:'你的数据，散落各处', prob_3_d:'你的日历在 Google 的服务器上，你的笔记在 Dropbox 里。到底谁真正拥有你家庭的数据？',
+      prob_cta:'还有一种更从容的方式。<span>自托管，且属于你。</span>', why_title:'为家庭而造，<em>而非为利润。</em>',
+      why_desc:'它全部运行在你拥有的硬件上，无需任何订阅也能正常运转，且绝不会把你的数据送出家庭网络。',
+      p_priv_t:'隐私优先', p_priv_d:'通过 SQLCipher 提供可选的 AES-256 数据库加密（在推荐的 Docker 部署中默认开启）。零遥测。你的数据永远不会离开你的服务器。',
+      p_self_t:'完全自托管', p_self_d:'可运行在树莓派、NAS 或任意服务器上。Docker 或 Podman 让部署成为一行命令。',
+      p_open_t:'开源', p_open_d:'MIT 许可。检视、修改、扩展、贡献。为重视透明的家庭而公开构建。',
+      p_foot_t:'小巧，且有人照料', p_foot_d:'256 MB 内存与一个约 500 MB 的镜像，基于一个你可以复制的 SQLite 文件。180 个测试套件对每一次改动运行。', feat_title:'你的家庭所需的一切',
+      feat_desc:'一套为家庭设计的完整工具，彼此协作，而非散落在二十一个独立的标签页里。',
+      f_tasks_k:'任务', f_tasks_t:'每个人都清楚该做什么。', f_tasks_d:'共享任务，带截止时间、优先级、子任务、标签和重复计划，可一次性指派给多位家庭成员。',
+      f_tasks_l1:'看板视图，一键切换状态', f_tasks_l2:'多人指派，头像叠加显示', f_tasks_l3:'可选与 CalDAV 提醒清单双向同步',
+      f_meals_k:'餐食', f_meals_t:'在有人开口之前，就把晚饭安排好。', f_meals_d:'周计划拖拽式排布，支持重复餐食和食材清单，一键直接导出到购物清单。',
+      f_meals_l1:'可拖拽的周计划，支持重复', f_meals_l2:'可复用、可缩放、可复制的菜谱', f_meals_l3:'共享购物清单，按货架排序并实时更新',
+      f_budget_k:'预算', f_budget_t:'月末不再有意外。', f_budget_d:'记录谁花了什么，自动分摊共享开销，并清晰看到钱都去了哪里。',
+      f_budget_l1:'54 种货币、循环条目、周/月/年统计、月度预算与储蓄目标', f_budget_l3:'订阅追踪，含续费、预算与提醒', f_budget_l4:'面向家庭、旅行和活动的共享开销，自动简化债务',
+      f_health_k:'健康', f_health_t:'健康，留在家庭内部。', f_health_d:'体征、用药、化验结果、运动和周期，按成员记录，默认私密，且永不离开你的服务器。',
+      f_health_l1:'周期环，含经期与易孕窗口预测', f_health_l2:'用药提醒与补药提醒', f_health_l3:'每条记录的可见性：私密或共享', f_health_l4:'父母可以记录孩子的发烧与用药',
+      more_title:'其余的模块', more_desc:'另外十七个，各自独立。开启适合你家庭的那些；其余的保持不碍事。',
+      m_docs_t:'文档', m_docs_d:'家庭文件，支持预览、文件夹、可见性控制和批量操作。可存放在本地文件夹、WebDAV 或 Google Drive；可选 Paperless-ngx 与 Papra。',
+      m_notes_t:'笔记与联系人', m_notes_d:'用于菜谱、备忘和快速提醒的彩色 Markdown 便利贴，外加一个支持 CardDAV 同步与 vCard 导入/导出的共享通讯录。',
+      m_cal_t:'日历', m_cal_d:'与 Google 和 CalDAV 双向同步，支持公开 ICS 订阅、循环事件、节假日叠加和按事件的可见性。',
+      m_shop_t:'购物', m_shop_d:'按货架分组、按你的商店顺序排列的协作清单，支持滑动手势，一键从餐食计划导入。',
+      m_bday_t:'生日', m_bday_d:'生日追踪，自动生成年度日历事件，显示年龄与自定义提醒。',
+      m_house_t:'家政', m_house_d:'管理家政人员：排班、打卡、按日或按小时计费、家务与用品。',
+      m_rewards_t:'奖励', m_rewards_d:'任务积分自动记到被指派成员头上，新任务有可配置的默认积分，家长审核的奖励目录，以及可审计的账本。',
+      m_recipes_t:'菜谱', m_recipes_d:'创建、复制和缩放可复用的菜谱，随后预填餐食位或把食材发送到购物清单。一个自建的 Mealie 实例可只读镜像。',
+      m_rem_t:'提醒', m_rem_d:'任务与日历事件的提醒，含应用内徽标，以及即便应用关闭也能送达的可选推送通知。',
+      m_backup_t:'备份', m_backup_d:'定时备份，支持还原前回滚，可选 WebDAV 云端上传（Nextcloud、ownCloud、Hetzner 等）。', screens_title:'还有 <em>另外十屏</em>',
+      screens_desc:'你还没见过的那些模块，就在你口袋里的手机上。同样经过调校的触控目标，同样随设备与主题自适应的布局。',
+      screens_hint:'拖动、滑动或滚动来探索 →',
+      cap_recipes:'菜谱', cap_pantry:'库存', cap_notes:'笔记', cap_contacts:'联系人',
+      cap_bday:'生日', cap_house:'家政', cap_documents:'文档', cap_subs:'订阅',
+      cap_accounts:'账户', cap_plan:'预算计划', plat_title:'运行在 <em>你的</em> 硬件上',
+      plat_desc:'一个 Docker 或 Podman 容器，可落到任意家庭服务器或 NAS 上。或者，从你平台的应用商店点几下即可安装。',
+      plat_docker:'预构建镜像，一条 <code>compose</code> 命令即可运行。',
+      plat_proxmox:'一个 <code>nesting=1</code> 的 Debian LXC，或一台普通虚拟机，运行 Docker 路径。',
+      plat_podman:'为 RHEL、Fedora 和 CentOS Stream 准备的无根且 SELinux 就绪方案。',
+      plat_truenas:'在 SCALE 社区应用目录中：从 Web 界面安装，无需终端。',
+      plat_umbrel:'已上架 Umbrel 应用商店；一切留在你的 Umbrel 上。',
+      plat_unraid:'一个社区应用模板：直接从 Unraid 应用标签页添加。',
+      plat_oneclick:'一键', plat_start:'从此开始', plat_guide:'指南', to_top:'回到顶部',
+      quick_warn:'<b>把第二个值记下来。</b> <code>DB_ENCRYPTION_KEY</code> 是可选的——留空则数据库保持未加密——但一旦设定便无法回头。丢失它，数据就再也无法打开，无论对你还是对我们。',
+      quick_note:'然后打开 <code>http://localhost:3000</code>。首次访问会引导你创建管理员账户。想要引导式安装？<a href="install.html">分步安装向导</a>会替你处理好 HTTPS、SSO 和备份。', setup_title:'几分钟内即可运行',
+      setup_1_t:'选择你的路径', setup_1_d:'Docker 或 Podman 只需两个文件和几条命令；如果你想要被一步步引导，有浏览器向导；或者从 NAS 应用商店一键安装。',
+      setup_2_t:'设置你的账户', setup_2_d:'创建一个管理员账户并选择你的偏好。大约两分钟。',
+      setup_3_t:'邀请你的家人', setup_3_d:'给每位成员发送邀请链接，设定角色，然后一起开始使用 Juju。',
+      setup_link:'分步安装指南',
+      cta_title:'夺回 <em>你家庭数据</em> 的掌控权。', cta_desc:'你只需安装一次，从此它便属于你。没有我们的账户，没有订阅，你家庭和它的数据之间也没有任何属于我们的东西。',
+      cta_install:'开始使用', cta_gh:'在 GitHub 上查看',
+      footer_heart:'为重视隐私与简单的家庭用心打造。',
+      foot_product:'产品', foot_screens:'截图', foot_install:'安装', foot_docs:'文档与规范',
+      foot_project:'项目', foot_contrib:'贡献', foot_changelog:'更新日志',
+      foot_legal:'法律', foot_impressum:'Impressum（德）', foot_privacy:'Datenschutz（德）',
+      foot_madewith:'自托管 · 隐私优先 · 开源'
     }
   };
   function lsGet(k){ try { return localStorage.getItem('yuvomi-'+k) || localStorage.getItem('oikos-'+k); } catch(e){ return null; } }
   function lsSet(k,v){ try { localStorage.setItem('yuvomi-'+k, v); } catch(e){} }
-  function detectLang(){ var n = (navigator.language || navigator.userLanguage || 'en').toLowerCase(); return n.indexOf('de') === 0 ? 'de' : 'en'; }
+  function detectLang(){ var n = (navigator.language || navigator.userLanguage || 'en').toLowerCase(); if (n.indexOf('de') === 0) return 'de'; if (n.indexOf('zh') === 0) return 'zh'; return 'en'; }
   var lang = lsGet('lang') || detectLang();
   var theme = lsGet('theme');
   function isDark(){ if (theme==='dark') return true; if (theme==='light') return false; return matchMedia('(prefers-color-scheme:dark)').matches; }
@@ -1595,8 +1720,8 @@ openssl rand -hex 32
     var d = isDark();
     var tb = document.getElementById('themeBtn');
     var tl = d
-      ? (lang === 'de' ? 'Zum hellen Design wechseln' : 'Switch to light theme')
-      : (lang === 'de' ? 'Zum dunklen Design wechseln' : 'Switch to dark theme');
+      ? (lang === 'de' ? 'Zum hellen Design wechseln' : lang === 'zh' ? '切换到浅色主题' : 'Switch to light theme')
+      : (lang === 'de' ? 'Zum dunklen Design wechseln' : lang === 'zh' ? '切换到深色主题' : 'Switch to dark theme');
     tb.setAttribute('aria-label', tl);
     tb.setAttribute('title', tl);
     tb.setAttribute('aria-pressed', d ? 'true' : 'false');
@@ -1660,13 +1785,14 @@ openssl rand -hex 32
     document.documentElement.lang = lang;
     var s = T[lang];
     document.querySelectorAll('[data-t]').forEach(function(el){ var k = el.getAttribute('data-t'); if (s[k] !== undefined) setRich(el, s[k]); });
-    document.getElementById('langLbl').textContent = lang === 'en' ? 'DE' : 'EN';
+    var nextLang = LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length];
+    document.getElementById('langLbl').textContent = LBL[nextLang];
     var lb = document.getElementById('langBtn');
-    lb.setAttribute('aria-label', lang === 'en' ? 'Auf Deutsch umschalten' : 'Switch to English');
-    lb.setAttribute('title', lang === 'en' ? 'Auf Deutsch umschalten' : 'Switch to English');
-    document.title = lang === 'en' ? 'Juju - The Self-Hosted Family Planner' : 'Juju - Der selbstgehostete Familienplaner';
+    lb.setAttribute('aria-label', SWITCH_TO[nextLang]);
+    lb.setAttribute('title', SWITCH_TO[nextLang]);
+    document.title = lang === 'en' ? 'Juju - The Self-Hosted Family Planner' : lang === 'zh' ? 'Juju - 自托管的家庭计划助手' : 'Juju - Der selbstgehostete Familienplaner';
     var rel = document.getElementById('foot-released');
-    if (rel) { var rp = (rel.getAttribute('data-released') || '').split('-'); if (rp[0]) { rel.textContent = new Date(+rp[0], (+rp[1] || 1) - 1, +rp[2] || 1).toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' }); } }
+    if (rel) { var rp = (rel.getAttribute('data-released') || '').split('-'); if (rp[0]) { rel.textContent = new Date(+rp[0], (+rp[1] || 1) - 1, +rp[2] || 1).toLocaleDateString(lang === 'de' ? 'de-DE' : lang === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' }); } }
     /* Alt text is content, not chrome: it stayed English on a de-labelled page,
        so German screen-reader users got English image descriptions. */
     document.querySelectorAll('[data-alt-t]').forEach(function(img){ var k = img.getAttribute('data-alt-t'); if (s[k] !== undefined) img.alt = s[k]; });
@@ -1685,7 +1811,7 @@ openssl rand -hex 32
     syncCodeScroll();
   }
   document.getElementById('themeBtn').onclick = function(){ theme = isDark() ? 'light' : 'dark'; lsSet('theme', theme); applyTheme(); };
-  document.getElementById('langBtn').onclick = function(){ lang = lang === 'en' ? 'de' : 'en'; lsSet('lang', lang); applyLang(); };
+  document.getElementById('langBtn').onclick = function(){ var i = LANGS.indexOf(lang); lang = LANGS[(i + 1) % LANGS.length]; lsSet('lang', lang); applyLang(); };
   matchMedia('(prefers-color-scheme:dark)').addEventListener('change', function(){ if (!theme) applyTheme(); });
   document.documentElement.classList.add('js');
   if ('IntersectionObserver' in window) {
