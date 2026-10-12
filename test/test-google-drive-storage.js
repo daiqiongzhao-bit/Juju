@@ -321,7 +321,10 @@ test('upload, streaming read, token refresh, delete and missing delete are suppo
   await driveStorage.deleteFile('already-missing');
 });
 
-test('read rejects metadata and streamed content above 5 MiB', async () => {
+// Die Grenze liegt seit v0.0.11 (efeac5c, "100MB documents") bei 100 MiB -
+// dieser Test war noch auf den alten 5-MiB-Wert geeicht und ist erst jetzt
+// wieder gelaufen, seit die npm-test-Kette repariert ist.
+test('read rejects metadata and streamed content above 100 MiB', async () => {
   await driveStorage.handleCallback('code');
   const folderId = cfg('document_storage_google_drive_folder_id');
   fake.state.files.set('too-large', {
@@ -329,7 +332,7 @@ test('read rejects metadata and streamed content above 5 MiB', async () => {
     name: 'large.bin',
     parents: [folderId],
     mimeType: 'application/octet-stream',
-    size: 5 * 1024 * 1024 + 1,
+    size: 100 * 1024 * 1024 + 1,
     content: Buffer.alloc(1),
   });
   await assert.rejects(
@@ -343,7 +346,7 @@ test('read rejects metadata and streamed content above 5 MiB', async () => {
     parents: [folderId],
     mimeType: 'application/octet-stream',
     size: null,
-    content: Buffer.alloc(5 * 1024 * 1024 + 1),
+    content: Buffer.alloc(100 * 1024 * 1024 + 1),
   });
   await assert.rejects(
     driveStorage.readFile('stream-too-large'),

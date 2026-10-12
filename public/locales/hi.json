@@ -2228,9 +2228,12 @@
         "mediaSourceBooks": "Book search with covers",
         "mediaSourceMovies": "Movie/series search with posters",
         "mediaSourceMusic": "Album search with covers",
+        "mediaSourceTmdb": "TMDB",
+        "mediaSourceItunes": "iTunes",
+        "mediaSourceOpenlibrary": "OpenLibrary",
+        "mediaSourceGoogleBooks": "Google Books",
         "mediaStatusMissing": "No TMDB key set (movie/series search disabled)",
         "mediaStatusOk": "TMDB configured",
-        "mediaTitle": "Media metadata",
         "mediaTmdbCardTitle": "TMDB & OpenLibrary",
         "mediaTmdbKey": "TMDB API key (v3)",
         "mediaTmdbKeyHint": "Leave empty to keep the saved key",
@@ -2238,7 +2241,7 @@
         "mediaTmdbProxy": "TMDB proxy URL (optional)",
         "mediaTmdbProxyHint": "For networks where api.themoviedb.org / image.tmdb.org are unreachable",
         "pageMediaIntegration": "Media metadata",
-        "pageMediaIntegrationDescription": "TMDB / OpenLibrary / iTunes / Google Books source settings"
+        "pageMediaIntegrationDescription": "TMDB / OpenLibrary / iTunes / Google Books source settings।"
     },
     "login": {
         "tagline": "अपने पारिवारिक प्लानर में फिर से आपका स्वागत है।",
@@ -3978,6 +3981,7 @@
         "previewFailed": "आमंत्रण की जाँच अभी नहीं हो सकी। कृपया थोड़ी देर में पृष्ठ फिर से लोड करें।"
     },
     "media": {
+        "tags": "Tags",
         "title": "Media Library",
         "subtitle": "Movies, series, music and books – personal or shared with the family.",
         "tabAll": "All",
@@ -4024,6 +4028,7 @@
         "source": "Source"
     },
     "memory": {
+        "tags": "Tags",
         "title": "Family Memory",
         "subtitle": "Shared moments: media, trips and events.",
         "add": "Add",
@@ -4110,6 +4115,7 @@
         "timelineEmptyTitle": "No interactions yet",
         "timelineEmptyDesc": "Log calls, meetings or notes to build a timeline per contact.",
         "deleteInteractionConfirm": "Delete this interaction?",
+        "deleteInteractionDetail": "The entry is permanently deleted and cannot be restored. Statistics and the timeline lose it.",
         "interactionDeleted": "Interaction deleted",
         "interaction": {
             "note": "Note",
@@ -4122,7 +4128,8 @@
         "addAnniversary": "Add anniversary",
         "annivEmptyTitle": "No anniversaries yet",
         "annivEmptyDesc": "Mark weddings, first meetings and other yearly milestones.",
-        "deleteAnniversaryConfirm": "Delete this anniversary? Its calendar event will be removed.",
+        "deleteAnniversaryConfirm": "Delete this anniversary?",
+        "deleteAnniversaryDetail": "The anniversary and its calendar event are permanently deleted and cannot be restored.",
         "anniversaryDeleted": "Anniversary deleted",
         "inDays": "in {{count}} days",
         "contact": "Contact",

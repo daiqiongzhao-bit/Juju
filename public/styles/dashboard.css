@@ -74,6 +74,122 @@
   min-height: 0;
 }
 
+/* --------------------------------------------------------
+ * Widget-Reihen: Medien & Geschenke
+ *
+ * Diese Reihen waren Inline-Styles im Template-String von
+ * dashboard.js - mit Design-Literalen (border-radius, font-size,
+ * font-weight), die der Typo-Guard in einer Stylesheet-Datei nie
+ * gesehen hat und die niemand aus tokens.css nehmen konnte.
+ * Guard #250 („kein Inline-Style schreibt einen Design-Wert als
+ * Literal") hat sie dorthin geblasen, wohin sie gehoeren: gleiche
+ * Geometrie, nur Stufen-weise.
+ *
+ * Die einzigen Laufzeitwerte bleiben die ZWEI Nutzerfarben der
+ * Geschenkzeile (Punkt + Zeilenfuellung) - als Custom Properties
+ * vom Template gesetzt, hier nur gelesen.
+ * -------------------------------------------------------- */
+.media-widget-list,
+.gift-widget-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.media-widget-list {
+  gap: var(--space-0h);
+}
+
+.gift-widget-list {
+  gap: var(--space-1h);
+}
+
+/* Medien: Cover (Poster 52x74, 2:3) + zweizeilige Zeile */
+.media-widget-cover {
+  width: 52px;
+  height: 74px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.media-widget-cover--placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-raised);
+}
+
+.media-widget-cover__icon {
+  opacity: 0.5;
+}
+
+.media-widget-row {
+  display: flex;
+  gap: var(--space-2h);
+  align-items: center;
+  padding: var(--space-1h) var(--space-1);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.media-widget-row__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0h);
+}
+
+.media-widget-row__title {
+  font-size: var(--type-caption);
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-widget-row__meta {
+  font-size: var(--type-micro);
+  opacity: 0.65;
+}
+
+/* Geschenke: Punkte + Betraege. Die Punktfarbe und die Zeilenfuellung
+ * kommen als --gift-dot / --gift-row-bg aus dem Template (Rot/Weiß-
+ * Semantik des Moduls, s. giftLedger.css .gl-stat-bar). */
+.gift-widget-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1h) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--gift-row-bg);
+  cursor: pointer;
+}
+
+.gift-widget-row__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--gift-dot);
+  flex-shrink: 0;
+}
+
+.gift-widget-row__label {
+  font-size: var(--type-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.gift-widget-row__count {
+  margin-inline-start: auto;
+  font-size: var(--type-micro);
+  opacity: 0.7;
+}
+
+.gift-widget-row__total {
+  font-size: var(--type-secondary);
+  font-weight: var(--font-weight-bold);
+}
+
 @media (min-width: 768px) {
   .dashboard__grid {
     grid-template-columns: repeat(2, 1fr);

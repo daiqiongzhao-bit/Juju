@@ -1042,20 +1042,20 @@ function renderMediaWidget(media) {
   }
   const cards = watching.map((m) => {
     const cover = m.cover_url
-      ? `<img src="${esc(dashCoverSrc(m.cover_url))}" alt="" loading="lazy" style="width:52px;height:74px;object-fit:cover;border-radius:8px;flex-shrink:0">`
-      : `<span style="width:52px;height:74px;border-radius:8px;background:var(--color-surface-raised, #eef2f7);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="film" aria-hidden="true" style="width:20px;height:20px;opacity:.5"></i></span>`;
+      ? `<img src="${esc(dashCoverSrc(m.cover_url))}" alt="" loading="lazy" class="media-widget-cover">`
+      : `<span class="media-widget-cover media-widget-cover--placeholder"><i data-lucide="film" class="icon-lg media-widget-cover__icon" aria-hidden="true"></i></span>`;
     return `
-      <div class="media-widget-row" data-route="/media?item=${m.id}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;padding:6px 4px;border-radius:10px;cursor:pointer">
+      <div class="media-widget-row" data-route="/media?item=${m.id}" role="button" tabindex="0">
         ${cover}
-        <span style="min-width:0;display:flex;flex-direction:column;gap:2px">
-          <span style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.title)}</span>
-          <span style="font-size:11px;opacity:.65">${esc(t('media.type.' + (m.media_type || 'movie')))}</span>
+        <span class="media-widget-row__body">
+          <span class="media-widget-row__title">${esc(m.title)}</span>
+          <span class="media-widget-row__meta">${esc(t(`media.type.${m.media_type || 'movie'}`))}</span>
         </span>
       </div>`;
   }).join('');
   return `<div class="widget widget--media">
     ${widgetHeader('film', t('nav.media'), media.doingCount || watching.length, '/media')}
-    <div class="widget__body" style="display:flex;flex-direction:column;gap:2px;overflow:hidden">${cards}</div>
+    <div class="widget__body media-widget-list">${cards}</div>
   </div>`;
 }
 
@@ -1073,16 +1073,15 @@ function renderGiftsWidget(gifts) {
     </div>`;
   }
   const row = (type, count, total, color, bg) => `
-    <div data-route="/gift-ledger" role="button" tabindex="0" style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:10px;background:${bg};cursor:pointer">
-      <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
-      <span style="font-size:13px;font-weight:600">${esc(t('giftLedger.type.' + type))}</span>
-      <span style="flex:1"></span>
-      <span style="font-size:12px;opacity:.7">${count}</span>
-      <span style="font-size:14px;font-weight:700">${esc(formatCurrency(total))}</span>
+    <div class="gift-widget-row" data-route="/gift-ledger" role="button" tabindex="0" style="--gift-dot:${color};--gift-row-bg:${bg}">
+      <span class="gift-widget-row__dot"></span>
+      <span class="gift-widget-row__label">${esc(t(`giftLedger.type.${type}`))}</span>
+      <span class="gift-widget-row__count">${count}</span>
+      <span class="gift-widget-row__total">${esc(formatCurrency(total))}</span>
     </div>`;
   return `<div class="widget widget--gifts">
     ${widgetHeader('gift', t('nav.giftLedger'), redCount + whiteCount, '/gift-ledger')}
-    <div class="widget__body" style="display:flex;flex-direction:column;gap:6px">
+    <div class="widget__body gift-widget-list">
       ${row('red', redCount, gifts.redTotal || 0, '#dc2626', 'rgba(220,38,38,.08)')}
       ${row('white', whiteCount, gifts.whiteTotal || 0, '#64748b', 'rgba(100,116,139,.10)')}
     </div>

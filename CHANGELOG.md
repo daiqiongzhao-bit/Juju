@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 关系网工具栏新增「查路径」按钮；联系人弹窗新增「扩展资料」分节与「偏好」「标签」入口；互动/纪念日/人情账表单支持关联联系人。
 - 非管理员在关系模块的选择器（路径查询、互动、纪念日、人情账）中不再看到已隐藏联系人。
 - 人情账「待还礼」统计遵守既有隐私规则：他人私密账目对普通成员不可见。
-- `public/index.html` 静态资源版本参数同步至 0.1.0。
+- `public/index.html` 静态资源版本参数同步至 0.0.24。
 
 ### 数据库
 
@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 回填 v0.0.23「人际树」遗漏的英文词条（`relationships.gen.*`、`tab.genealogy`）——此前英文界面会显示原始 key。
 - 补齐人际关系页既有多处已引用但未定义的样式类（`rel-filter`、`rel-common__name`、`rel-anniv__contact/date`）。
 - 修复存量测试失败：订阅测试对「跨币种关联条目标题后缀」与「月度合计按基础币种汇总」的预期停留在旧行为（CI 自 v0.0.23 起即失败，且阻断其后整个测试链）；测试改为 seed 确定性汇率缓存（EUR→CNY = 2），断言换算后的确定值。
+- **修复发布关键缺陷——Service Worker 缓存键**：自 v0.0.23 起 `index.html` 给每个 shell 资产带 `?v=` 参数穿透 HTTP 缓存，但 precache 列的是裸路径、`cache.match` 按完整 URL 匹配，导致首次离线启动丢失样式；SW 现将同源请求规范化为 pathname 再匹配（API 缓存不动，其查询串有语义）。
+- **修复发布关键缺陷——widget 权限登记**：媒体库与礼金簿两个 widget 自 v0.0.23 起存在于仪表盘，但未登记进 `PERMISSION_WIDGETS`，导致无法按用户锁定；已补登记（二者为非门控模块，`module: null`）。
+- **修复整条 CI 测试链**：链自数月前在 `test:sw-precache` 处断裂，其后约 90 个测试从未运行；逐一修复——settings-copy 守卫（24 语言补齐 `mediaSourceTmdb/Itunes/Openlibrary/GoogleBooks` 键与描述句末标点，移除 modules-media 中与叶子标题重复的 h2）、carddav 测试夹具补齐关系档案列（#137/#143/#146 的 contacts 部分）、google-drive 与 document-storage 测试对齐 v0.0.11 起的 100 MiB 读取上限、installer-schema 跟随品牌改名（`templates/yuvomi.xml` → `templates/juju.xml`）。
+- **排版令牌化**：relationships/giftLedger/media/memory/auth 五个样式表中 114 处硬编码 `font-size`/`letter-spacing` 全部改用车载令牌（`--type-*` 语义阶优先，12/14/16px 等有精确令牌值的用 `--text-*`），守卫「字号只能经令牌设置」转绿；无视觉回退（精确值取同值令牌，其余取最近阶并记录理由）。
+- settings-navigation 守卫期望修正：modules 域实为 5 叶（modules-media 自 v0.0.11 起存在），原期望 4 为链断期间数月未跑留下的陈旧值。
 
 ## [0.0.23] - 2026-09-23
 

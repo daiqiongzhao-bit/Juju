@@ -212,7 +212,7 @@ test('BASE_URL steht in jedem Deploy-Ziel, das Variablen von Hand aufzählt', ()
   // Das Ergebnis ist eine Funktion, die stumm nichts tut.
   assert.match(portainerSource(), /^\s+- BASE_URL=\$\{BASE_URL:-\}/m,
     'Portainer-Compose reicht BASE_URL nicht durch');
-  const unraid = readFileSync(new URL('../templates/yuvomi.xml', import.meta.url), 'utf8');
+  const unraid = readFileSync(new URL('../templates/juju.xml', import.meta.url), 'utf8');
   assert.match(unraid, /Target="BASE_URL"/, 'Unraid deklariert BASE_URL nicht');
 });
 
@@ -343,7 +343,7 @@ test('.env.example dokumentiert die lokalen Dokumentspeicher-Werte', () => {
 });
 
 test('Unraid deklariert die lokalen Dokumentspeicher-Werte advanced und optional', () => {
-  const src = readFileSync(new URL('../templates/yuvomi.xml', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../templates/juju.xml', import.meta.url), 'utf8');
   for (const key of DOCUMENT_STORAGE_LOCAL_KEYS) {
     const config = src.match(new RegExp(`<Config[^>]+Target="${key}"[^>]*>`));
     assert.ok(config, `Unraid fehlt ${key}`);
@@ -409,7 +409,7 @@ test('Jedes Container-Deployment schreibt Backups nach /backups (issue #579)', (
   const quadlet = readFileSync(new URL('../tools/quadlet/oikos.container', import.meta.url), 'utf8');
   assert.match(quadlet, /^Environment=BACKUP_DIR=\/backups$/m, 'Quadlet setzt BACKUP_DIR nicht');
 
-  const unraid = readFileSync(new URL('../templates/yuvomi.xml', import.meta.url), 'utf8');
+  const unraid = readFileSync(new URL('../templates/juju.xml', import.meta.url), 'utf8');
   const backupVar = unraid.match(/<Config[^>]+Target="BACKUP_DIR"[^>]*>[^<]*/);
   assert.ok(backupVar, 'Unraid deklariert BACKUP_DIR nicht');
   assert.match(backupVar[0], /Default="\/backups"/, 'Unraid BACKUP_DIR muss /backups defaulten');
@@ -476,7 +476,7 @@ test('Google Drive OAuth installer wiring is optional, masked, validated and dep
 
   const envExample = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
   const portainer = readFileSync(new URL('../docs/docker-compose.portainer.yml', import.meta.url), 'utf8');
-  const unraid = readFileSync(new URL('../templates/yuvomi.xml', import.meta.url), 'utf8');
+  const unraid = readFileSync(new URL('../templates/juju.xml', import.meta.url), 'utf8');
   for (const key of GOOGLE_DRIVE_KEYS) {
     assert.match(envExample, new RegExp(`^${key}=`, 'm'));
     assert.match(portainer, new RegExp(`- ${key}=\\$\\{${key}:-`));
@@ -501,12 +501,12 @@ test('Unraid deklariert alle Web-Push-Variablen advanced und maskiert den privat
   // Unraid zaehlt jede Variable von Hand auf und hat keinen Fallback: fehlt ein
   // Eintrag, koennen Unraid-Nutzer die Variable ueberhaupt nicht setzen. Genau
   // daran scheiterte Push auf iOS - das Subject war nirgends erreichbar (#580).
-  const unraid = readFileSync(new URL('../templates/yuvomi.xml', import.meta.url), 'utf8');
+  const unraid = readFileSync(new URL('../templates/juju.xml', import.meta.url), 'utf8');
   const envExample = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
 
   for (const key of ['VAPID_SUBJECT', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY']) {
     const entry = unraid.match(new RegExp(`<Config[^>]+Target="${key}"[^>]*>`));
-    assert.ok(entry, `${key} fehlt in templates/yuvomi.xml`);
+    assert.ok(entry, `${key} fehlt in templates/juju.xml`);
     assert.match(entry[0], /Display="advanced"/, `${key} sollte advanced sein`);
     assert.match(entry[0], /Required="false"/, `${key} ist optional`);
     assert.match(envExample, new RegExp(`^# ?${key}=`, 'm'), `${key} fehlt in .env.example`);
@@ -630,7 +630,7 @@ test('.env.example dokumentiert alle optionalen Dokument-WebDAV-Werte', () => {
 });
 
 test('Unraid deklariert alle Dokument-WebDAV-Werte advanced und maskiert das Passwort', () => {
-  const src = readFileSync(new URL('../templates/yuvomi.xml', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../templates/juju.xml', import.meta.url), 'utf8');
   for (const key of DOCUMENT_STORAGE_KEYS) {
     const config = src.match(new RegExp(`<Config[^>]+Target="${key}"[^>]*>`));
     assert.ok(config, `Unraid fehlt ${key}`);

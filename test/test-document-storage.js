@@ -1265,8 +1265,10 @@ test('readDocumentContent branches on storage_backend and reads disabled WebDAV 
   );
 });
 
+// Seit v0.0.11 (efeac5c, "100MB documents") liegt die Grenze bei 100 MiB -
+// dieser Test war noch auf den alten 5-MiB-Wert geeicht.
 test('readDocumentContent rejects oversized responses before and during streaming', async (t) => {
-  const oversized = 5 * 1024 * 1024 + 1;
+  const oversized = 100 * 1024 * 1024 + 1;
   const webdav = await createWebdavServer(t, {
     handler(req, res) {
       if (req.method !== 'GET') return false;
@@ -1278,8 +1280,8 @@ test('readDocumentContent rejects oversized responses before and during streamin
       if (req.url === '/documents/streamed.bin') {
         res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
         Readable.from([
-          Buffer.alloc(3 * 1024 * 1024),
-          Buffer.alloc(3 * 1024 * 1024),
+          Buffer.alloc(51 * 1024 * 1024),
+          Buffer.alloc(51 * 1024 * 1024),
         ]).pipe(res);
         return true;
       }
@@ -2757,7 +2759,7 @@ test('local storage: read enforces the maximum readable size', () =>
     const full = nodePath.join(dir, relKey);
     mkdirSync(nodePath.dirname(full), { recursive: true });
     writeFileSync(full, '');
-    truncateSync(full, 5 * 1024 * 1024 + 1); // sparse file just over MAX_READ_BYTES
+    truncateSync(full, 100 * 1024 * 1024 + 1); // sparse file just over MAX_READ_BYTES (100 MiB seit v0.0.11)
 
     await assert.rejects(
       storage.readDocumentContent({
@@ -2767,7 +2769,7 @@ test('local storage: read enforces the maximum readable size', () =>
       }),
       (error) => assertStorageError(error, 'DOCUMENT_STORAGE_READ_FAILED')
     );
-    assert.ok(statSync(full).size > 5 * 1024 * 1024);
+    assert.ok(statSync(full).size > 100 * 1024 * 1024);
   }).run());
 
 test('local storage: delete ignores an already-missing file', () =>

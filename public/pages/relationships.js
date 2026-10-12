@@ -12,6 +12,7 @@
 import { api } from '/api.js';
 import { t, formatDate } from '/i18n.js';
 import { esc } from '/utils/html.js';
+import { renderPageSearch, wirePageSearch } from '/utils/page-search.js';
 import { openModal, closeModal, confirmModal } from '/components/modal.js';
 import { wireTablist } from '/utils/tablist.js';
 
@@ -282,7 +283,7 @@ export async function render(container, { user } = {}) {
     <div class="page relationships-page">
       <header class="page-toolbar">
         <div class="page-toolbar__titles">
-          <h1 class="page-title">${t('nav.relationships')}</h1>
+          <h1 class="page-toolbar__title">${t('nav.relationships')}</h1>
           <p class="page-subtitle">${t('relationships.subtitle')}</p>
         </div>
       </header>
@@ -378,9 +379,7 @@ async function renderNetwork() {
       <div class="rel-graph-toolbar">
         <span class="rel-graph-hint">${t('relationships.graphHint')}</span>
         <div class="rel-graph-actions">
-          <input type="search" class="form-input rel-search-input" id="rel-search"
-                 placeholder="${t('relationships.searchPlaceholder')}"
-                 aria-label="${t('relationships.searchPerson')}">
+          ${renderPageSearch({ id: 'rel-search', label: t('relationships.searchPerson'), placeholder: t('relationships.searchPlaceholder'), clearLabel: t('common.searchClear'), className: 'rel-graph__search' })}
           <button class="btn btn--secondary btn--sm" data-action="rel-search-go">${t('relationships.searchPerson')}</button>
           <button class="btn btn--secondary btn--sm" data-action="rel-reset">${t('relationships.resetView')}</button>
           <button class="btn btn--secondary btn--sm" data-action="rel-undo">${t('relationships.undo')}</button>
@@ -594,11 +593,7 @@ async function renderPeople() {
   const panel = _container.querySelector('#rel-panel-people');
   panel.innerHTML = `
     <div class="rel-toolbar">
-      <div class="rel-search">
-        <i data-lucide="search" class="icon-sm" aria-hidden="true"></i>
-        <input type="search" class="form-input rel-search__input" id="rel-people-search"
-               placeholder="${t('relationships.searchPlaceholder')}" aria-label="${t('relationships.searchPlaceholder')}">
-      </div>
+      ${renderPageSearch({ id: 'rel-people-search', label: t('relationships.searchPlaceholder'), placeholder: t('relationships.searchPlaceholder'), clearLabel: t('common.searchClear'), className: 'rel-toolbar__search' })}
       <select class="form-input rel-filter" id="rel-people-filter" aria-label="${t('relationships.filterByType')}">
         <option value="">${t('relationships.filterAll')}</option>
         ${state.options.relationTypes.map((rt) => `<option value="${rt}">${esc(relLabel(rt))}</option>`).join('')}
@@ -607,9 +602,8 @@ async function renderPeople() {
     <div class="rel-people-grid" id="rel-people-grid" aria-busy="true"></div>`;
   if (window.lucide) window.lucide.createIcons({ el: panel });
 
-  const search = panel.querySelector('#rel-people-search');
+  wirePageSearch(panel, { id: 'rel-people-search', onQuery: () => paintPeople() });
   const filter = panel.querySelector('#rel-people-filter');
-  search.addEventListener('input', () => paintPeople());
   filter.addEventListener('change', () => paintPeople());
   await ensureContacts();
   paintPeople();
@@ -1773,7 +1767,7 @@ async function paintTimeline() {
   if (window.lucide) window.lucide.createIcons({ el: list });
   list.querySelectorAll('[data-del]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const ok = await confirmModal(t('relationships.deleteInteractionConfirm'), { danger: true, confirmLabel: t('common.delete') });
+      const ok = await confirmModal(t('relationships.deleteInteractionConfirm'), { danger: true, confirmLabel: t('common.delete'), detail: t('relationships.deleteInteractionDetail') });
       if (!ok) return;
       try {
         await api.delete(`/relationships/interactions/${btn.dataset.del}`);
@@ -1853,7 +1847,7 @@ async function paintAnniversaries() {
   });
   list.querySelectorAll('[data-del]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const ok = await confirmModal(t('relationships.deleteAnniversaryConfirm'), { danger: true, confirmLabel: t('common.delete') });
+      const ok = await confirmModal(t('relationships.deleteAnniversaryConfirm'), { danger: true, confirmLabel: t('common.delete'), detail: t('relationships.deleteAnniversaryDetail') });
       if (!ok) return;
       try {
         await api.delete(`/relationships/anniversaries/${btn.dataset.del}`);
@@ -2632,7 +2626,7 @@ function openTagsModal(contactId) {
           toast(err?.data?.error || t('common.unknownError'), 'danger');
         }
       });
-      panel.querySelector('#tg-close').addEventListener('click', () => closeModal());
+      panel.querySelector('#tg-close').addEventListener('click', () => closeModal({ force: true }));
     },
   });
 }

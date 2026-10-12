@@ -14,7 +14,7 @@
 .relationships-page .page-subtitle {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
 }
 
 .rel-panel[hidden] { display: none; }
@@ -27,7 +27,7 @@
 
 .rel-muted {
   color: var(--color-text-tertiary);
-  font-size: 0.85rem;
+  font-size: var(--type-caption);
 }
 
 /* ---- Toolbars ---- */
@@ -37,19 +37,11 @@
   gap: 12px;
   flex-wrap: wrap;
 }
-.rel-search {
-  position: relative;
+/* Layout only — the control visual lives in page-search.css (shared). */
+.rel-toolbar__search {
   flex: 1 1 220px;
-  display: flex;
-  align-items: center;
+  max-width: 320px;
 }
-.rel-search .icon-sm {
-  position: absolute;
-  left: 12px;
-  color: var(--color-text-tertiary);
-  pointer-events: none;
-}
-.rel-search__input { padding-left: 34px; width: 100%; }
 
 /* ---- Network graph ---- */
 .rel-graph-wrap { padding: 14px; }
@@ -60,7 +52,7 @@
   gap: 12px;
   margin-bottom: 8px;
 }
-.rel-graph-hint { color: var(--color-text-tertiary); font-size: 0.85rem; }
+.rel-graph-hint { color: var(--color-text-tertiary); font-size: var(--type-caption); }
 .rel-graph {
   width: 100%;
   height: auto;
@@ -82,7 +74,7 @@
 .rel-node:hover .rel-node__circle { filter: brightness(1.08); }
 .rel-node__label {
   fill: var(--color-text-primary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   pointer-events: none;
   paint-order: stroke;
@@ -112,7 +104,7 @@
 .rel-person:hover { background: var(--color-surface-hover); }
 .rel-person__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rel-person__name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rel-person__type { font-size: 0.82rem; font-weight: 600; }
+.rel-person__type { font-size: var(--type-caption); font-weight: 600; }
 
 /* ---- Avatars ---- */
 .rel-avatar {
@@ -123,13 +115,17 @@
   background-size: cover;
   background-position: center;
   background-color: var(--color-surface-raised, #888);
-  color: var(--color-text-on-accent, #fff);
+  color: var(--color-text-secondary, #64748b);
   flex: none;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
-.rel-avatar--initials { background: var(--module-relationships, #15803D); }
-.rel-avatar--lg { width: 64px; height: 64px; font-size: 24px; }
+/* Initialen tragen ihr eigenes Paar: die Ink-Stufe der Tönung (weiß im Light
+   auf dem dunklen Smaragd, near-black im Dark auf dem hellen #4ADE80).
+   Die Basisregel darueber hat keinen Text (Foto-Platzhalter) - sie haelt
+   sekundaere Tinte auf der Flaeche, damit ihr Paar auch ohne Override stimmt. */
+.rel-avatar--initials { background: var(--module-relationships, #15803D); color: var(--color-ink-on-vivid, #fff); }
+.rel-avatar--lg { width: 64px; height: 64px; font-size: var(--text-2xl); }
 
 /* ---- Common contacts ---- */
 .rel-common-list { display: flex; flex-direction: column; gap: 12px; }
@@ -140,20 +136,20 @@
 }
 .rel-common__amp { color: var(--color-text-tertiary); font-weight: 500; }
 .rel-common__shared { margin-top: 10px; }
-.rel-common__shared-label { font-size: 0.82rem; color: var(--color-text-secondary); }
+.rel-common__shared-label { font-size: var(--type-caption); color: var(--color-text-secondary); }
 .rel-common__chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 10px 4px 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--color-border-subtle);
   background: var(--color-surface);
   color: var(--color-text-primary);
-  font: inherit; font-size: 0.85rem;
+  font: inherit; font-size: var(--type-caption);
   cursor: pointer;
 }
 .chip:hover { background: var(--color-surface-hover); }
-.chip .rel-avatar { width: 22px; height: 22px; font-size: 9px; }
+.chip .rel-avatar { width: 22px; height: 22px; font-size: var(--type-micro); }
 
 /* ---- Timeline ---- */
 .rel-timeline { display: flex; flex-direction: column; gap: 10px; }
@@ -161,23 +157,23 @@
   display: flex; align-items: flex-start; gap: 12px;
   padding: 12px 14px;
   border: 1px solid var(--color-border-subtle);
-  border-radius: 14px;
+  border-radius: calc(var(--radius-md) + 2px);
   background: var(--color-surface);
 }
 .rel-event__icon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: 10px; flex: none;
-  background: color-mix(in srgb, var(--module-relationships) 16%, transparent);
+  width: 36px; height: 36px; border-radius: var(--radius-sm); flex: none;
+  background: color-mix(in srgb, var(--module-relationships) var(--tint-surface), transparent);
   color: var(--module-relationships);
 }
 .rel-event__body { flex: 1; min-width: 0; }
 .rel-event__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .rel-event__contact { font-weight: 600; }
-.rel-event__date { color: var(--color-text-tertiary); font-size: 0.82rem; }
+.rel-event__date { color: var(--color-text-tertiary); font-size: var(--type-caption); }
 .rel-event__note { margin-top: 4px; color: var(--color-text-secondary); }
 .rel-event__type {
   display: inline-block; margin-top: 6px;
-  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-label);
   color: var(--module-relationships); font-weight: 700;
 }
 
@@ -189,17 +185,17 @@
 }
 .rel-anniv__main { flex: 1; min-width: 0; }
 .rel-anniv__title { font-weight: 600; }
-.rel-anniv__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--color-text-secondary); font-size: 0.88rem; }
+.rel-anniv__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--color-text-secondary); font-size: var(--text-sm); }
 .rel-anniv__right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.rel-anniv__count { font-weight: 700; color: var(--module-relationships); font-size: 0.9rem; }
+.rel-anniv__count { font-weight: 700; color: var(--module-relationships); font-size: var(--text-sm); }
 .rel-anniv__count--soon { color: var(--_module-birthdays); }
 .rel-anniv__actions { display: flex; gap: 4px; }
 
 /* ---- Contact modal ---- */
 .rel-contact-modal { display: flex; flex-direction: column; gap: 14px; }
 .rel-contact-modal__head { display: flex; align-items: center; gap: 14px; }
-.rel-contact-modal__name { font-size: 1.1rem; font-weight: 700; }
-.rel-contact-modal__cat { color: var(--color-text-tertiary); font-size: 0.85rem; text-transform: capitalize; }
+.rel-contact-modal__name { font-size: var(--type-card-title); font-weight: 700; }
+.rel-contact-modal__cat { color: var(--color-text-tertiary); font-size: var(--type-caption); text-transform: capitalize; }
 .rel-photo-row { display: flex; align-items: center; gap: 12px; }
 .rel-modal-subhead {
   display: flex; align-items: center; justify-content: space-between;
@@ -208,10 +204,10 @@
 .rel-edge-list { display: flex; flex-direction: column; gap: 8px; }
 .rel-edge-item {
   display: flex; align-items: center; gap: 10px;
-  padding: 6px 8px; border-radius: 10px; background: var(--color-surface);
+  padding: 6px 8px; border-radius: var(--radius-sm); background: var(--color-surface);
 }
 .rel-edge-item__name { flex: 1; font-weight: 500; }
-.rel-edge-item__type { color: var(--color-text-secondary); font-size: 0.82rem; }
+.rel-edge-item__type { color: var(--color-text-secondary); font-size: var(--type-caption); }
 .rel-modal-quick { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ---- Relationship Tree ---- */
@@ -235,7 +231,7 @@
   min-width: 0;
 }
 .rel-tree__label {
-  font-size: 0.82rem;
+  font-size: var(--type-caption);
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -249,19 +245,19 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px 4px 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--color-border-subtle);
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--type-caption);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .rel-tree-source:hover { background: var(--color-surface-hover); }
 .rel-tree-source--active {
   border-color: var(--module-relationships);
-  background: color-mix(in srgb, var(--module-relationships) 12%, var(--color-surface));
+  background: color-mix(in srgb, var(--module-relationships) var(--tint-state), var(--color-surface));
   color: var(--color-text-primary);
   box-shadow: 0 0 0 1px var(--module-relationships);
 }
@@ -277,13 +273,13 @@
 }
 .rel-tree-aggregate {
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: calc(var(--radius-md) + 2px);
   border: 1px solid var(--color-border-subtle);
   background: var(--color-surface);
 }
 .rel-tree-aggregate--all {
-  border-color: color-mix(in srgb, var(--module-relationships) 40%, var(--color-border-subtle));
-  background: color-mix(in srgb, var(--module-relationships) 6%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--module-relationships) var(--tint-hint), var(--color-border-subtle));
+  background: color-mix(in srgb, var(--module-relationships) var(--tint-wash), var(--color-surface));
 }
 .rel-tree-aggregate__title {
   display: flex;
@@ -293,7 +289,7 @@
   color: var(--color-text-primary);
 }
 .rel-tree-aggregate__subtitle {
-  font-size: 0.82rem;
+  font-size: var(--type-caption);
   font-weight: 500;
   color: var(--color-text-secondary);
 }
@@ -310,7 +306,7 @@
 }
 .rel-tree-branch {
   border: 1px solid var(--color-border-subtle);
-  border-radius: 14px;
+  border-radius: calc(var(--radius-md) + 2px);
   background: var(--color-surface);
   overflow: hidden;
 }
@@ -340,10 +336,10 @@
   flex: none;
   min-width: 22px;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--color-surface-raised);
   color: var(--color-text-secondary);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   text-align: center;
 }
@@ -359,7 +355,7 @@
   align-items: center;
   gap: 10px;
   padding: 6px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: transparent;
   color: inherit;
@@ -377,7 +373,7 @@
   bottom: 0;
   width: 2px;
   background: var(--color-border-subtle);
-  border-radius: 1px;
+  border-radius: calc(var(--radius-2xs) - 1px);
 }
 .rel-tree-node__name {
   flex: 1;
@@ -389,33 +385,33 @@
 }
 .rel-tree-node__edge {
   flex: none;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-label);
   padding: 2px 7px;
-  border-radius: 6px;
+  border-radius: calc(var(--radius-xs) + 2px);
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
 .rel-tree-node__badge {
   flex: none;
-  font-size: 0.7rem;
+  font-size: var(--type-micro);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--tracking-label);
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--module-relationships);
   color: #fff;
 }
 .rel-tree-node__sources {
   flex: none;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
 }
 .rel-tree-node--shared {
   border-color: color-mix(in srgb, var(--module-relationships) 45%, var(--color-border-subtle));
-  background: color-mix(in srgb, var(--module-relationships) 7%, var(--color-surface));
+  background: color-mix(in srgb, var(--module-relationships) var(--tint-wash), var(--color-surface));
 }
 .rel-tree-node--shared .rel-tree-node__line {
   background: color-mix(in srgb, var(--module-relationships) 60%, var(--color-border-subtle));
@@ -424,14 +420,14 @@
 /* row actions (delete/edit) — kompakt */
 .row-action {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 8px;
+  width: 30px; height: 30px; border-radius: var(--radius-full);
   border: 1px solid transparent; background: transparent;
   color: var(--color-text-secondary); cursor: pointer;
 }
 .row-action:hover { background: var(--color-surface-hover); color: var(--color-text-primary); }
-.row-action--danger:hover { color: var(--color-danger, #d23); background: color-mix(in srgb, var(--color-danger, #d23) 12%, transparent); }
+.row-action--danger:hover { color: var(--color-danger, #d23); background: color-mix(in srgb, var(--color-danger, #d23) var(--tint-state), transparent); }
 
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .rel-people-grid { grid-template-columns: 1fr; }
   .rel-anniv { flex-direction: column; align-items: stretch; }
   .rel-anniv__right { flex-direction: row; align-items: center; justify-content: space-between; }
@@ -449,11 +445,10 @@
   gap: 6px;
   flex-wrap: wrap;
 }
-.rel-search-input {
-  width: 170px;
-  padding: 4px 8px;
-  font-size: 0.85rem;
-}
+/* Graph-Toolbar: kompakte Stufe passend zu den btn--sm-Nachbarn.
+   Kontroll-Visual kommt aus page-search.css, hier nur die Stufe. */
+.rel-graph__search { width: 170px; }
+.rel-graph__search .page-search__input { min-height: 32px; padding-block: var(--space-1); font-size: var(--type-caption); }
 .rel-node--found .rel-node__circle {
   stroke: var(--color-accent, #f59e0b);
   stroke-width: 4;
@@ -463,9 +458,9 @@
   font-weight: 700;
   fill: var(--color-accent, #f59e0b);
 }
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .rel-graph-actions { justify-content: flex-start; }
-  .rel-search-input { width: 120px; }
+  .rel-graph__search { width: 120px; }
 }
 
 /* --- Genealogy (族谱) --- */
@@ -489,7 +484,7 @@
   width: auto;
   min-width: 170px;
   padding: 4px 8px;
-  font-size: 0.85rem;
+  font-size: var(--type-caption);
 }
 .rel-gen__zoom {
   display: inline-flex;
@@ -499,7 +494,7 @@
 .rel-gen__canvas {
   overflow: auto;
   border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background:
     radial-gradient(circle, color-mix(in srgb, var(--color-border, #cbd5e1) 45%, transparent) 1px, transparent 1px);
   background-size: 22px 22px;
@@ -533,7 +528,7 @@
   filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.22)) brightness(1.05);
 }
 .rel-gen__name {
-  font-size: 13px;
+  font-size: var(--type-caption);
   font-weight: 600;
   fill: #fff;
   pointer-events: none;
@@ -542,7 +537,7 @@
   display: flex;
   gap: 18px;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary, #94a3b8);
 }
 .rel-gen__swatch {
@@ -558,7 +553,7 @@
 /* 世代列表 */
 .rel-gen-list {
   padding: 8px 4px;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 .rel-gen-list ul.rel-gen-list__children {
   list-style: none;
@@ -580,18 +575,18 @@
   border: 0;
   background: transparent;
   padding: 3px 8px;
-  border-radius: 8px;
+  border-radius: calc(var(--radius-sm) - 2px);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text, #1f2937);
 }
-.rel-gen-list__person:hover { background: var(--color-hover, #f1f5f9); }
+.rel-gen-list__person:hover { background: var(--color-surface-hover); }
 .rel-gen-list__spouse {
-  font-size: 13px;
+  font-size: var(--type-caption);
   color: var(--color-text-secondary, #64748b);
-  background: var(--color-hover, #f8fafc);
-  border-radius: 8px;
+  background: var(--color-surface-hover, #f8fafc);
+  border-radius: var(--radius-sm, 8px);
   padding: 3px 8px;
 }
 
@@ -615,26 +610,26 @@ button.rel-gen__node--picked {
 /* 人际树（取代族谱）：整张关系网自动成树 */
 .rel-rtree { display: flex; flex-direction: column; gap: 12px; }
 .rel-rtree__toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.rel-rtree__hint { color: #6b7280; font-size: 13px; flex: 1 1 220px; min-width: 200px; }
+.rel-rtree__hint { color: #6b7280; font-size: var(--type-caption); flex: 1 1 220px; min-width: 200px; }
 .rel-rtree__actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.rel-rtree__canvas { overflow: auto; max-height: 72vh; border-radius: 12px; background: #f6f7f9; padding: 10px; }
+.rel-rtree__canvas { overflow: auto; max-height: 72vh; border-radius: var(--radius-md); background: #f6f7f9; padding: 10px; }
 .rel-rtree__canvas--dragging { cursor: grabbing; }
 .rel-rtree__comp { margin-bottom: 26px; }
 .rel-rtree__comp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-.rel-rtree__comp-name { font-weight: 600; font-size: 14px; }
-.rel-rtree__comp-meta { color: #6b7280; font-size: 12px; }
+.rel-rtree__comp-name { font-weight: 600; font-size: var(--text-sm); }
+.rel-rtree__comp-meta { color: #6b7280; font-size: var(--text-xs); }
 .rel-rtree__svg { display: block; }
 .rel-rtree__link { fill: none; stroke-width: 2; }
-.rel-rtree__edge-label { font-size: 11px; fill: #6b7280; }
+.rel-rtree__edge-label { font-size: var(--type-micro); fill: #6b7280; }
 .rel-rtree__node { cursor: pointer; }
 .rel-rtree__rect { stroke: rgba(0,0,0,.10); }
-.rel-rtree__name { font-size: 13px; font-weight: 600; fill: #fff; pointer-events: none; }
+.rel-rtree__name { font-size: var(--type-caption); font-weight: 600; fill: #fff; pointer-events: none; }
 .rel-rtree__toggle { cursor: pointer; }
 .rel-rtree__toggle-bg { fill: #fff; stroke: rgba(0,0,0,.18); }
-.rel-rtree__toggle-sign { font-size: 13px; font-weight: 700; fill: #374151; pointer-events: none; }
-.rel-rtree__legend { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; color: #6b7280; font-size: 12px; }
+.rel-rtree__toggle-sign { font-size: var(--type-caption); font-weight: 700; fill: #374151; pointer-events: none; }
+.rel-rtree__legend { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; color: #6b7280; font-size: var(--text-xs); }
 .rel-rtree__legend-item { display: flex; align-items: center; gap: 4px; }
-.rel-rtree__swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.rel-rtree__swatch { width: 12px; height: 12px; border-radius: calc(var(--radius-2xs) + 1px); display: inline-block; }
 
 /* ============================================================
  *关系网增强（v0.1.0）：扩展资料 / 提醒中心 / 亲疏洞察 / 路径查询 /
@@ -646,9 +641,9 @@ button.rel-gen__node--picked {
   margin: 18px 0 10px;
   padding-top: 14px;
   border-top: 1px solid var(--color-border);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--color-text-tertiary);
 }
@@ -658,7 +653,7 @@ button.rel-gen__node--picked {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .rel-grid2 { grid-template-columns: 1fr; }
 }
 
@@ -666,7 +661,7 @@ button.rel-gen__node--picked {
 .rel-filter { min-width: 150px; max-width: 220px; }
 .rel-common__name { font-weight: 600; }
 .rel-anniv__contact { color: var(--module-relationships); font-weight: 600; }
-.rel-anniv__date { color: var(--color-text-tertiary); font-size: 0.85rem; }
+.rel-anniv__date { color: var(--color-text-tertiary); font-size: var(--type-caption); }
 
 /* ---- 提醒中心 ---- */
 .rel-rem-grid {
@@ -675,7 +670,7 @@ button.rel-gen__node--picked {
   gap: 14px;
   align-items: start;
 }
-@media (max-width: 860px) {
+@media (max-width: 768px) {
   .rel-rem-grid { grid-template-columns: 1fr; }
 }
 .rel-rem-card { padding: 14px 16px; }
@@ -684,7 +679,7 @@ button.rel-gen__node--picked {
   align-items: baseline;
   gap: 6px;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: var(--type-secondary);
   margin-bottom: 6px;
 }
 .rel-rem-card__empty { padding: 12px 0; }
@@ -698,8 +693,8 @@ button.rel-gen__node--picked {
 .rel-rem-card__head + .rel-rem-row { border-top: none; }
 .rel-rem-row__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .rel-rem-row__name { font-weight: 600; }
-.rel-rem-row__meta { color: var(--color-text-secondary); font-size: 0.85rem; }
-.rel-rem-row__when { color: var(--color-text-tertiary); font-size: 0.82rem; white-space: nowrap; }
+.rel-rem-row__meta { color: var(--color-text-secondary); font-size: var(--type-caption); }
+.rel-rem-row__when { color: var(--color-text-tertiary); font-size: var(--type-caption); white-space: nowrap; }
 
 /* ---- 亲疏洞察 ---- */
 .rel-insights {
@@ -708,11 +703,11 @@ button.rel-gen__node--picked {
   gap: 14px;
   align-items: start;
 }
-@media (max-width: 860px) {
+@media (max-width: 768px) {
   .rel-insights { grid-template-columns: 1fr; }
 }
 .rel-ins-card { padding: 14px 16px; }
-.rel-ins-card__head { font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; }
+.rel-ins-card__head { font-weight: 700; font-size: var(--type-secondary); margin-bottom: 6px; }
 .rel-ins-row {
   display: flex;
   align-items: center;
@@ -724,7 +719,7 @@ button.rel-gen__node--picked {
 .rel-ins-row__name { font-weight: 600; flex: 0 1 auto; }
 .rel-ins-row__meta {
   color: var(--color-text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--type-caption);
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -734,7 +729,7 @@ button.rel-gen__node--picked {
 .rel-ins-row__score {
   margin-left: auto;
   color: var(--module-relationships);
-  font-size: 0.82rem;
+  font-size: var(--type-caption);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -748,12 +743,12 @@ button.rel-gen__node--picked {
   gap: 6px;
   padding: 12px 14px;
   background: var(--color-surface-hover);
-  border-radius: 10px;
-  font-size: 0.92rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 .rel-path__node { font-weight: 600; }
-.rel-path__rel { color: var(--color-text-tertiary); font-size: 0.82rem; }
+.rel-path__rel { color: var(--color-text-tertiary); font-size: var(--type-caption); }
 .rel-path__arrow { color: var(--module-relationships); font-weight: 700; }
 
 /* ---- 偏好/标签弹窗头部 ---- */
@@ -780,8 +775,8 @@ button.rel-gen__node--picked {
   gap: 6px;
   padding: 6px 12px;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
-  font-size: 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: var(--type-caption);
   cursor: pointer;
   user-select: none;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -789,7 +784,7 @@ button.rel-gen__node--picked {
 .rel-tag-chip:hover { background: var(--color-surface-hover); }
 .rel-tag-chip.is-on {
   border-color: var(--module-relationships);
-  background: color-mix(in srgb, var(--module-relationships) 14%, transparent);
+  background: color-mix(in srgb, var(--module-relationships) var(--tint-surface), transparent);
   color: var(--module-relationships);
   font-weight: 600;
 }

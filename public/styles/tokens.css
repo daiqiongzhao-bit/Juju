@@ -1426,6 +1426,7 @@
     --_module-shopping:  #F472B6;
     --_module-notes:     #FCD34D;
     --_module-contacts:  #60A5FA;
+    --_module-relationships: #4ADE80;  /* Smaragdgrün Dark - Beziehungen/Netzwerk; 11,38:1 auf #0A0A0C, 8,03:1 auf #2C2C2E — WCAG AA */
     --_module-birthdays: #FB7185;
     --_module-budget:      #2DD4BF;
     --_module-recipes:     #2ECC99;
@@ -1612,6 +1613,7 @@
     --_module-shopping:  #F472B6;
     --_module-notes:     #FCD34D;
     --_module-contacts:  #60A5FA;
+    --_module-relationships: #4ADE80;  /* Smaragdgrün Dark - Beziehungen/Netzwerk; 11,38:1 auf #0A0A0C, 8,03:1 auf #2C2C2E — WCAG AA */
     --_module-birthdays: #FB7185;
     --_module-budget:      #2DD4BF;
     --_module-recipes:     #2ECC99;

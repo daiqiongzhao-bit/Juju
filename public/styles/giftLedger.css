@@ -5,104 +5,115 @@
 
 /* Header */
 .gl-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-.gl-head h2{margin:0;font-size:20px}
+.gl-head h2{margin:0;font-size:var(--type-section-title)}
 .gl-spacer{flex:1}
 
 /* Type tabs */
 .gl-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-.gl-tab{padding:6px 14px;border:1px solid var(--border,#ddd);border-radius:20px;cursor:pointer;background:var(--bg,#fff);color:var(--text,#222);display:flex;gap:6px;align-items:center}
-.gl-tab.active{background:var(--accent,#3b82f6);color:#fff;border-color:var(--accent,#3b82f6)}
-.gl-tab .gl-count{font-size:11px;opacity:.8}
+.gl-tab{padding:6px 14px;border:1px solid var(--color-border);border-radius: calc(var(--radius-lg) + 4px);cursor:pointer;background:var(--color-surface);color:var(--color-text-primary);display:flex;gap:6px;align-items:center}
+.gl-tab.active{background:var(--color-accent);color:#fff;border-color:var(--color-accent)}
+.gl-tab .gl-count{font-size:var(--type-micro);opacity:.8}
 
 /* Filters */
 .gl-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.gl-filters input{padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:10px;background:var(--bg,#fff);color:var(--text,#222);min-width:220px}
+.gl-filters input{padding:8px 12px;border:1px solid var(--color-border);border-radius: var(--radius-sm);background:var(--color-surface);color:var(--color-text-primary);min-width:220px}
 
 /* Summary strip (nur sichtbare Zeilen, clientseitig berechnet) */
-.gl-summary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg,#fff);border:1px solid var(--border,#eee);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--color-text-secondary,#666)}
-.gl-summary__item strong{font-size:15px;color:var(--text,#222)}
+.gl-summary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--color-surface);border:1px solid var(--color-border);border-radius: var(--radius-md);padding:10px 14px;margin-bottom:12px;font-size:var(--type-caption);color:var(--color-text-secondary,#666)}
+.gl-summary__item strong{font-size:var(--type-secondary);color:var(--color-text-primary)}
 .gl-summary__dot{opacity:.5}
-.gl-summary__sum{color:var(--accent,#3b82f6)}
-.gl-summary__hint{font-size:11px;color:#999}
+.gl-summary__sum{color:var(--color-accent)}
+.gl-summary__hint{font-size:var(--type-micro);color:#999}
 
 /* List */
 .gl-list{display:flex;flex-direction:column;gap:10px}
-.gl-card{background:var(--bg,#fff);border:1px solid var(--border,#ddd);border-radius:12px;padding:14px 16px;position:relative;display:flex;gap:12px;align-items:center;cursor:pointer;transition:.15s;overflow:hidden}
+.gl-card{background:var(--color-surface);border:1px solid var(--color-border);border-radius: var(--radius-md);padding:14px 16px;position:relative;display:flex;gap:12px;align-items:center;cursor:pointer;transition:.15s;overflow:hidden}
 .gl-card:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.10)}
-.gl-card.selected{outline:2px solid var(--accent,#3b82f6);outline-offset:-2px}
+.gl-card.selected{outline:2px solid var(--color-accent);outline-offset:-2px}
 .gl-card__accent{position:absolute;left:0;top:0;bottom:0;width:4px}
 .gl-card--red .gl-card__accent{background:linear-gradient(180deg,#ef4444,#f97316)}
 .gl-card--white .gl-card__accent{background:linear-gradient(180deg,#9ca3af,#d4d4d8)}
 .gl-card__check{position:relative;z-index:1}
-.gl-card__check input{width:16px;height:16px;accent-color:var(--accent,#3b82f6)}
+.gl-card__check input{width:16px;height:16px;accent-color:var(--color-accent)}
 .gl-card__body{flex:1;min-width:0}
-.gl-card__title{font-weight:600;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.gl-card__amount{font-size:17px;font-weight:700;color:var(--text,#1f2937);font-variant-numeric:tabular-nums;white-space:nowrap}
+.gl-card__title{font-weight:600;font-size:var(--type-secondary);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gl-card__amount{font-size:var(--type-body);font-weight:700;color:var(--color-text-primary);font-variant-numeric:tabular-nums;white-space:nowrap}
 .gl-card__amount--empty{color:#c4c8cf;font-weight:400}
 
 /* Type badge: red = joyful (wedding/birth), white = mourning (funeral) */
-.gl-type{display:inline-block;padding:1px 9px;border-radius:10px;font-size:11px}
+.gl-type{display:inline-block;padding:1px 9px;border-radius: var(--radius-sm);font-size:var(--type-micro)}
 .gl-type.red{background:#fef2f2;color:#b91c1c}
 .gl-type.white{background:#fff7ed;color:#c2410c}
 
-.gl-lock{font-size:12px;color:#888}
-.gl-meta{font-size:12px;color:#888;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
-.gl-chip{display:inline-flex;align-items:center;gap:4px;background:var(--hover,#f5f5f5);border-radius:8px;padding:2px 8px}
-.gl-note{font-size:13px;color:var(--text,#333);white-space:pre-wrap;margin-top:6px}
+.gl-lock{font-size:var(--text-xs);color:#888}
+.gl-meta{font-size:var(--text-xs);color:#888;margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
+.gl-chip{display:inline-flex;align-items:center;gap:4px;background:var(--color-surface-hover);border-radius: calc(var(--radius-sm) - 2px);padding:2px 8px}
+.gl-note{font-size:var(--type-caption);color:var(--color-text-primary);white-space:pre-wrap;margin-top:6px}
 
 /* Empty state */
 .gl-empty{text-align:center;color:#999;padding:48px 20px;display:flex;flex-direction:column;align-items:center;gap:6px}
-.gl-empty__icon{font-size:44px;line-height:1;margin-bottom:4px;opacity:.85}
-.gl-empty__title{font-size:15px;font-weight:600;color:var(--text,#444)}
-.gl-empty__desc{font-size:13px;color:#999;max-width:320px}
+.gl-empty__icon{font-size:var(--text-5xl);line-height:1;margin-bottom:4px;opacity:.85}
+.gl-empty__title{font-size:var(--type-secondary);font-weight:600;color:var(--color-text-primary)}
+.gl-empty__desc{font-size:var(--type-caption);color:#999;max-width:320px}
 .gl-empty .gl-btn{margin-top:12px}
 
 /* Buttons */
-button.gl-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--accent,#3b82f6);background:var(--accent,#3b82f6);color:#fff;cursor:pointer;font-size:13px}
-button.gl-btn.ghost{background:transparent;color:var(--accent,#3b82f6)}
+button.gl-btn{padding:7px 14px;border-radius: calc(var(--radius-sm) - 2px);border:1px solid var(--color-accent);background:var(--color-accent);color:#fff;cursor:pointer;font-size:var(--type-caption)}
+button.gl-btn.ghost{background:transparent;color:var(--color-accent)}
 button.gl-btn.danger{background:#dc2626;border-color:#dc2626}
+/* Delete im Formular: Ghost nimmt die Danger-Füllung, behält aber die weiße
+   Schrift der Basis (Ghost allein ließe den Accent-Text auf Rot stehen). */
+button.gl-btn.ghost.danger{background:#dc2626;border-color:#dc2626;color:#fff}
+/* Hinweis-Zeile unter einem Formularfeld (privat-Hinweis). */
+.gl-hint{font-size:var(--type-micro);color:var(--color-text-tertiary);margin-top:var(--space-1)}
 
 /* Batch selection bar */
-.gl-bar{position:sticky;bottom:12px;display:none;align-items:center;gap:10px;background:var(--accent,#3b82f6);color:#fff;padding:10px 16px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.2);margin-top:14px}
+.gl-bar{position:sticky;bottom:12px;display:none;align-items:center;gap:10px;background:var(--color-accent);color:#fff;padding:10px 16px;border-radius: var(--radius-md);box-shadow:0 6px 20px rgba(0,0,0,.2);margin-top:14px}
 .gl-bar.show{display:flex}
+/* Die Bar steht auf Accent - die Buttons darin werden zu weißen Outlines
+   (Ghost) bzw. abgedunkeltem Rot (#7f1d1d, gegen das Blau der Bar sonst
+   nicht von der Accent-Füllung zu unterscheiden). Vorher Inline-Overrides
+   im Template (Design-Literale, Guard #250). */
+.gl-bar .gl-btn.ghost{border-color:#fff;color:#fff}
+.gl-bar .gl-btn.danger{background:#7f1d1d;border-color:#7f1d1d}
 
 /* Form modal */
 .gl-modal-body{padding:16px;max-width:560px;max-height:80vh;overflow:auto}
 .gl-field{margin-bottom:12px}
-.gl-field label{display:block;font-size:12px;color:#777;margin-bottom:4px}
-.gl-field input,.gl-field textarea,.gl-field select{width:100%;padding:8px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--bg,#fff);color:var(--text,#222);box-sizing:border-box}
+.gl-field label{display:block;font-size:var(--text-xs);color:#777;margin-bottom:4px}
+.gl-field input,.gl-field textarea,.gl-field select{width:100%;padding:8px;border:1px solid var(--color-border);border-radius: calc(var(--radius-sm) - 2px);background:var(--color-surface);color:var(--color-text-primary);box-sizing:border-box}
 
 /* Red / white radio pair */
 .gl-radios{display:flex;gap:10px}
-.gl-radios label{display:flex;gap:6px;align-items:center;font-size:14px;border:1px solid var(--border,#ddd);border-radius:8px;padding:8px 12px;cursor:pointer}
+.gl-radios label{display:flex;gap:6px;align-items:center;font-size:var(--text-sm);border:1px solid var(--color-border);border-radius: calc(var(--radius-sm) - 2px);padding:8px 12px;cursor:pointer}
 .gl-radios label.active-red{border-color:#dc2626;background:#fef2f2}
 .gl-radios label.active-white{border-color:#ea580c;background:#fff7ed}
 
 /* ---- Statistics (v0.0.13) ---- */
-.gl-stats-panel{margin:12px 0;background:var(--bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.gl-stats-panel{margin:12px 0;background:var(--color-surface);border:1px solid var(--color-border);border-radius: calc(var(--radius-md) + 2px);padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .gl-stats-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
-.gl-stats-head select{border:1px solid var(--border,#ddd);border-radius:8px;padding:4px 8px;font-size:13px}
-.gl-stat-kpi{display:inline-flex;flex-direction:column;align-items:flex-end;border-radius:10px;padding:6px 12px;font-size:12px}
-.gl-stat-kpi strong{font-size:16px}
+.gl-stats-head select{border:1px solid var(--color-border);border-radius: calc(var(--radius-sm) - 2px);padding:4px 8px;font-size:var(--type-caption)}
+.gl-stat-kpi{display:inline-flex;flex-direction:column;align-items:flex-end;border-radius: var(--radius-sm);padding:6px 12px;font-size:var(--text-xs)}
+.gl-stat-kpi strong{font-size:var(--text-base)}
 .gl-stat-kpi small{opacity:.65}
 .gl-stat-kpi--red{background:rgba(220,38,38,.08);color:#b91c1c}
 .gl-stat-kpi--white{background:rgba(100,116,139,.10);color:#475569}
 .gl-stats-months{display:flex;flex-direction:column;gap:4px}
-.gl-stat-month{display:flex;align-items:center;gap:8px;font-size:12px}
+.gl-stat-month{display:flex;align-items:center;gap:8px;font-size:var(--text-xs)}
 .gl-stat-month__label{width:34px;color:#6b7280;flex-shrink:0}
 .gl-stat-month__bars{flex:1;display:flex;flex-direction:column;gap:2px}
-.gl-stat-bar{display:block;height:7px;border-radius:4px;min-width:0}
+.gl-stat-bar{display:block;height:7px;border-radius: var(--radius-xs);min-width:0}
 .gl-stat-bar--red{background:linear-gradient(90deg,#ef4444,#dc2626)}
 .gl-stat-bar--white{background:linear-gradient(90deg,#94a3b8,#64748b)}
 .gl-stat-month__total{width:110px;text-align:right;font-weight:600;flex-shrink:0}
 .gl-stat-month__total small{font-weight:400;color:#9ca3af}
 .gl-stats-rels,.gl-stats-years{margin-top:14px}
-.gl-stats-rels h4,.gl-stats-years h4{margin:0 0 8px;font-size:13px;color:#6b7280}
-.gl-stat-rel{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;border-bottom:1px dashed var(--border,#eee)}
+.gl-stats-rels h4,.gl-stats-years h4{margin:0 0 8px;font-size:var(--type-caption);color:#6b7280}
+.gl-stat-rel{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:var(--type-caption);border-bottom:1px dashed var(--color-border)}
 .gl-stat-rel__name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gl-stat-rel__meta{color:#9ca3af;font-size:12px}
+.gl-stat-rel__meta{color:#9ca3af;font-size:var(--text-xs)}
 .gl-stat-rel__total{font-weight:700}
-.gl-stat-year{display:flex;align-items:center;gap:14px;padding:6px 10px;border-radius:8px;font-size:13px;cursor:pointer}
+.gl-stat-year{display:flex;align-items:center;gap:14px;padding:6px 10px;border-radius: calc(var(--radius-sm) - 2px);font-size:var(--type-caption);cursor:pointer}
 .gl-stat-year:hover{background:rgba(59,130,246,.06)}
 .gl-stat-year.active{background:rgba(59,130,246,.12)}
 .gl-stat-year__label{font-weight:700;width:48px}
@@ -110,4 +121,4 @@ button.gl-btn.danger{background:#dc2626;border-color:#dc2626}
 .gl-stat-year__white{color:#475569}
 
 /* 已回礼标记（#relationships 人情账绑人） */
-.gl-chip--returned{background:color-mix(in srgb, var(--ok, #16a34a) 14%, transparent);color:var(--ok, #16a34a);font-weight:600}
+.gl-chip--returned{background:color-mix(in srgb, var(--color-success) var(--tint-surface), transparent);color:var(--color-success);font-weight:600}

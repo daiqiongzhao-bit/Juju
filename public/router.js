@@ -407,7 +407,7 @@ function updateThemeColorForRoute(route) {
 
   }
 
-  setThemeColor('#F2F2F7', '#0A0A0C');
+  setThemeColor('#F5F7FA', '#0A0A0C');
 
 }
 
@@ -5289,7 +5289,7 @@ function renderSearchResults(container, data, onClose) {
       .filter(Boolean).join(' · '));
 
   // Medienbibliothek: Titel + Typ.
-  const MEDIA_TYPE_LABEL = (mt) => t('media.type.' + (mt || 'movie')) || mt;
+  const MEDIA_TYPE_LABEL = (mt) => t(`media.type.${mt || 'movie'}`) || mt;
   makeSection('nav.media', media, (i) => `/media?item=${i.id}`, null,
 
     (i) => MEDIA_TYPE_LABEL(i.media_type));

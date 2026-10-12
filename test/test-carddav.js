@@ -2369,6 +2369,27 @@ describe('Contacts API - Multi-Value Fields', () => {
     const migration95ApiDb = MIGRATIONS.find(m => m.version === 95);
     if (migration95ApiDb) contactsApiDb.exec(migration95ApiDb.up);
 
+    // Beziehungs-Profilspalten nachziehen: loadMultiValueFields() im Contacts-
+    // Router liest vehicle_plate/school/custom_tags (#137), gender/hometown/
+    // wechat/douyin/qq/contact_groups/call_them/call_me (#143) und hidden (#146)
+    // aus contacts. In Produktion bringt init() die Migrationen mit; dieses
+    // Fixture hat nur die Basis-Tabelle, daher die contacts-Teile der
+    // Migrationen hier explicit afterllen (143/146 erzeugen zusätzlich
+    // relationship-Tabellen, die dieses Fixture nicht braucht).
+    const migration137ApiDb = MIGRATIONS.find(m => m.version === 137);
+    if (migration137ApiDb) contactsApiDb.exec(migration137ApiDb.up);
+    contactsApiDb.exec(`
+      ALTER TABLE contacts ADD COLUMN gender TEXT;
+      ALTER TABLE contacts ADD COLUMN hometown TEXT;
+      ALTER TABLE contacts ADD COLUMN wechat TEXT;
+      ALTER TABLE contacts ADD COLUMN douyin TEXT;
+      ALTER TABLE contacts ADD COLUMN qq TEXT;
+      ALTER TABLE contacts ADD COLUMN contact_groups TEXT;
+      ALTER TABLE contacts ADD COLUMN call_them TEXT;
+      ALTER TABLE contacts ADD COLUMN call_me TEXT;
+      ALTER TABLE contacts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+    `);
+
     // Override db.get() to use our test database
     const dbModule = await import('../server/db.js');
     dbModule._setTestDatabase(contactsApiDb);

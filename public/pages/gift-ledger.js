@@ -83,8 +83,8 @@ export async function render(container, { user } = {}) {
       <div class="gl-bar" id="gl-bar">
         <span id="gl-bar-count">${esc(t('giftLedger.selected', { count: 0 }))}</span>
         <div class="gl-spacer" style="flex:1"></div>
-        <button class="gl-btn ghost" id="gl-bar-cancel" style="border-color:#fff;color:#fff">${esc(t('giftLedger.cancelSelect'))}</button>
-        <button class="gl-btn danger" id="gl-bar-del" style="background:#7f1d1d;border-color:#7f1d1d">${esc(t('giftLedger.batchDelete'))}</button>
+        <button class="gl-btn ghost" id="gl-bar-cancel">${esc(t('giftLedger.cancelSelect'))}</button>
+        <button class="gl-btn danger" id="gl-bar-del">${esc(t('giftLedger.batchDelete'))}</button>
       </div>
     </div>
   `;
@@ -352,7 +352,7 @@ export async function render(container, { user } = {}) {
       toggleSelectMode(false);
       await load();
     } catch {
-      alert(t('common.error') || 'Fehler');
+      window.yuvomi?.showToast?.(t('common.error') || 'Fehler', 'danger');
     }
   }
 
@@ -382,10 +382,10 @@ export async function render(container, { user } = {}) {
       <div class="gl-field"><label>${esc(t('giftLedger.note'))}</label><textarea id="f-note" rows="3"></textarea></div>
       <div class="gl-field"><label><input type="checkbox" id="f-returned"> ${esc(t('giftLedger.returned'))}</label></div>
       <div class="gl-field"><label><input type="checkbox" id="f-private"> ${esc(t('giftLedger.private'))}</label>
-        <div style="font-size:11px;color:#888;margin-top:4px">${esc(t('giftLedger.privateHint') || '')}</div>
+        <div class="gl-hint">${esc(t('giftLedger.privateHint') || '')}</div>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px">
-        ${editing ? `<button class="gl-btn ghost danger" id="f-del" style="background:#dc2626;border-color:#dc2626">${esc(t('giftLedger.delete'))}</button>` : ''}
+        ${editing ? `<button class="gl-btn ghost danger" id="f-del">${esc(t('giftLedger.delete'))}</button>` : ''}
         <div class="gl-spacer" style="flex:1"></div>
         <button class="gl-btn" id="f-save">${esc(t('giftLedger.save') || t('common.save'))}</button>
       </div>
@@ -447,7 +447,7 @@ export async function render(container, { user } = {}) {
     body.querySelector('#f-save').addEventListener('click', async () => {
       const name = body.querySelector('#f-name').value.trim();
       if (!name) {
-        alert(t('giftLedger.eventNameRequired') || t('common.nameRequired') || 'Name erforderlich');
+        window.yuvomi?.showToast?.(t('giftLedger.eventNameRequired') || t('common.nameRequired') || 'Name erforderlich', 'danger');
         return;
       }
       const amountRaw = body.querySelector('#f-amount').value.trim();
@@ -465,7 +465,7 @@ export async function render(container, { user } = {}) {
         is_private: body.querySelector('#f-private').checked,
       };
       if (payload.amount !== null && !isFinite(payload.amount)) {
-        alert(t('giftLedger.amountInvalid') || 'Betrag ungültig');
+        window.yuvomi?.showToast?.(t('giftLedger.amountInvalid') || 'Betrag ungültig', 'danger');
         return;
       }
       try {
@@ -475,7 +475,7 @@ export async function render(container, { user } = {}) {
         closeModal({ force: true });
         await load();
       } catch {
-        alert(t('common.error') || 'Fehler');
+        window.yuvomi?.showToast?.(t('common.error') || 'Fehler', 'danger');
       }
     });
   }

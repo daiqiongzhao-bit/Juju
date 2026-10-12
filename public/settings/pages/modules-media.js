@@ -15,7 +15,6 @@ function renderPage(container, cfg) {
   container.replaceChildren();
   container.insertAdjacentHTML('beforeend', `
     <section class="settings-section">
-      <h2 class="settings-section__title">${t('settings.mediaTitle')}</h2>
       <div class="settings-card">
         <h3 class="settings-card__title">${t('settings.mediaTmdbCardTitle')}</h3>
         <p class="settings-card-description">${t('settings.mediaDescription')}</p>
@@ -133,10 +132,10 @@ function renderPage(container, cfg) {
       <div class="settings-card">
         <h3 class="settings-card__title">${t('settings.mediaFreeSourcesTitle')}</h3>
         <p class="settings-card-description">${t('settings.mediaFreeSourcesDesc')}</p>
-        <ul style="margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.9;color:var(--color-text-secondary,#555)">
-          <li><strong>TMDB</strong> — ${t('settings.mediaSourceMovies')}</li>
-          <li><strong>iTunes</strong> — ${t('settings.mediaSourceMusic')}</li>
-          <li><strong>OpenLibrary</strong> · <strong>Google Books</strong> — ${t('settings.mediaSourceBooks')}</li>
+        <ul class="settings-media-sources">
+          <li><strong>${t('settings.mediaSourceTmdb')}</strong> — ${t('settings.mediaSourceMovies')}</li>
+          <li><strong>${t('settings.mediaSourceItunes')}</strong> — ${t('settings.mediaSourceMusic')}</li>
+          <li><strong>${t('settings.mediaSourceOpenlibrary')}</strong> · <strong>${t('settings.mediaSourceGoogleBooks')}</strong> — ${t('settings.mediaSourceBooks')}</li>
         </ul>
       </div>
     </section>

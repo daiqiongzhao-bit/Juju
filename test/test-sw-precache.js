@@ -133,7 +133,13 @@ test('jedes eager geladene Stylesheet aus index.html ist precacht', () => {
     .map((m) => m[0])
     .filter((tag) => !/\bmedia=/.test(tag) && !/\bonload=/.test(tag))
     .map((tag) => tag.match(/\bhref=["']([^"']+)["']/)?.[1])
-    .filter(Boolean);
+    .filter(Boolean)
+    // Seit v0.0.23 trägt jedes Shell-Asset in index.html `?v=<release>` (HTTP-
+    // Cache-Busting). Der SW precacht PFADE und normalisiert den Query beim
+    // Cache-Key weg (cacheKey() in sw.js) - verglichen wird deshalb der Pfad,
+    // nicht die volle URL. Vorher stand hier ein exakter String-Vergleich:
+    // seit dem `?v=`-Kommando meldete er JEDES Stylesheet als unprecacht.
+    .map((href) => href.split('?')[0]);
 
   // Reichweiten-Nachweis: findet das Muster nichts, prüft die Assertion nichts.
   assert.ok(eager.length >= 10, `Nur ${eager.length} eager geladene Stylesheets gefunden - das Muster greift nicht mehr`);

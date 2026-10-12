@@ -76,7 +76,7 @@ export async function render(container, { user } = {}) {
       <div class="mk-filters">
         <input id="mk-q" placeholder="${esc(t('media.searchPlaceholder'))}" style="min-width:200px">
         <select id="mk-status"><option value="">${esc(t('media.allStatus'))}</option>${STATUSES.map(
-          (s) => `<option value="${s}">${esc(t('media.status.' + s))}</option>`
+          (s) => `<option value="${s}">${esc(t(`media.status.${s}`))}</option>`
         ).join('')}</select>
         <select id="mk-member"><option value="">${esc(t('media.allMembers'))}</option></select>
         <input id="mk-tag" placeholder="${esc(t('media.tag'))}" style="width:120px">
@@ -85,8 +85,8 @@ export async function render(container, { user } = {}) {
       <div class="mk-bar" id="mk-bar">
         <span id="mk-bar-count"></span>
         <div class="mk-spacer" style="flex:1"></div>
-        <button class="mk-btn ghost" id="mk-bar-cancel" style="border-color:#fff;color:#fff">${esc(t('media.cancelSelect'))}</button>
-        <button class="mk-btn" id="mk-bar-del" style="background:#7f1d1d;border-color:#7f1d1d">${esc(t('media.batchDelete'))}</button>
+        <button class="mk-btn ghost" id="mk-bar-cancel">${esc(t('media.cancelSelect'))}</button>
+        <button class="mk-btn danger" id="mk-bar-del">${esc(t('media.batchDelete'))}</button>
       </div>
     </div>
   `;
@@ -147,8 +147,8 @@ export async function render(container, { user } = {}) {
   container.querySelector('#mk-group').addEventListener('click', (e) => {
     state.groupByStatus = !state.groupByStatus;
     e.currentTarget.classList.toggle('active', state.groupByStatus);
-    e.currentTarget.style.background = state.groupByStatus ? 'var(--accent,#3b82f6)' : 'transparent';
-    e.currentTarget.style.color = state.groupByStatus ? '#fff' : 'var(--accent,#3b82f6)';
+    e.currentTarget.style.background = state.groupByStatus ? 'var(--color-accent)' : 'transparent';
+    e.currentTarget.style.color = state.groupByStatus ? '#fff' : 'var(--color-accent)';
     load();
   });
 
@@ -157,7 +157,7 @@ export async function render(container, { user } = {}) {
   });
 
   function statusBadge(s) {
-    return `<span class="mk-badge">${esc(t('media.status.' + s))}</span>`;
+    return `<span class="mk-badge">${esc(t(`media.status.${s}`))}</span>`;
   }
 
   function cardHtml(it) {
@@ -213,8 +213,8 @@ export async function render(container, { user } = {}) {
     const btn = container.querySelector('#mk-select');
     btn.textContent = state.selectMode ? t('media.cancelSelect') : t('media.selectMode');
     btn.classList.toggle('active', state.selectMode);
-    btn.style.background = state.selectMode ? 'var(--accent,#3b82f6)' : 'transparent';
-    btn.style.color = state.selectMode ? '#fff' : 'var(--accent,#3b82f6)';
+    btn.style.background = state.selectMode ? 'var(--color-accent)' : 'transparent';
+    btn.style.color = state.selectMode ? '#fff' : 'var(--color-accent)';
     bar.classList.toggle('show', state.selectMode);
     updateBar();
     load();
@@ -232,7 +232,7 @@ export async function render(container, { user } = {}) {
       await api.post('/media/batch-delete', { ids: [...state.selected] });
       toggleSelectMode(false);
     } catch {
-      alert(t('common.error') || 'Fehler');
+      window.yuvomi?.showToast?.(t('common.error') || 'Fehler', 'danger');
     }
   }
 
@@ -313,7 +313,7 @@ export async function render(container, { user } = {}) {
           <label><input type="checkbox" data-uid="${m.id}" ${rel ? 'checked' : ''}> ${esc(m.name || m.display_name || '#' + m.id)}</label>
           <select class="mk-member-status" data-uid="${m.id}">
             <option value="">—</option>
-            ${STATUSES.map((s) => `<option value="${s}" ${st === s ? 'selected' : ''}>${esc(t('media.status.' + s))}</option>`).join('')}
+            ${STATUSES.map((s) => `<option value="${s}" ${st === s ? 'selected' : ''}>${esc(t(`media.status.${s}`))}</option>`).join('')}
           </select>
         </div>`;
       })
@@ -332,11 +332,11 @@ export async function render(container, { user } = {}) {
     body.innerHTML = `
       <h3>${esc(item.title)}</h3>
       <div class="mk-field"><label>${esc(t('media.cover'))}</label>${
-      item.cover_url ? `<img src="${esc(coverSrc(item.cover_url))}" style="max-width:120px;border-radius:8px">` : '—'
+      item.cover_url ? `<img class="mk-detail-cover" src="${esc(coverSrc(item.cover_url))}">` : '—'
     }</div>
       <div class="mk-field"><label>${esc(t('media.status.label'))}</label>
         <select id="d-status">${STATUSES.map(
-          (s) => `<option value="${s}" ${item.status === s ? 'selected' : ''}>${esc(t('media.status.' + s))}</option>`
+          (s) => `<option value="${s}" ${item.status === s ? 'selected' : ''}>${esc(t(`media.status.${s}`))}</option>`
         ).join('')}</select></div>
       <div class="mk-field"><label>${esc(t('media.rating'))}</label><div id="d-stars">${starsInput(item.rating)}</div></div>
       <div class="mk-field"><label>${esc(t('media.watchDate'))}</label><input id="d-watch" type="date" value="${esc((item.watch_date || '').slice(0, 10))}"></div>
@@ -388,7 +388,7 @@ export async function render(container, { user } = {}) {
         closeModal({ force: true });
         load();
       } catch (e) {
-        alert(t('common.error') || 'Fehler');
+        window.yuvomi?.showToast?.(t('common.error') || 'Fehler', 'danger');
       }
     });
     body.querySelector('#d-del').addEventListener('click', async () => {
@@ -457,7 +457,7 @@ export async function render(container, { user } = {}) {
         </div>
         <div class="mk-grid2">
           <div class="mk-field"><label>${esc(t('media.status.label'))}</label>
-            <select id="a-status">${STATUSES.map((s) => `<option value="${s}">${esc(t('media.status.' + s))}</option>`).join('')}</select></div>
+            <select id="a-status">${STATUSES.map((s) => `<option value="${s}">${esc(t(`media.status.${s}`))}</option>`).join('')}</select></div>
           <div class="mk-field"><label>${esc(t('media.rating'))}</label><div id="a-stars">${starsInput(0)}</div></div>
         </div>
         <div class="mk-field"><label>${esc(t('media.comment'))}</label><textarea id="a-comment" rows="2"></textarea></div>
@@ -534,7 +534,7 @@ export async function render(container, { user } = {}) {
               .map(
                 (d, i) => `<div class="mk-search-row" data-i="${i}">${
                   d.posterUrl || d.coverUrl ? `<img src="${esc(coverSrc(d.posterUrl || d.coverUrl))}">` : '<div class="mk-search-row__ph">📄</div>'
-                }<div class="mk-search-row__body"><div><b>${esc(d.title)}</b></div><div style="font-size:12px;color:#888">${esc(
+                }<div class="mk-search-row__body"><div><b>${esc(d.title)}</b></div><div class="mk-search-row__meta">${esc(
                   [d.releaseDate || d.publishDate || '', d.authors || ''].filter(Boolean).join(' · ')
                 )}</div>${d.overview ? `<div class="mk-search-row__ov">${esc(String(d.overview).slice(0, 80))}</div>` : ''}</div></div>`
               )

@@ -45,6 +45,8 @@ const WIDGET_LABEL_KEYS = {
   health: 'nav.health',
   cycle: 'settings.permWidgetCycle',
   housekeeping: 'nav.housekeeping',
+  media: 'nav.media',
+  gifts: 'nav.giftLedger',
   notes: 'nav.notes',
   family: 'settings.permWidgetFamily',
   weather: 'settings.permWidgetWeather',

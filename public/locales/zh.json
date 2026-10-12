@@ -1018,6 +1018,7 @@
         "timelineEmptyTitle": "还没有互动记录",
         "timelineEmptyDesc": "记录通话、会面或备注，为每位联系人建立时间线。",
         "deleteInteractionConfirm": "删除这条互动记录？",
+        "deleteInteractionDetail": "该记录将被永久删除，无法恢复。统计概览与时间线中将不再显示它。",
         "interactionDeleted": "互动已删除",
         "interaction": {
             "note": "备注",
@@ -1030,7 +1031,8 @@
         "addAnniversary": "添加纪念日",
         "annivEmptyTitle": "还没有纪念日",
         "annivEmptyDesc": "标记婚礼、初识日等每年的重要节点。",
-        "deleteAnniversaryConfirm": "删除这个纪念日？其日历事件也会一并移除。",
+        "deleteAnniversaryConfirm": "删除这个纪念日？",
+        "deleteAnniversaryDetail": "该纪念日及其日历事件将被永久删除，无法恢复。",
         "anniversaryDeleted": "纪念日已删除",
         "inDays": "还有 {{count}} 天",
         "contact": "联系人",
@@ -2431,8 +2433,7 @@
         "healthCaregiversLabel": "可以记录健康数据",
         "healthCaregiversHint": "这些人可以为该成员记录体征、用药、化验结果和活动，并在此过程中看到其私密记录。经期日记不在此列。",
         "pageMediaIntegration": "媒体元数据",
-        "pageMediaIntegrationDescription": "TMDB / OpenLibrary / iTunes / Google Books 数据源配置",
-        "mediaTitle": "媒体元数据",
+        "pageMediaIntegrationDescription": "TMDB / OpenLibrary / iTunes / Google Books 数据源配置。",
         "mediaTmdbCardTitle": "TMDB 与 OpenLibrary",
         "mediaDescription": "配置影视书库的元数据搜索源。TMDB Key 仅管理员可见，保存后立即生效。",
         "mediaTmdbKey": "TMDB API Key（v3）",
@@ -2450,6 +2451,10 @@
         "mediaFreeSourcesDesc": "以下数据源无需任何配置，新增弹窗会按类型自动切换。",
         "mediaSourceMovies": "影视 / 剧集搜索与海报",
         "mediaSourceMusic": "音乐专辑搜索与封面",
+        "mediaSourceTmdb": "TMDB",
+        "mediaSourceItunes": "iTunes",
+        "mediaSourceOpenlibrary": "OpenLibrary",
+        "mediaSourceGoogleBooks": "Google Books",
         "mediaSourceBooks": "书籍搜索与封面",
         "embyCardTitle": "Emby 集成",
         "embyCardDesc": "连接 Emby / Jellyfin 服务器：把「已看 / 在看」状态同步到影音书库，并在影音书库中浏览 Emby 照片库。",
@@ -4231,6 +4236,7 @@
         "previewFailed": "目前无法检查该邀请，请稍后重新加载页面。"
     },
     "media": {
+        "tags": "标签",
         "title": "影音书库",
         "subtitle": "电影、剧集、音乐与书籍——个人收藏或家庭共享。",
         "tabAll": "全部",
@@ -4277,6 +4283,7 @@
         "source": "数据源"
     },
     "memory": {
+        "tags": "标签",
         "title": "家庭回忆",
         "subtitle": "共同记忆：影音、旅行与生活事件。",
         "add": "新增",

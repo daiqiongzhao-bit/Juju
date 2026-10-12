@@ -67,7 +67,7 @@ export async function render(container, { user } = {}) {
       </div>
       <div class="fm-filters">
         <select id="fm-type"><option value="">${esc(t('memory.allTypes'))}</option>${TYPES.map(
-          (s) => `<option value="${s}">${esc(t('memory.type.' + s))}</option>`
+          (s) => `<option value="${s}">${esc(t(`memory.type.${s}`))}</option>`
         ).join('')}</select>
         <select id="fm-member"><option value="">${esc(t('memory.allMembers'))}</option></select>
         <input id="fm-tag" placeholder="${esc(t('memory.tag'))}" style="width:110px">
@@ -162,7 +162,7 @@ export async function render(container, { user } = {}) {
     const members = (it.members || []).map((m) => esc(m.name || '#' + m.uid)).join(', ');
     const lock = it.is_locked ? ' 🔒' : '';
     return `<div class="fm-item" data-id="${it.id}">
-      <h3>${esc(it.title)}${lock}<span class="fm-type">${esc(t('memory.type.' + it.type))}</span></h3>
+      <h3>${esc(it.title)}${lock}<span class="fm-type">${esc(t(`memory.type.${it.type}`))}</span></h3>
       <div class="fm-meta">${esc((it.event_time || '').slice(0, 10) || '')} · ${esc(it.location || '')} · ${esc(members)}</div>
       <div class="fm-desc">${esc(it.description || '')}</div>
       ${photos ? `<div class="fm-photos">${photos}</div>` : ''}
@@ -279,10 +279,9 @@ export async function render(container, { user } = {}) {
         const base = dir.replace(/\/+$/, '');
         filesBox.innerHTML = files
           .map(
-            (f) => `<label style="display:inline-flex;flex-direction:column;align-items:center;margin:4px;cursor:pointer;vertical-align:top">
-              <img src="/api/v1/memory/file?path=${encodeURIComponent(base + '/' + f.name)}" alt="" loading="lazy"
-                   style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid rgba(0,0,0,.1)">
-              <span style="font-size:11px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+            (f) => `<label class="fm-import-file">
+              <img src="/api/v1/memory/file?path=${encodeURIComponent(base + '/' + f.name)}" alt="" loading="lazy">
+              <span class="fm-import-file__name">${esc(f.name)}</span>
               <input type="checkbox" data-name="${esc(f.name)}" checked>
             </label>`
           )
@@ -308,7 +307,7 @@ export async function render(container, { user } = {}) {
         closeModal({ force: true });
         load();
       } catch {
-        alert(t('memory.folderErr'));
+        window.yuvomi?.showToast?.(t('memory.folderErr'), 'danger');
         importBtn.disabled = false;
       }
     });
@@ -327,7 +326,7 @@ export async function render(container, { user } = {}) {
       <h3>${esc(item.title)}</h3>
       <div class="fm-field"><label>${esc(t('memory.type.label'))}</label>
         <select id="d-type">${TYPES.map(
-          (s) => `<option value="${s}" ${item.type === s ? 'selected' : ''}>${esc(t('memory.type.' + s))}</option>`
+          (s) => `<option value="${s}" ${item.type === s ? 'selected' : ''}>${esc(t(`memory.type.${s}`))}</option>`
         ).join('')}</select></div>
       <div class="fm-field"><label>${esc(t('memory.eventTime'))}</label><input id="d-time" type="date" value="${esc((item.event_time || '').slice(0, 10))}"></div>
       <div class="fm-field"><label>${esc(t('memory.location'))}</label><input id="d-loc" value="${esc(item.location || '')}"></div>
@@ -367,7 +366,7 @@ export async function render(container, { user } = {}) {
         closeModal({ force: true });
         load();
       } catch {
-        alert(t('common.error') || 'Fehler');
+        window.yuvomi?.showToast?.(t('common.error') || 'Fehler', 'danger');
       }
     });
     body.querySelector('#d-del').addEventListener('click', async () => {
@@ -385,7 +384,7 @@ export async function render(container, { user } = {}) {
     body.className = 'fm-modal-body';
     body.innerHTML = `
       <div class="fm-field"><label>${esc(t('memory.type.label'))}</label>
-        <select id="a-type">${TYPES.map((s) => `<option value="${s}">${esc(t('memory.type.' + s))}</option>`).join('')}</select></div>
+        <select id="a-type">${TYPES.map((s) => `<option value="${s}">${esc(t(`memory.type.${s}`))}</option>`).join('')}</select></div>
       <div class="fm-field"><label>${esc(t('memory.title'))}</label><input id="a-title"></div>
       <div class="fm-field"><label>${esc(t('memory.eventTime'))}</label><input id="a-time" type="date"></div>
       <div class="fm-field"><label>${esc(t('memory.location'))}</label><input id="a-loc"></div>
@@ -418,7 +417,7 @@ export async function render(container, { user } = {}) {
     wireFolderImport(body, async () => {
       const payload = collectPayload();
       if (!payload.title) {
-        alert(t('memory.titleRequired') || 'Titel erforderlich');
+        window.yuvomi?.showToast?.(t('memory.titleRequired') || 'Titel erforderlich', 'danger');
         body.querySelector('#a-title').focus();
         return null;
       }
@@ -428,7 +427,7 @@ export async function render(container, { user } = {}) {
     body.querySelector('#a-save').addEventListener('click', async () => {
       const title = body.querySelector('#a-title').value.trim();
       if (!title) {
-        alert(t('memory.titleRequired') || 'Titel erforderlich');
+        window.yuvomi?.showToast?.(t('memory.titleRequired') || 'Titel erforderlich', 'danger');
         return;
       }
       const payload = collectPayload();
@@ -438,7 +437,7 @@ export async function render(container, { user } = {}) {
         closeModal({ force: true });
         load();
       } catch {
-        alert(t('common.error') || 'Fehler');
+        window.yuvomi?.showToast?.(t('common.error') || 'Fehler', 'danger');
       }
     });
   }

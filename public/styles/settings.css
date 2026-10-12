@@ -831,6 +831,17 @@
   color: var(--color-text-primary);
 }
 
+/* Liste der freien Medien-Quellen auf der Medien-Modulseite (TMDB, iTunes,
+ * OpenLibrary, Google Books) - war ein Inline-Style im Template
+ * (font-size/line-height als Literal, Guard #250). */
+.settings-media-sources {
+  margin: var(--space-2) 0 0;
+  padding-left: 18px;
+  font-size: var(--type-caption);
+  line-height: 1.9;
+  color: var(--color-text-secondary);
+}
+
 .settings-pwa-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

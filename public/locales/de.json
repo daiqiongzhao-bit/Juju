@@ -1032,6 +1032,7 @@
         "timelineEmptyTitle": "Noch keine Interaktionen",
         "timelineEmptyDesc": "Erfasse Anrufe, Treffen oder Notizen für eine Zeitleiste pro Kontakt.",
         "deleteInteractionConfirm": "Diese Interaktion löschen?",
+        "deleteInteractionDetail": "Der Eintrag wird endgültig gelöscht und ist nicht wiederherstellbar. Auswertungen und der Zeitstrahl verlieren ihn.",
         "interactionDeleted": "Interaktion gelöscht",
         "interaction": {
             "note": "Notiz",
@@ -1044,7 +1045,8 @@
         "addAnniversary": "Jahrestag hinzufügen",
         "annivEmptyTitle": "Noch keine Jahrestage",
         "annivEmptyDesc": "Markiere Hochzeiten, Kennenlernen und andere jährliche Meilensteine.",
-        "deleteAnniversaryConfirm": "Diesen Jahrestag löschen? Sein Kalendereintrag wird entfernt.",
+        "deleteAnniversaryConfirm": "Diesen Jahrestag löschen?",
+        "deleteAnniversaryDetail": "Der Jahrestag und sein Kalendereintrag werden endgültig gelöscht und sind nicht wiederherstellbar.",
         "anniversaryDeleted": "Jahrestag gelöscht",
         "inDays": "in {{count}} Tagen",
         "contact": "Kontakt",
@@ -2445,8 +2447,7 @@
         "healthCaregiversLabel": "Darf Gesundheitsdaten eintragen",
         "healthCaregiversHint": "Diese Personen dürfen für dieses Mitglied Vitalwerte, Medikamente, Laborwerte und Aktivitäten eintragen und dabei auch dessen private Einträge sehen. Das Zyklus-Tagebuch bleibt ausgenommen.",
         "pageMediaIntegration": "Medien-Metadaten",
-        "pageMediaIntegrationDescription": "Datenquellen TMDB / OpenLibrary / iTunes / Google Books",
-        "mediaTitle": "Medien-Metadaten",
+        "pageMediaIntegrationDescription": "Datenquellen TMDB / OpenLibrary / iTunes / Google Books.",
         "mediaTmdbCardTitle": "TMDB & OpenLibrary",
         "mediaDescription": "Anreicherung der Medienbibliothek konfigurieren. Der TMDB-Key ist nur für Admins sichtbar.",
         "mediaTmdbKey": "TMDB API-Key (v3)",
@@ -2464,6 +2465,10 @@
         "mediaFreeSourcesDesc": "Diese Quellen brauchen keinen Key; der Hinzufügen-Dialog wählt sie je Medientyp automatisch.",
         "mediaSourceMovies": "Film-/Serien-Suche mit Postern",
         "mediaSourceMusic": "Album-Suche mit Covern",
+        "mediaSourceTmdb": "TMDB",
+        "mediaSourceItunes": "iTunes",
+        "mediaSourceOpenlibrary": "OpenLibrary",
+        "mediaSourceGoogleBooks": "Google Books",
         "mediaSourceBooks": "Buchsuche mit Covern",
         "embyCardTitle": "Emby-Integration",
         "embyCardDesc": "Emby-/Jellyfin-Server anbinden: Gesehene-Status in die Medienbibliothek uebernehmen und Fotobibliotheken durchstoebern.",
@@ -4231,6 +4236,7 @@
         "previewFailed": "Die Einladung konnte gerade nicht geprüft werden. Bitte lade die Seite in einem Moment neu."
     },
     "media": {
+        "tags": "Tags",
         "title": "Medienbibliothek",
         "subtitle": "Filme, Serien, Musik und Bücher – persönlich oder gemeinsam mit der Familie.",
         "tabAll": "Alle",
@@ -4277,6 +4283,7 @@
         "source": "Quelle"
     },
     "memory": {
+        "tags": "Tags",
         "title": "Familienerinnerungen",
         "subtitle": "Gemeinsame Momente: Medien, Reisen und Ereignisse.",
         "add": "Hinzufügen",

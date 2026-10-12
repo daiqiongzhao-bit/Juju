@@ -67,6 +67,12 @@ export const PERMISSION_WIDGETS = Object.freeze([
   { id: 'health',       module: 'health' },
   { id: 'cycle',        module: 'health' },
   { id: 'housekeeping', module: 'housekeeping' },
+  // media/giftLedger sind keine Permission-Module (nicht in PERMISSION_MODULES,
+  // nicht in NAV_TO_MODULE) - ihre Widgets tragen darum wie family/weather/clock
+  // `module: null`: einzeln sperrbar, ohne Modul-Gate. Fehlten seit v0.0.23
+  // (die Widgets existierten, die Rechte-Verwaltung kannte sie nicht).
+  { id: 'media',        module: null },
+  { id: 'gifts',        module: null },
   { id: 'notes',        module: 'notes' },
   { id: 'family',       module: null },
   { id: 'weather',      module: null },

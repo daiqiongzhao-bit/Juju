@@ -15,7 +15,7 @@
  *   → bypassCacheUntil (in-memory + Cache API für SW-Restart-Robustheit)
  */
 
-const APP_RELEASE   = '0.0.10';
+const APP_RELEASE   = '0.0.24';
 const SHELL_CACHE   = `yuvomi-shell-${APP_RELEASE}`;
 const PAGES_CACHE   = `yuvomi-pages-${APP_RELEASE}`;
 const LOCALES_CACHE = `yuvomi-locales-${APP_RELEASE}`;
@@ -369,7 +369,7 @@ function dispatchFetch(request, url) {
   // Gilt für ALLE Requests (JS, CSS, Images, HTML) im Bypass-Fenster.
   if (Date.now() < bypassCacheUntil) {
     return fetch(new Request(request, { cache: 'no-cache' })).catch(async () => {
-      const cached = await caches.match(request)
+      const cached = await caches.match(cacheKey(request))
         || await caches.match('/index.html')
         || await caches.match('/offline.html');
       return cached || new Response('Offline', {
@@ -421,6 +421,24 @@ function dispatchFetch(request, url) {
 }
 
 // --------------------------------------------------------
+// Cache-Key: der PFAD, nicht die angefragte URL
+//
+// index.html trägt seit v0.0.23 an jedem Shell-Asset `?v=<release>` (HTTP-
+// Cache-Busting). `cache.match(request)` vergleicht die VOLLE URL - der
+// Precache-Eintrag `/styles/tokens.css` und der Request
+// `/styles/tokens.css?v=0.0.24` wären damit zwei verschiedene Schlüssel:
+// der allererste Offline-Start geht leer aus (ungestylte Shell), und jeder
+// Online-Besuch legt eine zweite Kopie unter dem Query-Key an.
+// `test:sw-precache` hält die Paarung (Pfad in der Liste == Pfad im href).
+//
+// NICHT für den API-Cache: dort trägt der Query die Bedeutung (`?since=…`).
+// --------------------------------------------------------
+function cacheKey(request) {
+  const url = new URL(request.url);
+  return url.origin === self.location.origin ? url.pathname : request.url;
+}
+
+// --------------------------------------------------------
 // Strategie: Network-First (für Navigation Requests)
 // --------------------------------------------------------
 async function networkFirst(request, cacheName) {
@@ -429,11 +447,11 @@ async function networkFirst(request, cacheName) {
   try {
     const response = await fetch(request);
     if (response.ok && response.type === 'basic') {
-      cache.put(request, response.clone());
+      cache.put(cacheKey(request), response.clone());
     }
     return response;
   } catch {
-    const cached = await cache.match(request);
+    const cached = await cache.match(cacheKey(request));
     if (cached) return cached;
 
     const shell = await cache.match('/index.html');
@@ -487,12 +505,12 @@ async function networkFirstApi(request) {
 // --------------------------------------------------------
 async function cacheFirst(request, cacheName) {
   const cache  = await caches.open(cacheName);
-  const cached = await cache.match(request);
+  const cached = await cache.match(cacheKey(request));
   if (cached) return cached;
 
   try {
     const response = await fetch(request);
-    if (response.ok) cache.put(request, response.clone());
+    if (response.ok) cache.put(cacheKey(request), response.clone());
     return response;
   } catch {
     return new Response('', { status: 408 });

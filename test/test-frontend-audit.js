@@ -2273,7 +2273,10 @@ test('die Küchen-Listen teilen eine Zeilen-Grammatik', () => {
   const shared = read('../public/styles/list-row.css');
   const indexHtml = read('../public/index.html');
 
-  assert.match(indexHtml, /<link rel="stylesheet" href="\/styles\/list-row\.css" \/>/,
+  // Optionale ?v=-Query: seit v0.0.23 tragen JEDE Asset-Referenz in index.html
+  // den Versions-Query (Cache-Busting). Der Guard prueft das EINHAENGEN, nicht
+  // die Cache-Strategie - ein Query daran aendert nichts daran.
+  assert.match(indexHtml, /<link rel="stylesheet" href="\/styles\/list-row\.css(?:\?[^"]*)?" \/>/,
     'list-row.css muss in index.html eingehängt sein (Router lädt nur EIN Page-CSS pro Seite)');
 
   // Die Gruppe trägt die Fläche, die Zeile nur Inhalt.
@@ -4683,7 +4686,19 @@ test('phase 1 keeps productive list surfaces opaque instead of high-transparency
   }
 });
 
-test('phase 1 app backdrop uses subtle tokenized tint and opaque scroll content', () => {
+test('phase 1 app backdrop keeps the tokenized tint on the shell and the scroll container transparent', () => {
+  // Der Guard wurde 2026-08-11 geschrieben und verlangte einen OPAKEN
+  // Scrollport (`background-color: var(--color-bg)`). Drei Tage spaeter
+  // (242e4af, Bug 2026-08-14) wurde er ABSICHTLICH transparent: die opake
+  // Farbe hat den ganzen Liquid-Glass-Backdrop (Blobs + .app-shell-Gradient)
+  // unsichtbar gemacht. Die Inhaltsflaechen sind seit dem HIG-Rollout opak
+  // und verdecken den Backdrop nur, wo Inhalt liegt - Lesbarkeit tragen
+  // die Karten, nicht der Scrollport.
+  //
+  // Was der Guard WEITERHIN schuetzt, ist die Ursache der alten Fassung: der
+  // decorative Gradient darf NICHT auf den Scrollport wandern (Issue #166 -
+  // Rasterierungsaussetzer beim Scrollen in WebKit/Blink). Er steht auf
+  // .app-shell, tokenisiert; der Scrollport bleibt durchsichtig.
   const glass = read('../public/styles/glass.css');
   const layout = read('../public/styles/layout.css');
   const shellRule = cssRuleBody(glass, '.app-shell');
@@ -4692,7 +4707,7 @@ test('phase 1 app backdrop uses subtle tokenized tint and opaque scroll content'
 
   assert.match(shellRule, /var\(--app-backdrop-accent-strength\)/, 'app-shell tint strength should be tokenized');
   assert.match(shellRule, /var\(--app-backdrop-secondary-strength\)/, 'secondary backdrop tint should be tokenized');
-  assert.match(glassContentRule, /background-color:\s*var\(--color-bg\)/, 'glass.css should keep scroll content on an opaque readable base');
+  assert.match(glassContentRule, /background-color:\s*transparent/, 'glass.css should keep the scroll container transparent so the shell backdrop shows through (Bug 2026-08-14)');
   assert.doesNotMatch(layoutContentRule, /radial-gradient/, 'layout.css should not put decorative radial gradients on the scroll container');
 });
 
@@ -5669,7 +5684,9 @@ test('die Statusbar folgt der ausdruecklichen Theme-Wahl, nicht nur dem System',
     if (!scoped.length) continue;
     scopedDocs.push(name);
     assert.equal(scoped.length, 2, `${name}: erwartet zwei system-gebundene Metas, gefunden ${scoped.length}`);
-    if (!/<script[^>]+src="\/theme-init\.js"/.test(src)) unfixed.push(name);
+    // ?v=-Query tolerant, derselbe Grund wie beim list-row-Guard: seit v0.0.23
+    // tragen alle Asset-Referenzen den Versions-Query, geprueft wird das LADEN.
+    if (!/<script[^>]+src="\/theme-init\.js(?:\?[^"]*)?"/.test(src)) unfixed.push(name);
   }
 
   // Reichweite vor dem Urteil.
