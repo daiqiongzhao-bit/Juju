@@ -71,7 +71,7 @@ jobs:
         id: digest
         run: |
           set -euo pipefail
-          IMG="ghcr.io/${{ github.repository_owner }}/yuvomi:${{ steps.ver.outputs.version }}"
+          IMG="ghcr.io/${{ github.repository_owner }}/juju:${{ steps.ver.outputs.version }}"
           for i in $(seq 1 40); do
             # `|| true` keeps a not-yet-published image (pipefail makes inspect's
             # failure propagate) from tripping `set -e` and aborting the retry loop.
@@ -99,7 +99,7 @@ jobs:
           set -euo pipefail
           FORK="$OWNER/umbrel-apps"
           UPSTREAM="getumbrel/umbrel-apps"
-          BRANCH="yuvomi-update"
+          BRANCH="juju-update"
 
           git config --global user.name "$OWNER"
           git config --global user.email "$ACTOR@users.noreply.github.com"
@@ -112,7 +112,7 @@ jobs:
           # but belongs to the wrong account.
           TOKEN_USER="$(gh api user --jq .login 2>/dev/null || true)"
           if [ -z "$TOKEN_USER" ]; then
-            echo "::error::UMBREL_FORK_TOKEN was rejected by the API. A stray newline or space in the secret value is the usual cause (piping it through 'echo' adds one). Re-set it with: gh auth token | tr -d '[:space:]' | gh secret set UMBREL_FORK_TOKEN --repo $OWNER/yuvomi"
+            echo "::error::UMBREL_FORK_TOKEN was rejected by the API. A stray newline or space in the secret value is the usual cause (piping it through 'echo' adds one). Re-set it with: gh auth token | tr -d '[:space:]' | gh secret set UMBREL_FORK_TOKEN --repo $OWNER/juju"
             exit 1
           fi
           echo "UMBREL_FORK_TOKEN authenticates as: $TOKEN_USER"
@@ -127,17 +127,17 @@ jobs:
 
           # Guard: only update once Juju is already in upstream master. Before the
           # initial submission is merged there is nothing to edit — skip.
-          if [ ! -f yuvomi/umbrel-app.yml ]; then
+          if [ ! -f juju/umbrel-app.yml ]; then
             echo "::notice::Juju is not yet in upstream master (initial submission still pending). Skipping auto-update."
             exit 0
           fi
 
           # Edit the maintainers' files IN PLACE — never overwrite them with our
           # source, so their port / gallery / category / review tweaks are preserved.
-          sed -i -E "s|^version: .*|version: \"$VERSION\"|" yuvomi/umbrel-app.yml
-          sed -i -E "s|image: ghcr.io/$OWNER/yuvomi:[^@[:space:]]+@sha256:[0-9a-f]+|image: ghcr.io/$OWNER/yuvomi:$VERSION@$DIGEST|" yuvomi/docker-compose.yml
+          sed -i -E "s|^version: .*|version: \"$VERSION\"|" juju/umbrel-app.yml
+          sed -i -E "s|image: ghcr.io/$OWNER/juju:[^@[:space:]]+@sha256:[0-9a-f]+|image: ghcr.io/$OWNER/juju:$VERSION@$DIGEST|" juju/docker-compose.yml
           if [ -z "${RELEASE_BODY:-}" ]; then
-            RELEASE_BODY="$(gh release view "v$VERSION" --repo "$OWNER/yuvomi" --json body -q .body)"
+            RELEASE_BODY="$(gh release view "v$VERSION" --repo "$OWNER/juju" --json body -q .body)"
             export RELEASE_BODY
           fi
           # releaseNotes from the GitHub release body (JSON-encoded string is valid YAML)
@@ -155,7 +155,7 @@ jobs:
           # indented continuation behind, so the file became invalid YAML and the
           # PR carried a broken manifest (seen on the v1.79.0 release). Consume the
           # whole block: up to the next line starting a top-level key, or EOF.
-          p = "yuvomi/umbrel-app.yml"
+          p = "juju/umbrel-app.yml"
           t = open(p).read()
 
           # Markdown belongs in a changelog, not in an app-store field: strip the
@@ -178,25 +178,25 @@ jobs:
             flags=re.M | re.S,
           )
           if n != 1:
-            sys.exit("::error::releaseNotes block not found in yuvomi/umbrel-app.yml")
+            sys.exit("::error::releaseNotes block not found in juju/umbrel-app.yml")
           open(p, "w").write(t)
           PY
 
           echo "--- updated ---"
-          grep -E '^(version|releaseNotes):' yuvomi/umbrel-app.yml
-          grep 'image:' yuvomi/docker-compose.yml
+          grep -E '^(version|releaseNotes):' juju/umbrel-app.yml
+          grep 'image:' juju/docker-compose.yml
 
           # A malformed manifest must never reach the maintainers' PR: fail here
           # instead. python3 on ubuntu-latest ships PyYAML.
-          python3 -c "import yaml,sys; yaml.safe_load(open('yuvomi/umbrel-app.yml')); yaml.safe_load(open('yuvomi/docker-compose.yml')); print('YAML OK')"
+          python3 -c "import yaml,sys; yaml.safe_load(open('juju/umbrel-app.yml')); yaml.safe_load(open('juju/docker-compose.yml')); print('YAML OK')"
 
-          if git diff --quiet -- yuvomi/; then
+          if git diff --quiet -- juju/; then
             echo "Catalog already at v$VERSION — nothing to do."
             exit 0
           fi
 
-          git add yuvomi/
-          git commit -m "yuvomi: update to v$VERSION"
+          git add juju/
+          git commit -m "juju: update to v$VERSION"
           git push --force origin "$BRANCH"
 
           # An open PR is the NORMAL state here: the branch is long-lived and every
@@ -216,13 +216,13 @@ jobs:
           EXISTING="$(open_pr)"
           if [ -n "$EXISTING" ]; then
             echo "PR #$EXISTING already open - the force-push above updated it to v$VERSION."
-            gh pr edit "$EXISTING" --repo "$UPSTREAM" --title "yuvomi: update to v$VERSION" || true
+            gh pr edit "$EXISTING" --repo "$UPSTREAM" --title "juju: update to v$VERSION" || true
             exit 0
           fi
 
           gh pr create --repo "$UPSTREAM" --base master --head "$OWNER:$BRANCH" \
-            --title "yuvomi: update to v$VERSION" \
-            --body "Automated update of Juju to v$VERSION (multi-arch image pinned by digest). Source: https://github.com/$OWNER/yuvomi/releases/tag/v$VERSION" \
+            --title "juju: update to v$VERSION" \
+            --body "Automated update of Juju to v$VERSION (multi-arch image pinned by digest). Source: https://github.com/$OWNER/juju/releases/tag/v$VERSION" \
           || {
             # A PR that appeared between the lookup and here is not a failure either:
             # the update sits on the branch, so the PR carries it regardless.
