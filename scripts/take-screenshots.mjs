@@ -28,7 +28,7 @@ const SCREENSHOT_DIR = resolve(ROOT, 'docs', 'screenshots');
 const LOCALE      = (process.env.SHOT_LOCALE || 'en').toLowerCase();
 const OUT_DIR     = LOCALE === 'en' ? SCREENSHOT_DIR : resolve(SCREENSHOT_DIR, LOCALE);
 // BCP-47 tag for the browser context (drives Intl date/number/currency formatting).
-const CONTEXT_LOCALE = { en: 'en-US', de: 'de-DE' }[LOCALE] || 'en-US';
+const CONTEXT_LOCALE = { en: 'en-US', de: 'de-DE', zh: 'zh-CN' }[LOCALE] || 'en-US';
 const DEMO_DB     = '/tmp/yuvomi-screenshot.db';
 const PORT        = 3099;
 const BASE_URL    = `http://localhost:${PORT}`;
@@ -358,7 +358,7 @@ async function warmWeatherCache(browser) {
 
 async function main() {
   console.log('Launching browser…');
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || undefined });
   const warnings = [];
 
   try {
