@@ -475,7 +475,7 @@
         </a>
         <button class="nav-btn" id="langToggle" type="button" aria-label="Switch language">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          <span id="langLabel">DE</span>
+          <span id="langLabel">中文</span>
         </button>
         <button class="nav-btn" id="themeToggle" type="button" aria-label="Toggle theme" aria-pressed="false">
           <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -1097,12 +1097,97 @@ docker compose logs | grep "Server running"</div></div><p data-t="trouble_nginx_
         footer_home:'Startseite', footer_heart:'Mit Sorgfalt gebaut für Familien, die Privatsphäre und Einfachheit schätzen.', footer_contrib:'Mitmachen', footer_impressum:'Impressum', footer_privacy:'Datenschutz',
         to_top:'Nach oben',
         skip_link:'Zum Inhalt springen', backLabel:'Übersicht', copy:'Kopieren', copied:'Kopiert!', copyfail:'Nicht kopiert'
+      },
+      zh: {
+        hero_eyebrow:'安装部署', hero_title_pre:'安装 Juju', hero_title_em:'多种方式任选。',
+        hero_desc:'几分钟内把自托管的家庭计划助手跑起来。可以选择应用商店一键安装、两条命令的 Docker 部署，或向导式网页安装。',
+        hero_time:'约 10 分钟',
+        nav_main:'主导航', nav_home:'Juju 主页', foot_nav:'页脚', tablist_label:'安装方式选项', code_label:'命令块',
+        prereq_title:'你需要准备什么',
+        prereq_desc:'Juju 以 Docker 或 Podman 容器运行，无需安装 Node.js 或任何其他运行时。只要有一个容器引擎就够了。（应用商店安装连这一步都替你搞定；只有向导式网页安装需要额外安装 Git 和 Node.js。）',
+        prereq_docker_title:'Docker 或 Podman', prereq_docker_desc:'把应用打包成容器，其他什么都不用装。个人使用免费。Podman（RHEL/Fedora/CentOS Stream）也可以 — 无 root、兼容 SELinux。',
+        prereq_terminal_title:'终端', prereq_terminal_desc:'用来输入几条命令的命令行界面。每个系统都内置 — 无需额外安装。',
+        prereq_terminal_hint:'macOS：终端 · Windows：PowerShell · Linux：bash',
+        prereq_sys_title:'系统', prereq_sys_desc:'最低 256 MB 内存。树莓派、NAS、家庭服务器或任何台式机都能跑。',
+        prereq_sys_hint:'Docker 镜像约占 500 MB 磁盘',
+        steps_title:'选择你的<em>平台</em>', steps_desc:'七种安装方式，选一个符合你环境的即可，结果都是同一个私有的 Juju 实例。',
+        tab_group_terminal:'在终端里', tab_group_store:'应用商店一键安装',
+        tab_installer:'网页安装器', tab_docker:'Docker / Podman', tab_proxmox:'Proxmox', tab_source:'从源码', tab_truenas:'TrueNAS', tab_umbrel:'Umbrel', tab_unraid:'Unraid', tab_one:'一键',
+        opt_installer_info:'一个支持 24 种语言的浏览器向导：自动检测容器引擎（Docker 或 Podman），配置 <code>.env</code>（可选反向代理/HTTPS、单点登录、自动备份），启动容器并创建管理员账号。完全不想碰终端？用应用商店一键安装（TrueNAS、Umbrel、Unraid）。',
+        opt_installer_prereq:'这条路需要宿主机上额外装有 Git 和 Node.js 18+，因为向导从仓库运行。其他方式只需要容器引擎。',
+        step_inst1_title:'克隆仓库', step_inst1_desc:'打开终端，把 Juju 克隆到你喜欢的目录。',
+        step_inst2_title:'启动安装器', step_inst2_desc:'在仓库根目录运行这条命令。安装器服务会在 8090 端口启动。',
+        step_inst3_title:'在浏览器中打开向导', step_inst3_desc:'访问以下地址。向导会带你完成配置、容器启动和管理员账号创建。',
+        step_inst3_info:'安装完成后安装器会自动关闭。你的 Juju 实例会继续通过 Docker 或 Podman 运行。',
+        opt_proxmox_info:'Proxmox 官方目录里没有 Juju 条目。可行的做法是跑一个小巧的 Debian LXC，里面用和其他地方一样的 Docker 部署。以下三步只覆盖外层容器。',
+        step_px1_title:'创建非特权 LXC', step_px1_desc:'在 Proxmox 宿主 shell 上运行。<code>nesting=1</code> 让 Docker 能在非特权容器内运行，没有它守护进程起不来。按需调整 ID、存储和网桥。',
+        step_px1_alt:'更想用完整虚拟机？也可以，而且不需要 nesting 参数：照常装好 Debian，然后从第 2 步继续。',
+        step_px2_title:'在容器内安装 Docker', step_px2_desc:'直接用 Debian 官方仓库，不把安装脚本灌进 shell。',
+        step_px3_title:'按 Docker 步骤继续', step_px3_desc:'从这里开始没有任何 Proxmox 特有的东西：<a href="#docker" data-tab="docker">Docker 镜像</a>那套流程原样适用。之后 Juju 会在容器 IP 的 3000 端口响应 — 在宿主机上用 <code>pct exec 110 -- hostname -I</code> 可以查到这个 IP。',
+        opt_docker_info:'不需要 Git，不需要构建 — 只要两个文件和一条命令。也只需要 Docker 或 Podman（Podman 请用 podman-compose.yml）。',
+        step_a1_title:'下载配置文件', step_a1_desc:'运行这两条命令。它们会下载 Docker 配置和你的设置模板。',
+        step_a2_title:'创建你的配置', step_a2_desc:'复制模板，然后用文本编辑器打开 <code>.env</code>。<code>SESSION_SECRET</code> 必填；<code>DB_ENCRYPTION_KEY</code> 可选但一经设定不可更改。',
+        step_a2_gen:'运行下面这条命令两次，为每个密钥各生成一个安全值 — 一次结果填 <code>SESSION_SECRET</code>，另一次填 <code>DB_ENCRYPTION_KEY</code>：',
+        step_a2_warning:'请把 <code>.env</code> 文件备份到安全的地方。如果丢了 <code>DB_ENCRYPTION_KEY</code>，数据将无法恢复。',
+        step_a3_title:'启动容器', step_a3_desc:'Docker 会下载 Juju 镜像并在后台启动。首次下载需要一点时间。',
+        step_a3_success:'用 <code>docker compose logs -f</code> 查看日志。看到 <code>Server running on port 3000</code> 即成功。容器会一直在后台运行。',
+        step_setup_title:'创建管理员账号', step_setup_desc:'首次访问时，Juju 会直接在浏览器里引导你创建管理员账号。更喜欢命令行？也可以运行安装向导：',
+        opt_source_info:'适合贡献者或想运行自定义版本的人。需要 Git。首次构建需要几分钟。',
+        step_b1_title:'克隆仓库', step_b3_title:'构建并启动', step_b3_desc:'<code>--build</code> 参数会在本地构建 Docker 镜像。首次需要几分钟。',
+        opt_truenas_info:'无需终端。Juju 已进入 TrueNAS SCALE 社区应用目录 — 在 TrueNAS 网页界面点几下即可安装。',
+        step_tn1_title:'打开应用目录', step_tn1_desc:'在 TrueNAS SCALE 网页界面进入 Apps → Discover Apps，搜索 Juju。',
+        step_tn2_title:'配置并安装', step_tn2_desc:'点击 Install。设置一个强随机的 Session Secret（必填）和 Database Encryption Key（建议 — 请备份，丢失无法恢复）。按需调整端口和存储路径，然后 Install。',
+        step_tn3_title:'打开 WebUI', step_tn3_desc:'应用状态显示 Running 后，在应用总览中点击 WebUI。首次访问会引导你在浏览器里创建管理员账号。',
+        opt_umbrel_info:'无需终端。直接从 Umbrel 应用商店安装 Juju — 一切都运行在你的 Umbrel 上，也不会离开它。',
+        step_um1_title:'打开应用商店', step_um1_desc:'在 Umbrel 仪表盘打开 App Store，搜索 Juju。',
+        step_um2_title:'一键安装', step_um2_desc:'点击 Install。Umbrel 会自动拉取镜像并启动容器 — 无需编辑任何配置文件。',
+        step_um3_title:'打开 Juju', step_um3_desc:'从 Umbrel 主屏幕启动 Juju。首次访问会引导你在浏览器里创建管理员账号。',
+        opt_unraid_info:'无需终端。Juju 以 Community Applications 模板发布 — 在 Unraid 的 Apps 标签页直接添加。',
+        step_ur1_title:'打开 Community Applications', step_ur1_desc:'在 Unraid 打开 Apps 标签页（Community Applications 插件），搜索 Juju。',
+        step_ur2_title:'配置模板', step_ur2_desc:'点击 Install。设置 SESSION_SECRET（必填）和 DB_ENCRYPTION_KEY（建议 — 请备份）。按需调整 WebUI 端口和 appdata 路径。',
+        step_ur3_title:'应用并打开', step_ur3_desc:'点击 Apply。容器运行后，点击 Juju 图标 → WebUI。首次访问会引导你创建管理员账号。',
+        path_now:'你正在安装到', path_change:'更换',
+        success_title:'一切就绪', success_desc:'打开浏览器，访问：',
+        success_desc_store:'用应用商店提供的方式打开 Juju：TrueNAS 和 Unraid 上的 WebUI 按钮，或 Umbrel 主屏幕上的 Juju 图标。地址是你服务器的，不是这台电脑的 — 只有坐在那台机器前 <code>localhost</code> 才有效。',
+        success_hint:'用刚创建的管理员账号登录。之后可以在设置页通过链接邀请更多家庭成员，他们可以自己设置密码。',
+        success_full_guide:'完整技术指南',
+        env_where:'两项都存放在你在 compose 文件旁创建的 <code>.env</code> 文件里。',
+        env_where_store:'应用商店在安装表单里已经让你填过这两项，所以没有 <code>.env</code> 文件可编辑。在应用的配置界面修改并重启即可。',
+        optional_where:'在同一份 <code>.env</code> 里设置，然后用 <code>docker compose up -d</code> 重启生效。',
+        optional_where_store:'TrueNAS 和 Unraid 在应用的配置界面添加后重启；Umbrel 需要在应用的 compose 文件里加 override。',
+        env_title:'两个设置决定你的安全', env_desc:'一个必填，一个可选但不可逆。本节之后的所有内容以后都能改；这两项中的第二项不能。',
+        env_session_label:'Session Secret', env_session_desc:'用于签名和校验登录 Cookie。用 <code>openssl rand -hex 32</code> 生成安全值。',
+        env_db_label:'数据库密钥', env_db_desc:'可选，但如果家庭会记录健康或财务信息，强烈建议设置。用 AES-256 加密整个数据库；用 <code>openssl rand -hex 32</code> 生成。留空则数据库不加密；一旦设置就没有回头路：丢失该值，数据将永远打不开，你不行，我们也一样。',
+        env_required:'必填', env_irreversible:'不可逆',
+        optional_title:'更进一步', optional_desc:'Juju 跑起来之后，可以配置这些扩展功能。全部都是环境变量。',
+        opt_https_title:'HTTPS 与外网访问', opt_https_desc:'从其他设备或公网访问 Juju：用 Nginx 做反向代理，配一张免费的 Let\'s Encrypt 证书。',
+        opt_guide:'指南 →',
+        opt_weather_title:'天气小部件', opt_weather_desc:'通过 Open-Meteo 在仪表盘显示本地天气，无需 API 密钥。把 <code>WEATHER_LAT</code> 和 <code>WEATHER_LON</code> 设为你的坐标。',
+        opt_cal_title:'日历与联系人同步', opt_cal_desc:'与 Google 日历（OAuth）双向同步，支持多账号 CalDAV/CardDAV（iCloud、Nextcloud、Radicale）。提醒列表（Apple Reminders、Nextcloud、Radicale）双向映射到任务或购物清单 — 完成、编辑或删除也会同步到服务器。',
+        opt_sso_title:'SSO / OpenID Connect', opt_sso_desc:'通过任意 OIDC 提供商（Authentik、Keycloak、Google、Microsoft Entra）实现单点登录。设置四个 <code>OIDC_*</code> 变量后，登录页会自动出现「使用 SSO 登录」按钮。',
+        opt_backup_title:'自动备份', opt_backup_desc:'默认按计划自动备份 — 每天凌晨 2 点，保留 7 份；可用 <code>BACKUP_ENABLED=false</code> 关闭。还可以把每份备份上传到 WebDAV 服务器（Nextcloud、ownCloud、Hetzner 等）。在 设置 → 管理 → 备份与恢复 中管理和恢复。',
+        opt_doc_storage_title:'文档存储', opt_doc_storage_desc:'可以把新文档和日历附件存到 SQLite 之外：挂载的宿主机目录、WebDAV 或 Google Drive。Drive 的 OAuth 已接好，稍后在设置中显式选择。数据库备份只含元数据，请对外部二进制存储另行备份。',
+        opt_email_title:'邮件 / SMTP', opt_email_desc:'配置发件 SMTP 服务器后即可启用自助「忘记密码」流程。设置 <code>EMAIL_SMTP_*</code> 变量和 <code>BASE_URL</code>（用于重置链接），或在 设置 → 管理 → 邮件 中稍后配置。',
+        opt_fixer_title:'实时汇率换算', opt_fixer_desc:'预算 → 订阅功能不依赖任何外部服务即可使用。设置 <code>FIXER_API_KEY</code> 后，可把外币计费的订阅换算成家庭基本货币，汇率缓存 12 小时。',
+        opt_update_title:'更新', opt_update_desc:'拉取最新镜像并重启：<code>docker compose pull && docker compose up -d</code>。数据在更新间完整保留。',
+        trouble_title:'遇到问题？', trouble_desc:'大多数问题都有简单解法。仍未解决的话，欢迎到 GitHub 提 issue。',
+        trouble_port_title:'3000 端口被占用', trouble_port_desc:'另一个应用正在使用 3000 端口。停掉它，或者修改 <code>docker-compose.yml</code> 中的端口：',
+        trouble_port_change:'或者编辑 <code>docker-compose.yml</code>，把 <code>3000:3000</code> 改成例如 <code>8080:3000</code>。',
+        trouble_perm_title:'Docker：权限被拒绝', trouble_perm_desc:'把你的用户加入 docker 组，然后注销并重新登录：',
+        trouble_reach_title:'容器启动了但页面打不开', trouble_reach_desc:'检查容器状态和日志：', trouble_reach_firewall:'从其他设备访问？检查你的防火墙规则。',
+        trouble_db_title:'数据库加密错误', trouble_db_desc:'<code>.env</code> 里的 <code>DB_ENCRYPTION_KEY</code> 缺失，或与建库时使用的密钥不一致。全新安装时可以重置：',
+        trouble_db_warning:'<code>docker compose down -v</code> 会删除所有数据。只在没有数据的全新安装上使用。',
+        trouble_nginx_title:'Nginx 显示 502 Bad Gateway', trouble_nginx_desc:'Nginx 连不上容器。检查容器是否在运行、端口是否匹配：',
+        trouble_nginx_port:'确保 Nginx 配置里的 <code>proxy_pass</code> 端口与 <code>docker-compose.yml</code> 中的宿主端口一致（默认：3000）。',
+        footer_home:'主页', footer_heart:'为重视隐私与简约的家庭用心打造。', footer_contrib:'参与贡献', footer_impressum:'Impressum（DE）', footer_privacy:'Datenschutz（DE）',
+        to_top:'回到顶部',
+        skip_link:'跳到正文', backLabel:'总览', copy:'复制', copied:'已复制！', copyfail:'复制失败'
       }
     };
 
     function lsGet(k){ try { return localStorage.getItem('yuvomi-'+k) || localStorage.getItem('oikos-'+k); } catch(e){ return null; } }
     function lsSet(k,v){ try { localStorage.setItem('yuvomi-'+k, v); } catch(e){} }
-    function detectLang(){ var n = (navigator.language || navigator.userLanguage || 'en').toLowerCase(); return n.indexOf('de') === 0 ? 'de' : 'en'; }
+    function detectLang(){ var n = (navigator.language || navigator.userLanguage || 'en').toLowerCase(); if (n.indexOf('zh') === 0) return 'zh'; return n.indexOf('de') === 0 ? 'de' : 'en'; }
 
     var lang = lsGet('lang') || detectLang();
     var theme = lsGet('theme');
@@ -1126,8 +1211,8 @@ docker compose logs | grep "Server running"</div></div><p data-t="trouble_nginx_
       var d = isDark();
       var tb = document.getElementById('themeToggle');
       var tl = d
-        ? (lang === 'de' ? 'Zum hellen Design wechseln' : 'Switch to light theme')
-        : (lang === 'de' ? 'Zum dunklen Design wechseln' : 'Switch to dark theme');
+        ? (lang === 'de' ? 'Zum hellen Design wechseln' : lang === 'zh' ? '切换到浅色主题' : 'Switch to light theme')
+        : (lang === 'de' ? 'Zum dunklen Design wechseln' : lang === 'zh' ? '切换到深色主题' : 'Switch to dark theme');
       tb.setAttribute('aria-label', tl);
       tb.setAttribute('title', tl);
       tb.setAttribute('aria-pressed', d ? 'true' : 'false');
@@ -1202,12 +1287,14 @@ docker compose logs | grep "Server running"</div></div><p data-t="trouble_nginx_
         el.setAttribute('aria-label', s[k]);
         if (el.matches('button, a[href]')) el.setAttribute('title', s[k]);
       });
-      document.getElementById('langLabel').textContent = lang === 'en' ? 'DE' : 'EN';
+      document.getElementById('langLabel').textContent = lang === 'en' ? '中文' : lang === 'zh' ? 'DE' : 'EN';
+      var nextLang = lang === 'en' ? 'zh' : lang === 'zh' ? 'de' : 'en';
       var lt = document.getElementById('langToggle');
-      lt.setAttribute('aria-label', lang === 'en' ? 'Auf Deutsch umschalten' : 'Switch to English');
-      lt.setAttribute('title', lang === 'en' ? 'Auf Deutsch umschalten' : 'Switch to English');
+      var switchTo = nextLang === 'zh' ? '切换到中文' : nextLang === 'de' ? 'Auf Deutsch umschalten' : 'Switch to English';
+      lt.setAttribute('aria-label', switchTo);
+      lt.setAttribute('title', switchTo);
       document.getElementById('backLabel').textContent = s.backLabel;
-      document.title = lang === 'en' ? 'Install Juju - Self-Hosted Family Planner' : 'Juju installieren - Selbstgehosteter Familienplaner';
+      document.title = lang === 'en' ? 'Install Juju - Self-Hosted Family Planner' : lang === 'zh' ? '安装 Juju - 自托管家庭计划助手' : 'Juju installieren - Selbstgehosteter Familienplaner';
       /* Day-precise on purpose: a month-only stamp makes a page touched today
          look identical to one last touched four weeks ago, which is the opposite
          of the signal a maintenance-wary reader is looking for. */
@@ -1216,7 +1303,7 @@ docker compose logs | grep "Server running"</div></div><p data-t="trouble_nginx_
         var rp = (rel.getAttribute('data-released') || '').split('-');
         if (rp[0]) {
           rel.textContent = new Date(+rp[0], (+rp[1] || 1) - 1, +rp[2] || 1)
-            .toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            .toLocaleDateString(lang === 'de' ? 'de-DE' : lang === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         }
       }
       applyThemeLabel();
@@ -1224,7 +1311,7 @@ docker compose logs | grep "Server running"</div></div><p data-t="trouble_nginx_
       if (refreshPathScope) refreshPathScope();
     }
     document.getElementById('themeToggle').addEventListener('click', function(){ theme = isDark() ? 'light' : 'dark'; lsSet('theme', theme); applyTheme(); });
-    document.getElementById('langToggle').addEventListener('click', function(){ lang = lang === 'en' ? 'de' : 'en'; lsSet('lang', lang); applyLang(); });
+    document.getElementById('langToggle').addEventListener('click', function(){ lang = lang === 'en' ? 'zh' : lang === 'zh' ? 'de' : 'en'; lsSet('lang', lang); applyLang(); });
     matchMedia('(prefers-color-scheme:dark)').addEventListener('change', function(){ if (!theme) applyTheme(); });
 
     /* Tabs - ARIA tabs pattern: roving tabindex + Arrow/Home/End keys with
