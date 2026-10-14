@@ -224,8 +224,8 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "puppeteer": "^25.4.0",
-    "sharp": "^0.35.3"
+    "puppeteer": "^25.13.0",
+    "sharp": "^0.35.5"
   },
   "allowScripts": {
     "better-sqlite3-multiple-ciphers@13.0.3": true,
