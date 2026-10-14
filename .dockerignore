@@ -47,6 +47,7 @@ podman-compose.yml
 
 # Scripts (dev-only)
 scripts/
+scripts-tmp/
 
 # Markdown files (README, CHANGELOG, etc.)
 *.md
