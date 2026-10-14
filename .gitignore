@@ -119,3 +119,5 @@ zz-*.js
 dbdata/
 DEV_LOG.md
 scripts-tmp/
+test/
+tests/
