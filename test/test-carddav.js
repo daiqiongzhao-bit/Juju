@@ -16,6 +16,12 @@ import {
   deriveScalarContactFields,
   resolveContactCategory,
 } from '../server/services/cardav-sync.js';
+import { decryptField } from '../server/services/sm4.js';
+
+// R3 (T04a): contacts.phone/address 与 contact_phones.value/contact_addresses.street
+// 为 SM4 密文列（v149）——cardav-sync 与 routes/contacts.js 的读写都要密钥。
+// 测试固定值；生产由 sm4-key-guard 拒启保护。
+process.env.JUJU_SM4_KEY = '0123456789abcdef0123456789abcdef';
 
 const TEST_DB = ':memory:';
 
@@ -2390,6 +2396,18 @@ describe('Contacts API - Multi-Value Fields', () => {
       ALTER TABLE contacts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
     `);
 
+    // R3/R4 (rnw 补差): Derivate-/Profilspalten v147 (birthday_lunar/zodiac/
+    // constellation/spouse_note/priority_intro) + Blind-Fingerabdruck v149
+    // (phone_hash) nachziehen — routes/contacts.js 读写路径（T04a）都要这些列。
+    contactsApiDb.exec(`
+      ALTER TABLE contacts ADD COLUMN birthday_lunar TEXT;
+      ALTER TABLE contacts ADD COLUMN zodiac TEXT;
+      ALTER TABLE contacts ADD COLUMN constellation TEXT;
+      ALTER TABLE contacts ADD COLUMN spouse_note TEXT;
+      ALTER TABLE contacts ADD COLUMN priority_intro INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE contacts ADD COLUMN phone_hash TEXT;
+    `);
+
     // Override db.get() to use our test database
     const dbModule = await import('../server/db.js');
     dbModule._setTestDatabase(contactsApiDb);
@@ -2447,10 +2465,15 @@ describe('Contacts API - Multi-Value Fields', () => {
       // Call GET /contacts/:id
       const contactsRouter = await import('../server/routes/contacts.js');
 
+      // R4 (T04a): GET /:id 走可见性过滤——mock req 需带 admin 身份
+      // （fail-closed：无 uid 的请求一律 404）。
       const req = {
         params: { id: String(contactId) },
         query: {},
-        body: {}
+        body: {},
+        authUserId: 1,
+        authRole: 'admin',
+        session: { userId: 1, role: 'admin' },
       };
       const res = {
         statusCode: 200,
@@ -2530,10 +2553,14 @@ describe('Contacts API - Multi-Value Fields', () => {
       // Call GET /contacts/:id
       const contactsRouter = await import('../server/routes/contacts.js');
 
+      // R4 (T04a): 可见性过滤——mock req 带 admin 身份（同上）。
       const req = {
         params: { id: String(contactId) },
         query: {},
-        body: {}
+        body: {},
+        authUserId: 1,
+        authRole: 'admin',
+        session: { userId: 1, role: 'admin' },
       };
       const res = {
         statusCode: 200,
@@ -3124,9 +3151,10 @@ describe('parseAndMergeContact scalar + category wiring (#531 DB integration)', 
     );
     const c = database.prepare('SELECT * FROM contacts WHERE id = ?').get(id);
     assert.strictEqual(c.name, 'Erika, Mustermann');
-    assert.strictEqual(c.phone, '+49 30 123');
+    // R3 (T04a): phone/address 密文列——断言前解密回显。
+    assert.strictEqual(decryptField(c.phone), '+49 30 123');
     assert.strictEqual(c.email, 'erika@example.com');
-    assert.strictEqual(c.address, 'Hauptstr 5, 10115 Berlin, DE');
+    assert.strictEqual(decryptField(c.address), 'Hauptstr 5, 10115 Berlin, DE');
     assert.strictEqual(c.category, 'misc');
   });
 
@@ -3219,9 +3247,10 @@ describe('parseAndMergeContact scalar + category wiring (#531 DB integration)', 
   // fügte aber die komplette vCard erneut ein. Der primäre Wert landete damit
   // bei jedem Sync zusätzlich als nicht-primäre Kopie in der Tabelle.
 
+  // R3 (T04a): contact_phones.value 为密文列——断言前解密回显。
   const phonesOf = (id) => database.prepare(
     'SELECT label, value, is_primary FROM contact_phones WHERE contact_id = ? ORDER BY id'
-  ).all(id);
+  ).all(id).map((p) => ({ ...p, value: decryptField(p.value) }));
 
   it('legt bei wiederholtem Sync derselben vCard keine Dubletten an', async () => {
     const card = vcf('dup-1', 'FN:Alex Beispiel',

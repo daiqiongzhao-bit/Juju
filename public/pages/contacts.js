@@ -96,6 +96,10 @@ let state = {
   searchQuery:    '',
   selectMode:     false,
   selected:       new Set(),
+  // R4-Profildaten (v147): 生肖/星座枚举来自 /relationships/meta/options
+  // (后端 ZODIACS/CONSTELLATIONS 单一数据源)。加载失败 → 空数组，Select
+  //  degradiert auf „未设置" —  gespeicherte Werte werden per Ist-Option erhalten.
+  options: { zodiacs: [], constellations: [] },
   // Default-Land (ISO-3166-Alpha-2) für die Telefon-Anzeige/-Hilfe. Aus der
   // haushaltweiten Region abgeleitet; null → libphonenumber-js nutzt nur
   // explizite Ländervorwahlen (führendes +). Rein Anzeige, nie Speicher-Logik.
@@ -195,15 +199,21 @@ export async function render(container, { user }) {
     updateSelectUI();
   });
 
-  const [res, catRes, prefsRes] = await Promise.all([
+  const [res, catRes, prefsRes, optRes] = await Promise.all([
     api.get('/contacts'),
     api.get('/contacts/categories'),
     // Region → Default-Land für die Telefon-Anzeige. Fehlschlag ist unkritisch:
     // ohne Default-Land werden nur +-Vorwahl-Nummern formatiert, Rest bleibt roh.
     api.get('/preferences').catch(() => null),
+    // R4: 生肖/星座枚举（与关系页同源 — /relationships/meta/options）。
+    api.get('/relationships/meta/options').catch(() => null),
   ]);
   state.defaultCountry = countryFromRegion(prefsRes?.data?.region);
   state.categories = catRes.data ?? [];
+  if (optRes?.data) {
+    state.options.zodiacs        = optRes.data.zodiacs ?? [];
+    state.options.constellations = optRes.data.constellations ?? [];
+  }
   // Der Server sortiert mit SQLite-NOCASE (ASCII-only); nach jeder lokalen
   // Änderung sortiert die Seite dagegen mit localeCompare. Damit die Reihenfolge
   // nicht zwischen Reload und Bearbeiten springt (Umlaut-Nachnamen), gilt hier
@@ -798,6 +808,38 @@ function renderContactDetail(contact) {
       label: t('contacts.birthdayLabel'),
       value: contact.birthday ? formatDate(contact.birthday) : '',
     },
+    // R4-Profildaten (v147): 服务端派生 + 手动修正字段。 detailRowEl verwirft
+    // Zeilen ohne Wert — 农历未换算/生肖未设置 erscheinen schlicht nicht.
+    // 单条 GET (/:id) liefert sowohl snake_case (SELECT *) als auch die
+    // camelCase-Aliase; die Liste nur snake_case — deshalb beides lesen.
+    {
+      icon: 'moon',
+      label: t('contacts.birthdayLunarLabel'),
+      value: contact.birthday_lunar || contact.birthdayLunar || '',
+    },
+    {
+      icon: 'star',
+      label: t('contacts.zodiacLabel'),
+      value: contact.zodiac || '',
+    },
+    {
+      icon: 'sparkles',
+      label: t('contacts.constellationLabel'),
+      value: contact.constellation || '',
+    },
+    {
+      icon: 'heart',
+      label: t('contacts.spouseNoteLabel'),
+      value: contact.spouse_note || contact.spouseNote || '',
+      multiline: true,
+    },
+    {
+      icon: 'star',
+      label: t('contacts.priorityIntroLabel'),
+      value: (contact.priority_intro === 1 || contact.priorityIntro === true)
+        ? t('contacts.priorityIntroOn')
+        : '',
+    },
     {
       icon: 'globe',
       label: t('contacts.websiteLabel'),
@@ -999,7 +1041,31 @@ function buildContactForm({ mode, contact = null }) {
     ),
   ].join('');
 
-  const advancedOpen = isEdit && (!!contact.address || !!contact.notes);
+  // Aufklappen, wenn irgendein Sekundärfeld bereits befüllt ist — seit R4
+  // (v147) zählen die Profilfelder (农历/生肖/星座/家属备注/优先介绍/互称) dazu:
+  // ein Kontakt mit gesetzter 生肖 würde sonst zugeklappt gespeichert, ohne
+  // dass der Nutzer den Wert je zu Gesicht bekam.
+  const advancedOpen = isEdit && (!!contact.address || !!contact.notes
+    || !!contact.birthday_lunar || !!contact.zodiac || !!contact.constellation
+    || !!contact.spouse_note || contact.priority_intro === 1
+    || !!contact.call_them || !!contact.call_me);
+
+  // R4: 生肖/星座下拉。 Optionen kommen aus state.options (meta/options); ein
+  // gespeicherter Wert, der (noch) nicht in der Liste steht — Meta-Abruf
+  // fehlgeschlagen oder Enum nachgezogen — bekommt eine Ist-Option, sonst
+  // zeigte das stumme Select den ersten Eintrag und schriebe ihn beim Speichern
+  // fest (dasselbe Muster wie orphanCat oben, #535).
+  const enumOpts = (values, current) => {
+    const list = Array.isArray(values) ? [...values] : [];
+    if (current && !list.includes(current)) list.unshift(current);
+    return [
+      `<option value="">${t('contacts.enumUnset')}</option>`,
+      ...list.map((val) => `<option value="${esc(val)}" ${current === val ? 'selected' : ''}>${esc(val)}</option>`),
+    ].join('');
+  };
+  const curZodiac        = (isEdit && contact.zodiac) || '';
+  const curConstellation = (isEdit && contact.constellation) || '';
+  const priorityOn       = isEdit && (contact.priority_intro === 1 || contact.priorityIntro === true);
 
   // Vor-/Nachname (#535). Kontakte ohne gespeicherte Struktur (Altbestand,
   // lokal angelegt vor diesem Feld) werden heuristisch aus dem Anzeigenamen
@@ -1023,6 +1089,38 @@ function buildContactForm({ mode, contact = null }) {
       <label class="form-label" for="cm-birthday">${t('contacts.birthdayLabel')}</label>
       <yuvomi-datepicker id="cm-birthday" type="date" value="${v('birthday')}"></yuvomi-datepicker>
       <p class="form-hint">${t('contacts.birthdayHint')}</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="cm-birthday-lunar">${t('contacts.birthdayLunarLabel')}</label>
+      <input type="text" class="form-input" id="cm-birthday-lunar" value="${v('birthday_lunar')}" placeholder="—" readonly>
+      <p class="form-hint">${t('contacts.birthdayLunarHint')}</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="cm-zodiac">${t('contacts.zodiacLabel')}</label>
+      <select class="form-input" id="cm-zodiac">${enumOpts(state.options.zodiacs, curZodiac)}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="cm-constellation">${t('contacts.constellationLabel')}</label>
+      <select class="form-input" id="cm-constellation">${enumOpts(state.options.constellations, curConstellation)}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="cm-spouse-note">${t('contacts.spouseNoteLabel')}</label>
+      <textarea class="form-input" id="cm-spouse-note" rows="2" maxlength="2000" placeholder="${t('contacts.spouseNotePlaceholder')}">${v('spouse_note')}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="cm-callthem">${t('contacts.callThemLabel')}</label>
+      <input type="text" class="form-input" id="cm-callthem" maxlength="60" value="${v('call_them')}" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="cm-callme">${t('contacts.callMeLabel')}</label>
+      <input type="text" class="form-input" id="cm-callme" maxlength="60" value="${v('call_me')}" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="cm-switch" for="cm-priority">
+        <input type="checkbox" id="cm-priority" ${priorityOn ? 'checked' : ''}>
+        <span>${t('contacts.priorityIntroLabel')}</span>
+      </label>
+      <p class="form-hint">${t('contacts.priorityIntroHint')}</p>
     </div>
     <div class="form-group">
       <label class="form-label" for="cm-notes">${t('contacts.notesLabel')}</label>
@@ -1141,6 +1239,16 @@ function buildContactForm({ mode, contact = null }) {
         const address  = panel.querySelector('#cm-address').value.trim() || null;
         const birthday = panel.querySelector('#cm-birthday')?.value || null;
         const notes    = panel.querySelector('#cm-notes').value.trim() || null;
+        // R4-Profildaten (v147). 生肖/星座按“仅传变化项”语义: 不改 → 不传,
+        // 服务端 leitet bei Birthday-Änderung alle drei Felder automatisch ab
+        // (applyLunarFields); 改 → 显式值优先 (手动修正). 农历生日 ist im
+        // Formular nur Read-only-Anzeige und wird nie gesendet.
+        const zodiac        = panel.querySelector('#cm-zodiac').value || null;
+        const constellation = panel.querySelector('#cm-constellation').value || null;
+        const spouseNote    = panel.querySelector('#cm-spouse-note').value.trim() || null;
+        const priorityIntro = panel.querySelector('#cm-priority').checked;
+        const callThem      = panel.querySelector('#cm-callthem').value.trim() || null;
+        const callMe        = panel.querySelector('#cm-callme').value.trim() || null;
 
         if (!name) {
           window.yuvomi?.showToast(t('contacts.nameRequiredHint'), 'danger');
@@ -1154,6 +1262,20 @@ function buildContactForm({ mode, contact = null }) {
         try {
           // firstName/lastName sind führend; der Server leitet `name` daraus ab (#535).
           const body = { name, category, phone, email, address, notes, birthday };
+          // R4-Profildaten (v147): 家属备注/优先介绍/互称 als Replace-Set (wie
+          // Adresse/Notiz — das Formular hält alle Werte, ''/false → clear).
+          body.spouseNote    = spouseNote;
+          body.priorityIntro = priorityIntro;
+          body.callThem      = callThem;
+          body.callMe        = callMe;
+          if (isEdit) {
+            // 仅传变化项: 不改 → 服务端自动换算/原值兜底 (siehe oben).
+            if (zodiac !== (contact.zodiac || null)) body.zodiac = zodiac;
+            if (constellation !== (contact.constellation || null)) body.constellation = constellation;
+          } else {
+            if (zodiac) body.zodiac = zodiac;
+            if (constellation) body.constellation = constellation;
+          }
           // Replace-Set: das Formular hält alle Werte, Label-Pflicht des Servers
           // deckt 'other' als neutrales Default ab.
           body.phones = phoneEntries.map((r, i) => ({ label: r.label || 'other', value: r.value, isPrimary: i === 0 }));

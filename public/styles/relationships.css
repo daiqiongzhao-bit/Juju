@@ -789,3 +789,138 @@ button.rel-gen__node--picked {
   font-weight: 600;
 }
 .rel-tag-chip input { accent-color: var(--module-relationships); margin: 0; }
+/* 分组人数后缀（GET /groups 的 usage 子计数）— 弱于组名，不抢勾选状态 */
+.rel-tag-chip__count {
+  color: var(--color-text-tertiary);
+  font-size: var(--type-micro);
+  font-weight: 400;
+}
+.rel-tag-chip.is-on .rel-tag-chip__count { color: inherit; opacity: 0.75; }
+
+/* --------------------------------------------------------
+   R4 (v147/v148/v150): 优先介绍角标 / 分组-Chips / 分组-Verwaltung / ACL
+   -------------------------------------------------------- */
+
+/* Badge sitzt absolut in der Karte — die rel-person ist ein Button, ein
+   zusätzliches Inline-Element würde das Body-Flexlayout verschieben. */
+.rel-person { position: relative; }
+.rel-person__badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: var(--type-caption);
+  line-height: 1;
+  color: var(--module-relationships);
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--module-relationships) 45%, transparent));
+}
+
+/* ---- 分组-Filter (People-Toolbar) ---- */
+.rel-groups-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 2px 10px;
+}
+.rel-groups-filter[hidden] { display: none; }
+.rel-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-1) var(--space-4);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-height: 30px;
+}
+.rel-filter-chip:hover:not(.is-active) {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+.rel-filter-chip.is-active {
+  background-color: color-mix(in srgb, var(--module-relationships) var(--tint-state), transparent);
+  border-color: color-mix(in srgb, var(--module-relationships) var(--tint-hint), transparent);
+  color: var(--module-relationships);
+}
+.rel-filter-chip__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* ---- 分组-Verwaltung (Zeilen: Name | Farbe | Ops) ---- */
+.rel-group-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.rel-group-admin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rel-group-admin-row__name { flex: 1; min-width: 0; }
+.rel-group-admin-row__color {
+  width: 44px;
+  height: 38px;
+  padding: 2px 4px;
+  flex: none;
+  cursor: pointer;
+}
+.rel-group-admin-row__ops {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+/* ---- ACL-Box (对谁隐藏) ---- */
+.rel-acl-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+}
+.rel-acl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--type-caption);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.rel-acl-chip:hover { background: var(--color-surface-hover); }
+.rel-acl-chip.is-on {
+  border-color: var(--color-danger, #d23);
+  background: color-mix(in srgb, var(--color-danger, #d23) var(--tint-state), transparent);
+  color: var(--color-danger, #d23);
+  font-weight: 600;
+}
+.rel-acl-chip input { accent-color: var(--color-danger, #d23); margin: 0; }
+
+/* ---- 优先介绍-Schalter im Beziehungs-Modal (wie .cm-switch auf der Kontaktseite) ---- */
+.rel-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-base);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+}
+.rel-switch input {
+  accent-color: var(--module-relationships);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}

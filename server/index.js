@@ -10,6 +10,10 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { readFileSync } from 'node:fs';
+// SM4 key guard: MUST be evaluated before ./db.js — db.js auto-runs init()
+// (and its migrations) at import time, and the encryption migration needs the
+// key. A guard placed in the module body would run too late.
+import './services/sm4-key-guard.js';
 import { createLogger } from './logger.js';
 import * as db from './db.js';
 import { router as authRouter, sessionMiddleware, requireAuth, requireAdmin } from './auth.js';

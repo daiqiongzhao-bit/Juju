@@ -19,6 +19,11 @@ import { toE164, defaultCountryFromConfig, countryFromRegion as srvCountryFromRe
 import { MIGRATIONS, _setTestDatabase, _resetTestDatabase } from '../server/db.js';
 import { parseAndMergeContact } from '../server/services/cardav-sync.js';
 
+// R3/v149 (T04a): CardDAV-Schreibpfade verschlüsseln phone/street vor dem Insert
+// und entschlüsseln beim Matchen - dafür wird der SM4-Schlüssel aus der Env
+// gelesen. Produktion: sm4-key-guard; Test: fester lokaler Schlüssel.
+process.env.JUJU_SM4_KEY = '0123456789abcdef0123456789abcdef';
+
 const metadata = JSON.parse(
   readFileSync(new URL('../public/vendor/libphonenumber/metadata.min.json', import.meta.url), 'utf8')
 );

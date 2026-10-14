@@ -2,6 +2,15 @@
  * Modul: Kontakte (Contacts)
  * Zweck: REST-API-Routen für wichtige Familienkontakte
  * Abhängigkeiten: express, server/db.js, server/auth.js
+ *
+ * R3/R4 (rnw 补差, T04a):
+ *   - phone/address/vehicle_plate 及 contact_phones.value/value_e164、
+ *     contact_addresses.street 为 SM4 密文列（v149）：写路径 encryptField，
+ *     读路径 decryptField 回显；`q` 文本搜索因此不再覆盖手机号（PRD 预期），
+ *     精确检索请用 `?phone=`（phone_hash 等值，v149）。
+ *   - birthday_lunar/zodiac/constellation 为服务端派生字段（v147/T02）：
+ *     applyLunarFields 裁决；spouse_note/priority_intro 为普通 Profile 字段。
+ *   - 读路径叠加 R4 可见性过滤（visibilityFilter，v150 contact_node_acl）。
  */
 
 import { createLogger } from '../logger.js';
@@ -11,6 +20,9 @@ import { str, oneOf, date, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT } from 
 import { uniqueKey } from '../utils/category-slug.js';
 import { composeDisplayName, normalizeNameParts } from '../../public/utils/contact-name.js';
 import { toE164, defaultCountryFromConfig } from '../utils/phone.js';
+import { applyLunarFields, ZODIACS, CONSTELLATIONS } from '../services/lunar-fields.js';
+import { encryptField, decryptField, phoneHash } from '../services/sm4.js';
+import { visibilityFilter } from '../services/contact-visibility.js';
 
 const log = createLogger('Contacts');
 
@@ -29,7 +41,7 @@ function readNameParts(body) {
   const parts = normalizeNameParts({
     firstName:  body.firstName,
     lastName:   body.lastName,
-    middleName: body.middleName,
+    middleName:  body.middleName,
     namePrefix: body.namePrefix,
     nameSuffix: body.nameSuffix,
   });
@@ -47,6 +59,34 @@ function namePartChecks(parts) {
     str(parts.namePrefix, 'Namenszusatz', { max: MAX_SHORT, required: false }),
     str(parts.nameSuffix, 'Namenssuffix', { max: MAX_SHORT, required: false }),
   ];
+}
+
+/**
+ * R4: priorityIntro 校验——布尔值（传了才校验；null 视作「清除」）。
+ * @param {*} val 请求值
+ * @returns {{value: boolean|null, error: string|null}}
+ */
+function priorityIntroCheck(val) {
+  if (val === undefined || val === null) return { value: null, error: null };
+  if (typeof val !== 'boolean') return { value: null, error: 'Priority intro must be a boolean.' };
+  return { value: val, error: null };
+}
+
+/**
+ * R3: 联系人敏感标量列解密回显（读路径宽容——非密文原样返回，不抛错）。
+ * phone_hash 是内部盲指纹（v149），不属于 API 契约——响应中剔除。
+ * @param {Object|null} row contacts 行（SELECT *）
+ * @returns {Object|null} 解密后的浅拷贝
+ */
+function presentContact(row) {
+  if (!row) return row;
+  const { phone_hash: _phoneHash, ...rest } = row;
+  return {
+    ...rest,
+    phone: decryptField(row.phone),
+    address: decryptField(row.address),
+    vehicle_plate: decryptField(row.vehicle_plate),
+  };
 }
 
 /** Verwaltbare Kontakt-Kategorien aus der DB (nach sort_order). */
@@ -68,18 +108,21 @@ function contactCategoryInUseCount(key) {
 
 /**
  * Loads multi-value fields (phones, emails, addresses) for a contact.
+ * R3: phones.value/value_e164、addresses.street、vehicle_plate 为密文列——
+ * 此处统一 decryptField 回显，调用方拿到的即是明文。
  * @param {number} contactId - Contact ID
  * @returns {{ phones: Array, emails: Array, addresses: Array }}
  */
 function loadMultiValueFields(contactId) {
   const phones = db.get().prepare(`
-    SELECT id, label, value, is_primary FROM contact_phones
+    SELECT id, label, value, value_e164, is_primary FROM contact_phones
     WHERE contact_id = ?
     ORDER BY is_primary DESC, id ASC
   `).all(contactId).map(p => ({
     id: p.id,
     label: p.label,
-    value: p.value,
+    value: decryptField(p.value),
+    valueE164: decryptField(p.value_e164),
     isPrimary: p.is_primary === 1
   }));
 
@@ -102,7 +145,7 @@ function loadMultiValueFields(contactId) {
   `).all(contactId).map(a => ({
     id: a.id,
     label: a.label,
-    street: a.street,
+    street: decryptField(a.street),
     city: a.city,
     state: a.state,
     postalCode: a.postal_code,
@@ -111,12 +154,13 @@ function loadMultiValueFields(contactId) {
   }));
 
   const extras = db.get().prepare(`
-    SELECT vehicle_plate, school, custom_tags, gender, hometown, wechat, douyin, qq, contact_groups, call_them, call_me, hidden
+    SELECT vehicle_plate, school, custom_tags, gender, hometown, wechat, douyin, qq, contact_groups, call_them, call_me, hidden,
+           birthday_lunar, zodiac, constellation, spouse_note, priority_intro
     FROM contacts WHERE id = ?
   `).get(contactId) || {};
   return {
     phones, emails, addresses,
-    vehiclePlate: extras.vehicle_plate ?? null,
+    vehiclePlate: decryptField(extras.vehicle_plate),
     school: extras.school ?? null,
     customTags: extras.custom_tags ?? null,
     gender: extras.gender ?? null,
@@ -127,6 +171,12 @@ function loadMultiValueFields(contactId) {
     contactGroups: extras.contact_groups ?? null,
     callThem: extras.call_them ?? null,
     callMe: extras.call_me ?? null,
+    // R4-Profilefelder (v147) — camelCase-Aliase wie die übrigen Multi-Value-Felder.
+    birthdayLunar: extras.birthday_lunar ?? null,
+    zodiac: extras.zodiac ?? null,
+    constellation: extras.constellation ?? null,
+    spouseNote: extras.spouse_note ?? null,
+    priorityIntro: extras.priority_intro === 1,
     hidden: extras.hidden === 1,
   };
 }
@@ -216,6 +266,26 @@ function validateAddresses(addresses) {
     }
   }
   return { valid: true };
+}
+
+/**
+ * R4: 派生字段最终裁决（POST/PUT 共用）。
+ *
+ * applyLunarFields(body, current) 覆盖「生日语境」四情形（T02，current 为 DB
+ * 现行行——契约参数）；此处补齐唯一不在其裁决范围内的组合——未传 birthday 但
+ * 显式传了派生字段（手动修正无需动生日）。显式值（含 null 清除）永远优先于
+ * 自动换算结果。
+ *
+ * @param {Object} body 请求体
+ * @param {Object|null} [current] DB 现行行（PUT 时传入）
+ * @returns {{birthdayLunar: *, zodiac: *, constellation: *}} 仅含需写入的键
+ */
+function resolveLunarPatch(body, current = null) {
+  const patch = applyLunarFields(body, current);
+  if (body.birthdayLunar !== undefined) patch.birthdayLunar = body.birthdayLunar;
+  if (body.zodiac !== undefined) patch.zodiac = body.zodiac;
+  if (body.constellation !== undefined) patch.constellation = body.constellation;
+  return patch;
 }
 
 // --------------------------------------------------------
@@ -318,8 +388,12 @@ router.delete('/categories/:key', (req, res) => {
 /**
  * GET /api/v1/contacts
  * Alle Kontakte, optional nach Kategorie gefiltert und nach Name gesucht.
- * Query: ?category=<cat>&q=<search>
+ * Query: ?category=<cat>&q=<search>&phone=<exact>
  * Response: { data: Contact[] }
+ *
+ * R3 注意：phone/address 已 SM4 加密，`q` 的 LIKE 明文匹配对手机号**永久失效**
+ * （PRD 明确的预期行为）——`q` 只覆盖 name/email 等明文列；手机号精确检索
+ * 请用 `?phone=`（phone_hash 等值，v149）。
  */
 router.get('/', (req, res) => {
   try {
@@ -333,28 +407,47 @@ router.get('/', (req, res) => {
     }
 
     if (req.query.q) {
-      where.push('(name LIKE ? OR phone LIKE ? OR email LIKE ?)');
+      // R3: phone LIKE 已随密文存储下线（见上方说明）——q 仅搜 name/email。
+      where.push('(name LIKE ? OR email LIKE ?)');
       const like = `%${req.query.q}%`;
-      params.push(like, like, like);
+      params.push(like, like);
+    }
+
+    // R3: 手机号精确检索走 phone_hash 盲指纹等值（密文列不可 LIKE/排序）。
+    if (req.query.phone) {
+      const hash = phoneHash(String(req.query.phone).trim());
+      if (hash) {
+        where.push('phone_hash = ?');
+        params.push(hash);
+      }
     }
 
     if (where.length) sql += ' WHERE ' + where.join(' AND ');
+    // R4: 协作者可见性（hidden + contact_node_acl）；admin 返回空片段（不过滤）。
+    const vis = visibilityFilter(req, 'contacts');
+    sql += vis.sql;
+    params.push(...vis.params);
     // Sortiert nach Nachname, wo er bekannt ist; sonst nach dem Anzeigenamen (#535).
     sql += ' ORDER BY category ASC, COALESCE(NULLIF(last_name, \'\'), name) COLLATE NOCASE ASC, name COLLATE NOCASE ASC';
 
-    const contacts = db.get().prepare(sql).all(...params);
+    const contacts = db.get().prepare(sql).all(...params).map(presentContact);
     res.json({ data: contacts });
   } catch (err) {
     log.error('', err);
-    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+    res.status(500).json({ error: 'Interner Fehler' });
   }
 });
 
 /**
  * POST /api/v1/contacts
  * Neuen Kontakt anlegen.
- * Body: { name, category?, phone?, email?, address?, notes?, phones?, emails?, addresses? }
+ * Body: { name, category?, phone?, email?, address?, notes?, birthday?,
+ *         birthdayLunar?, zodiac?, constellation?, spouseNote?, priorityIntro?,
+ *         phones?, emails?, addresses? }
  * Response: { data: Contact }
+ *
+ * R3: phone/address/vehiclePlate 及 phones/addresses 子表敏感列写入前加密；
+ * phone 同步 phone_hash。R4: 生日自动换算农历/生肖/星座（applyLunarFields）。
  */
 router.post('/', (req, res) => {
   try {
@@ -377,8 +470,15 @@ router.post('/', (req, res) => {
     const vGroups   = str(req.body.contactGroups, 'Groups', { max: MAX_TEXT, required: false });
     const vCallThem = str(req.body.callThem, 'Call them', { max: MAX_SHORT, required: false });
     const vCallMe   = str(req.body.callMe, 'Call me', { max: MAX_SHORT, required: false });
+    // R4-Profilefelder (v147): 派生三件套 + spouse_note + priority_intro。
+    const vBirthdayLunar = str(req.body.birthdayLunar, 'Birthday lunar', { max: MAX_SHORT, required: false });
+    const vZodiac        = oneOf(req.body.zodiac, ZODIACS, 'Zodiac');
+    const vConstellation = oneOf(req.body.constellation, CONSTELLATIONS, 'Constellation');
+    const vSpouseNote    = str(req.body.spouseNote, 'Spouse note', { max: MAX_TEXT, required: false });
+    const vPriorityIntro = priorityIntroCheck(req.body.priorityIntro);
     const errors   = collectErrors([vName, vCat, vPhone, vEmail, vAddress, vNotes, vBirthday,
                                     vGender, vHometown, vWechat, vDouyin, vQq, vGroups, vCallThem, vCallMe,
+                                    vBirthdayLunar, vZodiac, vConstellation, vSpouseNote, vPriorityIntro,
                                     ...namePartChecks(nameParts.parts)]);
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
 
@@ -404,25 +504,38 @@ router.post('/', (req, res) => {
       }
     }
 
+    // R4: 派生字段裁决——生日自动换算农历/生肖/星座；显式修正优先（resolveLunarPatch）。
+    const lunar = resolveLunarPatch(req.body, null);
+    const birthdayLunar  = lunar.birthdayLunar  !== undefined ? lunar.birthdayLunar  : (vBirthdayLunar.value ?? null);
+    const zodiac         = lunar.zodiac         !== undefined ? lunar.zodiac         : (vZodiac.value ?? null);
+    const constellation  = lunar.constellation  !== undefined ? lunar.constellation  : (vConstellation.value ?? null);
+
     // Insert contact and multi-value fields in a transaction
     const transaction = db.get().transaction(() => {
       const result = db.get().prepare(`
-        INSERT INTO contacts (name, category, phone, email, address, notes, birthday,
+        INSERT INTO contacts (name, category, phone, phone_hash, email, address, notes, birthday,
                               first_name, last_name, middle_name, name_prefix, name_suffix,
                               vehicle_plate, school, custom_tags,
-                              gender, hometown, wechat, douyin, qq, contact_groups, call_them, call_me)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(vName.value, vCat.value || FALLBACK_CATEGORY, vPhone.value, vEmail.value,
-             vAddress.value, vNotes.value, vBirthday.value,
+                              gender, hometown, wechat, douyin, qq, contact_groups, call_them, call_me,
+                              birthday_lunar, zodiac, constellation, spouse_note, priority_intro)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(vName.value, vCat.value || FALLBACK_CATEGORY,
+             // R3: 敏感列加密落库；phone 同步盲指纹（phone_hash = HMAC(明文)）。
+             encryptField(vPhone.value), phoneHash(vPhone.value), vEmail.value,
+             encryptField(vAddress.value), vNotes.value, vBirthday.value,
              nameParts.parts.firstName, nameParts.parts.lastName, nameParts.parts.middleName,
-             nameParts.parts.namePrefix, nameParts.parts.nameSuffix, req.body.vehiclePlate || null, req.body.school || null, req.body.customTags || null,
+             nameParts.parts.namePrefix, nameParts.parts.nameSuffix,
+             encryptField(req.body.vehiclePlate || null), req.body.school || null, req.body.customTags || null,
              vGender.value ?? null, vHometown.value ?? null, vWechat.value ?? null, vDouyin.value ?? null,
-             vQq.value ?? null, vGroups.value ?? null, vCallThem.value ?? null, vCallMe.value ?? null);
+             vQq.value ?? null, vGroups.value ?? null, vCallThem.value ?? null, vCallMe.value ?? null,
+             birthdayLunar, zodiac, constellation, vSpouseNote.value ?? null,
+             vPriorityIntro.value ? 1 : 0);
 
       const contactId = result.lastInsertRowid;
 
       // Insert phones. value_e164 ist additiv (Phase 2): der rohe value bleibt die
       // Wahrheit; value_e164 wird nur gesetzt, wo parsebar (sonst NULL).
+      // R3: toE164 先在明文上算完，再与 value 一并加密。
       if (req.body.phones && Array.isArray(req.body.phones)) {
         const defaultCountry = defaultCountryFromConfig(db.get());
         const insertPhone = db.get().prepare(`
@@ -430,8 +543,8 @@ router.post('/', (req, res) => {
           VALUES (?, ?, ?, ?, ?)
         `);
         for (const phone of req.body.phones) {
-          insertPhone.run(contactId, phone.label, phone.value, phone.isPrimary ? 1 : 0,
-                          toE164(phone.value, defaultCountry));
+          insertPhone.run(contactId, phone.label, encryptField(phone.value), phone.isPrimary ? 1 : 0,
+                          encryptField(toE164(phone.value, defaultCountry)));
         }
       }
 
@@ -446,7 +559,7 @@ router.post('/', (req, res) => {
         }
       }
 
-      // Insert addresses
+      // Insert addresses. R3: street 加密落库（city/state/postal_code/country 明文）。
       if (req.body.addresses && Array.isArray(req.body.addresses)) {
         const insertAddress = db.get().prepare(`
           INSERT INTO contact_addresses (contact_id, label, street, city, state, postal_code, country, is_primary)
@@ -456,7 +569,7 @@ router.post('/', (req, res) => {
           insertAddress.run(
             contactId,
             address.label,
-            address.street || null,
+            encryptField(address.street || null),
             address.city || null,
             address.state || null,
             address.postalCode || null,
@@ -471,19 +584,19 @@ router.post('/', (req, res) => {
 
     const contactId = transaction();
 
-    // Query the created contact with multi-value fields
+    // Query the created contact with multi-value fields (R3: 解密回显)
     const contact = db.get().prepare('SELECT * FROM contacts WHERE id = ?').get(contactId);
     const multiValueFields = loadMultiValueFields(contactId);
 
     res.status(201).json({
       data: {
-        ...contact,
+        ...presentContact(contact),
         ...multiValueFields
       }
     });
   } catch (err) {
     log.error('', err);
-    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+    res.status(500).json({ error: 'Interner Fehler' });
   }
 });
 
@@ -492,6 +605,10 @@ router.post('/', (req, res) => {
  * Kontakt bearbeiten.
  * Body: alle Felder optional, phones/emails/addresses mit Replacement-Semantik
  * Response: { data: Contact }
+ *
+ * R3: phone/address/vehiclePlate **仅当 body 传了才**加密回写——未传绝不触碰
+ * （防二次加密/误清；contact 现值原样保留）。phone 传了则 phone_hash 同步。
+ * R4: 派生字段仅在生日变更或显式传了时才重算（resolveLunarPatch）。
  */
 router.put('/:id', (req, res) => {
   try {
@@ -521,6 +638,12 @@ router.put('/:id', (req, res) => {
     if (req.body.contactGroups !== undefined) checks.push(str(req.body.contactGroups, 'Groups', { max: MAX_TEXT, required: false }));
     if (req.body.callThem !== undefined) checks.push(str(req.body.callThem, 'Call them', { max: MAX_SHORT, required: false }));
     if (req.body.callMe   !== undefined) checks.push(str(req.body.callMe,   'Call me',   { max: MAX_SHORT, required: false }));
+    // R4-Profilefelder (v147) — 仅传了才校验/才动。
+    if (req.body.birthdayLunar !== undefined) checks.push(str(req.body.birthdayLunar, 'Birthday lunar', { max: MAX_SHORT, required: false }));
+    if (req.body.zodiac        !== undefined) checks.push(oneOf(req.body.zodiac, ZODIACS, 'Zodiac'));
+    if (req.body.constellation !== undefined) checks.push(oneOf(req.body.constellation, CONSTELLATIONS, 'Constellation'));
+    if (req.body.spouseNote    !== undefined) checks.push(str(req.body.spouseNote, 'Spouse note', { max: MAX_TEXT, required: false }));
+    if (req.body.priorityIntro !== undefined) checks.push(priorityIntroCheck(req.body.priorityIntro));
     const errors = collectErrors(checks);
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
 
@@ -546,6 +669,9 @@ router.put('/:id', (req, res) => {
       }
     }
 
+    // R4: 派生字段 patch（生日变更/显式修正才含键；否则为空 → 下方原值兜底）。
+    const lunar = resolveLunarPatch(req.body, contact);
+
     // Update contact and multi-value fields in a transaction
     const transaction = db.get().transaction(() => {
       // Update scalar fields
@@ -554,6 +680,7 @@ router.put('/:id', (req, res) => {
         SET name        = COALESCE(?, name),
             category    = COALESCE(?, category),
             phone       = ?,
+            phone_hash  = ?,
             email       = ?,
             address     = ?,
             notes       = ?,
@@ -573,14 +700,21 @@ router.put('/:id', (req, res) => {
             qq = ?,
             contact_groups = ?,
             call_them = ?,
-            call_me = ?
+            call_me = ?,
+            birthday_lunar = ?,
+            zodiac = ?,
+            constellation = ?,
+            spouse_note = ?,
+            priority_intro = ?
         WHERE id = ?
       `).run(
         derivedName ?? req.body.name?.trim() ?? null,
         req.body.category ?? null,
-        req.body.phone   !== undefined ? (req.body.phone?.trim()   || null) : contact.phone,
+        // R3: 仅传了才加密回写；未传 → 原密文值原样保留（防二次加密/误清）。
+        req.body.phone   !== undefined ? encryptField(req.body.phone?.trim()   || null) : contact.phone,
+        req.body.phone   !== undefined ? phoneHash(req.body.phone?.trim()      || null) : contact.phone_hash,
         req.body.email   !== undefined ? (req.body.email?.trim()   || null) : contact.email,
-        req.body.address !== undefined ? (req.body.address?.trim() || null) : contact.address,
+        req.body.address !== undefined ? encryptField(req.body.address?.trim() || null) : contact.address,
         req.body.notes   !== undefined ? (req.body.notes?.trim()   || null) : contact.notes,
         req.body.birthday !== undefined ? (req.body.birthday || null) : contact.birthday,
         nameParts.provided ? nameParts.parts.firstName  : contact.first_name,
@@ -588,7 +722,7 @@ router.put('/:id', (req, res) => {
         nameParts.provided ? nameParts.parts.middleName : contact.middle_name,
         nameParts.provided ? nameParts.parts.namePrefix : contact.name_prefix,
         nameParts.provided ? nameParts.parts.nameSuffix : contact.name_suffix,
-        req.body.vehiclePlate !== undefined ? (req.body.vehiclePlate?.trim() || null) : contact.vehicle_plate,
+        req.body.vehiclePlate !== undefined ? encryptField(req.body.vehiclePlate?.trim() || null) : contact.vehicle_plate,
         req.body.school !== undefined ? (req.body.school?.trim() || null) : contact.school,
         req.body.customTags !== undefined ? (req.body.customTags ?? null) : contact.custom_tags,
         req.body.gender !== undefined ? (req.body.gender?.trim() || null) : contact.gender,
@@ -599,11 +733,18 @@ router.put('/:id', (req, res) => {
         req.body.contactGroups !== undefined ? (req.body.contactGroups?.trim() || null) : contact.contact_groups,
         req.body.callThem !== undefined ? (req.body.callThem?.trim() || null) : contact.call_them,
         req.body.callMe !== undefined ? (req.body.callMe?.trim() || null) : contact.call_me,
+        // R4: 派生字段仅在 patch 含键时写，否则保留 DB 现值。
+        lunar.birthdayLunar !== undefined ? lunar.birthdayLunar : contact.birthday_lunar,
+        lunar.zodiac        !== undefined ? lunar.zodiac        : contact.zodiac,
+        lunar.constellation !== undefined ? lunar.constellation : contact.constellation,
+        req.body.spouseNote !== undefined ? (req.body.spouseNote?.trim() || null) : contact.spouse_note,
+        req.body.priorityIntro !== undefined ? (req.body.priorityIntro ? 1 : 0) : contact.priority_intro,
         id
       );
 
       // Replace phones (delete all, insert new). value_e164 additiv mitberechnen
-      // (Phase 2), value bleibt der rohe Eingabewert.
+      // (Phase 2), value bleibt der rohe Eingabewert. R3: toE164 在明文上算完后
+      // value/value_e164 一并加密写入。
       if (req.body.phones !== undefined && Array.isArray(req.body.phones)) {
         db.get().prepare('DELETE FROM contact_phones WHERE contact_id = ?').run(id);
 
@@ -613,8 +754,8 @@ router.put('/:id', (req, res) => {
           VALUES (?, ?, ?, ?, ?)
         `);
         for (const phone of req.body.phones) {
-          insertPhone.run(id, phone.label, phone.value, phone.isPrimary ? 1 : 0,
-                          toE164(phone.value, defaultCountry));
+          insertPhone.run(id, phone.label, encryptField(phone.value), phone.isPrimary ? 1 : 0,
+                          encryptField(toE164(phone.value, defaultCountry)));
         }
       }
 
@@ -631,7 +772,7 @@ router.put('/:id', (req, res) => {
         }
       }
 
-      // Replace addresses (delete all, insert new)
+      // Replace addresses (delete all, insert new). R3: street 加密写入。
       if (req.body.addresses !== undefined && Array.isArray(req.body.addresses)) {
         db.get().prepare('DELETE FROM contact_addresses WHERE contact_id = ?').run(id);
 
@@ -643,7 +784,7 @@ router.put('/:id', (req, res) => {
           insertAddress.run(
             id,
             address.label,
-            address.street || null,
+            encryptField(address.street || null),
             address.city || null,
             address.state || null,
             address.postalCode || null,
@@ -656,19 +797,19 @@ router.put('/:id', (req, res) => {
 
     transaction();
 
-    // Query the updated contact with multi-value fields
+    // Query the updated contact with multi-value fields (R3: 解密回显)
     const updated = db.get().prepare('SELECT * FROM contacts WHERE id = ?').get(id);
     const multiValueFields = loadMultiValueFields(id);
 
     res.json({
       data: {
-        ...updated,
+        ...presentContact(updated),
         ...multiValueFields
       }
     });
   } catch (err) {
     log.error('', err);
-    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+    res.status(500).json({ error: 'Interner Fehler' });
   }
 });
 
@@ -682,7 +823,7 @@ router.delete('/:id', (req, res) => {
     const id     = parseInt(req.params.id, 10);
     const contact = db.get().prepare('SELECT family_user_id FROM contacts WHERE id = ?').get(id);
     if (!contact) return res.status(404).json({ error: 'Kontakt nicht gefunden', code: 404 });
-    
+
     if (contact.family_user_id) {
       return res.status(403).json({ error: 'Familienmitglieder können nicht aus der Kontaktliste gelöscht werden.', code: 403 });
     }
@@ -693,60 +834,76 @@ router.delete('/:id', (req, res) => {
     res.status(204).end();
   } catch (err) {
     log.error('', err);
-    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+    res.status(500).json({ error: 'Interner Fehler' });
   }
 });
 
 /**
  * GET /api/v1/contacts/meta
- * Kategorien-Liste für Dropdowns.
- * Response: { data: { categories } }
+ * Kategorien-Liste für Dropdowns + R4 生肖/星座枚举（单一数据源：lunar-fields.js）。
+ * Response: { data: { categories, zodiacs, constellations } }
  */
 router.get('/meta', (_req, res) => {
   try {
-    res.json({ data: { categories: loadContactCategories() } });
+    res.json({
+      data: {
+        categories: loadContactCategories(),
+        zodiacs: ZODIACS,
+        constellations: CONSTELLATIONS,
+      },
+    });
   } catch (err) {
     log.error('', err);
-    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+    res.status(500).json({ error: 'Interner Fehler' });
   }
 });
 
 /**
  * GET /api/v1/contacts/:id
  * Einzelnen Kontakt abrufen mit Multi-Value Fields (phones, emails, addresses).
+ * R4: 非 admin 不可见（hidden 或 ACL 屏蔽）→ 404（不泄露存在性）。
  * Response: { data: Contact }
  */
 router.get('/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const contact = db.get().prepare('SELECT * FROM contacts WHERE id = ?').get(id);
+    // R4: 可见性直接叠进 WHERE——过滤掉的联系人与「不存在」同响应（404）。
+    const vis = visibilityFilter(req, 'contacts');
+    const contact = db.get().prepare(`SELECT * FROM contacts WHERE id = ?${vis.sql}`).get(id, ...vis.params);
     if (!contact) return res.status(404).json({ error: 'Kontakt nicht gefunden', code: 404 });
 
-    // Load multi-value fields
+    // Load multi-value fields (R3: 内部已解密回显)
     const multiValueFields = loadMultiValueFields(id);
 
     res.json({
       data: {
-        ...contact,
+        ...presentContact(contact),
         ...multiValueFields
       }
     });
   } catch (err) {
     log.error('', err);
-    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+    res.status(500).json({ error: 'Interner Fehler' });
   }
 });
 
 /**
  * GET /api/v1/contacts/:id/vcard
  * Kontakt als vCard 3.0 (.vcf) exportieren.
+ * R3: phone/address 必须先解密再写 vCard（导出必须是明文）。
+ * R4: 与 GET /:id 同样的可见性门（不可见 → 404）。
  * Response: text/vcard Dateidownload
  */
 router.get('/:id/vcard', (req, res) => {
   try {
     const id      = parseInt(req.params.id, 10);
-    const contact = db.get().prepare('SELECT * FROM contacts WHERE id = ?').get(id);
+    const vis = visibilityFilter(req, 'contacts');
+    const contact = db.get().prepare(`SELECT * FROM contacts WHERE id = ?${vis.sql}`).get(id, ...vis.params);
     if (!contact) return res.status(404).json({ error: 'Kontakt nicht gefunden', code: 404 });
+
+    // R3: 导出明文——密文列先解密。
+    const phone   = decryptField(contact.phone);
+    const address = decryptField(contact.address);
 
     const esc = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
 
@@ -760,9 +917,9 @@ router.get('/:id/vcard', (req, res) => {
         ? `N:${esc(contact.last_name)};${esc(contact.first_name)};${esc(contact.middle_name)};${esc(contact.name_prefix)};${esc(contact.name_suffix)}`
         : `N:${esc(contact.name)};;;;`,
     ];
-    if (contact.phone)   lines.push(`TEL;TYPE=VOICE:${esc(contact.phone)}`);
+    if (phone)   lines.push(`TEL;TYPE=VOICE:${esc(phone)}`);
     if (contact.email)   lines.push(`EMAIL:${esc(contact.email)}`);
-    if (contact.address) lines.push(`ADR;TYPE=HOME:;;${esc(contact.address)};;;;`);
+    if (address) lines.push(`ADR;TYPE=HOME:;;${esc(address)};;;;`);
     if (contact.notes)   lines.push(`NOTE:${esc(contact.notes)}`);
     if (contact.birthday) lines.push(`BDAY:${esc(contact.birthday)}`);
     if (contact.category) lines.push(`CATEGORIES:${esc(contact.category)}`);
@@ -776,7 +933,7 @@ router.get('/:id/vcard', (req, res) => {
     res.send(vcf);
   } catch (err) {
     log.error('', err);
-    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+    res.status(500).json({ error: 'Interner Fehler' });
   }
 });
 

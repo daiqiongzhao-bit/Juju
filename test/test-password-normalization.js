@@ -71,6 +71,9 @@ process.env.SESSION_SECRET = 'test-password-nfc-secret-minimum-32ch';
 process.env.DB_PATH = join(tmpDir, 'test.db');
 process.env.SESSION_SECURE = 'false';
 process.env.PORT = '13100';
+// R3: SM4 应用层加密需要 JUJU_SM4_KEY（32 hex）——server/index.js 的启动守卫
+// (sm4-key-guard) 在缺钥时直接拒启；测试提供固定的本地密钥。
+process.env.JUJU_SM4_KEY = '0123456789abcdef0123456789abcdef';
 // Der Login-Limiter zählt Fehlversuche; die Suite prüft mehrere davon bewusst.
 process.env.RATE_LIMIT_MAX_ATTEMPTS = '100';
 

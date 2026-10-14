@@ -10,6 +10,9 @@ const log = createLogger('CardDAV');
 import * as db from '../db.js';
 import { composeDisplayName, normalizeNameParts } from '../../public/utils/contact-name.js';
 import { toE164, defaultCountryFromConfig } from '../utils/phone.js';
+// R3/v149: contact_phones.value/value_e164、contact_addresses.street 及
+// contacts.phone/address 为 SM4 密文列——读解密、写加密、标量手机号走 phone_hash。
+import { encryptField, decryptField, phoneHash } from './sm4.js';
 
 // --------------------------------------------------------
 // Helper Functions
@@ -1135,16 +1138,18 @@ async function parseAndMergeContact(vCardText, accountId, addressbookUrl) {
     // Step 3: No match - insert new contact.
     // origin = 'remote': rein aus CardDAV entstanden, trägt keine lokal gepflegten
     // Daten und darf beim Remote-Löschen entfernt werden.
+    // R3/v149: scalar.phone/address sind Klartext aus der vCard - verschlüsselt
+    // (plus phone_hash) in die Spalten schreiben.
     const knownCategories = db.get().prepare('SELECT key, name FROM contact_categories').all();
     const scalar = deriveScalarContactFields(vcard);
     const result = db.get().prepare(`
       INSERT INTO contacts (
         name, first_name, last_name, middle_name, name_prefix, name_suffix,
-        category, phone, email, address, organization, job_title, birthday, website,
+        category, phone, phone_hash, email, address, organization, job_title, birthday, website,
         photo, nickname, notes,
         carddav_account_id, carddav_uid, carddav_addressbook_url, carddav_origin
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'remote')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'remote')
     `).run(
       vcard.name,
       vcard.firstName,
@@ -1153,9 +1158,10 @@ async function parseAndMergeContact(vCardText, accountId, addressbookUrl) {
       vcard.namePrefix,
       vcard.nameSuffix,
       resolveContactCategory(vcard.categories, knownCategories),
-      scalar.phone,
+      encryptField(scalar.phone),
+      phoneHash(scalar.phone),
       scalar.email,
-      scalar.address,
+      encryptField(scalar.address),
       vcard.organization,
       vcard.jobTitle,
       vcard.birthday,
@@ -1205,18 +1211,53 @@ function findContactByEmailOrPhone(emails, phones) {
   // ('030 12345678' vs. '+49 30 12345678') statt Duplikate zu erzeugen. Ist die
   // eingehende Nummer nicht parsebar oder value_e164 NULL, bleibt der exakte
   // Rohwert-Vergleich als Fallback wirksam (kein Regress).
+  //
+  // R3/v149: c.phone/cp.value/cp.value_e164 sind mittlerweile SM4-verschlüsselt -
+  // SQL-Gleichheit auf dem Chiffrat kann nie treffen. Daher:
+  //   - Skalarspalte contacts.phone → phone_hash 等值（盲指纹，v149）；
+  //   - Multi-Value-Werte → einmaliger Dekrypt-Scan + JS-seitiger Vergleich
+  //     (Familien-DB: Kontakte liegen im zwei- bis dreistelligen Rahmen).
+  // Priorität je eingehender Nummer (wie bisher value_e164 vor Rohwert):
+  //   value_e164 (Format-Varianten) → value (exakt) → contacts.phone_hash (exakt).
   const defaultCountry = defaultCountryFromConfig(db.get());
+
+  const decryptedPhoneIndex = (() => {
+    const rows = db.get().prepare(`
+      SELECT cp.contact_id AS contactId, cp.value AS value, cp.value_e164 AS valueE164
+      FROM contact_phones cp
+    `).all();
+    const byValue = new Map();
+    const byE164 = new Map();
+    for (const row of rows) {
+      // 读路径宽容：存量明文行原样返回，与密文行同表参与匹配（双轨过渡）。
+      const value = decryptField(row.value);
+      const e164 = decryptField(row.valueE164);
+      if (value && !byValue.has(value)) byValue.set(value, row.contactId);
+      if (e164 && !byE164.has(e164)) byE164.set(e164, row.contactId);
+    }
+    return { byValue, byE164 };
+  })();
+
+  const contactById = (cid) => (
+    cid == null ? null : db.get().prepare('SELECT * FROM contacts WHERE id = ?').get(cid) || null
+  );
+
+  const contactByScalarPhone = (value) => {
+    const hash = phoneHash(value);
+    if (!hash) return null;
+    return db.get().prepare('SELECT * FROM contacts WHERE phone_hash = ? LIMIT 1').get(hash) || null;
+  };
+
   for (const phone of phones) {
     const e164 = toE164(phone.value, defaultCountry);
-    const contact = db.get().prepare(`
-      SELECT c.* FROM contacts c
-      LEFT JOIN contact_phones cp ON c.id = cp.contact_id
-      WHERE c.phone = ? OR cp.value = ?
-         OR (? IS NOT NULL AND cp.value_e164 IS NOT NULL AND cp.value_e164 = ?)
-      LIMIT 1
-    `).get(phone.value, phone.value, e164, e164);
-
-    if (contact) return contact;
+    if (e164) {
+      const hit = contactById(decryptedPhoneIndex.byE164.get(e164));
+      if (hit) return hit;
+    }
+    const exact = contactById(decryptedPhoneIndex.byValue.get(phone.value));
+    if (exact) return exact;
+    const scalar = contactByScalarPhone(phone.value);
+    if (scalar) return scalar;
   }
 
   return null;
@@ -1283,9 +1324,17 @@ function updateContact(contactId, vcard, fillAll = false) {
     values.push(vcard.name);
   }
 
-  maybeUpdate('phone', 'phone', scalar.phone);
+  // R3/v149: phone/address sind verschlüsselte Spalten - aus der vCard dürfen
+  // nur Chiffrate (plus phone_hash-Fingerprint) in sie gelangen. maybeUpdate
+  // schreibt updates/values im Lock-Schritt, deshalb phone_hash unmittelbar
+  // hinter phone einschieben (Parameter-Reihenfolge bleibt aligned).
+  maybeUpdate('phone', 'phone', scalar.phone == null ? scalar.phone : encryptField(scalar.phone));
+  if (updates.includes('phone = ?')) {
+    updates.push('phone_hash = ?');
+    values.push(phoneHash(scalar.phone));
+  }
   maybeUpdate('email', 'email', scalar.email);
-  maybeUpdate('address', 'address', scalar.address);
+  maybeUpdate('address', 'address', scalar.address == null ? scalar.address : encryptField(scalar.address));
   maybeUpdate('organization', 'organization', vcard.organization);
   maybeUpdate('jobTitle', 'job_title', vcard.jobTitle);
   maybeUpdate('birthday', 'birthday', vcard.birthday);
@@ -1313,10 +1362,15 @@ function updateContact(contactId, vcard, fillAll = false) {
 function updateContactMultiValues(contactId, vcard) {
   const conn = db.get();
 
-  const phones    = conn.prepare('SELECT label, value, is_primary FROM contact_phones WHERE contact_id = ? ORDER BY id').all(contactId);
+  // R3/v149: value/street sind verschlüsselt - für den Vergleich mit den
+  // Klartext-Werten der vCard (keyOf/addressKeyOf/sameSet unten) werden sie
+  // hier entschlüsselt gelesen. E-Mails bleiben Klartext (nicht verschlüsselt).
+  const phones    = conn.prepare('SELECT label, value, is_primary FROM contact_phones WHERE contact_id = ? ORDER BY id').all(contactId)
+    .map((r) => ({ ...r, value: decryptField(r.value) }));
   const emails    = conn.prepare('SELECT label, value, is_primary FROM contact_emails WHERE contact_id = ? ORDER BY id').all(contactId);
   const addresses = conn.prepare(`SELECT label, street, city, state, postal_code, country, is_primary
-                                  FROM contact_addresses WHERE contact_id = ? ORDER BY id`).all(contactId);
+                                  FROM contact_addresses WHERE contact_id = ? ORDER BY id`).all(contactId)
+    .map((r) => ({ ...r, street: decryptField(r.street) }));
 
   // Ein primärer Eintrag überlebt die Löschung unten. Steht sein Wert auch in
   // der vCard, legte der anschließende Insert ihn ein zweites Mal als
@@ -1384,15 +1438,17 @@ function insertContactMultiValues(contactId, vcard) {
 
   // Batch insert phones. value_e164 additiv (Phase 2): der rohe value bleibt die
   // Wahrheit; value_e164 nur wo parsebar, damit der Sync format-unabhängig matcht.
+  // R3/v149: toE164 läuft auf dem Klartext (vor der Verschlüsselung); value und
+  // value_e164 werden anschließend verschlüsselt geschrieben.
   if (vcard.phones && vcard.phones.length > 0) {
     const defaultCountry = defaultCountryFromConfig(db.get());
     const placeholders = vcard.phones.map(() => '(?, ?, ?, ?, ?)').join(', ');
     const values = vcard.phones.flatMap((phone, i) => [
       contactId,
       phone.label || null,
-      phone.value,
+      encryptField(phone.value),
       (!hasPrimaryPhone && i === 0) ? 1 : 0,
-      toE164(phone.value, defaultCountry)
+      encryptField(toE164(phone.value, defaultCountry))
     ]);
 
     db.get().prepare(`
@@ -1417,13 +1473,14 @@ function insertContactMultiValues(contactId, vcard) {
     `).run(...values);
   }
 
-  // Batch insert addresses
+  // Batch insert addresses. R3/v149: street verschlüsselt schreiben; city/state/
+  // postal_code/country bleiben Klartext.
   if (vcard.addresses && vcard.addresses.length > 0) {
     const placeholders = vcard.addresses.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
     const values = vcard.addresses.flatMap((addr, i) => [
       contactId,
       addr.label || null,
-      addr.street,
+      encryptField(addr.street),
       addr.city,
       addr.state,
       addr.postalCode,

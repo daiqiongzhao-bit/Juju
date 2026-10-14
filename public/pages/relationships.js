@@ -13,7 +13,7 @@ import { api } from '/api.js';
 import { t, formatDate } from '/i18n.js';
 import { esc } from '/utils/html.js';
 import { renderPageSearch, wirePageSearch } from '/utils/page-search.js';
-import { openModal, closeModal, confirmModal } from '/components/modal.js';
+import { openModal, closeModal, confirmModal, confirmOverModal } from '/components/modal.js';
 import { wireTablist } from '/utils/tablist.js';
 
 const RELATION_TYPES = ['family', 'friend', 'partner', 'spouse', 'child', 'colleague', 'neighbor', 'acquaintance', 'knows', 'met-through'];
@@ -36,6 +36,13 @@ const state = {
   graphPos: null,
   graphNodes: null,
   focusedId: null,
+  // R4 (v148): 平面分组 — Gruppen (GET /groups), contactId → [groupId] Map
+  // (einmalig pro People-Tab-Besuch via ensureGroupMap geladen) und der
+  // aktive Multi-Select-Filter (lokale Filterung in paintPeople).
+  groups: [],
+  groupMap: {},
+  groupMapReady: false,
+  groupFilter: new Set(),
 };
 
 // --------------------------------------------------------
@@ -69,6 +76,24 @@ function relColor(type) {
     'met-through': 'var(--color-text-tertiary)',
   };
   return map[type] || 'var(--module-relationships)';
+}
+
+/**
+ * R4 (v147): Select-Optionen für Enum-Felder (生肖/星座). Ein gespeicherter
+ * Wert außerhalb der Liste (meta/options-Abruf fehlgeschlagen, Enum nachgezogen)
+ * bekommt eine Ist-Option — sonst zeigte das stumme Select den ersten Eintrag
+ * und schriebe ihn beim nächsten Speichern fest.
+ * @param {string[]} values  Enum-Werte aus state.options
+ * @param {string}   current Gespeicherter Wert ('' → keine Ist-Option)
+ * @returns {string} HTML-Optionen
+ */
+function enumOptionsHtml(values, current) {
+  const list = Array.isArray(values) ? [...values] : [];
+  if (current && !list.includes(current)) list.unshift(current);
+  return [
+    `<option value="">${t('relationships.enumUnset')}</option>`,
+    ...list.map((val) => `<option value="${esc(val)}" ${current === val ? 'selected' : ''}>${esc(val)}</option>`),
+  ].join('');
 }
 
 function interactionIcon(type) {
@@ -140,6 +165,59 @@ function isAdminUser() {
 
 function contactById(id) {
   return state.contacts.find((c) => c.id === id) || null;
+}
+
+// --------------------------------------------------------
+// R4 (v148): 平面分组 — Daten für Filter-Chips, Kontakt-Modal, Verwaltung
+// --------------------------------------------------------
+
+/**
+ * Farbsanitisierung für Gruppen-Dots: `color` ist ein freies Textfeld (der
+ * Router prüft nur die Länge) — nur echte Hex-Werte dürfen in ein
+ * style-Attribut, alles andere fällt auf den Modul-Ton zurück.
+ * @param {string} raw
+ * @returns {string|null} '#rgb'/'#rrggbb' oder null
+ */
+function safeColor(raw) {
+  const v = String(raw || '').trim();
+  return /^#[0-9a-fA-F]{3}$/.test(v) || /^#[0-9a-fA-F]{6}$/.test(v) ? v : null;
+}
+
+/**
+ * Lädt Gruppen + Mitgliedschaften (force → neu). Mitgliedschaften kommen je
+ * Kontakt einzeln (GET /contacts/:id/groups); für nicht sichtbare Kontakte
+ * antwortet der Endpunkt 404 — der Catch deckt das als „keine Gruppe" ab.
+ * Fehlschlag ist unkritisch: Chips bleiben leer, die Seite arbeitet weiter.
+ * @param {boolean} [force=false]
+ */
+async function ensureGroupMap(force = false) {
+  if (!force && state.groupMapReady) return;
+  try {
+    const results = await Promise.all([
+      api.get('/relationships/groups'),
+      ...state.contacts.map((c) =>
+        api.get(`/relationships/contacts/${c.id}/groups`).catch(() => ({ data: [] }))),
+    ]);
+    state.groups = results[0]?.data || [];
+    const map = {};
+    state.contacts.forEach((c, i) => {
+      map[c.id] = (results[i + 1]?.data || []).map((g) => g.id);
+    });
+    state.groupMap = map;
+    state.groupMapReady = true;
+  } catch {
+    state.groups = [];
+    state.groupMap = {};
+  }
+}
+
+/** Nach Gruppenänderungen (Kontakt-Modal / Verwaltung): Chips + Grid nachziehen. */
+async function refreshGroupsUI() {
+  await ensureGroupMap(true);
+  if (state.activeTab === 'people') {
+    paintGroupChips();
+    paintPeople();
+  }
 }
 
 function toast(msg, type = 'success') {
@@ -598,15 +676,52 @@ async function renderPeople() {
         <option value="">${t('relationships.filterAll')}</option>
         ${state.options.relationTypes.map((rt) => `<option value="${rt}">${esc(relLabel(rt))}</option>`).join('')}
       </select>
+      <button class="btn btn--secondary btn--sm" id="rel-people-manage-groups">${t('relationships.groupsManage')}</button>
     </div>
+    <div class="rel-groups-filter" id="rel-people-group-chips" role="group" aria-label="${t('relationships.groupsFilter')}" hidden></div>
     <div class="rel-people-grid" id="rel-people-grid" aria-busy="true"></div>`;
   if (window.lucide) window.lucide.createIcons({ el: panel });
 
   wirePageSearch(panel, { id: 'rel-people-search', onQuery: () => paintPeople() });
   const filter = panel.querySelector('#rel-people-filter');
   filter.addEventListener('change', () => paintPeople());
+  // R4 (v148): Gruppen-Filter-Chips — Mehrfachauswahl, reine Lokalfilterung.
+  panel.querySelector('#rel-people-group-chips').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-group-chip]');
+    if (!chip) return;
+    const gid = Number(chip.dataset.groupChip);
+    if (state.groupFilter.has(gid)) state.groupFilter.delete(gid);
+    else state.groupFilter.add(gid);
+    paintGroupChips();
+    paintPeople();
+  });
+  panel.querySelector('#rel-people-manage-groups')
+    .addEventListener('click', () => openManageGroupsModal());
   await ensureContacts();
+  await ensureGroupMap();
+  paintGroupChips();
   paintPeople();
+}
+
+/** Gruppen-Filter-Chips (Mehrfachauswahl). Leer/ohne Gruppen → Zeile ausgeblendet. */
+function paintGroupChips() {
+  const box = _container.querySelector('#rel-people-group-chips');
+  if (!box) return;
+  if (!state.groups.length) {
+    box.innerHTML = '';
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = state.groups.map((g) => {
+    const on = state.groupFilter.has(g.id);
+    const color = safeColor(g.color);
+    return `<button type="button" class="rel-filter-chip${on ? ' is-active' : ''}"
+              data-group-chip="${g.id}" aria-pressed="${on ? 'true' : 'false'}">
+      ${color ? `<span class="rel-filter-chip__dot" style="background:${color}"></span>` : ''}
+      <span>${esc(g.name)}</span>
+    </button>`;
+  }).join('');
 }
 
 function paintPeople() {
@@ -619,6 +734,12 @@ function paintPeople() {
   let list = state.contacts.slice();
   if (f) list = list.filter((c) => (c.relationship_type || '') === f);
   if (q) list = list.filter((c) => (c.name || '').toLowerCase().includes(q));
+  // R4 (v148): Gruppen-Filter (UND über die Gruppen, ODER innerhalb einer
+  // Mehrfachauswahl — wie der Typ-Filter, nur eben multi).
+  if (state.groupFilter.size) {
+    list = list.filter((c) =>
+      (state.groupMap[c.id] || []).some((gid) => state.groupFilter.has(gid)));
+  }
 
   grid.removeAttribute('aria-busy');
   if (!list.length) {
@@ -634,6 +755,9 @@ function paintPeople() {
           ${esc(relLabel(c.relationship_type))}
         </span>
       </span>
+      ${c.priority_intro === 1
+        ? `<span class="rel-person__badge" title="${t('relationships.priorityIntroLabel')}">${t('relationships.priorityIntroBadge')}</span>`
+        : ''}
     </button>`).join('');
   grid.querySelectorAll('[data-contact]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1946,6 +2070,29 @@ async function openContactModal(contact) {
           <label class="form-label" for="rc-callme">${t('relationships.callMe')}</label>
           <input class="form-input" id="rc-callme" type="text" maxlength="60" value="${esc(c.call_me || '')}" autocomplete="off">
         </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-birthday-lunar">${t('relationships.birthdayLunarLabel')}</label>
+          <input class="form-input" id="rc-birthday-lunar" type="text" value="${esc(c.birthday_lunar || '')}" placeholder="—" readonly>
+          <p class="form-hint">${t('relationships.birthdayLunarHint')}</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-zodiac">${t('relationships.zodiacLabel')}</label>
+          <select class="form-input" id="rc-zodiac">${enumOptionsHtml(state.options.zodiacs, c.zodiac || '')}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-constellation">${t('relationships.constellationLabel')}</label>
+          <select class="form-input" id="rc-constellation">${enumOptionsHtml(state.options.constellations, c.constellation || '')}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rc-spouse-note">${t('relationships.spouseNoteLabel')}</label>
+          <textarea class="form-input" id="rc-spouse-note" rows="2" maxlength="2000">${esc(c.spouse_note || '')}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="rel-switch" for="rc-priority">
+            <input type="checkbox" id="rc-priority" ${c.priority_intro === 1 ? 'checked' : ''}>
+            <span>${t('relationships.priorityIntroLabel')}</span>
+          </label>
+        </div>
       </div>
 
       <div class="form-group">
@@ -1981,7 +2128,15 @@ async function openContactModal(contact) {
         <button class="btn btn--secondary btn--sm" id="rc-add-anniv">${t('relationships.quickAddAnniversary')}</button>
         <button class="btn btn--secondary btn--sm" id="rc-add-prefs">${t('relationships.preferences')}</button>
         <button class="btn btn--secondary btn--sm" id="rc-add-tags">${t('relationships.tagsGroups')}</button>
+        <button class="btn btn--secondary btn--sm" id="rc-add-groups">${t('relationships.groupsButton')}</button>
       </div>
+
+      ${isAdminUser() ? `
+      <div class="form-group">
+        <div class="rel-modal-subhead"><span>${t('relationships.aclLabel')}</span></div>
+        <p class="form-hint">${t('relationships.aclHint')}</p>
+        <div class="rel-acl-list" id="rc-acl"><div class="rel-loading">${t('common.loading')}</div></div>
+      </div>` : ''}
     </div>
     <div class="modal-panel__footer">
       <div></div>
@@ -2033,6 +2188,11 @@ async function openContactModal(contact) {
       });
       panel.querySelector('#rc-add-prefs').addEventListener('click', () => openPreferencesModal(c.id));
       panel.querySelector('#rc-add-tags').addEventListener('click', () => openTagsModal(c.id));
+      panel.querySelector('#rc-add-groups').addEventListener('click', () => openGroupsModal(c.id));
+      // R4 (v150): ACL-Box nur für Admins gerendert — Nicht-Admins sehen den
+      // Block gar nicht (der Server würde jede Schreiboperation 403en).
+      const aclBox = panel.querySelector('#rc-acl');
+      if (aclBox) wireAclBox(aclBox, c.id);
 
       panel.querySelector('#rc-save').addEventListener('click', async () => {
         const type = panel.querySelector('#rc-type').value;
@@ -2047,6 +2207,11 @@ async function openContactModal(contact) {
         const groups = panel.querySelector('#rc-groups').value.trim();
         const callThem = panel.querySelector('#rc-callthem').value.trim();
         const callMe = panel.querySelector('#rc-callme').value.trim();
+        // R4-Profildaten (v147) — „nur geänderte Felder" wie die übrigen rc-Felder.
+        const zodiac = panel.querySelector('#rc-zodiac').value || null;
+        const constellation = panel.querySelector('#rc-constellation').value || null;
+        const spouseNote = panel.querySelector('#rc-spouse-note').value.trim() || null;
+        const priorityIntro = panel.querySelector('#rc-priority').checked;
         const body = {};
         if (type !== (c.relationship_type || '')) body.relationship_type = type || null;
         if (plate !== (c.vehicle_plate || '')) body.vehiclePlate = plate || null;
@@ -2060,6 +2225,10 @@ async function openContactModal(contact) {
         if (groups !== (c.contact_groups || '')) body.contactGroups = groups || null;
         if (callThem !== (c.call_them || '')) body.callThem = callThem || null;
         if (callMe !== (c.call_me || '')) body.callMe = callMe || null;
+        if (zodiac !== (c.zodiac || null)) body.zodiac = zodiac;
+        if (constellation !== (c.constellation || null)) body.constellation = constellation;
+        if (spouseNote !== (c.spouse_note || null)) body.spouseNote = spouseNote;
+        if (priorityIntro !== (c.priority_intro === 1)) body.priorityIntro = priorityIntro;
         if (pendingPhoto) body.photo = pendingPhoto;
         if (!Object.keys(body).length) { closeModal({ force: true }); return; }
         const btn = panel.querySelector('#rc-save');
@@ -2082,6 +2251,10 @@ async function openContactModal(contact) {
               contact_groups: c.contact_groups || null,
               call_them: c.call_them || null,
               call_me: c.call_me || null,
+              zodiac: c.zodiac || null,
+              constellation: c.constellation || null,
+              spouse_note: c.spouse_note || null,
+              priority_intro: c.priority_intro === 1,
             };
             pushHistory({
               label: t('relationships.contact'),
@@ -2098,6 +2271,10 @@ async function openContactModal(contact) {
                 contactGroups: prev.contact_groups,
                 callThem: prev.call_them,
                 callMe: prev.call_me,
+                zodiac: prev.zodiac,
+                constellation: prev.constellation,
+                spouseNote: prev.spouse_note,
+                priorityIntro: prev.priority_intro,
               }),
               redo: () => api.patch(`/relationships/contacts/${c.id}`, metaBody),
             });
@@ -2627,6 +2804,287 @@ function openTagsModal(contactId) {
         }
       });
       panel.querySelector('#tg-close').addEventListener('click', () => closeModal({ force: true }));
+    },
+  });
+}
+
+// --------------------------------------------------------
+// R4 (v148): 平面分组 — Kontakt-Modal (Bindung) + Verwaltung (CRUD)
+// --------------------------------------------------------
+
+/**
+ * „对谁隐藏"-Box im Kontakt-Modal (nur Admins — der Block wird nur für sie
+ * gerendert). Checkbox-Chips je User; change → POST /relationships/acl bzw.
+ * DELETE /relationships/acl/:id. Nach dem POST wird die Regel-Liste neu
+ * gezogen, damit ein späteres Abwählen die frisch erzeugte Regel-ID kennt.
+ * @param {HTMLElement} box       #rc-acl
+ * @param {number}      contactId
+ */
+function wireAclBox(box, contactId) {
+  let rules = [];
+  const paint = async () => {
+    let users = [];
+    try {
+      const [usersRes, aclRes] = await Promise.all([
+        api.get('/relationships/acl/users'),
+        api.get('/relationships/acl'),
+      ]);
+      users = usersRes?.data || [];
+      rules = (aclRes?.data || []).filter((r) => r.contact_id === contactId);
+    } catch { /* ignore — Box bleibt leer */ }
+    if (!users.length) {
+      box.innerHTML = `<div class="rel-muted">${t('relationships.aclEmpty')}</div>`;
+      return;
+    }
+    const hiddenIds = new Set(rules.map((r) => r.user_id));
+    box.innerHTML = users.map((u) => `
+      <label class="rel-acl-chip ${hiddenIds.has(u.id) ? 'is-on' : ''}">
+        <input type="checkbox" data-acl-user="${u.id}" ${hiddenIds.has(u.id) ? 'checked' : ''}>
+        <span>${esc(u.display_name || u.username)}</span>
+      </label>`).join('');
+    box.querySelectorAll('input[data-acl-user]').forEach((cb) => {
+      cb.addEventListener('change', async () => {
+        const userId = Number(cb.dataset.aclUser);
+        try {
+          if (cb.checked) {
+            await api.post('/relationships/acl', { contactId, userId });
+            const aclRes = await api.get('/relationships/acl').catch(() => null);
+            rules = (aclRes?.data || []).filter((r) => r.contact_id === contactId);
+          } else {
+            const rule = rules.find((r) => r.user_id === userId);
+            if (rule) await api.delete(`/relationships/acl/${rule.id}`);
+            rules = rules.filter((r) => r.user_id !== userId);
+          }
+          cb.closest('.rel-acl-chip')?.classList.toggle('is-on', cb.checked);
+        } catch (err) {
+          toast(err?.data?.error || t('common.unknownError'), 'danger');
+          cb.checked = !cb.checked; // Server-Zustand wiederherstellen
+        }
+      });
+    });
+  };
+  paint();
+}
+
+/**
+ * Kontakt ↔ Gruppen (Modal). Gleiche Grammatik wie openTagsModal: Chip-Liste
+ * mit Checkbox-Bindung (GET /groups + GET /contacts/:id/groups), Neuanlage
+ * oben (POST /groups — 重名 409 wird als Toast gezeigt).
+ * @param {number} contactId
+ */
+function openGroupsModal(contactId) {
+  const contact = contactById(contactId) || {};
+  const content = `
+    <div class="rel-pref-head">${avatarHtml(contact, 40)} <strong>${esc(contact.name || '?')}</strong></div>
+    <div class="form-group">
+      <label class="form-label" for="gp-new">${t('relationships.groupsNew')}</label>
+      <div class="rel-tag-add">
+        <input class="form-input" id="gp-new" type="text" maxlength="60" placeholder="${t('relationships.groupsNewHint')}">
+        <button class="btn btn--secondary btn--sm" id="gp-add">${t('relationships.add')}</button>
+      </div>
+    </div>
+    <div class="rel-tag-list" id="gp-list"><div class="rel-loading">${t('common.loading')}</div></div>
+    <div class="modal-panel__footer">
+      <div></div>
+      <div class="contact-modal__footer-actions">
+        <button class="btn btn--secondary" id="gp-close">${t('common.cancel')}</button>
+      </div>
+    </div>`;
+  openModal({
+    title: t('relationships.groupsTitle'),
+    content,
+    size: 'md',
+    onSave: (panel) => {
+      const listBox = panel.querySelector('#gp-list');
+      const paint = async () => {
+        let all = [];
+        let mine = [];
+        try {
+          all = (await api.get('/relationships/groups').then((r) => r?.data || []));
+          mine = (await api.get(`/relationships/contacts/${contactId}/groups`).then((r) => r?.data || []));
+        } catch { /* ignore */ }
+        const mineIds = new Set(mine.map((x) => x.id));
+        listBox.innerHTML = all.length
+          ? all.map((g) => `
+            <label class="rel-tag-chip ${mineIds.has(g.id) ? 'is-on' : ''}">
+              <input type="checkbox" data-group="${g.id}" ${mineIds.has(g.id) ? 'checked' : ''}>
+              <span>${esc(g.name)}</span>
+              ${typeof g.usage === 'number' && g.usage > 0
+                ? `<span class="rel-tag-chip__count">${t('relationships.groupsUsage', { count: g.usage })}</span>`
+                : ''}
+            </label>`).join('')
+          : `<div class="rel-muted">${t('relationships.groupsEmpty')}</div>`;
+        listBox.querySelectorAll('input[data-group]').forEach((cb) => {
+          cb.addEventListener('change', async () => {
+            const groupId = Number(cb.dataset.group);
+            try {
+              if (cb.checked) await api.post(`/relationships/contacts/${contactId}/groups`, { groupId });
+              else await api.delete(`/relationships/contacts/${contactId}/groups/${groupId}`);
+              cb.closest('.rel-tag-chip')?.classList.toggle('is-on', cb.checked);
+              await refreshGroupsUI();
+            } catch (err) {
+              toast(err?.data?.error || t('common.unknownError'), 'danger');
+              cb.checked = !cb.checked;
+            }
+          });
+        });
+      };
+      paint();
+      panel.querySelector('#gp-add').addEventListener('click', async () => {
+        const name = panel.querySelector('#gp-new').value.trim();
+        if (!name) return;
+        try {
+          await api.post('/relationships/groups', { name });
+          panel.querySelector('#gp-new').value = '';
+          await refreshGroupsUI();
+          await paint();
+        } catch (err) {
+          toast(err?.data?.error || t('common.unknownError'), 'danger');
+        }
+      });
+      panel.querySelector('#gp-close').addEventListener('click', () => closeModal({ force: true }));
+    },
+  });
+}
+
+/**
+ * Verwaltungs-Dialog für Gruppen selbst: Neuanlage, Umbenennen (change →
+ * PUT), Farbe (native color-Input → PUT), Sortieren (Auf/Ab → normalisiertes
+ * sortOrder je Position) und Löschen (confirmModal → DELETE; Map-Einträge
+ * löscht der Server transaktional mit).
+ */
+function openManageGroupsModal() {
+  const content = `
+    <div class="form-group">
+      <label class="form-label" for="mg-new">${t('relationships.groupsNew')}</label>
+      <div class="rel-tag-add">
+        <input class="form-input" id="mg-new" type="text" maxlength="60" placeholder="${t('relationships.groupsNewHint')}">
+        <button class="btn btn--secondary btn--sm" id="mg-add">${t('relationships.add')}</button>
+      </div>
+    </div>
+    <div class="rel-group-admin-list" id="mg-list"><div class="rel-loading">${t('common.loading')}</div></div>
+    <div class="modal-panel__footer">
+      <div></div>
+      <div class="contact-modal__footer-actions">
+        <button class="btn btn--secondary" id="mg-close">${t('common.cancel')}</button>
+      </div>
+    </div>`;
+  openModal({
+    title: t('relationships.groupsManage'),
+    content,
+    size: 'md',
+    onSave: (panel) => {
+      const listBox = panel.querySelector('#mg-list');
+      // Chips/Grid hinter dem Modal nachziehen (nur People-Tab hat sie).
+      const refreshBackdrop = async () => {
+        await ensureGroupMap(true);
+        if (state.activeTab === 'people') {
+          paintGroupChips();
+          paintPeople();
+        }
+      };
+
+      const moveGroup = async (gid, dir) => {
+        const groups = state.groups.slice();
+        const idx = groups.findIndex((g) => g.id === gid);
+        const target = idx + dir;
+        if (idx === -1 || target < 0 || target >= groups.length) return;
+        const [moved] = groups.splice(idx, 1);
+        groups.splice(target, 0, moved);
+        try {
+          // Sortierung normalisieren: jede Gruppe auf ihren Index. Gruppen ohne
+          // eigenes sortOrder stehen alle auf 0 — ein bloßer Tausch zweier
+          // Nullen wäre unsichtbar. Unveränderte Positionen werden übersprungen.
+          await Promise.all(groups.map((g, i) => (
+            g.sort_order === i
+              ? Promise.resolve()
+              : api.put(`/relationships/groups/${g.id}`, { sortOrder: i })
+          )));
+          await refreshBackdrop();
+          await paint();
+        } catch (err) {
+          toast(err?.data?.error || t('common.unknownError'), 'danger');
+        }
+      };
+
+      const paint = async () => {
+        let groups = [];
+        try {
+          groups = (await api.get('/relationships/groups').then((r) => r?.data || []));
+        } catch { /* ignore */ }
+        state.groups = groups;
+        listBox.innerHTML = groups.length
+          ? groups.map((g, i) => `
+            <div class="rel-group-admin-row" data-group-row="${g.id}">
+              <input class="form-input rel-group-admin-row__name" type="text" maxlength="60"
+                     value="${esc(g.name)}" aria-label="${t('relationships.groupsName')}">
+              <input class="form-input rel-group-admin-row__color" type="color"
+                     value="${esc(safeColor(g.color) || '#15803d')}" aria-label="${t('relationships.groupsColor')}">
+              <div class="rel-group-admin-row__ops">
+                <button class="row-action" data-group-up="${g.id}" aria-label="${t('relationships.groupsUp')}" ${i === 0 ? 'disabled' : ''}><i data-lucide="arrow-up" class="icon-sm" aria-hidden="true"></i></button>
+                <button class="row-action" data-group-down="${g.id}" aria-label="${t('relationships.groupsDown')}" ${i === groups.length - 1 ? 'disabled' : ''}><i data-lucide="arrow-down" class="icon-sm" aria-hidden="true"></i></button>
+                <button class="row-action row-action--danger" data-group-del="${g.id}" aria-label="${t('common.delete')}"><i data-lucide="trash-2" class="icon-sm" aria-hidden="true"></i></button>
+              </div>
+            </div>`).join('')
+          : `<div class="rel-muted">${t('relationships.groupsEmpty')}</div>`;
+        if (window.lucide) window.lucide.createIcons({ el: listBox });
+        listBox.querySelectorAll('[data-group-row]').forEach((row) => {
+          const gid = Number(row.dataset.groupRow);
+          const nameInput = row.querySelector('.rel-group-admin-row__name');
+          const colorInput = row.querySelector('.rel-group-admin-row__color');
+          const save = async () => {
+            const name = nameInput.value.trim();
+            if (!name) return;
+            try {
+              await api.put(`/relationships/groups/${gid}`, { name, color: colorInput.value });
+              toast(t('relationships.groupsSaved'));
+              await refreshBackdrop();
+              await paint();
+            } catch (err) {
+              toast(err?.data?.error || t('common.unknownError'), 'danger');
+            }
+          };
+          // change (nicht input): Speichern auf Blur/Enter, nicht pro Tastendruck.
+          nameInput.addEventListener('change', save);
+          colorInput.addEventListener('change', save);
+          row.querySelector('[data-group-up]')?.addEventListener('click', () => moveGroup(gid, -1));
+          row.querySelector('[data-group-down]')?.addEventListener('click', () => moveGroup(gid, 1));
+          row.querySelector('[data-group-del]')?.addEventListener('click', async () => {
+            // confirmOverModal statt confirmModal: das Verwaltungs-Modal bleibt
+            // offen (Formular wird geparkt), sonst wirft jede einzelne Löschung
+            // den Nutzer aus der Liste heraus (#625-Muster).
+            const ok = await confirmOverModal(t('relationships.groupsDeleteConfirm'), {
+              danger: true,
+              confirmLabel: t('common.delete'),
+              detail: t('relationships.groupsDeleteDetail'),
+            });
+            if (!ok) return;
+            try {
+              await api.delete(`/relationships/groups/${gid}`);
+              toast(t('relationships.groupsDeleteDone'));
+              await refreshBackdrop();
+              await paint();
+            } catch (err) {
+              toast(err?.data?.error || t('common.unknownError'), 'danger');
+            }
+          });
+        });
+      };
+
+      paint();
+      panel.querySelector('#mg-add').addEventListener('click', async () => {
+        const name = panel.querySelector('#mg-new').value.trim();
+        if (!name) return;
+        try {
+          await api.post('/relationships/groups', { name });
+          panel.querySelector('#mg-new').value = '';
+          await refreshBackdrop();
+          await paint();
+        } catch (err) {
+          toast(err?.data?.error || t('common.unknownError'), 'danger');
+        }
+      });
+      panel.querySelector('#mg-close').addEventListener('click', () => closeModal({ force: true }));
     },
   });
 }

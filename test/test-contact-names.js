@@ -29,6 +29,9 @@ function eq(actual, expected, msg) {
 
 console.log('\n[Contact-Names-Test] Strukturierte Namensteile (#535)\n');
 
+// R3: SM4 应用层加密需要 JUJU_SM4_KEY（32 hex）。生产由 sm4-key-guard 拒启保护；
+// 测试提供固定的本地密钥（不对应任何真实数据）。
+process.env.JUJU_SM4_KEY = '0123456789abcdef0123456789abcdef';
 process.env.DB_PATH = path.join(os.tmpdir(), `yuvomi-contact-names-${process.pid}.db`);
 process.env.SESSION_SECRET = 'contact-names-test-secret-32bytes-long';
 

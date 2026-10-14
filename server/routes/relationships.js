@@ -1,3 +1,27 @@
+/**
+ * Modul: Beziehungen (Relationships)
+ * Zweck: REST-API-Routen für das Beziehungsnetz — Kanten, Graph, Interaktionen,
+ *        Jahrestage, Kontakt-Metadaten, Tags/Gruppen, Erinnerungen, ACL.
+ *
+ * R3/R4 (rnw 补差, T04b):
+ *   - R3: `contacts.vehicle_plate` ist SM4-Chiffre-Spalte (v149) — PATCH
+ *     /contacts/:id verschlüsselt vor dem Schreiben (encryptField) und
+ *     entschlüsselt in der Antwort (decryptField).
+ *   - R4: birthday_lunar/zodiac/constellation sind Server-Ableitungen (v147) —
+ *     applyLunarFields(body, DB-Zeile) entscheidet; spouse_note/priority_intro
+ *     sind gewöhnliche Profilfelder. Enum-Quelle: lunar-fields.js (ZODIACS/
+ *     CONSTELLATIONS), ausgeliefert über GET /meta/options.
+ *   - R4: Flache Gruppen — 7 Endpoints auf contact_groups/contact_group_map
+ *     (v148), admin-only ACL — 4 Endpoints auf contact_node_acl (v150).
+ *   - R4: Alle Lese-Endpoints filtern über contact-visibility.js
+ *     (visibilityFilter/isVisible/visibleIdSet): Admin sieht alles, Nicht-Admins
+ *     sehen nur hidden = 0 UND nicht per contact_node_acl gesperrte Kontakte;
+ *     ohne User-ID fail-closed (AND 1=0).
+ *
+ * Abhängigkeiten: express, server/db.js, server/middleware/validate.js,
+ *   server/services/{anniversaries,lunar-fields,sm4,contact-visibility}.js
+ */
+
 import express from 'express';
 import { createLogger } from '../logger.js';
 import * as db from '../db.js';
@@ -8,6 +32,9 @@ import {
   syncAnniversaryArtifacts,
   syncAllAnniversaryReminders,
 } from '../services/anniversaries.js';
+import { applyLunarFields, ZODIACS, CONSTELLATIONS } from '../services/lunar-fields.js';
+import { encryptField, decryptField } from '../services/sm4.js';
+import { visibilityFilter, isVisible, visibleIdSet } from '../services/contact-visibility.js';
 
 const log = createLogger('Relationships');
 const router = express.Router();
@@ -53,6 +80,45 @@ function logOp(req, action, entity, entityId, summary) {
 }
 function labelSuffix(label) {
   return label ? ` (${label})` : '';
+}
+
+/**
+ * R4: priorityIntro-Validierung — Boolesch (null gilt als „Löschen“).
+ * Identische Semantik wie in routes/contacts.js (T04a).
+ * @param {*} val Anfrage-Wert
+ * @returns {{value: boolean|null, error: string|null}}
+ */
+function priorityIntroCheck(val) {
+  if (val === undefined || val === null) return { value: null, error: null };
+  if (typeof val !== 'boolean') return { value: null, error: 'Priority intro must be a boolean.' };
+  return { value: val, error: null };
+}
+
+/**
+ * R3/R4: Antwortdarstellung für PATCH /contacts/:id — vehicle_plate ist
+ * Chiffre (v149) und wird entschlüssert; phone_hash ist interner Blind-Finger-
+ * abdruck (v149) und gehört nicht zum API-Vertrag (wie contacts.js
+ * presentContact). @param {Object|null} row contacts-Zeile
+ * @returns {Object|null} entschlüsselte flache Kopie
+ */
+function presentContactMeta(row) {
+  if (!row) return row;
+  const { phone_hash: _phoneHash, ...rest } = row;
+  return {
+    ...rest,
+    vehicle_plate: decryptField(row.vehicle_plate),
+  };
+}
+
+/**
+ * R4: Sichtbarkeits-Gate für kontaktgebundene Einzel-Lesepfade — unsichtbare
+ * Kontakte antworten wie „nicht vorhanden“ (404, keine Existenz-Leak).
+ * @param {object} req Express-Request
+ * @param {number} contactId Kontakt-ID
+ * @returns {boolean} true = für den aktuellen Betrachter sichtbar
+ */
+function contactVisibleOr404(req, contactId) {
+  return contactExists(contactId) && isVisible(req, contactId);
 }
 
 // Nächstes Vorkommen eines wiederkehrenden Datums (Geburtstag/ Jahrestag).
@@ -107,6 +173,10 @@ router.get('/meta/options', (_req, res) => {
       acceptedImageTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
       relationTypes: RELATION_TYPES,
       interactionTypes: INTERACTION_TYPES,
+      // R4: Enum-Einzelsquelle (lunar-fields.js) — gleiche Liste wie die
+      // oneOf-Validierung in PATCH /contacts/:id und routes/contacts.js.
+      zodiacs: ZODIACS,
+      constellations: CONSTELLATIONS,
     },
   });
 });
@@ -130,6 +200,12 @@ router.get('/', (req, res) => {
       sql += ' AND (r.contact_a = ? OR r.contact_b = ?)';
       params.push(req.query.contactId, req.query.contactId);
     }
+    // R4: Kanten nur, wenn BEIDE Endpunkte für den Betrachter sichtbar sind
+    // (hidden + contact_node_acl; admin → leere Fragmente).
+    const visA = visibilityFilter(req, 'a');
+    const visB = visibilityFilter(req, 'b');
+    sql += visA.sql + visB.sql;
+    params.push(...visA.params, ...visB.params);
     sql += ' ORDER BY r.created_at DESC';
     const rows = db.get().prepare(sql).all(...params);
     res.json({ data: rows });
@@ -259,8 +335,11 @@ router.delete('/:id', (req, res) => {
 // --------------------------------------------------------
 router.get('/graph', (req, res) => {
   try {
-    const admin = isAdminReq(req);
-    const hiddenFilter = admin ? '' : ' AND a.hidden = 0 AND b.hidden = 0';
+    // R4: Kanten doppelt (a/b) und Knotenliste gehen durch die gleiche
+    // Sichtbarkeitslogik (hidden + contact_node_acl; admin → keine Filter).
+    const visA = visibilityFilter(req, 'a');
+    const visB = visibilityFilter(req, 'b');
+    const visNodes = visibilityFilter(req, 'contacts');
     const edges = db.get().prepare(`
       SELECT r.id, r.contact_a, r.contact_b, r.relation_type, r.note, r.strength, r.met_at, r.direction, r.label,
              a.name AS name_a, b.name AS name_b,
@@ -268,8 +347,8 @@ router.get('/graph', (req, res) => {
       FROM contact_relationships r
       JOIN contacts a ON a.id = r.contact_a
       JOIN contacts b ON b.id = r.contact_b
-      WHERE 1=1${hiddenFilter}
-    `).all();
+      WHERE 1=1${visA.sql}${visB.sql}
+    `).all(...visA.params, ...visB.params);
 
     const nodeIds = new Set();
     for (const e of edges) {
@@ -283,9 +362,9 @@ router.get('/graph', (req, res) => {
       nodes = db.get().prepare(`
         SELECT id, name, photo, relationship_type, category
         FROM contacts
-        WHERE id IN (${placeholders})${admin ? '' : ' AND hidden = 0'}
+        WHERE id IN (${placeholders})${visNodes.sql}
         ORDER BY name COLLATE NOCASE ASC
-      `).all(...nodeIds);
+      `).all(...nodeIds, ...visNodes.params);
     }
 
     const degree = new Map();
@@ -308,9 +387,14 @@ router.get('/graph', (req, res) => {
 router.get('/common', (req, res) => {
   try {
     const focusId = req.query.contactId ? parseInt(req.query.contactId, 10) : null;
-    const edges = db.get().prepare(`
+    // R4: In-Memory-Adjazenz — once die sichtbare ID-Menge holen
+    // (admin → null = keine Filterung) und Kanten/Shared-Kontakte filtern.
+    const visible = visibleIdSet(req);
+    const isVis = (id) => visible === null || visible.has(id);
+    const allEdges = db.get().prepare(`
       SELECT contact_a, contact_b FROM contact_relationships
     `).all();
+    const edges = allEdges.filter((e) => isVis(e.contact_a) && isVis(e.contact_b));
 
     // Adjazenzliste (ungerichtet)
     const adj = new Map();
@@ -338,7 +422,7 @@ router.get('/common', (req, res) => {
 
       const na = adj.get(e.contact_a) || new Set();
       const nb = adj.get(e.contact_b) || new Set();
-      const shared = [...na].filter((x) => nb.has(x) && x !== e.contact_a && x !== e.contact_b)
+      const shared = [...na].filter((x) => nb.has(x) && x !== e.contact_a && x !== e.contact_b && isVis(x))
         .map((x) => nameOf(x));
 
       results.push({
@@ -368,6 +452,10 @@ router.get('/tree', (req, res) => {
         .filter((n) => Number.isInteger(n) && n > 0);
     }
 
+    // R4: Sichtbare ID-Menge (admin → null); Kanten und Quellkontakte filtern.
+    const visible = visibleIdSet(req);
+    const isVis = (id) => visible === null || visible.has(id);
+
     const allEdges = db.get().prepare(`
       SELECT r.contact_a, r.contact_b, r.relation_type,
              a.name AS name_a, b.name AS name_b,
@@ -376,7 +464,7 @@ router.get('/tree', (req, res) => {
       FROM contact_relationships r
       JOIN contacts a ON a.id = r.contact_a
       JOIN contacts b ON b.id = r.contact_b
-    `).all();
+    `).all().filter((e) => isVis(e.contact_a) && isVis(e.contact_b));
 
     // Falls keine Quellen angegeben, automatisch alle Kontakte mit Kanten wählen.
     if (!sourceIds.length && allEdges.length) {
@@ -387,6 +475,8 @@ router.get('/tree', (req, res) => {
       }
       sourceIds = [...touched].slice(0, 12);
     }
+    // Explizit angefragte, aber unsichtbare Quellen fallen heraus (404-Semantik).
+    sourceIds = sourceIds.filter((id) => isVis(id));
 
     // Kontakt-Metadaten auflösen
     const contactMap = new Map();
@@ -503,6 +593,10 @@ router.get('/interactions', (req, res) => {
       sql += ' AND (i.note LIKE ? OR c.name LIKE ?)';
       params.push(`%${String(req.query.q).trim()}%`, `%${String(req.query.q).trim()}%`);
     }
+    // R4: Interaktionen unsichtbarer Kontakte sind mitgefiltert.
+    const vis = visibilityFilter(req, 'c');
+    sql += vis.sql;
+    params.push(...vis.params);
     sql += ' ORDER BY i.occurred_at DESC, i.created_at DESC';
     const rows = db.get().prepare(sql).all(...params);
     res.json({ data: rows });
@@ -560,12 +654,15 @@ router.get('/anniversaries', (req, res) => {
   try {
     const uid = userId(req);
     syncAllAnniversaryReminders(db.get(), uid);
+    // R4: Jahrestage unsichtbarer Kontakte sind mitgefiltert.
+    const vis = visibilityFilter(req, 'c');
     const rows = db.get().prepare(`
       SELECT a.*, c.name AS contact_name, c.photo AS contact_photo
       FROM anniversaries a
       JOIN contacts c ON c.id = a.contact_id
+      WHERE 1=1${vis.sql}
       ORDER BY a.anniversary_date ASC
-    `).all();
+    `).all(...vis.params);
     res.json({ data: rows.map((r) => hydrateAnniversary(r)) });
   } catch (err) {
     log.error('GET /anniversaries error:', err);
@@ -686,7 +783,9 @@ router.delete('/anniversaries/:id', (req, res) => {
 router.patch('/contacts/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const contact = db.get().prepare('SELECT id, name FROM contacts WHERE id = ?').get(id);
+    // R4: vollständige Zeile laden — applyLunarFields(body, current) und die
+    // Antwortdarstellung brauchen birthday + die aktuellen Derivate.
+    const contact = db.get().prepare('SELECT * FROM contacts WHERE id = ?').get(id);
     if (!contact) return res.status(404).json({ error: 'Contact not found.', code: 404 });
 
     const sets = [];
@@ -709,7 +808,8 @@ router.patch('/contacts/:id', (req, res) => {
       const vPlate = str(req.body.vehiclePlate, 'Vehicle plate', { max: MAX_SHORT, required: false });
       if (vPlate.error) return res.status(400).json({ error: vPlate.error, code: 400 });
       sets.push('vehicle_plate = ?');
-      params.push(vPlate.value ?? null);
+      // R3: vehicle_plate ist Chiffre-Spalte (v149) — vor dem Schreiben chiffrieren.
+      params.push(encryptField(vPlate.value ?? null));
     }
     if (req.body.school !== undefined) {
       const vSchool = str(req.body.school, 'School', { max: MAX_TITLE, required: false });
@@ -742,6 +842,63 @@ router.patch('/contacts/:id', (req, res) => {
         params.push(v.value ?? null);
       }
     }
+    // R4 (v147): 公历生日 — 该端点此前不写生日；关系页卡片保存走此端点，
+    // 生日变更时 applyLunarFields 自动换算派生字段（显式值优先）。
+    if (req.body.birthday !== undefined) {
+      const vBirthday = validateDate(req.body.birthday, 'Birthday', false);
+      if (vBirthday.error) return res.status(400).json({ error: vBirthday.error, code: 400 });
+      sets.push('birthday = ?');
+      params.push(vBirthday.value ?? null);
+    }
+    // R4-Profilefelder (v147): Validierung identisch zu routes/contacts.js.
+    // 显式提供的派生字段（含显式 null 清除）以请求值为准——即使生日未动。
+    const vBirthdayLunar = req.body.birthdayLunar !== undefined
+      ? str(req.body.birthdayLunar, 'Birthday lunar', { max: MAX_SHORT, required: false }) : null;
+    const vZodiac = req.body.zodiac !== undefined
+      ? oneOf(req.body.zodiac, ZODIACS, 'Zodiac') : null;
+    const vConstellation = req.body.constellation !== undefined
+      ? oneOf(req.body.constellation, CONSTELLATIONS, 'Constellation') : null;
+    const vSpouseNote = req.body.spouseNote !== undefined
+      ? str(req.body.spouseNote, 'Spouse note', { max: MAX_TEXT, required: false }) : null;
+    const vPriorityIntro = req.body.priorityIntro !== undefined
+      ? priorityIntroCheck(req.body.priorityIntro) : null;
+    for (const v of [vBirthdayLunar, vZodiac, vConstellation, vSpouseNote, vPriorityIntro]) {
+      if (v?.error) return res.status(400).json({ error: v.error, code: 400 });
+    }
+    for (const [v, column] of [
+      [vBirthdayLunar, 'birthday_lunar'],
+      [vZodiac, 'zodiac'],
+      [vConstellation, 'constellation'],
+    ]) {
+      if (!v) continue;
+      sets.push(`${column} = ?`);
+      params.push(v.value ?? null);
+    }
+    if (vSpouseNote) {
+      sets.push('spouse_note = ?');
+      params.push(vSpouseNote.value ?? null);
+    }
+    if (vPriorityIntro) {
+      sets.push('priority_intro = ?');
+      params.push(vPriorityIntro.value ? 1 : 0);
+    }
+    // R4: Ableitungs-Entscheid — applyLunarFields(body, DB-Zeile):
+    //   Birthday unverändert → kein Derivate-Patch (nur explizite Felder);
+    //   Birthday geändert    → nicht explizit genannte Derivate werden
+    //                          automatisch abgeleitet (explizit gewinnt);
+    //   Birthday geleert     → alle drei Derivate auf NULL.
+    const lunar = applyLunarFields(req.body, contact);
+    const derivedColumns = [
+      ['birthdayLunar', 'birthday_lunar'],
+      ['zodiac', 'zodiac'],
+      ['constellation', 'constellation'],
+    ];
+    for (const [bodyKey, column] of derivedColumns) {
+      if (lunar[bodyKey] === undefined) continue;
+      if (sets.some((s) => s.startsWith(`${column} = `))) continue; // 显式值已占位
+      sets.push(`${column} = ?`);
+      params.push(lunar[bodyKey] ?? null);
+    }
     // Node-Hiding für Kollaboratoren (nur Admins).
     if (req.body.hidden !== undefined) {
       if (!isAdminReq(req)) return res.status(403).json({ error: 'Only admins can change visibility.', code: 403 });
@@ -755,10 +912,16 @@ router.patch('/contacts/:id', (req, res) => {
     params.push(id);
     db.get().prepare(`UPDATE contacts SET ${sets.join(', ')} WHERE id = ?`).run(...params);
 
+    // R3/R4: Antwort inkl. neuer Profilspalten; vehicle_plate entschlüsselt,
+    // phone_hash (interner Blind-Fingerabdruck, v149) bleibt ausgespart.
     const updated = db.get().prepare(
-      'SELECT id, name, photo, relationship_type, category, vehicle_plate, school, custom_tags, gender, hometown, wechat, douyin, qq, contact_groups, call_them, call_me, hidden FROM contacts WHERE id = ?'
+      `SELECT id, name, photo, relationship_type, category, vehicle_plate, school, custom_tags,
+              gender, hometown, wechat, douyin, qq, contact_groups, call_them, call_me, hidden,
+              birthday, birthday_lunar, zodiac, constellation, spouse_note, priority_intro, phone_hash
+       FROM contacts WHERE id = ?`
     ).get(id);
-    res.json({ data: updated });
+    logOp(req, 'update', 'contact', id, sets.map((s) => s.split(' = ')[0]).join(', '));
+    res.json({ data: presentContactMeta(updated) });
   } catch (err) {
     log.error('PATCH /contacts/:id error:', err);
     res.status(500).json({ error: 'Internal error.', code: 500 });
@@ -769,8 +932,15 @@ router.patch('/contacts/:id', (req, res) => {
 // GET /api/v1/relationships/tree-export  -> JSON-Backup des Beziehungsgraphen
 router.get('/tree-export', (req, res) => {
   try {
-    const contacts = db.get().prepare('SELECT id, name, photo, category, relationship_type FROM contacts').all();
-    const edges = db.get().prepare('SELECT contact_a, contact_b, relation_type, note FROM contact_relationships').all();
+    // R4: Export unterliegt derselben Sichtbarkeit wie die Live-Ansicht
+    // (admin → vollständig). Der Export enthält keine chiffrierten Spalten
+    // (id/name/photo/category/relationship_type) — keine Entschlüsselung nötig.
+    const visible = visibleIdSet(req);
+    const isVis = (id) => visible === null || visible.has(id);
+    const contacts = db.get().prepare('SELECT id, name, photo, category, relationship_type FROM contacts').all()
+      .filter((c) => isVis(c.id));
+    const edges = db.get().prepare('SELECT contact_a, contact_b, relation_type, note FROM contact_relationships').all()
+      .filter((e) => isVis(e.contact_a) && isVis(e.contact_b));
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', 'attachment; filename="relationship-tree.json"');
     res.send(JSON.stringify({ exportedAt: new Date().toISOString(), nodes: contacts, edges }, null, 2));
@@ -791,15 +961,16 @@ router.get('/path', (req, res) => {
     if (!Number.isInteger(from) || !Number.isInteger(to)) {
       return res.status(400).json({ error: 'from and to must be numeric contact IDs.', code: 400 });
     }
-    const admin = isAdminReq(req);
-    const hiddenFilter = admin ? '' : ' AND a.hidden = 0 AND b.hidden = 0';
+    // R4: BFS läuft nur über Kanten, deren beide Endpunkte sichtbar sind.
+    const visA = visibilityFilter(req, 'a');
+    const visB = visibilityFilter(req, 'b');
     const edges = db.get().prepare(`
       SELECT r.contact_a, r.contact_b, r.relation_type, r.label, r.strength, r.direction
       FROM contact_relationships r
       JOIN contacts a ON a.id = r.contact_a
       JOIN contacts b ON b.id = r.contact_b
-      WHERE 1=1${hiddenFilter}
-    `).all();
+      WHERE 1=1${visA.sql}${visB.sql}
+    `).all(...visA.params, ...visB.params);
 
     const adj = new Map();
     const add = (x, y, meta) => {
@@ -859,24 +1030,24 @@ router.get('/path', (req, res) => {
 // --------------------------------------------------------
 router.get('/insights', (req, res) => {
   try {
-    const admin = isAdminReq(req);
     const staleDays = Math.max(1, Math.min(3650, parseInt(req.query.staleDays || '90', 10) || 90));
+    // R4: Kontaktliste und Kanten laufen durch dieselbe Sichtbarkeitslogik.
+    const visContacts = visibilityFilter(req, 'contacts');
+    const visA = visibilityFilter(req, 'a');
+    const visB = visibilityFilter(req, 'b');
     const contacts = db.get().prepare(
-      admin
-        ? 'SELECT id, name, photo, relationship_type FROM contacts'
-        : 'SELECT id, name, photo, relationship_type FROM contacts WHERE hidden = 0'
-    ).all();
+      `SELECT id, name, photo, relationship_type FROM contacts WHERE 1=1${visContacts.sql}`
+    ).all(...visContacts.params);
 
     const strengthSum = new Map();
     const degree = new Map();
-    const edges = db.get().prepare(admin
-      ? 'SELECT contact_a, contact_b, strength FROM contact_relationships'
-      : `SELECT r.contact_a, r.contact_b, r.strength
-         FROM contact_relationships r
-         JOIN contacts a ON a.id = r.contact_a
-         JOIN contacts b ON b.id = r.contact_b
-         WHERE a.hidden = 0 AND b.hidden = 0`
-    ).all();
+    const edges = db.get().prepare(`
+      SELECT r.contact_a, r.contact_b, r.strength
+      FROM contact_relationships r
+      JOIN contacts a ON a.id = r.contact_a
+      JOIN contacts b ON b.id = r.contact_b
+      WHERE 1=1${visA.sql}${visB.sql}
+    `).all(...visA.params, ...visB.params);
     for (const e of edges) {
       degree.set(e.contact_a, (degree.get(e.contact_a) || 0) + 1);
       degree.set(e.contact_b, (degree.get(e.contact_b) || 0) + 1);
@@ -925,6 +1096,10 @@ router.get('/preferences', (req, res) => {
   try {
     const contactId = parseInt(req.query.contactId, 10);
     if (!Number.isInteger(contactId)) return res.status(400).json({ error: 'contactId required.', code: 400 });
+    // R4: Einzel-Lesepfad — unsichtbare Kontakte antworten 404 (keine Existenz-Leak).
+    if (!contactVisibleOr404(req, contactId)) {
+      return res.status(404).json({ error: 'Contact not found.', code: 404 });
+    }
     const row = db.get().prepare('SELECT * FROM contact_preferences WHERE contact_id = ?').get(contactId);
     res.json({ data: row || null });
   } catch (err) {
@@ -1020,6 +1195,10 @@ router.delete('/tags/:id', (req, res) => {
 router.get('/contacts/:id/tags', (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
+    // R4: kontaktgebundener Lese-Pfad — unsichtbare Kontakte → 404.
+    if (!contactVisibleOr404(req, id)) {
+      return res.status(404).json({ error: 'Contact not found.', code: 404 });
+    }
     const rows = db.get().prepare(`
       SELECT t.* FROM contact_tags t
       JOIN contact_tag_map m ON m.tag_id = t.id
@@ -1070,18 +1249,296 @@ router.delete('/contacts/:id/tags/:tagId', (req, res) => {
 });
 
 // --------------------------------------------------------
+// R4: Flache Gruppen (v148: contact_groups + contact_group_map)
+//     7 Endpoints — Modell wie contact_tags (siehe oben).
+// --------------------------------------------------------
+router.get('/groups', (_req, res) => {
+  try {
+    const groups = db.get().prepare(`
+      SELECT g.*, (SELECT COUNT(*) FROM contact_group_map m WHERE m.group_id = g.id) AS usage
+      FROM contact_groups g
+      ORDER BY g.sort_order ASC, g.name COLLATE NOCASE ASC
+    `).all();
+    res.json({ data: groups });
+  } catch (err) {
+    log.error('GET /groups error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+router.post('/groups', (req, res) => {
+  try {
+    const vName = str(req.body.name, 'Name', { max: MAX_SHORT });
+    const vColor = str(req.body.color, 'Color', { max: MAX_SHORT, required: false });
+    const vSort = num(req.body.sortOrder, 'Sort order', { required: false });
+    const errors = collectErrors([vName, vColor, vSort].filter(Boolean));
+    if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
+    if (vSort.value !== null && !Number.isInteger(vSort.value)) {
+      return res.status(400).json({ error: 'Sort order must be an integer.', code: 400 });
+    }
+    const dup = db.get().prepare('SELECT id FROM contact_groups WHERE name = ? COLLATE NOCASE').get(vName.value);
+    if (dup) return res.status(409).json({ error: 'Group already exists.', code: 409 });
+    const info = db.get().prepare(
+      'INSERT INTO contact_groups (name, color, sort_order, created_by) VALUES (?, ?, ?, ?)'
+    ).run(vName.value, vColor.value ?? null, vSort.value ?? 0, currentUid(req) || null);
+    const created = db.get().prepare('SELECT * FROM contact_groups WHERE id = ?').get(info.lastInsertRowid);
+    logOp(req, 'create', 'contact_group', created.id, created.name);
+    res.status(201).json({ data: created });
+  } catch (err) {
+    log.error('POST /groups error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+router.put('/groups/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = db.get().prepare('SELECT * FROM contact_groups WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'Group not found.', code: 404 });
+
+    const checks = [];
+    if (req.body.name !== undefined) checks.push(str(req.body.name, 'Name', { max: MAX_SHORT, required: false }));
+    if (req.body.color !== undefined) checks.push(str(req.body.color, 'Color', { max: MAX_SHORT, required: false }));
+    if (req.body.sortOrder !== undefined) checks.push(num(req.body.sortOrder, 'Sort order', { required: false }));
+    const errors = collectErrors(checks);
+    if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
+
+    const sets = [];
+    const params = [];
+    if (req.body.name !== undefined) {
+      const name = req.body.name?.trim() || null;
+      if (!name) return res.status(400).json({ error: 'Name must not be empty.', code: 400 });
+      const dup = db.get().prepare('SELECT id FROM contact_groups WHERE name = ? COLLATE NOCASE AND id <> ?').get(name, id);
+      if (dup) return res.status(409).json({ error: 'Group already exists.', code: 409 });
+      sets.push('name = ?');
+      params.push(name);
+    }
+    if (req.body.color !== undefined) {
+      sets.push('color = ?');
+      params.push(req.body.color?.trim() || null);
+    }
+    if (req.body.sortOrder !== undefined) {
+      const sortOrder = req.body.sortOrder === null || req.body.sortOrder === '' ? 0 : Number(req.body.sortOrder);
+      if (!Number.isInteger(sortOrder)) {
+        return res.status(400).json({ error: 'Sort order must be an integer.', code: 400 });
+      }
+      sets.push('sort_order = ?');
+      params.push(sortOrder);
+    }
+    if (sets.length === 0) {
+      return res.status(400).json({ error: 'No fields to update.', code: 400 });
+    }
+    sets.push("updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')");
+    params.push(id);
+    db.get().prepare(`UPDATE contact_groups SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+
+    const updated = db.get().prepare('SELECT * FROM contact_groups WHERE id = ?').get(id);
+    logOp(req, 'update', 'contact_group', id, updated.name);
+    res.json({ data: updated });
+  } catch (err) {
+    log.error('PUT /groups/:id error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+router.delete('/groups/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = db.get().prepare('SELECT id, name FROM contact_groups WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'Group not found.', code: 404 });
+    logOp(req, 'delete', 'contact_group', id, existing.name);
+    // Transaktion: erst die Bindungen, dann die Gruppe (ON DELETE CASCADE
+    // sichert auch die Map-Reihen, aber explizit hält die Semantik stabil).
+    db.get().transaction(() => {
+      db.get().prepare('DELETE FROM contact_group_map WHERE group_id = ?').run(id);
+      db.get().prepare('DELETE FROM contact_groups WHERE id = ?').run(id);
+    })();
+    res.status(204).end();
+  } catch (err) {
+    log.error('DELETE /groups/:id error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+router.get('/contacts/:id/groups', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    // R4: kontaktgebundener Lese-Pfad — unsichtbare Kontakte → 404.
+    if (!contactVisibleOr404(req, id)) {
+      return res.status(404).json({ error: 'Contact not found.', code: 404 });
+    }
+    const rows = db.get().prepare(`
+      SELECT g.* FROM contact_groups g
+      JOIN contact_group_map m ON m.group_id = g.id
+      WHERE m.contact_id = ? ORDER BY g.sort_order ASC, g.name COLLATE NOCASE ASC
+    `).all(id);
+    res.json({ data: rows });
+  } catch (err) {
+    log.error('GET /contacts/:id/groups error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+router.post('/contacts/:id/groups', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!contactExists(id)) return res.status(404).json({ error: 'Contact does not exist.', code: 404 });
+    let groupId = req.body.groupId ? parseInt(req.body.groupId, 10) : null;
+    if (!Number.isInteger(groupId) && req.body.name) {
+      const vName = str(req.body.name, 'Name', { max: MAX_SHORT });
+      if (vName.error) return res.status(400).json({ error: vName.error, code: 400 });
+      let group = db.get().prepare('SELECT id FROM contact_groups WHERE name = ? COLLATE NOCASE').get(vName.value);
+      if (!group) {
+        const info = db.get().prepare('INSERT INTO contact_groups (name, created_by) VALUES (?, ?)').run(vName.value, currentUid(req) || null);
+        groupId = info.lastInsertRowid;
+      } else {
+        groupId = group.id;
+      }
+    }
+    if (!Number.isInteger(groupId)) return res.status(400).json({ error: 'groupId or name required.', code: 400 });
+    // db.js läuft mit foreign_keys = ON — vor dem Binden die Gruppe prüfen,
+    // sonst würde ein unbekanntes groupId in einen 500 laufen.
+    const group = db.get().prepare('SELECT id, name FROM contact_groups WHERE id = ?').get(groupId);
+    if (!group) return res.status(404).json({ error: 'Group does not exist.', code: 404 });
+    db.get().prepare('INSERT OR IGNORE INTO contact_group_map (contact_id, group_id) VALUES (?, ?)').run(id, groupId);
+    logOp(req, 'update', 'contact_group_map', id, `${group.name} ↔ contact #${id}`);
+    res.status(201).json({ data: { contactId: id, groupId } });
+  } catch (err) {
+    log.error('POST /contacts/:id/groups error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+router.delete('/contacts/:id/groups/:groupId', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const groupId = parseInt(req.params.groupId, 10);
+    const group = db.get().prepare('SELECT id, name FROM contact_groups WHERE id = ?').get(groupId);
+    if (group) {
+      logOp(req, 'update', 'contact_group_map', id, `unbound ${group.name} ↔ contact #${id}`);
+    }
+    db.get().prepare('DELETE FROM contact_group_map WHERE contact_id = ? AND group_id = ?').run(id, groupId);
+    res.status(204).end();
+  } catch (err) {
+    log.error('DELETE /contacts/:id/groups/:groupId error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// R4: Knoten-Sichtbarkeit (ACL, v150: contact_node_acl) — nur Admins.
+//     Nicht-Admins erhalten konsequent 403 (Verwaltung ist Admin-Privileg).
+// --------------------------------------------------------
+const ACL_FORBIDDEN = { error: 'Only admins can manage visibility.', code: 403 };
+
+router.get('/acl', (req, res) => {
+  try {
+    if (!isAdminReq(req)) return res.status(403).json(ACL_FORBIDDEN);
+    // ?contactId= 按联系人过滤（PRD L170 / ARCHITECTURE L245 契约）；
+    // 缺省或空串 → 全量；非整数 → 400（同 /preferences、POST /acl 的整数 ID 校验风格）。
+    const params = [];
+    let where = '';
+    if (req.query.contactId !== undefined && req.query.contactId !== '') {
+      const contactId = parseInt(req.query.contactId, 10);
+      if (!Number.isInteger(contactId)) {
+        return res.status(400).json({ error: 'contactId must be an integer ID.', code: 400 });
+      }
+      where = ' WHERE acl.contact_id = ?';
+      params.push(contactId);
+    }
+    const rows = db.get().prepare(`
+      SELECT acl.id, acl.contact_id, acl.user_id, acl.created_by, acl.created_at,
+             c.name AS contact_name, u.username
+      FROM contact_node_acl acl
+      JOIN contacts c ON c.id = acl.contact_id
+      JOIN users u ON u.id = acl.user_id
+      ${where}ORDER BY acl.id DESC
+    `).all(...params);
+    res.json({ data: rows });
+  } catch (err) {
+    log.error('GET /acl error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+router.get('/acl/users', (req, res) => {
+  try {
+    if (!isAdminReq(req)) return res.status(403).json(ACL_FORBIDDEN);
+    // Admins selbst kann man nicht vor sich selbst sperren — Selbst-Ausschluss.
+    const selfId = currentUid(req);
+    const rows = selfId
+      ? db.get().prepare('SELECT id, username, display_name, role FROM users WHERE id <> ? ORDER BY id ASC').all(selfId)
+      : db.get().prepare('SELECT id, username, display_name, role FROM users ORDER BY id ASC').all();
+    res.json({ data: rows });
+  } catch (err) {
+    log.error('GET /acl/users error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+router.post('/acl', (req, res) => {
+  try {
+    if (!isAdminReq(req)) return res.status(403).json(ACL_FORBIDDEN);
+    const vContact = num(req.body.contactId, 'Contact', { required: true });
+    const vUser = num(req.body.userId, 'User', { required: true });
+    const errors = collectErrors([vContact, vUser]);
+    if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
+    if (!Number.isInteger(vContact.value) || !Number.isInteger(vUser.value)) {
+      return res.status(400).json({ error: 'contactId and userId must be integer IDs.', code: 400 });
+    }
+    if (!contactExists(vContact.value)) {
+      return res.status(404).json({ error: 'Contact does not exist.', code: 404 });
+    }
+    const user = db.get().prepare('SELECT id, username FROM users WHERE id = ?').get(vUser.value);
+    if (!user) return res.status(404).json({ error: 'User does not exist.', code: 404 });
+    const dup = db.get().prepare(
+      'SELECT id FROM contact_node_acl WHERE contact_id = ? AND user_id = ?'
+    ).get(vContact.value, vUser.value);
+    if (dup) return res.status(409).json({ error: 'This visibility rule already exists.', code: 409 });
+    const info = db.get().prepare(
+      'INSERT INTO contact_node_acl (contact_id, user_id, created_by) VALUES (?, ?, ?)'
+    ).run(vContact.value, vUser.value, currentUid(req) || null);
+    const created = db.get().prepare('SELECT * FROM contact_node_acl WHERE id = ?').get(info.lastInsertRowid);
+    logOp(req, 'create', 'contact_acl', created.id, `contact #${vContact.value} hidden from ${user.username}`);
+    res.status(201).json({ data: created });
+  } catch (err) {
+    log.error('POST /acl error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+router.delete('/acl/:id', (req, res) => {
+  try {
+    if (!isAdminReq(req)) return res.status(403).json(ACL_FORBIDDEN);
+    const id = parseInt(req.params.id, 10);
+    const existing = db.get().prepare('SELECT * FROM contact_node_acl WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'Visibility rule not found.', code: 404 });
+    logOp(req, 'delete', 'contact_acl', id, `contact #${existing.contact_id} → user #${existing.user_id}`);
+    db.get().prepare('DELETE FROM contact_node_acl WHERE id = ?').run(id);
+    res.status(204).end();
+  } catch (err) {
+    log.error('DELETE /acl/:id error:', err);
+    res.status(500).json({ error: 'Internal error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
 // 提醒中心: 生日 / 纪念日 / 久未联系 / 该还礼 聚合
 // --------------------------------------------------------
 router.get('/reminders', (req, res) => {
   try {
-    const admin = isAdminReq(req);
     const staleDays = Math.max(1, Math.min(3650, parseInt(req.query.staleDays || '90', 10) || 90));
-    const hiddenCond = admin ? '' : ' AND hidden = 0';
+    // R4: alle Kontakt-bezogenen Teilabfragen laufen durch dieselbe
+    // Sichtbarkeitslogik (admin → leere Fragmente).
+    const visContacts = visibilityFilter(req, 'contacts');
+    const visC = visibilityFilter(req, 'c');
+    const visA = visibilityFilter(req, 'a');
+    const visB = visibilityFilter(req, 'b');
 
     const birthdays = db.get().prepare(`
       SELECT id, name, photo, relationship_type, birthday FROM contacts
-      WHERE birthday IS NOT NULL AND birthday != ''${hiddenCond}
-    `).all()
+      WHERE birthday IS NOT NULL AND birthday != ''${visContacts.sql}
+    `).all(...visContacts.params)
       .map((c) => ({ ...c, type: 'birthday', next: nextOccurrence(c.birthday) }))
       .filter((c) => c.next)
       .sort((a, b) => a.next.daysUntil - b.next.daysUntil);
@@ -1089,8 +1546,8 @@ router.get('/reminders', (req, res) => {
     const anniversaries = db.get().prepare(`
       SELECT a.id, a.title, a.anniversary_date, c.name AS contact_name, c.photo AS contact_photo
       FROM anniversaries a JOIN contacts c ON c.id = a.contact_id
-      WHERE 1=1${admin ? '' : ' AND c.hidden = 0'}
-    `).all()
+      WHERE 1=1${visC.sql}
+    `).all(...visC.params)
       .map((a) => ({ ...a, type: 'anniversary', next: nextOccurrence(a.anniversary_date, true) }))
       .filter((a) => a.next)
       .sort((a, b) => a.next.daysUntil - b.next.daysUntil);
@@ -1101,18 +1558,17 @@ router.get('/reminders', (req, res) => {
       lastInteraction.set(r.contact_id, r.last);
     }
     const degree = new Map();
-    const edgeRows = db.get().prepare(admin
-      ? 'SELECT contact_a, contact_b FROM contact_relationships'
-      : `SELECT r.contact_a, r.contact_b FROM contact_relationships r
-         JOIN contacts a ON a.id = r.contact_a
-         JOIN contacts b ON b.id = r.contact_b
-         WHERE a.hidden = 0 AND b.hidden = 0`
-    ).all();
+    const edgeRows = db.get().prepare(`
+      SELECT r.contact_a, r.contact_b FROM contact_relationships r
+      JOIN contacts a ON a.id = r.contact_a
+      JOIN contacts b ON b.id = r.contact_b
+      WHERE 1=1${visA.sql}${visB.sql}
+    `).all(...visA.params, ...visB.params);
     for (const e of edgeRows) {
       degree.set(e.contact_a, (degree.get(e.contact_a) || 0) + 1);
       degree.set(e.contact_b, (degree.get(e.contact_b) || 0) + 1);
     }
-    const stale = db.get().prepare(`SELECT id, name, photo, relationship_type FROM contacts WHERE 1=1${hiddenCond}`).all()
+    const stale = db.get().prepare(`SELECT id, name, photo, relationship_type FROM contacts WHERE 1=1${visContacts.sql}`).all(...visContacts.params)
       .filter((c) => (degree.get(c.id) || 0) > 0)
       .map((c) => {
         const last = lastInteraction.get(c.id) || null;
@@ -1124,7 +1580,7 @@ router.get('/reminders', (req, res) => {
       .slice(0, 100);
 
     // 隐私与 gift-ledger 模块保持一致：私密账目仅创建者与管理员可见
-    const giftPrivacy = admin ? '' : ' AND (g.is_private = 0 OR g.creator_uid = ?)';
+    const giftPrivacy = isAdminReq(req) ? '' : ' AND (g.is_private = 0 OR g.creator_uid = ?)';
     const giftReturns = db.get().prepare(`
       SELECT g.id, g.type, g.event_name, g.event_date, g.amount, g.note,
              gc.name AS contact_name, gc.photo AS contact_photo
@@ -1132,7 +1588,7 @@ router.get('/reminders', (req, res) => {
       LEFT JOIN contacts gc ON gc.id = COALESCE(g.related_contact_id, g.giver_contact_id)
       WHERE g.returned = 0${giftPrivacy}
       ORDER BY (g.event_date IS NULL), g.event_date DESC LIMIT 100
-    `).all(...(admin ? [] : [currentUid(req)])).map((g) => ({ ...g, type: 'gift-return' }));
+    `).all(...(isAdminReq(req) ? [] : [currentUid(req)])).map((g) => ({ ...g, type: 'gift-return' }));
 
     res.json({ data: { staleDays, birthdays, anniversaries, stale, giftReturns } });
   } catch (err) {

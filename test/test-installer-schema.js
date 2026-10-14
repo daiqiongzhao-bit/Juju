@@ -108,6 +108,16 @@ const INTENTIONALLY_NOT_IN_INSTALLER = {
   MCP_INTERNAL_BASE_URL: 'Betriebs-Feinjustage.',
   RATE_LIMIT_WINDOW_MS: 'Betriebs-Feinjustage.',
   RATE_LIMIT_MAX_ATTEMPTS: 'Betriebs-Feinjustage.',
+
+  // R3 (rnw 补差, T03): SM4-Applikationsschlüssel für die Kontakt-PII-
+  // Verschlüsselung (v149). Bewusst NICHT im Wizard: frische Installationen
+  // brauchen ihn out-of-band (sm4-key-guard verweigert sonst den Start);
+  // die Installer-Anbindung (eigenes Key-Feld + 16-Byte-Generator) ist ein
+  // separates Follow-up. Bestandsinstallationen tragen ihn in .env.
+  JUJU_SM4_KEY: 'SM4-Applikationsschlüssel (R3/T03) — out-of-band; Installer-Anbindung ist Follow-up.',
+  // Einmaliger Migrationsvorgang (v149): Pfad zu einem verifizierten Backup
+  // vor der PII-Verschlüsselung. Reiner Betriebsschritt, keine Installation.
+  JUJU_DB_BACKUP: 'Einmaliger v149-Migrationspfad (Backup-Abnahme) — reiner Betriebsvorgang.',
 };
 
 /** Alle in .env.example dokumentierten Variablennamen, auch die auskommentierten. */

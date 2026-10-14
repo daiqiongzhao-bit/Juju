@@ -115,3 +115,7 @@ docs/github-pages/
 
 # macOS sync duplicates (" 2" suffix)
 * 2.*
+zz-*.js
+dbdata/
+DEV_LOG.md
+scripts-tmp/

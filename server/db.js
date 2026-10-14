@@ -24,6 +24,7 @@ import { mkdirSync, existsSync, renameSync, rmSync, copyFileSync, openSync, read
 import { createLogger } from './logger.js';
 import { decodeHtmlEntities } from './utils/html-entities.js';
 import { toE164, defaultCountryFromConfig } from './utils/phone.js';
+import { encryptField, phoneHash } from './services/sm4.js';
 
 const log = createLogger('DB');
 
@@ -5238,6 +5239,151 @@ const MIGRATIONS = [
         created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
       );
       CREATE INDEX IF NOT EXISTS idx_rel_op_log_created ON relationship_op_log(created_at DESC);
+    `,
+  },
+
+  {
+    version: 147,
+    description: 'Contacts: rnw profile fields - birthday_lunar/zodiac/constellation/spouse_note/priority_intro (#rnw-catchup)',
+    // Function form: SQLite has no ADD COLUMN IF NOT EXISTS, so each column is
+    // probed via PRAGMA table_info and skipped when already present (idempotent
+    // against partially applied drift; version tracking covers normal re-runs).
+    up: (database) => {
+      const columns = new Set(
+        database.prepare('PRAGMA table_info(contacts)').all().map((c) => c.name)
+      );
+      const additions = [
+        ['birthday_lunar', 'TEXT'],   // 'YYYY-MM-DD', leap month 'YYYY-LMM-DD'
+        ['zodiac', 'TEXT'],           // 12 zodiac signs, derived from lunar year
+        ['constellation', 'TEXT'],    // 12 constellations, derived from solar month/day
+        ['spouse_note', 'TEXT'],      // note for family members
+        ['priority_intro', 'INTEGER NOT NULL DEFAULT 0'], // 1 = introduce first
+      ];
+      for (const [name, type] of additions) {
+        if (columns.has(name)) continue;
+        database.exec(`ALTER TABLE contacts ADD COLUMN ${name} ${type}`);
+      }
+    },
+  },
+
+  {
+    version: 148,
+    description: 'Relationships: contact groups (contact_groups + contact_group_map) (#rnw-catchup)',
+    up: `
+      CREATE TABLE IF NOT EXISTS contact_groups (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL,
+        color      TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_groups_name ON contact_groups(name COLLATE NOCASE);
+
+      CREATE TABLE IF NOT EXISTS contact_group_map (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+        group_id   INTEGER NOT NULL REFERENCES contact_groups(id) ON DELETE CASCADE,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_group_map ON contact_group_map(contact_id, group_id);
+      CREATE INDEX IF NOT EXISTS idx_contact_group_map_group ON contact_group_map(group_id);
+    `,
+  },
+
+  {
+    version: 149,
+    description: 'Contacts: phone_hash column + SM4 encryption of legacy PII columns (phone/address/vehicle_plate/street) (#rnw-catchup)',
+    // Function form: (1) idempotent ADD COLUMN phone_hash, (2) hard backup
+    // assertion for existing data, (3) per-row re-encryption of six legacy
+    // columns. LIKE probing is forbidden — per-row substr check only.
+    up: (database) => {
+      // ① phone_hash: idempotent ADD COLUMN (PRAGMA probe, like v147).
+      const contactColumns = new Set(
+        database.prepare('PRAGMA table_info(contacts)').all().map((c) => c.name)
+      );
+      if (!contactColumns.has('phone_hash')) {
+        database.exec('ALTER TABLE contacts ADD COLUMN phone_hash TEXT');
+      }
+
+      // ② Backup assertion: in-place encryption of EXISTING data requires a
+      // verified backup. Fresh deployments (empty contacts) skip the check.
+      const hasContacts = database
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'contacts'")
+        .get() != null;
+      if (hasContacts) {
+        const contactCount = database.prepare('SELECT COUNT(*) AS n FROM contacts').get()?.n ?? 0;
+        if (contactCount > 0) {
+          const backup = process.env.JUJU_DB_BACKUP;
+          if (!backup || !existsSync(backup)) {
+            throw new Error(
+              'Migration 149 encrypts existing contact PII in place and cannot be rolled back automatically. ' +
+              'A verified backup is REQUIRED: set JUJU_DB_BACKUP to an existing backup file. ' +
+              'Suggested: cp yuvomi.db backups/pre-v149.db (or: sqlite3 yuvomi.db ".backup backups/pre-v149.db"), ' +
+              'then set JUJU_DB_BACKUP=/path/to/backups/pre-v149.db and restart. ' +
+              'No changes were applied.'
+            );
+          }
+        }
+      }
+
+      // ③ Six legacy columns → per-row encrypt & write back. A row is processed
+      // only when the value is non-empty and NOT already ciphertext
+      // (substr(col,1,3) <> 'v1.' — no LIKE probing). contacts.phone also gets
+      // phone_hash = HMAC-SHA256(plaintext) for equality lookup on ciphertext.
+      const tableExists = (table) => database
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get(table) != null;
+
+      const encryptColumn = (table, column, { hashPhone = false } = {}) => {
+        if (!tableExists(table)) {
+          console.log(`[Migration 149] ${table}.${column}: table missing — skipped.`);
+          return;
+        }
+        const rows = database.prepare(
+          `SELECT id, ${column} AS value FROM ${table} ` +
+          `WHERE ${column} IS NOT NULL AND ${column} <> '' AND substr(${column}, 1, 3) <> 'v1.'`
+        ).all();
+        const update = hashPhone
+          ? database.prepare(`UPDATE ${table} SET ${column} = ?, phone_hash = ? WHERE id = ?`)
+          : database.prepare(`UPDATE ${table} SET ${column} = ? WHERE id = ?`);
+        let processed = 0;
+        for (const row of rows) {
+          const encrypted = encryptField(row.value);
+          if (encrypted === row.value) continue; // safety: never expected (query pre-filters), no write
+          if (hashPhone) {
+            update.run(encrypted, phoneHash(row.value), row.id);
+          } else {
+            update.run(encrypted, row.id);
+          }
+          processed += 1;
+        }
+        console.log(`[Migration 149] ${table}.${column}: ${processed} row(s) encrypted.`);
+      };
+
+      encryptColumn('contacts', 'phone', { hashPhone: true });
+      encryptColumn('contacts', 'address');
+      encryptColumn('contacts', 'vehicle_plate');
+      encryptColumn('contact_phones', 'value');
+      encryptColumn('contact_phones', 'value_e164');
+      encryptColumn('contact_addresses', 'street');
+      // ④ Idempotency: on re-run every column query matches 0 rows (all v1.).
+    },
+  },
+
+  {
+    version: 150,
+    description: 'Relationships: per-node contact ACL (contact_node_acl) (#rnw-catchup)',
+    up: `
+      CREATE TABLE IF NOT EXISTS contact_node_acl (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        created_by INTEGER,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_node_acl ON contact_node_acl(contact_id, user_id);
     `,
   },
 

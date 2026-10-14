@@ -6,6 +6,9 @@
  *        GET /-Filter (category + q), vCard-Export mit Escaping, validateAddresses-
  *        Feldzweige, sowie die 404/403-Pfade (GET/:id, DELETE/:id family, Kategorie-404).
  * Ausführen: node --experimental-sqlite test/test-contacts-routes.js
+ *
+ * R3 (T04a): phone/address/vehiclePlate 及子表敏感列为 SM4 密文——响应解密回显，
+ * 故断言仍按明文值书写；`q` 的手机号检索已按 PRD 下线，改用 `?phone=` 精确命中。
  */
 
 import os from 'node:os';
@@ -22,6 +25,9 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || 'Assertion fehlge
 
 console.log('\n[Contacts-Routes-Test] HTTP-Schicht der Kontakt-Routen\n');
 
+// R3: SM4 应用层加密需要 JUJU_SM4_KEY（32 hex）。生产由 sm4-key-guard 拒启保护；
+// 测试提供固定的本地密钥（不对应任何真实数据）。
+process.env.JUJU_SM4_KEY = '0123456789abcdef0123456789abcdef';
 process.env.DB_PATH = path.join(os.tmpdir(), `yuvomi-contacts-routes-${process.pid}.db`);
 process.env.SESSION_SECRET = 'contacts-routes-test-secret-32bytes-long';
 
@@ -153,11 +159,14 @@ try {
     assert(body.data.some((c) => c.id === contactId), 'unser misc-Kontakt enthalten');
   });
 
-  await asyncTest('GET /?q= sucht in name/phone/email', async () => {
+  await asyncTest('GET /?q= sucht in name/email (phone ist R3-verschlüsselt → ?phone=)', async () => {
     const byName = await jget(`${base}?q=Erika`);
     assert(byName.status === 200 && byName.body.data.some((c) => c.id === contactId), 'Treffer über Name');
-    const byPhone = await jget(`${base}?q=030-111`);
-    assert(byPhone.body.data.some((c) => c.id === contactId), 'Treffer über Telefon');
+    // R3/PRD: q 覆盖手机号已随密文存储下线——手机号精确检索走 ?phone=（phone_hash 等值）。
+    const byPhoneLegacy = await jget(`${base}?q=030-111`);
+    assert(byPhoneLegacy.body.data.length === 0, 'q 搜手机号无 Treffer (PRD-erwartet)');
+    const byPhone = await jget(`${base}?phone=030-111`);
+    assert(byPhone.status === 200 && byPhone.body.data.some((c) => c.id === contactId), 'Treffer über ?phone= (phone_hash)');
     const none = await jget(`${base}?q=GibtEsNichtXYZ`);
     assert(none.body.data.length === 0, 'kein Treffer für Unsinns-Query');
   });

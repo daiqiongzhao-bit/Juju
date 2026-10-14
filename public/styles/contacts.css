@@ -770,3 +770,26 @@ html:has(.contacts-page.is-selecting) .page-fab {
   font-size: var(--type-caption);
   color: var(--color-text-tertiary);
 }
+
+/* --------------------------------------------------------
+   R4: 优先介绍开关 (v147)
+
+   Bewusst ein nacktes Checkbox-Label statt einer Switch-Grafik: die native
+   Trefferfläche ist auf dem Telefon größer und die Screenreader-Ansage kommt
+   gratis mit (role=checkbox des Inputs). Farbton folgt dem Modul-Akzent.
+   -------------------------------------------------------- */
+.cm-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-base);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+}
+
+.cm-switch input {
+  accent-color: var(--module-contacts, var(--color-accent));
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
