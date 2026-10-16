@@ -50,6 +50,9 @@ jobs:
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            # main 分支每次推送都刷新 latest —— 否则只有打 v* tag 时 latest
+            # 才会动，日常发版没打 tag 时用户拉到的 latest 永远是旧的。
+            type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=sha
 
