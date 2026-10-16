@@ -1,0 +1,184 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
+
+jobs:
+  claude-review:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Optional: Filter by PR author
+    # if: |
+    #   github.event.pull_request.user.login == 'external-contributor' ||
+    #   github.event.pull_request.user.login == 'new-developer' ||
+    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    permissions:
+      contents: read
+      # write, sonst läuft das Review durch und kann sein Ergebnis nicht posten:
+      # das Plugin schreibt über `gh pr comment`. Mit `read` endete der Job grün,
+      # aber ohne jeden Kommentar (permission_denials_count: 1).
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Skip Claude Code Review when token is unavailable
+        if: env.CLAUDE_CODE_OAUTH_TOKEN == ''
+        run: echo "CLAUDE_CODE_OAUTH_TOKEN is not configured; skipping Claude Code Review."
+
+      - name: Checkout repository
+        if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ env.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          # `--comment` IST DER GRUND, WARUM SIE NIE ETWAS GESAGT HAT. Die
+          # Anleitung des Plugins steuert das Posten ueber genau dieses Argument:
+          #
+          #   "If `--comment` argument was NOT provided, stop here.
+          #    Do not post any GitHub comments."
+          #
+          # Ohne das Flag prueft es also vollstaendig und schweigt danach
+          # absichtlich - genau das Bild, das die Laeufe zeigten: 20 Turns,
+          # fuenf Minuten, `is_error: false`, kein Kommentar. Es war die ganze
+          # Zeit gehorsam, nicht kaputt.
+          #
+          # Mit dem Flag postet es IMMER: eine Zusammenfassung, wenn es nichts
+          # findet, und Inline-Anmerkungen, wenn doch. Erst dadurch wird der
+          # Nachweis-Schritt weiter unten zu einer richtigen Zusicherung -
+          # vorher haette er auch einen sauberen PR rot gefaerbt.
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
+          allowed_bots: 'dependabot[bot]'
+          # DIESE LISTE ERSETZT, SIE ERGÄNZT NICHT. Das war die Annahme, die den
+          # zweiten Anlauf gekostet hat: `--allowed-tools` verdrängt die acht
+          # Werkzeuge, die das Plugin `code-review@claude-code-plugins` in seinem
+          # Frontmatter deklariert. Sie müssen deshalb hier alle wieder auftauchen.
+          #
+          # Der Weg dahin, in Zahlen, damit die nächste Runde nicht wieder rät:
+          #   #706, ohne diese Zeile:  10 Turns,  28 s, 5 Verweigerungen, nichts
+          #                            gepostet. Es fehlte alles zum LESEN.
+          #   #708, mit Read/Grep/Glob: 23 Turns, 4,5 min, 1 Verweigerung, immer
+          #                            noch nichts gepostet. Die Review hat also
+          #                            wirklich gearbeitet und ist erst am Ende
+          #                            gescheitert - an `gh pr comment`, dem
+          #                            einzigen Weg, ihr Ergebnis abzuliefern.
+          #
+          # `Skill` STEHT ZUERST, UND ZWAR AUS EINEM GRUND. Der Prompt ruft
+          # `/code-review:code-review …` auf, und das ist ein Plugin-Kommando -
+          # ohne das Skill-Werkzeug kann die Review ihr eigenes Kommando nicht
+          # ausfuehren. Ein Diagnoselauf mit `show_full_output` hat es benannt:
+          #
+          #   "tool_use_result": "Error: Execute skill: code-review:code-review"
+          #
+          # Das war eine Regression aus dem ersten Anlauf: vor `claude_args` gab
+          # es keine Liste, also war `Skill` da. Sie erklaert auch, warum die
+          # Laeufe so sprunghaft aussahen - ohne ihr Kommando improvisierte das
+          # Modell die Review, mal ueber 29 Turns mit Ergebnis, mal Abbruch nach
+          # vier. Dieselbe Messung nannte `gh repo view` als zweiten Treffer.
+          #
+          # Reihenfolge: Skill, dann die acht des Plugins, dann was es nicht
+          # deklariert, aber braucht. Read/Grep/Glob geben ihr den Quelltext um
+          # den Diff herum; `git rev-parse` verlangt seine eigene Anleitung für
+          # die SHA-gebundenen Codelinks.
+          claude_args: >-
+            --allowed-tools
+            "Skill,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh repo view:*),mcp__github_inline_comment__create_inline_comment,Read,Grep,Glob,Bash(git rev-parse:*),Bash(git log:*),Bash(git diff:*)"
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options
+
+      # DER EIGENTLICHE FEHLER WAR NICHT DIE SPERRE, SONDERN DIE STILLE.
+      #
+      # Die Action endet mit Erfolg, wenn sie ohne Ausnahme durchläuft - ob die
+      # Review dabei etwas gesagt hat, prüft niemand. So stand fünf PRs lang ein
+      # grüner Haken für eine Prüfung, die nie stattgefunden hat, und ein grüner
+      # Haken, der nichts misst, ist schlimmer als gar keiner: er lädt dazu ein,
+      # sich auf ihn zu verlassen.
+      #
+      # Geprüft wird der WIRKUNG nach, nicht dem Ablauf: hat claude irgendwo an
+      # diesem PR etwas hinterlassen - Zusammenfassung, Review oder Inline-
+      # Anmerkung? Der Lauf auf `synchronize` bleibt grün, wenn schon ein
+      # Kommentar von einem früheren Lauf steht; das Plugin sucht danach und
+      # schreibt bewusst nicht zweimal dasselbe.
+      # AUSGENOMMEN: ein PR, der DIESE Datei aendert. Die Action prueft, ob der
+      # Workflow im PR zeichengleich mit dem auf dem Default-Branch ist, und
+      # ueberspringt sich sonst selbst - sonst koennte ein PR sich per
+      # `claude_args` beliebige Werkzeuge freischalten und die Review gegen sich
+      # selbst laufen lassen. Sie tut das mit `outcome=success`, also mit
+      # demselben stillen Gruen, das dieser Schritt aufdeckt.
+      #
+      # Die Ausnahme hat ein Verfallsdatum: sie greift NUR, solange der PR den
+      # Workflow anfasst. Sobald er gemergt ist, prueft der naechste PR wieder
+      # scharf. Ohne sie waere jede kuenftige Workflow-Aenderung automatisch rot,
+      # und eine Ausnahme, die man wegklickt, ist bald keine mehr.
+      - name: Prueft die Review-Datei sich selbst?
+        id: self-edit
+        if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename' \
+             | grep -qx '.github/workflows/claude-code-review.yml'; then
+            echo "self=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Dieser PR aendert den Review-Workflow selbst." \
+                 "Die Action ueberspringt sich dann aus Sicherheitsgruenden" \
+                 "(Workflow-Validierung), also kann hier keine Review entstehen." \
+                 "Der Nachweis-Schritt ist ausgesetzt und greift ab dem naechsten PR wieder."
+          else
+            echo "self=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Die Review muss gesprochen haben
+        if: env.CLAUDE_CODE_OAUTH_TOKEN != '' && steps.claude-review.outcome == 'success' && steps.self-edit.outputs.self != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # `--paginate` mit einem jq, das ein Array baut, druckt EINE Zahl JE
+          # SEITE - `$((a + b))` stirbt daran, sobald ein PR über 30 Kommentare
+          # kommt. Deshalb ein Treffer je Zeile und `wc -l` als Zähler.
+          zaehle() {
+            gh api "$1" --paginate \
+              --jq '.[] | select(.user.login | ascii_downcase | contains("claude")) | .id' \
+              | wc -l | tr -d ' '
+          }
+          issue=$(zaehle "repos/$REPO/issues/$PR/comments")
+          review=$(zaehle "repos/$REPO/pulls/$PR/reviews")
+          inline=$(zaehle "repos/$REPO/pulls/$PR/comments")
+          echo "Zusammenfassungen: $issue · Reviews: $review · Inline-Anmerkungen: $inline"
+          if [ "$((issue + review + inline))" -eq 0 ]; then
+            echo "::error::Die Review ist durchgelaufen, hat aber nichts hinterlassen." \
+                 "Zwei Ursachen sind bekannt, in dieser Reihenfolge pruefen." \
+                 "(1) FEHLT --comment IM PROMPT? Ohne das Argument prueft das Plugin" \
+                 "vollstaendig und schweigt danach absichtlich - das war die Ursache," \
+                 "als dieser Schritt entstand, und sie sieht einer Sperre zum Verwechseln" \
+                 "aehnlich: is_error false, zwanzig Turns, kein Kommentar." \
+                 "(2) EINE WERKZEUG-SPERRE: im result-Objekt des Job-Logs steht" \
+                 "\"permission_denials_count\". Mit show_full_output: true erneut laufen" \
+                 "lassen, um zu sehen, WELCHES Werkzeug verweigert wurde, und es in" \
+                 "claude_args nachtragen - die Liste dort ERSETZT die des Plugins." \
+                 "Ein gruener Haken ohne Befund ist keiner."
+            exit 1
+          fi
