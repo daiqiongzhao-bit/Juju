@@ -33,7 +33,7 @@ const REFERENCE_LOCALE = 'de';
 // Default-Datensprache, wenn der Haushalt keine gesetzt und keine Region gewählt
 // hat. Englisch, weil das exakt dem Verhalten vor der Preference entspricht
 // ("Birthday: <Name>") - ein Bestandshaushalt erlebt so keinen stillen Wechsel.
-const DEFAULT_LOCALE = 'en';
+const DEFAULT_LOCALE = 'zh';
 
 const LOCALE_FILE_RE = /^([a-z]{2})\.json$/;
 

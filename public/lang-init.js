@@ -25,7 +25,7 @@
       var base = String(browserLocales[i]).split('-')[0].toLowerCase();
       if (SUPPORTED.indexOf(base) !== -1) return base;
     }
-    return 'en';
+    return 'zh';
   }
 
   var locale = resolve();

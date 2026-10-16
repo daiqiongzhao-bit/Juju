@@ -1650,7 +1650,7 @@ openssl rand -hex 32
   };
   function lsGet(k){ try { return localStorage.getItem('yuvomi-'+k) || localStorage.getItem('oikos-'+k); } catch(e){ return null; } }
   function lsSet(k,v){ try { localStorage.setItem('yuvomi-'+k, v); } catch(e){} }
-  function detectLang(){ var n = (navigator.language || navigator.userLanguage || 'en').toLowerCase(); if (n.indexOf('de') === 0) return 'de'; if (n.indexOf('zh') === 0) return 'zh'; return 'en'; }
+  function detectLang(){ var n = (navigator.language || navigator.userLanguage || 'en').toLowerCase(); if (n.indexOf('zh') === 0) return 'zh'; return n.indexOf('de') === 0 ? 'de' : 'en'; }
   var lang = lsGet('lang') || detectLang();
   var theme = lsGet('theme');
   function isDark(){ if (theme==='dark') return true; if (theme==='light') return false; return matchMedia('(prefers-color-scheme:dark)').matches; }

@@ -7,7 +7,7 @@
 
 const SUPPORTED_LOCALES = ['de', 'en', 'es', 'fr', 'it', 'sv', 'el', 'ru', 'tr', 'zh', 'ja', 'ar', 'hi', 'pt', 'uk', 'pl', 'nl', 'cs', 'vi', 'hu', 'ko', 'id', 'fa', 'fil'];
 const RTL_LOCALES = new Set(['ar', 'fa']);
-const DEFAULT_LOCALE = 'de';
+const DEFAULT_LOCALE = 'zh';
 const STORAGE_KEY = 'yuvomi-locale';
 const DATE_FORMAT_KEY = 'yuvomi-date-format';
 const TIME_FORMAT_KEY = 'yuvomi-time-format';
@@ -40,7 +40,7 @@ function resolveLocale() {
     const base = tag.split('-')[0].toLowerCase();
     if (SUPPORTED_LOCALES.includes(base)) return base;
   }
-  return 'en';
+  return 'zh';
 }
 
 /** Lade eine Locale-JSON-Datei */

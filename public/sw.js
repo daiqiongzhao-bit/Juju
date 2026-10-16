@@ -15,7 +15,7 @@
  *   → bypassCacheUntil (in-memory + Cache API für SW-Restart-Robustheit)
  */
 
-const APP_RELEASE   = '0.0.25';
+const APP_RELEASE   = '0.0.26';
 const SHELL_CACHE   = `yuvomi-shell-${APP_RELEASE}`;
 const PAGES_CACHE   = `yuvomi-pages-${APP_RELEASE}`;
 const LOCALES_CACHE = `yuvomi-locales-${APP_RELEASE}`;
@@ -426,7 +426,7 @@ function dispatchFetch(request, url) {
 // index.html trägt seit v0.0.23 an jedem Shell-Asset `?v=<release>` (HTTP-
 // Cache-Busting). `cache.match(request)` vergleicht die VOLLE URL - der
 // Precache-Eintrag `/styles/tokens.css` und der Request
-// `/styles/tokens.css?v=0.0.25` wären damit zwei verschiedene Schlüssel:
+// `/styles/tokens.css?v=0.0.26` wären damit zwei verschiedene Schlüssel:
 // der allererste Offline-Start geht leer aus (ungestylte Shell), und jeder
 // Online-Besuch legt eine zweite Kopie unter dem Query-Key an.
 // `test:sw-precache` hält die Paarung (Pfad in der Liste == Pfad im href).

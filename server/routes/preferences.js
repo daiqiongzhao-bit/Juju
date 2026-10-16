@@ -23,14 +23,13 @@ const VALID_MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 const DEFAULT_MEAL_TYPES = VALID_MEAL_TYPES.join(',');
 
 const VALID_CURRENCIES = ['AED', 'ARS', 'AUD', 'BBD', 'BOB', 'BRL', 'BSD', 'BZD', 'CAD', 'CHF', 'CLP', 'CNY', 'COP', 'CRC', 'CUP', 'CZK', 'DKK', 'DOP', 'EUR', 'GBP', 'GTQ', 'GYD', 'HNL', 'HTG', 'HUF', 'IDR', 'INR', 'IRR', 'JMD', 'JPY', 'KRW', 'KZT', 'MXN', 'MYR', 'NIO', 'NOK', 'NZD', 'PAB', 'PEN', 'PHP', 'PLN', 'PYG', 'RUB', 'SAR', 'SEK', 'SRD', 'TRY', 'TTD', 'UAH', 'USD', 'UYU', 'VES', 'XCD', 'ZAR'];
-const DEFAULT_CURRENCY = 'EUR';
+const DEFAULT_CURRENCY = 'CNY';
 const DEFAULT_APP_NAME = 'Juju';
 
 const VALID_DATE_FORMATS = ['mdy', 'dmy', 'ymd', 'mdy_dot', 'dmy_dot', 'dmy_slash', 'ymd_dot', 'ymd_slash'];
-// Default an die übrigen europäischen Defaults (EUR, 24h) und den Client-i18n-
-// Default (dmy) angeglichen: ein nicht konfigurierter Account zeigt 30.06.2026
-// statt 06/30/2026. US-Nutzer können in den Einstellungen weiterhin mdy wählen.
-const DEFAULT_DATE_FORMAT = 'dmy';
+// 默认面向中文用户：人民币 + 2026-06-30（ymd）。未配置的全新实例直接给出
+// 中国地区习惯；其他地区用户可在设置中改（EUR/mdy 等仍在合法列表内）。
+const DEFAULT_DATE_FORMAT = 'ymd';
 const VALID_TIME_FORMATS = ['24h', '12h'];
 
 // Wochenstart (haushaltweit): mit welchem Wochentag Kalender-Ansichten beginnen.
