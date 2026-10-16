@@ -24,6 +24,7 @@ import { intervalUnitLabel } from '/rrule-ui.js';
 import { appendCurrencyOptions } from '/settings/currency.js';
 import '/components/category-manager.js';
 import { findPageFab } from '/utils/fab.js';
+import { canAccessNavModule } from '/permissions.js';
 
 // --------------------------------------------------------
 // Konstanten
@@ -223,6 +224,8 @@ const TAB_CAPS = {
   'loans':          { month: false, note: 'budget.periodNoteLoans',         add: 'budget.newLoan' },
   'reports':        { month: true,  range: true, add: null },
   'split-expenses': { month: false, note: 'budget.periodNoteSplit',         add: 'splitExpenses.addExpense' },
+  // 礼金簿并入预算：人情账也是账，预算是唯一的财务入口（导航不再单列）。
+  'gift-ledger':    { month: false, note: null,                             add: 'giftLedger.add' },
 };
 
 // Sentinel für „keine eigene Farbe" im Kontofarb-Wähler: der echte Wert ist der
@@ -392,6 +395,8 @@ export async function render(container, { user }) {
   state.loanStatusFilter = 'active';
   state.accountsShowArchived = false;
   if (user?.access_scope === 'split_guest') state.activeTab = 'split-expenses';
+  // 旧深链 /gift-ledger：模块已并入预算，路由保留作兼容 — 落到礼金簿 tab。
+  if (user?.access_scope !== 'split_guest' && location.pathname === '/gift-ledger') state.activeTab = 'gift-ledger';
 
   if (user?.access_scope !== 'split_guest') {
     try {
@@ -444,6 +449,8 @@ export async function render(container, { user }) {
                 ['reports',       t('budget.reportsTab')],
               ]),
               ['split-expenses',  t('splitExpenses.tabLabel')],
+              // 礼金簿 tab：模块开关仍按 giftLedger 单独控制（设置里可关闭）。
+              ...(canAccessNavModule('giftLedger') ? [['gift-ledger', t('nav.giftLedger')]] : []),
             ].map(([id, label]) => {
               const on = id === state.activeTab;
               return `<button class="sub-tab${on ? ' sub-tab--active' : ''}" id="budget-tab-${id}" type="button" role="tab" data-tab-id="${id}" aria-controls="budget-body" aria-selected="${on ? 'true' : 'false'}" tabindex="${on ? '0' : '-1'}"><span class="sub-tab__label">${label}</span></button>`;
@@ -528,6 +535,13 @@ function wireNav() {
   const addHandler = () => {
     switch (state.activeTab) {
       case 'split-expenses': _container.querySelector('#split-add-expense')?.click(); return;
+      case 'gift-ledger': {
+        // 礼金簿面板是异步动态 import 的：按钮已渲染就直接开，否则等它出现。
+        const giftAdd = _container.querySelector('#gl-add');
+        if (giftAdd) { giftAdd.click(); return; }
+        setTimeout(() => _container.querySelector('#gl-add')?.click(), 600);
+        return;
+      }
       case 'subscriptions':  openSubscriptionModal(); return;
       case 'plan':           _container.querySelector('#budget-plan-add')?.click(); return;
       case 'accounts':       openAccountModal(); return;
@@ -657,6 +671,25 @@ function renderBody() {
       console.error('[Budget] split expenses render error:', err);
       setHtml(panel, `<div class="empty-state"><div class="empty-state__title">${t('splitExpenses.title')}</div><div class="empty-state__description">${t('budget.loadError')}</div></div>`);
     });
+    return;
+  }
+  if (state.activeTab === 'gift-ledger') {
+    setHtml(body, '<div class="budget-tab-panel budget-tab-panel--gift-ledger" id="budget-gift-ledger-panel"></div>');
+    // 礼金簿样式按路由 module 自动加载；并入预算后走 /budget 就不会再带它 — 幂等补挂。
+    if (!document.querySelector('link[href*="giftLedger.css"]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = '/styles/giftLedger.css';
+      document.head.appendChild(link);
+    }
+    const panel = body.querySelector('#budget-gift-ledger-panel');
+    // 礼金簿模块原样嵌入（自有过滤/统计/批量操作），仅标题在 tab 内隐藏。
+    import('/pages/gift-ledger.js')
+      .then((m) => m.render(panel, { user: _user }))
+      .catch((err) => {
+        console.error('[Budget] gift ledger render error:', err);
+        setHtml(panel, `<div class="empty-state"><div class="empty-state__title">${t('nav.giftLedger')}</div><div class="empty-state__description">${t('budget.loadError')}</div></div>`);
+      });
     return;
   }
 

@@ -493,7 +493,10 @@ app.get('/{*path}', spaLimiter, (req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'Not found.', code: 404 });
   }
-  res.sendFile(path.join(import.meta.dirname, '..', 'public', 'index.html'));
+  // root + 相对路径而不是绝对路径：send@1.x 在部分环境下对绝对路径
+  // sendFile 抛 NotFound（沙箱复现：绝对 500 / {root} 200），{root} 写法
+  // 两边都正确，且不存在跨平台差异。
+  res.sendFile('index.html', { root: path.join(import.meta.dirname, '..', 'public') });
 });
 
 // --------------------------------------------------------

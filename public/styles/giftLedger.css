@@ -122,3 +122,7 @@ button.gl-btn.ghost.danger{background:#dc2626;border-color:#dc2626;color:#fff}
 
 /* 已回礼标记（#relationships 人情账绑人） */
 .gl-chip--returned{background:color-mix(in srgb, var(--color-success) var(--tint-surface), transparent);color:var(--color-success);font-weight:600}
+
+/* ── 嵌入预算 tab（budget-tab-panel--gift-ledger）──────────────────────────
+   预算页头已有模块标题，礼金簿自己的 h2 在 tab 内重复 — 隐藏，操作按钮保留。 */
+.budget-tab-panel--gift-ledger .gl-head h2 { display: none; }

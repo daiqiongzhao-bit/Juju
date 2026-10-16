@@ -139,7 +139,7 @@ const ROUTES = [
   { path: '/relationships', page: '/pages/relationships.js', requiresAuth: true, module: 'relationships', titleKey: 'nav.relationships' },
   { path: '/media', page: '/pages/media-library.js', requiresAuth: true, module: 'media', titleKey: 'nav.media' },
   { path: '/family-memory', page: '/pages/family-memory.js', requiresAuth: true, module: 'memory', titleKey: 'nav.familyMemory' },
-  { path: '/gift-ledger',   page: '/pages/gift-ledger.js',   requiresAuth: true, module: 'giftLedger', titleKey: 'nav.giftLedger' },
+  { path: '/gift-ledger',   page: '/pages/budget.js',        requiresAuth: true, module: 'giftLedger', titleKey: 'nav.giftLedger' },
 
   { path: '/budget',   page: '/pages/budget.js',    requiresAuth: true, module: 'budget',    titleKey: 'nav.budget' },
 
@@ -5404,10 +5404,8 @@ function navItems() {
 
     { path: '/health',    label: t('nav.health'),    icon: 'heart-pulse',      module: 'health',      section: NAV_SECTION.people },
 
-    // Finanzen
-
+    // Finanzen — 礼金簿已并入预算（tab），导航不再单列；/gift-ledger 路由保留作深链兼容。
     { path: '/budget',    label: t('nav.budget'),    icon: 'wallet',           module: 'budget',      section: NAV_SECTION.finance },
-    { path: '/gift-ledger', label: t('nav.giftLedger'), icon: 'gift',           module: 'giftLedger',  section: NAV_SECTION.finance },
 
     // Settings ist am Ende gepinnt (siehe unten).
 

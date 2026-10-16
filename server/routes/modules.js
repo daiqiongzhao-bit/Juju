@@ -48,7 +48,8 @@ router.get('/assets/:id/{*assetPath}', async (req, res) => {
     if (ext === '.js') res.type('text/javascript');
     else if (ext === '.css') res.type('text/css');
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    res.sendFile(assetPath);
+    // {root} 而非绝对路径：send@1.x 绝对路径 sendFile 在部分环境抛 NotFound。
+    res.sendFile(relPath, { root: path.dirname(assetPath) });
   } catch (err) {
     const status = err.status || 500;
     if (status >= 500) log.error('Module asset failed:', err);
