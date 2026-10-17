@@ -1,63 +1,17 @@
 #!/bin/bash
 
-### 升级后执行：确保 compose 变量文件 .env 与密钥存在（升级可能替换 target 目录）。
-### 端口从 etc/port 恢复（安装时持久化），不被改回默认值。
-### 数据目录解析同 install_callback：TRIM_DATA_SHARE_PATHS 后缀匹配 → 旧 .env → TRIM_PKGVAR。
+### 升级后执行：确保数据目录与密钥存在（升级可能替换 target 目录，但
+### TRIM_PKGVAR/TRIM_PKGETC 跨版本稳定，密钥与数据天然保留）。
 ### 幂等：密钥仅在缺失时生成。
 
 set -u
 
-APPDEST="${TRIM_APPDEST}"
 ETCDIR="${TRIM_PKGETC}"
-ENVFILE="$APPDEST/docker/.env"
+DATADIR="${TRIM_PKGVAR}/data"
+BACKUPDIR="${TRIM_PKGVAR}/backups"
 
-# ---- 端口：升级向导（如有）→ etc/port → 旧 .env → 3000 ----
-PORT_VALUE="${wizard_port:-}"
-if [ -z "$PORT_VALUE" ] && [ -f "$ETCDIR/port" ]; then
-  PORT_VALUE="$(head -n1 "$ETCDIR/port" | tr -d '[:space:]')"
-fi
-if [ -z "$PORT_VALUE" ] && [ -f "$ENVFILE" ]; then
-  PORT_VALUE="$(sed -n 's/^wizard_port=//p' "$ENVFILE" | tail -n1)"
-fi
-case "$PORT_VALUE" in
-  ''|*[!0-9]*) PORT_VALUE=3000 ;;
-esac
+mkdir -p "$DATADIR" "$BACKUPDIR" 2>/dev/null || true
 
-# ---- 解析 data-share 实际路径（同 install_callback）----
-DATA_DIR=""
-BACKUP_DIR=""
-if [ -n "${TRIM_DATA_SHARE_PATHS:-}" ]; then
-  IFS=':' read -r -a _share_paths <<< "$TRIM_DATA_SHARE_PATHS"
-  for _p in "${_share_paths[@]}"; do
-    case "$_p" in
-      */data)    [ -n "$DATA_DIR" ]   || DATA_DIR="$_p" ;;
-      */backups) [ -n "$BACKUP_DIR" ] || BACKUP_DIR="$_p" ;;
-    esac
-  done
-fi
-if [ -z "$DATA_DIR" ] && [ -f "$ENVFILE" ]; then
-  _old_data="$(sed -n 's/^JUJU_DATA_DIR=//p' "$ENVFILE" | tail -n1)"
-  [ -n "$_old_data" ] && DATA_DIR="$_old_data"
-fi
-if [ -z "$BACKUP_DIR" ] && [ -f "$ENVFILE" ]; then
-  _old_bak="$(sed -n 's/^JUJU_BACKUP_DIR=//p' "$ENVFILE" | tail -n1)"
-  [ -n "$_old_bak" ] && BACKUP_DIR="$_old_bak"
-fi
-[ -n "$DATA_DIR" ]   || DATA_DIR="${TRIM_PKGVAR}/data"
-[ -n "$BACKUP_DIR" ] || BACKUP_DIR="${TRIM_PKGVAR}/backups"
-
-# ---- 重写 compose 变量文件 ----
-mkdir -p "$APPDEST/docker"
-cat > "$ENVFILE" <<EOF
-wizard_port=$PORT_VALUE
-JUJU_DATA_DIR=$DATA_DIR
-JUJU_BACKUP_DIR=$BACKUP_DIR
-EOF
-chmod 600 "$ENVFILE"
-echo "$PORT_VALUE" > "$ETCDIR/port" 2>/dev/null || true
-mkdir -p "$DATA_DIR" "$BACKUP_DIR" 2>/dev/null || true
-
-# ---- 应用密钥（仅缺失时生成）----
 if [ ! -f "$ETCDIR/juju.env" ]; then
   mkdir -p "$ETCDIR"
   cat > "$ETCDIR/juju.env" <<EOF

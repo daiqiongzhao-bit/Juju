@@ -17,7 +17,6 @@
 | `manifest` → `appname` | `juju` |
 | `manifest` → `desktop_applaunchname` | `juju.Application` |
 | `config/resource` → docker-project name | `juju` |
-| `config/resource` → data-share 名称 | `juju/data`、`juju/backups` |
 | `config/privilege` → username/groupname | `docker-juju` |
 | `app/ui/config` → 入口 ID | `juju.Application` |
 | compose → `container_name` | `juju` |
@@ -46,7 +45,7 @@ deploy/fnos/
 │   ├── uninstall_init / uninstall_callback
 │   └── config_init / config_callback
 ├── config/
-│   ├── resource            # docker-project + data-share 声明
+│   ├── resource            # docker-project 声明
 │   └── privilege           # 运行身份（run-as: package）
 └── wizard/
     ├── install             # 安装向导：服务端口（默认 3000，1—65535）
@@ -80,32 +79,38 @@ deploy/fnos/
 
 ## 安装后行为说明
 
-- **端口**：安装向导收集 `wizard_port`（默认 3000）。`install_callback`
-  把它写入 compose 同目录的 `.env`（供 `${wizard_port}` 占位），并持久化到
-  `etc/port`；升级时从 `etc/port` 恢复，**端口不会因升级被改回默认值**。
-- **数据目录**：`config/resource` 声明 `juju/data`、`juju/backups` 两个共享
-  （用户在飞牛文件管理器"应用文件"中可见）。官方文档明确共享目录的宿主机
-  路径拼写（`share/` vs `shares/`）随版本有差异，**不硬编码**：安装/升级
-  脚本把 `TRIM_DATA_SHARE_PATHS`（`:` 分隔、按名称后缀匹配、不依赖顺序）
-  解析成实际路径写入 `.env`，compose 通过 `${JUJU_DATA_DIR}` /
-  `${JUJU_BACKUP_DIR}` 挂载。解析失败时兜底 `TRIM_PKGVAR`（持久运行数据目录）。
+- **包体小是正常的**：`.fpk` 只有十几 KB，因为它只包含安装壳（manifest、
+  compose、向导、生命周期脚本、图标）。应用本体是 Docker Hub 上的镜像
+  `daiqiongzhao/juju:<版本>`（约 900+ MB），安装时由飞牛自动拉取。
+  代价是安装过程需要能访问 Docker Hub。
+- **端口**：安装向导收集 `wizard_port`（默认 3000）。飞牛会把向导答案作为
+  环境变量注入 compose 运行环境（真机验证过的机制），compose 中直接写
+  `${wizard_port}:3000`，重启/升级后端口保持。
+- **数据目录**：`${TRIM_PKGVAR}/data`（数据库与上传文件）和
+  `${TRIM_PKGVAR}/backups`（每日自动备份，保留 7 份）。`TRIM_PKGVAR` 即
+  `/var/apps/juju/var`（符号链接到存储池 `@appdata/juju`），升级保留、
+  卸载可选清除。**注意**：数据不在文件管理器的"应用文件"共享里，需要通过
+  SSH 访问 `/var/apps/juju/var/`。
+- **为什么不用 `.env` 文件**：实测飞牛运行 compose 的工作目录不是 compose
+  文件所在目录，同目录 `.env` 不会被读取（表现为 `variable is not set`
+  告警 → `invalid spec` 安装失败）。端口与路径一律使用平台注入的环境变量，
+  与官方文档及真机在跑的 Docker 应用（fn-bitwarden 等）做法一致。
 - **密钥**：首次安装由 `install_callback` 自动生成
   `DB_ENCRYPTION_KEY` / `JUJU_SM4_KEY` / `SESSION_SECRET`，保存在
-  `/var/apps/juju/etc/juju.env`（权限 600）。**升级与重装不会覆盖**
-  ——覆盖会导致已加密数据库无法解密。升级即使 target 目录被整体替换，
-  `upgrade_init`/`upgrade_callback` 也会重建 `.env` 并保留原端口与数据路径。
-- **卸载**：默认保留全部数据，仅当用户在卸载向导选择"删除数据"时，才按
-  `.env` 记录的路径清除数据目录与密钥（`TRIM_PKGVAR` 本身不动）。
+  `/var/apps/juju/etc/juju.env`（权限 600，通过 compose `env_file` 注入
+  容器）。**升级与重装不会覆盖**——覆盖会导致已加密数据库无法解密。
+- **卸载**：默认保留全部数据，仅当用户在卸载向导选择"删除数据"时，才清除
+  `TRIM_PKGVAR` 下的 data/backups 与 etc 中的密钥（`TRIM_PKGVAR` 本身不动）。
 
 ## 注意事项 / 已知限制
 
 - **平台架构**：当前 `platform = x86`，镜像仅推送 x86_64。飞牛 ARM
   机型无法安装，需为镜像补齐 `linux/arm64` 多架构（buildx
   `--platform linux/amd64,linux/arm64`）后再发 ARM 版 FPK。
-- **未经真机验证**：本包按 fnpack 1.2.3 模板与官方文档制作，生命周期脚本
-  已在本地模拟飞牛环境变量（TRIM_APPDEST/PKGETC/PKGVAR/DATA_SHARE_PATHS）
-  完成安装/重装/升级/卸载全流程测试与 `docker compose config` 校验，但尚未
-  在真实飞牛设备上运行。首次上架建议先通过"应用中心 → 手动安装"本地验证，
-  再提交商店审核。
+- **真机验证进度**：前两版在真机安装分别暴露了两个问题并已修复——①
+  `appname` 大写导致项目名非法；② 同目录 `.env` 不被 compose 读取导致卷路径
+  为空。当前版本改为真机在跑应用同款的环境变量直注模式，但**尚未完整跑通
+  一次真机安装**。再次安装前建议先通过"应用中心 → 手动安装"验证；
+  若仍失败，报错截图发来即可继续定位。
 - 若飞牛后续调整 FPK 规范，以 `fnpack create` 生成的新模板为准，
   对照更新本目录的 `wizard/`、`config/`、`cmd/` 结构。

@@ -9,8 +9,7 @@ services:
     env_file:
       - /var/apps/juju/etc/juju.env
     volumes:
-      # 数据库与上传文件（data-share 声明的共享目录，用户在文件管理器中可见）
-      # 实际路径由 install/upgrade 脚本解析 TRIM_DATA_SHARE_PATHS 后写入同目录 .env
-      - "${JUJU_DATA_DIR}:/data"
+      # 数据库与上传文件：飞牛运行时数据目录（TRIM_PKGVAR，升级保留/卸载可选清除）
+      - "${TRIM_PKGVAR}/data:/data"
       # 每日自动备份（保留最近 7 份）
-      - "${JUJU_BACKUP_DIR}:/backups"
+      - "${TRIM_PKGVAR}/backups:/backups"

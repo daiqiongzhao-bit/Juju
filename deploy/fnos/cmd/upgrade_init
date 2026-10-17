@@ -1,56 +1,10 @@
 #!/bin/bash
 
-### 升级前执行：target 目录即将被替换，先确保当前 .env 存在且有效。
-### 与 upgrade_callback 使用同一套解析逻辑（TRIM_DATA_SHARE_PATHS → 旧值 → TRIM_PKGVAR）。
-### 幂等，可安全重复执行。
+### 升级前执行：确保数据目录存在（target 即将被替换，数据目录不受影响，
+### 这里只是兜底补建）。幂等，可安全重复执行。
 
 set -u
 
-APPDEST="${TRIM_APPDEST}"
-ETCDIR="${TRIM_PKGETC}"
-ENVFILE="$APPDEST/docker/.env"
-
-# 端口：etc/port → 现有 .env → 3000（升级前无向导问答）
-PORT_VALUE=""
-if [ -f "$ETCDIR/port" ]; then
-  PORT_VALUE="$(head -n1 "$ETCDIR/port" | tr -d '[:space:]')"
-fi
-if [ -z "$PORT_VALUE" ] && [ -f "$ENVFILE" ]; then
-  PORT_VALUE="$(sed -n 's/^wizard_port=//p' "$ENVFILE" | tail -n1)"
-fi
-case "$PORT_VALUE" in
-  ''|*[!0-9]*) PORT_VALUE=3000 ;;
-esac
-
-# 数据目录
-DATA_DIR=""
-BACKUP_DIR=""
-if [ -n "${TRIM_DATA_SHARE_PATHS:-}" ]; then
-  IFS=':' read -r -a _share_paths <<< "$TRIM_DATA_SHARE_PATHS"
-  for _p in "${_share_paths[@]}"; do
-    case "$_p" in
-      */data)    [ -n "$DATA_DIR" ]   || DATA_DIR="$_p" ;;
-      */backups) [ -n "$BACKUP_DIR" ] || BACKUP_DIR="$_p" ;;
-    esac
-  done
-fi
-if [ -z "$DATA_DIR" ] && [ -f "$ENVFILE" ]; then
-  _old_data="$(sed -n 's/^JUJU_DATA_DIR=//p' "$ENVFILE" | tail -n1)"
-  [ -n "$_old_data" ] && DATA_DIR="$_old_data"
-fi
-if [ -z "$BACKUP_DIR" ] && [ -f "$ENVFILE" ]; then
-  _old_bak="$(sed -n 's/^JUJU_BACKUP_DIR=//p' "$ENVFILE" | tail -n1)"
-  [ -n "$_old_bak" ] && BACKUP_DIR="$_old_bak"
-fi
-[ -n "$DATA_DIR" ]   || DATA_DIR="${TRIM_PKGVAR}/data"
-[ -n "$BACKUP_DIR" ] || BACKUP_DIR="${TRIM_PKGVAR}/backups"
-
-mkdir -p "$APPDEST/docker"
-cat > "$ENVFILE" <<EOF
-wizard_port=$PORT_VALUE
-JUJU_DATA_DIR=$DATA_DIR
-JUJU_BACKUP_DIR=$BACKUP_DIR
-EOF
-chmod 600 "$ENVFILE"
+mkdir -p "${TRIM_PKGVAR}/data" "${TRIM_PKGVAR}/backups" 2>/dev/null || true
 
 exit 0

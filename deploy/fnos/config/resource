@@ -6,15 +6,5 @@
         "path": "docker"
       }
     ]
-  },
-  "data-share": {
-    "shares": [
-      {
-        "name": "juju/data"
-      },
-      {
-        "name": "juju/backups"
-      }
-    ]
   }
 }

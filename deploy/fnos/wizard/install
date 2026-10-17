@@ -21,7 +21,7 @@
       },
       {
         "type": "tips",
-        "helpText": "安装后通过 http://NAS-IP:端口 访问。数据库密钥将自动生成并保存在应用配置目录，请勿手动修改；重装应用前请先备份 文件管理 → 应用文件 → juju 目录。"
+        "helpText": "安装后通过 http://NAS-IP:端口 访问。数据库密钥将自动生成并保存在应用配置目录，请勿手动修改；数据文件位于 /var/apps/juju/var/（SSH 访问），每日自动备份在 /var/apps/juju/var/backups，卸载时可选保留。"
       }
     ]
   }
