@@ -1045,17 +1045,14 @@ function renderMediaWidget(media) {
       ? `<img src="${esc(dashCoverSrc(m.cover_url))}" alt="" loading="lazy" class="media-widget-cover">`
       : `<span class="media-widget-cover media-widget-cover--placeholder"><i data-lucide="film" class="icon-lg media-widget-cover__icon" aria-hidden="true"></i></span>`;
     return `
-      <div class="media-widget-row" data-route="/media?item=${m.id}" role="button" tabindex="0">
-        ${cover}
-        <span class="media-widget-row__body">
-          <span class="media-widget-row__title">${esc(m.title)}</span>
-          <span class="media-widget-row__meta">${esc(t(`media.type.${m.media_type || 'movie'}`))}</span>
-        </span>
+      <div class="media-widget-card" data-route="/media?item=${m.id}" role="button" tabindex="0">
+        <div class="media-widget-card__cover">${cover}</div>
+        <div class="media-widget-card__title">${esc(m.title)}</div>
       </div>`;
   }).join('');
   return `<div class="widget widget--media">
     ${widgetHeader('film', t('nav.media'), media.doingCount || watching.length, '/media')}
-    <div class="widget__body media-widget-list">${cards}</div>
+    <div class="widget__body media-widget-grid">${cards}</div>
   </div>`;
 }
 

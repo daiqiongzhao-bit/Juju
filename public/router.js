@@ -4233,23 +4233,30 @@ function renderChangelog(panel, payload) {
 
   const updateAvailable = isNewerVersion(latestVersion, currentVersion);
 
+  // 当前版本比 GitHub 最新 Release 还新（本地构建/预发布）：不是"缺失"。
+  const currentAhead = !updateAvailable && isNewerVersion(currentVersion, latestVersion);
+
   const note = panel.querySelector('#changelog-version-note');
 
   if (updateAvailable) {
 
     note.textContent = t('changelog.updateAvailable', { version: displayVersion(latestVersion) });
 
+  } else if (data.current_in_releases) {
+
+    note.textContent = t('changelog.currentFound');
+
+  } else if (currentAhead) {
+
+    note.textContent = t('changelog.currentAhead');
+
   } else {
 
-    note.textContent = data.current_in_releases
-
-      ? t('changelog.currentFound')
-
-      : t('changelog.currentMissing');
+    note.textContent = t('changelog.currentMissing');
 
   }
 
-  note.classList.toggle('changelog-version-note--warning', !updateAvailable && !data.current_in_releases);
+  note.classList.toggle('changelog-version-note--warning', !updateAvailable && !data.current_in_releases && !currentAhead);
 
   note.classList.toggle('changelog-version-note--update', updateAvailable);
   const updateRow = panel.querySelector('#changelog-update-row');

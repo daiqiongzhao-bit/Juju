@@ -12,7 +12,7 @@ import { createLogger } from '../logger.js';
 import express from 'express';
 import * as db from '../db.js';
 import { str, oneOf, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT } from '../middleware/validate.js';
-import { searchTmdb, searchOpenLibrary, searchItunes, searchGoogleBooks } from '../services/media-metadata.js';
+import { searchTmdb, searchOpenLibrary, searchItunes, searchGoogleBooks, fetchTmdbDetails } from '../services/media-metadata.js';
 import * as emby from '../services/media-emby.js';
 import { notifyUsers, actorName } from '../services/notify-fanout.js';
 
@@ -217,7 +217,7 @@ router.get('/search/openlib', async (req, res) => {
   try {
     const q = (req.query.q || '').toString().trim();
     const isbn = (req.query.isbn || '').toString().trim();
-    const results = await searchOpenLibrary(q, { isbn });
+    const results = await searchOpenLibrary(q, { isbn, proxyUrl: cfg.tmdb_proxy_url });
     res.json({ data: results });
   } catch (err) {
     log.error('search/openlib', err);
@@ -230,7 +230,7 @@ router.get('/search/itunes', async (req, res) => {
   try {
     const q = (req.query.q || '').toString().trim();
     if (!q) return res.json({ data: [] });
-    const results = await searchItunes(q);
+    const results = await searchItunes(q, { proxyUrl: cfg.tmdb_proxy_url });
     res.json({ data: results });
   } catch (err) {
     log.error('search/itunes', err);
@@ -243,7 +243,7 @@ router.get('/search/gbooks', async (req, res) => {
   try {
     const q = (req.query.q || '').toString().trim();
     if (!q) return res.json({ data: [] });
-    const results = await searchGoogleBooks(q);
+    const results = await searchGoogleBooks(q, { proxyUrl: cfg.tmdb_proxy_url });
     res.json({ data: results });
   } catch (err) {
     log.error('search/gbooks', err);
@@ -517,7 +517,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/v1/media/add
-router.post('/add', (req, res) => {
+router.post('/add', async (req, res) => {
   try {
     const me = uid(req);
     const vType = oneOf(req.body.mediaType || req.body.media_type, MEDIA_TYPES, 'Typ');
@@ -525,7 +525,9 @@ router.post('/add', (req, res) => {
     const vStatus = oneOf(req.body.status || 'wish', STATUSES, 'Status');
     const vComment = str(req.body.comment, 'Kommentar', { max: MAX_TEXT, required: false });
     const vCover = str(req.body.coverUrl || req.body.cover_url, 'Cover', { max: 2048, required: false });
-    const errors = collectErrors([vType, vTitle, vStatus, vComment, vCover]);
+    const vExternalId = str(req.body.externalId || req.body.external_id, 'externalId', { max: 64, required: false });
+    const vKind = str(req.body.kind, 'kind', { max: 16, required: false });
+    const errors = collectErrors([vType, vTitle, vStatus, vComment, vCover, vExternalId, vKind]);
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
 
     const rating = req.body.rating != null ? Number(req.body.rating) : null;
@@ -535,6 +537,23 @@ router.post('/add', (req, res) => {
     const members = Array.isArray(req.body.members)
       ? req.body.members.map(Number).filter((n) => Number.isFinite(n))
       : [];
+
+    // 影视类：按 externalId 补充简介 + 剧集完结状态（直连不通时走代理）。
+    let metadata = req.body.metadata ? req.body.metadata : null;
+    if ((vType.value === 'movie' || vType.value === 'tv') && vExternalId.value && cfg.tmdb_api_key) {
+      try {
+        const kind = vKind.value || (vType.value === 'tv' ? 'tv' : 'movie');
+        const details = await fetchTmdbDetails(vExternalId.value, kind, cfg.tmdb_api_key, cfg.tmdb_proxy_url);
+        metadata = Object.assign({}, metadata, {
+          overview: details.overview || (metadata && metadata.overview) || '',
+          series_status: details.status || (metadata && metadata.series_status) || '',
+          external_id: vExternalId.value,
+          kind,
+        });
+      } catch (e) {
+        log.warn('add TMDB enrich failed', e?.message);
+      }
+    }
 
     let newId;
     const tx = db.get().transaction(() => {
@@ -551,7 +570,7 @@ router.post('/add', (req, res) => {
           vStatus.value,
           rating,
           vComment.value || null,
-          req.body.metadata ? JSON.stringify(req.body.metadata) : null,
+          metadata ? JSON.stringify(metadata) : null,
           req.body.isPrivate ? 1 : 0,
           req.body.watchDate || req.body.watch_date || null,
           stringifyTags(req.body.tags),
@@ -720,12 +739,31 @@ router.post('/:id/refresh-cover', async (req, res) => {
       results.find((r) => r.posterUrl && norm(r.title) === norm(item.title)) ||
       results.find((r) => r.posterUrl);
     if (!hit) return res.status(404).json({ error: 'Kein Treffer mit Cover', code: 404 });
-    const meta = { externalId: hit.externalId, kind: hit.kind, originalTitle: hit.originalTitle, releaseDate: hit.releaseDate, overview: hit.overview, rating: hit.rating };
+    // 命中后用详情接口补齐「简介 + 剧集完结状态」，与已有元数据合并（不丢旧字段）。
+    let extra = { overview: hit.overview, rating: hit.rating };
+    if (cfg.tmdb_api_key) {
+      try {
+        const d = await fetchTmdbDetails(hit.externalId, hit.kind, cfg.tmdb_api_key, cfg.tmdb_proxy_url);
+        extra = { overview: d.overview || hit.overview, series_status: d.status, rating: hit.rating };
+      } catch (e) {
+        log.warn('refresh-cover TMDB details failed', e?.message);
+      }
+    }
+    const prev = item.metadata_json ? safeJson(item.metadata_json, {}) : {};
+    const meta = Object.assign({}, prev, {
+      externalId: hit.externalId,
+      kind: hit.kind,
+      originalTitle: hit.originalTitle,
+      releaseDate: hit.releaseDate,
+      overview: extra.overview || prev.overview || '',
+      series_status: extra.series_status || prev.series_status || '',
+      rating: extra.rating ?? prev.rating ?? null,
+    });
     db.get()
       .prepare(
         `UPDATE media_item SET
            cover_url     = ?,
-           metadata_json = COALESCE(metadata_json, ?),
+           metadata_json = ?,
            updated_at    = strftime('%Y-%m-%dT%H:%M:%SZ','now')
          WHERE id = ?`
       )

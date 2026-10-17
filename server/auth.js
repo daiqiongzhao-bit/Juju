@@ -28,7 +28,7 @@ const router = express.Router();
 // Präfix für NEUE API-Tokens. Bereits ausgegebene `oikos_`-Tokens bleiben gültig:
 // validiert wird über den Hash des gesamten Tokens, nicht über den Präfix.
 const API_TOKEN_PREFIX = 'yuvomi_';
-const FAMILY_ROLES = ['dad', 'mom', 'parent', 'child', 'grandparent', 'relative', 'other'];
+const FAMILY_ROLES = ['dad', 'mom', 'parent', 'child', 'grandparent', 'relative', 'wife', 'husband', 'other'];
 // Platzhalter-Hash für den Timing-Attack-Schutz beim Login unbekannter Benutzer.
 const DUMMY_PASSWORD_HASH = '$2b$12$invalidhashfortimingprotection000000000000000000000';
 const MAX_AVATAR_DATA_LENGTH = 768 * 1024;

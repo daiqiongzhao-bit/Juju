@@ -30,7 +30,7 @@ import { MODULE_KEYS } from './scopes.js';
 // Familienrollen (Subjekt-Achse „role"). Spiegelt den CHECK-Constraint der
 // users.family_role-Spalte (Migration, db.js).
 export const FAMILY_ROLES = Object.freeze([
-  'dad', 'mom', 'parent', 'child', 'grandparent', 'relative', 'other',
+  'dad', 'mom', 'parent', 'child', 'grandparent', 'relative', 'wife', 'husband', 'other',
 ]);
 
 // Gateable, nutzer-sichtbare Module. `key` === Scope-Modulschlüssel (scopes.js),

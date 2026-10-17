@@ -39,6 +39,30 @@ function urlFor(base, proxyUrl) {
   return (path) => `${base}${path}`;
 }
 
+/**
+ * 针对「无需 API Key 的第三方源」（OpenLibrary / iTunes / Google Books）的代理
+ * 透传。Cloudflare Worker 暴露 `/px/<host><path>`，当本机直连不通时自动改走代理。
+ * 返回两个构造器：直连 + 代理；调用方「先直连、失败再走代理」。
+ */
+function hostBuilders(host, proxyUrl) {
+  const direct = (path) => `https://${host}${path}`;
+  const useProxy = Boolean(proxyUrl && proxyUrl.trim());
+  const proxy = useProxy
+    ? (path) => `${proxyUrl.trim().replace(/\/$/, '')}/px/${host}${path}`
+    : null;
+  return { direct, proxy };
+}
+
+async function fetchJsonWithFallback(buildDirect, buildProxy, timeoutMs = 8000) {
+  const direct = await fetchJson(buildDirect(), timeoutMs);
+  if (direct) return direct;
+  if (buildProxy) {
+    const proxied = await fetchJson(buildProxy(), timeoutMs);
+    if (proxied) return proxied;
+  }
+  return null;
+}
+
 export async function searchTmdb(query, { apiKey, proxyUrl } = {}) {
   if (!apiKey) return [];
   const build = urlFor(TMDB_BASE, proxyUrl);
@@ -62,11 +86,14 @@ export async function searchTmdb(query, { apiKey, proxyUrl } = {}) {
     }));
 }
 
-export async function searchOpenLibrary(query, { isbn } = {}) {
+export async function searchOpenLibrary(query, { isbn, proxyUrl } = {}) {
   if (isbn) {
-    const doc = await fetchJson(`${OL_BASE}/isbn/${encodeURIComponent(isbn)}.json`);
+    const { direct, proxy } = hostBuilders('openlibrary.org', proxyUrl);
+    const doc = await fetchJsonWithFallback(
+      () => `${direct(`/isbn/${encodeURIComponent(isbn)}.json`)}`,
+      () => (proxy ? `${proxy(`/isbn/${encodeURIComponent(isbn)}.json`)}` : null)
+    );
     if (!doc) return [];
-    const workKey = doc.works && doc.works[0] ? doc.works[0].key : null;
     const authors = (doc.authors || []).map((a) => a.name).join(', ');
     return [
       {
@@ -80,8 +107,12 @@ export async function searchOpenLibrary(query, { isbn } = {}) {
       },
     ];
   }
-  const data = await fetchJson(
-    `${OL_BASE}/search.json?q=${encodeURIComponent(query)}&limit=10&fields=key,title,author_name,first_publish_year,cover_i`
+  const { direct, proxy } = hostBuilders('openlibrary.org', proxyUrl);
+  const data = await fetchJsonWithFallback(
+    () => `${direct('/search.json?q=' + encodeURIComponent(query) + '&limit=10&fields=key,title,author_name,first_publish_year,cover_i')}`,
+    () => proxy
+      ? `${proxy('/search.json?q=' + encodeURIComponent(query) + '&limit=10&fields=key,title,author_name,first_publish_year,cover_i')}`
+      : null
   );
   if (!data || !Array.isArray(data.docs)) return [];
   return data.docs.map((d) => ({
@@ -95,12 +126,13 @@ export async function searchOpenLibrary(query, { isbn } = {}) {
   }));
 }
 
-export async function searchItunes(query) {
+export async function searchItunes(query, { proxyUrl } = {}) {
   // iTunes Search API: ohne Key, Album-Suche. country=CN richtet die Results
   // auf den chinesischen Store aus (chinesische Titel, CNY-Preise irrelevant,
   // wir holen nur Metadaten + Cover).
-  const url = `${ITUNES_BASE}/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=10&country=CN`;
-  const data = await fetchJson(url);
+  const q = `/search?term=${encodeURIComponent(query)}&media=music&entity=album&limit=10&country=CN`;
+  const { direct, proxy } = hostBuilders('itunes.apple.com', proxyUrl);
+  const data = await fetchJsonWithFallback(() => direct(q), () => (proxy ? proxy(q) : null));
   if (!data || !Array.isArray(data.results)) return [];
   return data.results
     .filter((r) => r.collectionName)
@@ -115,10 +147,11 @@ export async function searchItunes(query) {
     }));
 }
 
-export async function searchGoogleBooks(query) {
+export async function searchGoogleBooks(query, { proxyUrl } = {}) {
   // Google Books API: ohne Key (Public-Endpunkt), maxResults<=10 zwingend.
-  const url = `${GB_BASE}/volumes?q=${encodeURIComponent(query)}&maxResults=10`;
-  const data = await fetchJson(url);
+  const q = `/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10`;
+  const { direct, proxy } = hostBuilders('www.googleapis.com', proxyUrl);
+  const data = await fetchJsonWithFallback(() => direct(q), () => (proxy ? proxy(q) : null));
   if (!data || !Array.isArray(data.items)) return [];
   return data.items.map((it) => {
     const v = it.volumeInfo || {};
@@ -136,4 +169,22 @@ export async function searchGoogleBooks(query) {
   });
 }
 
-export default { searchTmdb, searchOpenLibrary, searchItunes, searchGoogleBooks };
+/**
+ * 按 TMDB externalId 拉取详情（简介 + 剧集完结状态）。
+ * 需要 apiKey（详情接口强制鉴权）。proxyUrl 可选：本机直连不通时走代理。
+ * 返回 { overview, status } —— status 为 'Returning Series' | 'Ended' | ...（TV 才有）。
+ */
+export async function fetchTmdbDetails(externalId, kind, apiKey, proxyUrl) {
+  if (!apiKey || !externalId) return { overview: '', status: '' };
+  const path = kind === 'tv' ? `/3/tv/${externalId}` : `/3/movie/${externalId}`;
+  const build = urlFor(TMDB_BASE, proxyUrl);
+  const url = `${build(path)}?api_key=${encodeURIComponent(apiKey)}&language=zh-CN`;
+  const data = await fetchJson(url);
+  if (!data) return { overview: '', status: '' };
+  return {
+    overview: data.overview || '',
+    status: kind === 'tv' ? (data.status || '') : '',
+  };
+}
+
+export default { searchTmdb, searchOpenLibrary, searchItunes, searchGoogleBooks, fetchTmdbDetails };

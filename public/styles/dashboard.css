@@ -96,21 +96,53 @@
   overflow: hidden;
 }
 
-.media-widget-list {
-  gap: var(--space-0h);
-}
-
 .gift-widget-list {
   gap: var(--space-1h);
 }
 
-/* Medien: Cover (Poster 52x74, 2:3) + zweizeilige Zeile */
-.media-widget-cover {
-  width: 52px;
-  height: 74px;
-  object-fit: cover;
+/* Medien: 海报卡片网格（自适应 2:3 海报） */
+.media-widget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: var(--space-1h);
+}
+
+.media-widget-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0h);
+  cursor: pointer;
+}
+
+.media-widget-card__cover {
+  position: relative;
+  aspect-ratio: 2 / 3;
   border-radius: var(--radius-sm);
-  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--color-surface-raised);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.media-widget-card__cover .media-widget-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+.media-widget-card__cover .media-widget-cover--placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.media-widget-card__title {
+  font-size: var(--type-micro);
+  line-height: 1.2;
+  max-height: 2.4em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .media-widget-cover--placeholder {
@@ -122,35 +154,6 @@
 
 .media-widget-cover__icon {
   opacity: 0.5;
-}
-
-.media-widget-row {
-  display: flex;
-  gap: var(--space-2h);
-  align-items: center;
-  padding: var(--space-1h) var(--space-1);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.media-widget-row__body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0h);
-}
-
-.media-widget-row__title {
-  font-size: var(--type-caption);
-  font-weight: var(--font-weight-semibold);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.media-widget-row__meta {
-  font-size: var(--type-micro);
-  opacity: 0.65;
 }
 
 /* Geschenke: Punkte + Betraege. Die Punktfarbe und die Zeilenfuellung

@@ -91,3 +91,47 @@ button.mk-btn.danger{background:#dc2626;border-color:#dc2626}
 .mk-member-chip--row label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .mk-member-chip--row.checked{outline:1.5px solid var(--color-accent);outline-offset:-1.5px}
 .mk-member-status{border:1px solid var(--color-border);border-radius: calc(var(--radius-sm) - 2px);font-size:var(--type-micro);padding:2px 4px;background:var(--color-surface);color:var(--color-text-primary);max-width:76px}
+
+/* ---- 详情：完结状态徽标 + 简介 ---- */
+.mk-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 2px;
+}
+.mk-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--type-micro);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px 8px;
+  border-radius: 999px;
+  line-height: 1.6;
+}
+.mk-badge--ended {
+  background: color-mix(in srgb, #16a34a 18%, var(--color-surface));
+  color: #15803d;
+  border: 1px solid color-mix(in srgb, #16a34a 35%, transparent);
+}
+.mk-badge--ongoing {
+  background: color-mix(in srgb, #f59e0b 18%, var(--color-surface));
+  color: #b45309;
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+}
+.mk-detail-overview {
+  margin: 8px 0 4px;
+}
+.mk-detail-overview h4 {
+  font-size: var(--type-caption);
+  color: var(--color-text-primary);
+  opacity: 0.75;
+  margin: 0 0 4px;
+  font-weight: var(--font-weight-semibold);
+}
+.mk-detail-overview p {
+  margin: 0;
+  font-size: var(--type-caption);
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+}

@@ -1053,7 +1053,7 @@ const MIGRATIONS = [
     description: 'Separate family member role from system access role',
     up: `
       ALTER TABLE users ADD COLUMN family_role TEXT NOT NULL DEFAULT 'other'
-        CHECK(family_role IN ('dad', 'mom', 'parent', 'child', 'grandparent', 'relative', 'other'));
+        CHECK(family_role IN ('dad', 'mom', 'parent', 'child', 'grandparent', 'relative', 'wife', 'husband', 'other'));
 
       CREATE INDEX IF NOT EXISTS idx_users_family_role ON users(family_role);
     `,
@@ -5384,6 +5384,46 @@ const MIGRATIONS = [
         created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_node_acl ON contact_node_acl(contact_id, user_id);
+    `,
+  },
+
+  {
+    version: 151,
+    description: 'Expand family_role CHECK to include wife/husband',
+    foreignKeysOff: true,
+    up: `
+      ALTER TABLE users RENAME TO users_old;
+      CREATE TABLE users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        username      TEXT    UNIQUE NOT NULL,
+        display_name  TEXT    NOT NULL,
+        password_hash TEXT    NOT NULL,
+        avatar_color  TEXT    NOT NULL DEFAULT '#007AFF',
+        role          TEXT    NOT NULL DEFAULT 'member'
+                      CHECK(role IN ('admin', 'member')),
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        family_role   TEXT    NOT NULL DEFAULT 'other'
+                      CHECK(family_role IN ('dad','mom','parent','child','grandparent','relative','wife','husband','other')),
+        avatar_data   TEXT,
+        oidc_sub      TEXT,
+        oidc_provider TEXT,
+        calendar_feed_token TEXT,
+        calendar_feed_show_assignees INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT INTO users (
+        id, username, display_name, password_hash, avatar_color, role,
+        created_at, updated_at, family_role, avatar_data, oidc_sub,
+        oidc_provider, calendar_feed_token, calendar_feed_show_assignees
+      )
+        SELECT
+        id, username, display_name, password_hash, avatar_color, role,
+        created_at, updated_at, family_role, avatar_data, oidc_sub,
+        oidc_provider, calendar_feed_token, calendar_feed_show_assignees
+        FROM users_old;
+      UPDATE sqlite_sequence SET name = 'users' WHERE name = 'users_old';
+      DROP TABLE users_old;
+      CREATE INDEX IF NOT EXISTS idx_users_family_role ON users(family_role);
     `,
   },
 

@@ -19,7 +19,7 @@ const MIGRATIONS_SQL = {
       role          TEXT    NOT NULL DEFAULT 'member'
                             CHECK(role IN ('admin', 'member')),
       family_role   TEXT    NOT NULL DEFAULT 'other'
-                            CHECK(family_role IN ('dad', 'mom', 'parent', 'child', 'grandparent', 'relative', 'other')),
+                            CHECK(family_role IN ('dad', 'mom', 'parent', 'child', 'grandparent', 'relative', 'wife', 'husband', 'other')),
       created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
       updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
     );

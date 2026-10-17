@@ -143,6 +143,7 @@ export async function render(container, { user }) {
         <button class="btn btn--secondary" data-action="select-cancel">${t('common.cancel')}</button>
         <span class="contacts-selectbar__count" id="contacts-select-count" aria-live="polite"></span>
         <div class="contacts-selectbar__actions">
+          <button class="btn btn--secondary" data-action="select-export">${t('contacts.exportSelected')}</button>
           <button class="btn btn--secondary" data-action="select-all">${t('contacts.selectAll')}</button>
           <button class="btn btn--danger" data-action="select-delete">${t('common.delete')}</button>
         </div>
@@ -272,6 +273,7 @@ export async function render(container, { user }) {
   _container.querySelector('#contacts-selectbar').addEventListener('click', (e) => {
     if (e.target.closest('[data-action="select-cancel"]')) { exitSelectMode(); return; }
     if (e.target.closest('[data-action="select-all"]'))    { toggleSelectAll(); return; }
+    if (e.target.closest('[data-action="select-export"]')) { exportSelected(); return; }
     if (e.target.closest('[data-action="select-delete"]')) { deleteSelected(); return; }
   });
 
@@ -1338,6 +1340,21 @@ function updateSelectUI() {
   if (countEl) countEl.textContent = t('contacts.selectCount', { count: n });
   const delBtn = _container.querySelector('[data-action="select-delete"]');
   if (delBtn) delBtn.disabled = n === 0;
+  const expBtn = _container.querySelector('[data-action="select-export"]');
+  if (expBtn) expBtn.disabled = n === 0;
+}
+
+// 批量导出所选联系人为单个 .vcf（多 vCard 文件）。
+function exportSelected() {
+  const ids = [...state.selected];
+  if (!ids.length) return;
+  const a = document.createElement('a');
+  a.href = `/api/v1/contacts/export/vcard?ids=${ids.join(',')}`;
+  a.download = `contacts-${ids.length}.vcf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.yuvomi?.showToast?.(t('contacts.exportSelectedToast', { count: ids.length }), 'success');
 }
 
 // Nur nicht-verknüpfte Kontakte sind wählbar (Familien-Kontakte lassen sich

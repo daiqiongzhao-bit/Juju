@@ -888,31 +888,21 @@ router.get('/:id', (req, res) => {
 });
 
 /**
- * GET /api/v1/contacts/:id/vcard
- * Kontakt als vCard 3.0 (.vcf) exportieren.
- * R3: phone/address 必须先解密再写 vCard（导出必须是明文）。
- * R4: 与 GET /:id 同样的可见性门（不可见 → 404）。
- * Response: text/vcard Dateidownload
+ * vCard 3.0 Block für einen Kontakt (明文：phone/address 先解密)。
+ * 单导出与批量导出共用。
  */
-router.get('/:id/vcard', (req, res) => {
-  try {
-    const id      = parseInt(req.params.id, 10);
-    const vis = visibilityFilter(req, 'contacts');
-    const contact = db.get().prepare(`SELECT * FROM contacts WHERE id = ?${vis.sql}`).get(id, ...vis.params);
-    if (!contact) return res.status(404).json({ error: 'Kontakt nicht gefunden', code: 404 });
+function vcardBlockFor(contact) {
+  const phone   = decryptField(contact.phone);
+  const address = decryptField(contact.address);
 
-    // R3: 导出明文——密文列先解密。
-    const phone   = decryptField(contact.phone);
-    const address = decryptField(contact.address);
+  const esc = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
 
-    const esc = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
-
-    const lines = [
-      'BEGIN:VCARD',
-      'VERSION:3.0',
-      `FN:${esc(contact.name)}`,
-      // Strukturierte Komponenten exportieren, wo bekannt (#535); sonst trägt
-      // das Familiennamen-Feld weiterhin den Anzeigenamen als Ganzes.
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${esc(contact.name)}`,
+    // Strukturierte Komponenten exportieren, wo bekannt (#535); sonst trägt
+    // das Familiennamen-Feld weiterhin den Anzeigenamen als Ganzes.
       (contact.first_name || contact.last_name)
         ? `N:${esc(contact.last_name)};${esc(contact.first_name)};${esc(contact.middle_name)};${esc(contact.name_prefix)};${esc(contact.name_suffix)}`
         : `N:${esc(contact.name)};;;;`,
@@ -925,7 +915,59 @@ router.get('/:id/vcard', (req, res) => {
     if (contact.category) lines.push(`CATEGORIES:${esc(contact.category)}`);
     lines.push('END:VCARD');
 
-    const vcf      = lines.join('\r\n');
+    return lines.join('\r\n');
+}
+
+/**
+ * GET /api/v1/contacts/export/vcard?ids=1,2,3
+ * 批量导出：多个联系人合并为一个多 vCard 文件（.vcf）。
+ * - 带 ids：仅导出所选（不可见的 ID 被静默跳过，与单导出一致）
+ * - 不带 ids：导出全部可见联系人（上限 1000，防止超大响应）
+ * 与 GET /:id 同样的可见性门。
+ */
+router.get('/export/vcard', (req, res) => {
+  try {
+    const vis = visibilityFilter(req, 'contacts');
+    const idsParam = (req.query.ids || '').toString().trim();
+    let rows;
+    if (idsParam) {
+      const ids = idsParam
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      if (!ids.length) return res.status(400).json({ error: 'Keine gültigen IDs', code: 400 });
+      const marks = ids.map(() => '?').join(',');
+      rows = db.get().prepare(`SELECT * FROM contacts WHERE id IN (${marks})${vis.sql}`).all(...ids, ...vis.params);
+    } else {
+      rows = db.get().prepare(`SELECT * FROM contacts WHERE 1=1${vis.sql} LIMIT 1000`).all(...vis.params);
+    }
+    if (!rows.length) return res.status(404).json({ error: 'Keine Kontakte gefunden', code: 404 });
+
+    const vcf = rows.map(vcardBlockFor).join('\r\n');
+
+    res.setHeader('Content-Type', 'text/vcard; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="contacts-${rows.length}.vcf"`);
+    res.send(vcf);
+  } catch (err) {
+    log.error('', err);
+    res.status(500).json({ error: 'Interner Fehler' });
+  }
+});
+
+/**
+ * GET /api/v1/contacts/:id/vcard
+ * Kontakt als vCard 3.0 (.vcf) exportieren (Einzelkontakt).
+ * R4: 与 GET /:id 同样的可见性门（不可见 → 404）。
+ * Response: text/vcard Dateidownload
+ */
+router.get('/:id/vcard', (req, res) => {
+  try {
+    const id      = parseInt(req.params.id, 10);
+    const vis = visibilityFilter(req, 'contacts');
+    const contact = db.get().prepare(`SELECT * FROM contacts WHERE id = ?${vis.sql}`).get(id, ...vis.params);
+    if (!contact) return res.status(404).json({ error: 'Kontakt nicht gefunden', code: 404 });
+
+    const vcf      = vcardBlockFor(contact);
     const filename = encodeURIComponent(contact.name.replace(/[^a-zA-Z0-9-_ ]/g, '_')) + '.vcf';
 
     res.setHeader('Content-Type', 'text/vcard; charset=utf-8');

@@ -329,8 +329,20 @@ export async function render(container, { user } = {}) {
     }
     const body = document.createElement('div');
     body.className = 'mk-modal-body';
+    const md = item.metadata || {};
+    const statusBadge =
+      item.media_type === 'tv' && md.series_status
+        ? `<div class="mk-detail-badges"><span class="mk-badge ${
+            md.series_status === 'Ended' ? 'mk-badge--ended' : 'mk-badge--ongoing'
+          }">${esc(t(md.series_status === 'Ended' ? 'media.seriesEnded' : 'media.seriesReturning'))}</span></div>`
+        : '';
+    const overviewHtml = md.overview
+      ? `<div class="mk-detail-overview"><h4>${esc(t('media.overview') || '简介')}</h4><p>${esc(md.overview)}</p></div>`
+      : '';
     body.innerHTML = `
       <h3>${esc(item.title)}</h3>
+      ${statusBadge}
+      ${overviewHtml}
       <div class="mk-field"><label>${esc(t('media.cover'))}</label>${
       item.cover_url
         ? `<img class="mk-detail-cover" src="${esc(coverSrc(item.cover_url))}">`
@@ -452,6 +464,7 @@ export async function render(container, { user } = {}) {
     let addSource = 'tmdb';
     let addRating = 0;
     let addData = []; // letzte Suchergebnisse
+    let pickedMeta = null; // 选中的搜索结果（含 externalId/kind 用于回填简介/完结）
 
     const body = document.createElement('div');
     body.className = 'mk-modal-body mk-add';
@@ -570,6 +583,7 @@ export async function render(container, { user } = {}) {
         results.querySelectorAll('.mk-search-row').forEach((el) =>
           el.addEventListener('click', () => {
             const d = addData[parseInt(el.dataset.i, 10)];
+            pickedMeta = { externalId: d.externalId, kind: d.kind };
             body.querySelector('#a-title').value = d.title || '';
             body.querySelector('#a-cover').value = d.posterUrl || d.coverUrl || '';
             body.querySelector('#a-comment').value = [d.authors, d.overview].filter(Boolean).join('\n').slice(0, 500);
@@ -607,6 +621,8 @@ export async function render(container, { user } = {}) {
         isPrivate: body.querySelector('#a-private').checked,
         members: getPickedMembers(body),
         tags: [],
+        externalId: pickedMeta?.externalId || null,
+        kind: pickedMeta?.kind || null,
       };
       const saveBtn = body.querySelector('#a-save');
       saveBtn.disabled = true;
