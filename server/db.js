@@ -5392,8 +5392,7 @@ const MIGRATIONS = [
     description: 'Expand family_role CHECK to include wife/husband',
     foreignKeysOff: true,
     up: `
-      ALTER TABLE users RENAME TO users_old;
-      CREATE TABLE users (
+      CREATE TABLE users_new (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         username      TEXT    UNIQUE NOT NULL,
         display_name  TEXT    NOT NULL,
@@ -5411,7 +5410,7 @@ const MIGRATIONS = [
         calendar_feed_token TEXT,
         calendar_feed_show_assignees INTEGER NOT NULL DEFAULT 0
       );
-      INSERT INTO users (
+      INSERT INTO users_new (
         id, username, display_name, password_hash, avatar_color, role,
         created_at, updated_at, family_role, avatar_data, oidc_sub,
         oidc_provider, calendar_feed_token, calendar_feed_show_assignees
@@ -5420,9 +5419,11 @@ const MIGRATIONS = [
         id, username, display_name, password_hash, avatar_color, role,
         created_at, updated_at, family_role, avatar_data, oidc_sub,
         oidc_provider, calendar_feed_token, calendar_feed_show_assignees
-        FROM users_old;
-      UPDATE sqlite_sequence SET name = 'users' WHERE name = 'users_old';
-      DROP TABLE users_old;
+        FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+      INSERT OR IGNORE INTO sqlite_sequence (name, seq)
+        SELECT 'users', COALESCE(MAX(id), 0) FROM users;
       CREATE INDEX IF NOT EXISTS idx_users_family_role ON users(family_role);
     `,
   },
