@@ -4,8 +4,8 @@
 [飞牛应用商店](https://developer.fnnas.com/)（或应用中心手动安装）的 `.fpk` 安装包。
 
 应用本体即标准 Docker 服务（镜像 `daiqiongzhao/juju:<版本>`，见根目录
-`docker-compose.yml`），FPK 只是飞牛平台的安装壳：负责安装向导、数据目录、
-密钥初始化与生命周期管理。
+`docker-compose.yml`），FPK 只是飞牛平台的安装壳：负责安装向导、数据目录
+与生命周期管理。
 
 ## 命名规范（重要）
 
@@ -69,13 +69,13 @@ deploy/fnos/
    # fnpack 工具（飞牛官方，需 Linux x86_64）
    # 下载：https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64
    fnpack build          # 在 deploy/fnos/ 目录执行，产物名为 <appname>.fpk，即 juju.fpk
-   # 发布前重命名为 juju-<版本>.fpk（如 juju-0.0.27.fpk）——带版本号可避免
+   # 发布前重命名为 juju-<版本>.fpk（如 juju-0.0.28.fpk）——带版本号可避免
    # 手机/NAS 缓存旧包导致重复安装失败（已踩坑）
    ```
 
 4. **分发**（二选一）：
-   - 上传 GitHub Release assets（随版本发布，附 `juju.fpk`）——
-     v0.0.27 安装包：<https://github.com/daiqiongzhao-bit/Juju/releases/download/v0.0.27/juju-0.0.27.fpk>；
+   - 上传 GitHub Release assets（随版本发布，附 `juju-<版本>.fpk`）——
+     v0.0.28 安装包：<https://github.com/daiqiongzhao-bit/Juju/releases/download/v0.0.28/juju-0.0.28.fpk>；
    - 登录 [飞牛开发者中心](https://developer.fnnas.com/) 提交上架
      （需先注册并通过开发者认证，账号操作只能由本人完成）。
 
@@ -93,26 +93,31 @@ deploy/fnos/
   `/var/apps/juju/var`（符号链接到存储池 `@appdata/juju`），升级保留、
   卸载可选清除。**注意**：数据不在文件管理器的"应用文件"共享里，需要通过
   SSH 访问 `/var/apps/juju/var/`。
-- **为什么不用 `.env` 文件**：实测飞牛运行 compose 的工作目录不是 compose
-  文件所在目录，同目录 `.env` 不会被读取（表现为 `variable is not set`
-  告警 → `invalid spec` 安装失败）。端口与路径一律使用平台注入的环境变量，
-  与官方文档及真机在跑的 Docker 应用（fn-bitwarden 等）做法一致。
-- **密钥**：首次安装由 `install_callback` 自动生成
-  `DB_ENCRYPTION_KEY` / `JUJU_SM4_KEY` / `SESSION_SECRET`，保存在
-  `/var/apps/juju/etc/juju.env`（权限 600，通过 compose `env_file` 注入
-  容器）。**升级与重装不会覆盖**——覆盖会导致已加密数据库无法解密。
+- **为什么不用 `.env` / `env_file` 文件**：实测飞牛运行 compose 的工作目录
+  不是 compose 所在目录，同目录 `.env` 不会被读取（表现为
+  `variable is not set` 告警 → `invalid spec` 安装失败）。而 compose 的
+  `env_file` 指向一个安装时尚不存在的文件同样不行——飞牛在安装阶段就会
+  校验该路径，报 `env file ... not found` 直接终止安装，安装回调
+  （install_callback）根本来不及创建它。端口与路径一律使用平台注入的
+  环境变量，与官方文档及真机在跑的 Docker 应用（fn-bitwarden 等）一致。
+- **密钥（自 0.0.28 起由容器自行生成）**：首次启动时容器入口自动生成
+  `DB_ENCRYPTION_KEY` / `JUJU_SM4_KEY` / `SESSION_SECRET`，原子写入
+  `/var/apps/juju/var/data/.juju-secrets`（权限 600，随数据卷持久化）。
+  文件已存在则原样读取——**升级、重装、重启都不会更换密钥**（更换会导致
+  已加密数据库与字段无法解密）。请勿删除该文件；建议备份时连同它一起
+  拷贝一份。
 - **卸载**：默认保留全部数据，仅当用户在卸载向导选择"删除数据"时，才清除
-  `TRIM_PKGVAR` 下的 data/backups 与 etc 中的密钥（`TRIM_PKGVAR` 本身不动）。
+  `TRIM_PKGVAR` 下的 data/backups（含密钥文件），`TRIM_PKGVAR` 本身不动。
 
 ## 注意事项 / 已知限制
 
 - **平台架构**：当前 `platform = x86`，镜像仅推送 x86_64。飞牛 ARM
   机型无法安装，需为镜像补齐 `linux/arm64` 多架构（buildx
   `--platform linux/amd64,linux/arm64`）后再发 ARM 版 FPK。
-- **真机验证进度**：前两版在真机安装分别暴露了两个问题并已修复——①
+- **真机验证进度**：前三版在真机安装分别暴露了三个问题并已修复——①
   `appname` 大写导致项目名非法；② 同目录 `.env` 不被 compose 读取导致卷路径
-  为空。当前版本改为真机在跑应用同款的环境变量直注模式，但**尚未完整跑通
-  一次真机安装**。再次安装前建议先通过"应用中心 → 手动安装"验证；
-  若仍失败，报错截图发来即可继续定位。
+  为空；③ `env_file` 指向安装后才创建的文件，被飞牛安装期校验拦截
+  （`env file not found`）。v0.0.28 起密钥生成移入容器入口，与平台回调
+  时序完全解耦；如再次安装仍有问题，报错截图发来即可继续定位。
 - 若飞牛后续调整 FPK 规范，以 `fnpack create` 生成的新模板为准，
   对照更新本目录的 `wizard/`、`config/`、`cmd/` 结构。

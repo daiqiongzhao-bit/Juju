@@ -1,38 +1,21 @@
 #!/bin/bash
 
-### 安装后执行：预建数据目录并生成 Juju 应用密钥。
-### 幂等：密钥仅在首次生成，重装/升级不覆盖（否则数据库将无法解密）。
+### 安装后执行：预建数据目录。
+### 幂等；应用密钥不在这里生成——容器首次启动时自动生成
+### /data/.juju-secrets（见仓库根目录 entrypoint.sh）。
+###
+### 为什么不在回调里生成密钥：fnOS 在安装阶段就会校验 compose 的 env_file
+### 路径是否存在，而 install_callback 在校验之后才执行——回调里才创建的
+### 密钥文件永远赶不上校验（真机报错 "env file ... not found"）。
+### 密钥生成因此搬进容器入口，与部署平台完全解耦。
 ###
 ### 数据目录直接用 TRIM_PKGVAR（/var/apps/juju/var → /vol{n}/@appdata/juju），
 ### compose 中同样以 ${TRIM_PKGVAR}/data、${TRIM_PKGVAR}/backups 挂载。
 ### 不使用 .env 文件：飞牛运行 compose 的工作目录未必是 compose 所在目录，
-### .env 不会被读取（实测 JUJU_* 变量告警），端口与路径一律靠平台注入的环境变量。
+### .env 不会被读取，端口与路径一律靠平台注入的环境变量。
 
 set -u
 
-APPDEST="${TRIM_APPDEST}"
-ETCDIR="${TRIM_PKGETC}"
-DATADIR="${TRIM_PKGVAR}/data"
-BACKUPDIR="${TRIM_PKGVAR}/backups"
-
-# ---- 预建数据目录（以包用户身份创建，保证属主正确；docker 也会自动补建）----
-mkdir -p "$DATADIR" "$BACKUPDIR" 2>/dev/null || true
-
-# ---- 应用密钥（仅首次生成）----
-if [ ! -f "$ETCDIR/juju.env" ]; then
-  mkdir -p "$ETCDIR"
-  cat > "$ETCDIR/juju.env" <<EOF
-NODE_ENV=production
-PORT=3000
-DB_PATH=/data/yuvomi.db
-BACKUP_DIR=/backups
-DB_ENCRYPTION_KEY=$(openssl rand -hex 32)
-JUJU_SM4_KEY=$(openssl rand -hex 16)
-SESSION_SECRET=$(openssl rand -hex 32)
-SESSION_SECURE=false
-TRUST_PROXY=loopback
-EOF
-  chmod 600 "$ETCDIR/juju.env"
-fi
+mkdir -p "${TRIM_PKGVAR}/data" "${TRIM_PKGVAR}/backups" 2>/dev/null || true
 
 exit 0

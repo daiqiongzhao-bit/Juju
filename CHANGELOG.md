@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.28] - 2026-10-17
+
+> fnOS 安装修复：加密密钥改由容器首次启动自动生成，不再依赖安装回调写入 env_file。
+
+### 修复
+
+- **fnOS 安装失败（`env file ... not found`）**：fnOS 在安装阶段即校验 compose 的 `env_file` 路径，而安装回调（install_callback）在校验之后才执行——回调里才创建的密钥文件永远赶不上校验。密钥生成改为容器入口（`entrypoint.sh`）自理：首次启动时原子创建 `/data/.juju-secrets`（权限 600，随数据卷持久化），后续启动原样读取，重装/升级不换钥。Docker / Compose / fnOS 各部署方式行为一致。
+- **DB_PATH 显式化**：fnOS compose 显式设置 `DB_PATH=/data/yuvomi.db`，避免未设置时数据库落到容器层 `/app/yuvomi.db`（升级即丢数据）。
+
 ## [0.0.27] - 2026-10-17
 
 > 影音库元数据补齐、家庭角色扩展、版本状态提示修复、联系人批量导出。

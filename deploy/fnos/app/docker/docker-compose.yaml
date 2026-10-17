@@ -1,15 +1,20 @@
 services:
   juju:
-    image: daiqiongzhao/juju:0.0.27
+    image: daiqiongzhao/juju:0.0.28
     container_name: juju
     restart: unless-stopped
     ports:
       # 宿主机端口来自安装向导（wizard_port），容器内固定 3000
       - "${wizard_port}:3000"
-    env_file:
-      - /var/apps/juju/etc/juju.env
+    environment:
+      # 生产模式；DB_PATH 必须显式指向数据卷——不设置时 App-Default 是
+      # /app/yuvomi.db（容器层，升级即丢数据）
+      - NODE_ENV=production
+      - DB_PATH=/data/yuvomi.db
     volumes:
-      # 数据库与上传文件：飞牛运行时数据目录（TRIM_PKGVAR，升级保留/卸载可选清除）
+      # 数据库与上传文件：飞牛运行时数据目录（TRIM_PKGVAR，升级保留/卸载可选清除）。
+      # 首次启动时容器自动生成 /data/.juju-secrets（权限 600，勿删勿改——
+      # 丢了它已加密的数据无法解密）。
       - "${TRIM_PKGVAR}/data:/data"
       # 每日自动备份（保留最近 7 份）
       - "${TRIM_PKGVAR}/backups:/backups"

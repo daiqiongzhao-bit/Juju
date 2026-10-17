@@ -1,7 +1,8 @@
 #!/bin/bash
 
 ### 卸载后执行：默认保留数据；仅当用户在卸载向导选择"删除数据"时才清理。
-### 清理范围：TRIM_PKGVAR 下的 data/backups 子目录与 etc 中的密钥。
+### 清理范围：TRIM_PKGVAR 下的 data/backups 子目录（密钥文件 .juju-secrets
+### 就在 data 里，随之一并清除，无需单独处理）。
 ### 绝不删除 TRIM_PKGVAR 本身。幂等：重复执行安全。
 
 set -u
@@ -9,14 +10,10 @@ set -u
 if [ "${wizard_data_choice:-keep}" = "delete" ]; then
   DATADIR="${TRIM_PKGVAR}/data"
   BACKUPDIR="${TRIM_PKGVAR}/backups"
-  ETCDIR="${TRIM_PKGETC}"
 
-  # 目录存在性校验后清理
+  # 目录存在性校验后清理（含密钥文件 /data/.juju-secrets）
   [ -d "$DATADIR" ] && rm -rf "$DATADIR"
   [ -d "$BACKUPDIR" ] && rm -rf "$BACKUPDIR"
-
-  # 密钥文件
-  rm -f "$ETCDIR/juju.env"
 fi
 
 exit 0
