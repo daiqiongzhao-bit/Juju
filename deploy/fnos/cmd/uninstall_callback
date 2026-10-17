@@ -1,0 +1,14 @@
+#!/bin/bash
+
+### 卸载后执行：默认保留数据；仅当用户在卸载向导选择"删除数据"时才清理。
+### 幂等：重复执行安全（rm -rf 对不存在的路径无操作）。
+
+set -u
+
+if [ "${wizard_data_choice:-keep}" = "delete" ]; then
+  rm -f /var/apps/Juju/etc/juju.env
+  rm -rf /var/apps/Juju/shares/Juju/data
+  rm -rf /var/apps/Juju/shares/Juju/backups
+fi
+
+exit 0

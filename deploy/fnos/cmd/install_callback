@@ -1,0 +1,40 @@
+#!/bin/bash
+
+### 安装后执行：写入 compose 端口 .env 与 Juju 应用密钥 env。
+### 幂等：密钥仅在首次生成，重装/升级不覆盖（否则数据库将无法解密）。
+
+set -u
+
+APPDEST="${TRIM_APPDEST}"
+ETCDIR="${TRIM_PKGETC}"
+
+# ---- 端口（安装向导收集；缺失或非法时回落 3000）----
+PORT_VALUE="${wizard_port:-3000}"
+case "$PORT_VALUE" in
+  ''|*[!0-9]*) PORT_VALUE=3000 ;;
+esac
+
+# compose 工作目录 .env：为 docker-compose.yaml 的 ${wizard_port} 占位提供值
+cat > "$APPDEST/docker/.env" <<EOF
+wizard_port=$PORT_VALUE
+EOF
+chmod 600 "$APPDEST/docker/.env"
+
+# ---- 应用密钥（仅首次生成）----
+if [ ! -f "$ETCDIR/juju.env" ]; then
+  mkdir -p "$ETCDIR"
+  cat > "$ETCDIR/juju.env" <<EOF
+NODE_ENV=production
+PORT=3000
+DB_PATH=/data/yuvomi.db
+BACKUP_DIR=/backups
+DB_ENCRYPTION_KEY=$(openssl rand -hex 32)
+JUJU_SM4_KEY=$(openssl rand -hex 16)
+SESSION_SECRET=$(openssl rand -hex 32)
+SESSION_SECURE=false
+TRUST_PROXY=loopback
+EOF
+  chmod 600 "$ETCDIR/juju.env"
+fi
+
+exit 0

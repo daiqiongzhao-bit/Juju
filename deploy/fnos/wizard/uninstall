@@ -1,0 +1,23 @@
+[
+  {
+    "stepTitle": "卸载选项",
+    "items": [
+      {
+        "type": "radio",
+        "field": "wizard_data_choice",
+        "label": "应用数据处理方式",
+        "initValue": "keep",
+        "options": [
+          {
+            "label": "保留数据（推荐，重装可恢复）",
+            "value": "keep"
+          },
+          {
+            "label": "删除数据（数据库、上传文件、备份，不可恢复）",
+            "value": "delete"
+          }
+        ]
+      }
+    ]
+  }
+]

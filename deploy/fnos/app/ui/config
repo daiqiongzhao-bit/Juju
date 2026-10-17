@@ -1,0 +1,13 @@
+{
+    ".url": {
+        "Juju.Application": {
+            "title": "Juju 家庭管家",
+            "icon": "images/icon_{0}.png",
+            "type": "url",
+            "protocol": "http",
+            "port": "${wizard_port}",
+            "url": "/",
+            "allUsers": true
+        }
+    }
+}

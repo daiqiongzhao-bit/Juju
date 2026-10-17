@@ -1,0 +1,15 @@
+appname               = Juju
+version               = 0.0.27
+display_name          = Juju 家庭管家
+desc                  = 自托管家庭事务中心：日历、任务、购物清单、餐食计划、预算记账、家庭记忆时间线、影音库与联系人管理。数据全部留在自己的 NAS，无需订阅。<br/><br/>Self-hosted family hub: calendar, tasks, shopping, meal planning, budget, family memories, media library and contacts. All data stays on your NAS.
+platform              = x86
+source                = thirdparty
+maintainer            = daiqiongzhao
+maintainer_url        = https://github.com/daiqiongzhao-bit/Juju
+service_port          = 3000
+checkport             = false
+ctl_stop              = true
+desktop_uidir         = ui
+desktop_applaunchname = Juju.Application
+install_type          =
+changelog             = v0.0.27：新增妻子/丈夫家庭角色、联系人批量导出、影音详情简介与完结状态、版本更新提示。

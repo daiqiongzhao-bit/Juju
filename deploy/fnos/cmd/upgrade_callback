@@ -1,0 +1,37 @@
+#!/bin/bash
+
+### 升级后执行：补齐旧版本可能缺失的配置文件。
+### 幂等：已存在的密钥与端口一律不动。
+
+set -u
+
+APPDEST="${TRIM_APPDEST}"
+ETCDIR="${TRIM_PKGETC}"
+
+PORT_VALUE="${wizard_port:-3000}"
+case "$PORT_VALUE" in
+  ''|*[!0-9]*) PORT_VALUE=3000 ;;
+esac
+
+if [ ! -f "$APPDEST/docker/.env" ]; then
+  echo "wizard_port=$PORT_VALUE" > "$APPDEST/docker/.env"
+  chmod 600 "$APPDEST/docker/.env"
+fi
+
+if [ ! -f "$ETCDIR/juju.env" ]; then
+  mkdir -p "$ETCDIR"
+  cat > "$ETCDIR/juju.env" <<EOF
+NODE_ENV=production
+PORT=3000
+DB_PATH=/data/yuvomi.db
+BACKUP_DIR=/backups
+DB_ENCRYPTION_KEY=$(openssl rand -hex 32)
+JUJU_SM4_KEY=$(openssl rand -hex 16)
+SESSION_SECRET=$(openssl rand -hex 32)
+SESSION_SECURE=false
+TRUST_PROXY=loopback
+EOF
+  chmod 600 "$ETCDIR/juju.env"
+fi
+
+exit 0
