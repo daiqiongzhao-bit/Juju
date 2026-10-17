@@ -53,7 +53,8 @@ deploy/fnos/
    ```
 
 4. **分发**（二选一）：
-   - 上传 GitHub Release assets（随版本发布，附 `Juju.fpk`）；
+   - 上传 GitHub Release assets（随版本发布，附 `Juju.fpk`）——
+     v0.0.27 安装包：<https://github.com/daiqiongzhao-bit/Juju/releases/download/v0.0.27/Juju.fpk>；
    - 登录 [飞牛开发者中心](https://developer.fnnas.com/) 提交上架
      （需先注册并通过开发者认证，账号操作只能由本人完成）。
 
