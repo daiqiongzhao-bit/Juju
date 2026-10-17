@@ -121,3 +121,6 @@ DEV_LOG.md
 scripts-tmp/
 test/
 tests/
+
+# fnOS FPK build artifacts (built by fnpack, distributed via GitHub Release assets)
+deploy/fnos/*.fpk
