@@ -275,7 +275,25 @@ router.get('/img', async (req, res) => {
     } catch {
       return res.status(400).json({ error: 'Ungültige Bild-URL', code: 400 });
     }
-    if (target.protocol !== 'https:' || !isAllowedImgHost(target.hostname)) {
+    // TMDB-Bilder über den konfigurierten Proxy holen, falls image.tmdb.org
+    // im Server-Netz nicht erreichbar ist (z. B. CN / eingeschränktes LAN).
+    // Der Proxy-URL enthält für die API ein "/3" – für Bilder wird es entfernt,
+    // weil die Proxy-Route "/t/p/*" bereits das "/t/p" im Pfad mitführt.
+    const tmdbProxy = (getConfig().tmdb_proxy_url || '')
+      .trim()
+      .replace(/\/3\/?$/, '')
+      .replace(/\/$/, '');
+    if (tmdbProxy && target.hostname === 'image.tmdb.org') {
+      target = new URL(target.href.replace(/^https:\/\/image\.tmdb\.org/, tmdbProxy));
+    }
+    const allowedImgHost = (h) => {
+      if (isAllowedImgHost(h)) return true;
+      if (tmdbProxy) {
+        try { if (new URL(tmdbProxy).hostname === h) return true; } catch { /* ignore */ }
+      }
+      return false;
+    };
+    if (target.protocol !== 'https:' || !allowedImgHost(target.hostname)) {
       return res.status(400).json({ error: 'Host nicht erlaubt', code: 400 });
     }
     const ctrl = new AbortController();
