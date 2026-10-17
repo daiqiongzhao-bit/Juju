@@ -10,5 +10,6 @@ checkport             = false
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = juju.Application
+disable_authorization_path = true
 install_type          =
 changelog             = v0.0.27：新增妻子/丈夫家庭角色、联系人批量导出、影音详情简介与完结状态、版本更新提示。

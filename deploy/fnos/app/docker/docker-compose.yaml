@@ -2,7 +2,7 @@ services:
   juju:
     image: daiqiongzhao/juju:0.0.27
     container_name: juju
-    restart: always
+    restart: unless-stopped
     ports:
       # 宿主机端口来自安装向导（wizard_port），容器内固定 3000
       - "${wizard_port}:3000"

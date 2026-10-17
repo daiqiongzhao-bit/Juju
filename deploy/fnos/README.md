@@ -68,12 +68,14 @@ deploy/fnos/
    ```bash
    # fnpack 工具（飞牛官方，需 Linux x86_64）
    # 下载：https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64
-   fnpack build          # 在 deploy/fnos/ 目录执行，产出 juju.fpk（文件名取自 appname）
+   fnpack build          # 在 deploy/fnos/ 目录执行，产物名为 <appname>.fpk，即 juju.fpk
+   # 发布前重命名为 juju-<版本>.fpk（如 juju-0.0.27.fpk）——带版本号可避免
+   # 手机/NAS 缓存旧包导致重复安装失败（已踩坑）
    ```
 
 4. **分发**（二选一）：
    - 上传 GitHub Release assets（随版本发布，附 `juju.fpk`）——
-     v0.0.27 安装包：<https://github.com/daiqiongzhao-bit/Juju/releases/download/v0.0.27/juju.fpk>；
+     v0.0.27 安装包：<https://github.com/daiqiongzhao-bit/Juju/releases/download/v0.0.27/juju-0.0.27.fpk>；
    - 登录 [飞牛开发者中心](https://developer.fnnas.com/) 提交上架
      （需先注册并通过开发者认证，账号操作只能由本人完成）。
 
