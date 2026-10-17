@@ -332,7 +332,13 @@ export async function render(container, { user } = {}) {
     body.innerHTML = `
       <h3>${esc(item.title)}</h3>
       <div class="mk-field"><label>${esc(t('media.cover'))}</label>${
-      item.cover_url ? `<img class="mk-detail-cover" src="${esc(coverSrc(item.cover_url))}">` : '—'
+      item.cover_url
+        ? `<img class="mk-detail-cover" src="${esc(coverSrc(item.cover_url))}">`
+        : `<div class="mk-cover-missing"><span>—</span>${
+            item.media_type === 'movie' || item.media_type === 'tv'
+              ? ` <button class="mk-btn" id="d-refetch" type="button">${esc(t('media.refetchCover') || '自动补封面')}</button>`
+              : ''
+          }</div>`
     }</div>
       <div class="mk-field"><label>${esc(t('media.status.label'))}</label>
         <select id="d-status">${STATUSES.map(
@@ -359,6 +365,27 @@ export async function render(container, { user } = {}) {
       },
     });
     wireStars(body.querySelector('#d-stars'));
+    const refetchBtn = body.querySelector('#d-refetch');
+    if (refetchBtn) {
+      refetchBtn.addEventListener('click', async () => {
+        refetchBtn.disabled = true;
+        refetchBtn.textContent = t('media.refetching') || '搜索中…';
+        try {
+          const upd = (await api.post('/media/' + id + '/refresh-cover')).data;
+          if (upd?.cover_url) {
+            const field = refetchBtn.closest('.mk-field');
+            field.innerHTML = `<label>${esc(t('media.cover'))}</label><img class="mk-detail-cover" src="${esc(coverSrc(upd.cover_url))}">`;
+            load();
+          } else {
+            throw new Error('no cover');
+          }
+        } catch {
+          window.yuvomi?.showToast?.(t('media.refetchFailed') || '未找到匹配的封面', 'danger');
+          refetchBtn.disabled = false;
+          refetchBtn.textContent = t('media.refetchCover') || '自动补封面';
+        }
+      });
+    }
     let rating = item.rating || 0;
     body.querySelector('#d-stars').addEventListener('click', (e) => {
       if (e.target.dataset.v) rating = parseInt(e.target.dataset.v, 10);

@@ -698,6 +698,45 @@ router.put('/:id', (req, res) => {
   }
 });
 
+// POST /api/v1/media/:id/refresh-cover  -> Titel erneut bei TMDB suchen und
+// fehlende cover_url/metadata nachziehen (für Alt-Einträge, die ohne Cover
+// angelegt wurden, weil TMDB damals nicht erreichbar war)
+router.post('/:id/refresh-cover', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const item = db.get().prepare('SELECT * FROM media_item WHERE id = ?').get(id);
+    if (!item) return res.status(404).json({ error: 'Eintrag nicht gefunden', code: 404 });
+    if (item.creator_uid !== uid(req) && !isAdmin(req)) {
+      return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    }
+    if (item.media_type !== 'movie' && item.media_type !== 'tv') {
+      return res.status(400).json({ error: 'Nur Film/Serie (TMDB)', code: 400 });
+    }
+    const cfg = getConfig();
+    const results = await searchTmdb(item.title, { apiKey: cfg.tmdb_api_key, proxyUrl: cfg.tmdb_proxy_url });
+    // bevorzugt: exakter Titeltreffer mit Poster, sonst erster Treffer mit Poster
+    const norm = (s) => (s || '').toLowerCase().replace(/[\s:：·''""""\-–—()（）]+/g, '');
+    const hit =
+      results.find((r) => r.posterUrl && norm(r.title) === norm(item.title)) ||
+      results.find((r) => r.posterUrl);
+    if (!hit) return res.status(404).json({ error: 'Kein Treffer mit Cover', code: 404 });
+    const meta = { externalId: hit.externalId, kind: hit.kind, originalTitle: hit.originalTitle, releaseDate: hit.releaseDate, overview: hit.overview, rating: hit.rating };
+    db.get()
+      .prepare(
+        `UPDATE media_item SET
+           cover_url     = ?,
+           metadata_json = COALESCE(metadata_json, ?),
+           updated_at    = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE id = ?`
+      )
+      .run(hit.posterUrl, JSON.stringify(meta), id);
+    res.json({ data: getItem(id) });
+  } catch (err) {
+    log.error('POST /:id/refresh-cover', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
 // POST /api/v1/media/batch-delete  { ids: number[] }  (MUSS vor /:id stehen,
 // sonst matcht der generische /:id-Handler "batch-delete" und antwortet mit 404)
 // Jede ID wird einzeln auf Existenz + Besitzer-/Admin-Recht geprüft; nicht
