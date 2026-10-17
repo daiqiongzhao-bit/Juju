@@ -2,6 +2,14 @@ import { t } from '/i18n.js';
 import { api } from '/api.js';
 import { confirmModal } from '/components/modal.js';
 
+// UTC-Zeitstempel (…Z) in lokale Zeitzone formatieren, z.B. "2026/10/17 12:26"
+function fmtLocalDateTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 /**
  * Blatt: Medien-Metadaten (影视书库数据源)
  * Zentrale Konfiguration der externen Anreicherung für die Medienbibliothek:
@@ -120,7 +128,7 @@ function renderPage(container, cfg) {
 
         <div class="form-group">
           <span class="form-label">${t('settings.embyWebhookLastReceived')}</span>
-          <span class="settings-sync-info__status" id="emby-webhook-last">${cfg.embyWebhookLastReceived ? cfg.embyWebhookLastReceived : t('settings.embyWebhookLastReceivedNone')}</span>
+          <span class="settings-sync-info__status" id="emby-webhook-last">${cfg.embyWebhookLastReceived ? fmtLocalDateTime(cfg.embyWebhookLastReceived) : t('settings.embyWebhookLastReceivedNone')}</span>
         </div>
 
         <div id="emby-webhook-msg" class="form-hint" role="status" hidden></div>
