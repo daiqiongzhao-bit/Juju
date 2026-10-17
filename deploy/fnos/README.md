@@ -7,18 +7,37 @@
 `docker-compose.yml`），FPK 只是飞牛平台的安装壳：负责安装向导、数据目录、
 密钥初始化与生命周期管理。
 
+## 命名规范（重要）
+
+飞牛要求 `appname`（同时作为 Docker Compose 项目名）**只能由小写字母、数字、
+连字符、下划线组成且以字母或数字开头**。本项目统一使用 `juju`：
+
+| 位置 | 值 |
+| --- | --- |
+| `manifest` → `appname` | `juju` |
+| `manifest` → `desktop_applaunchname` | `juju.Application` |
+| `config/resource` → docker-project name | `juju` |
+| `config/resource` → data-share 名称 | `juju/data`、`juju/backups` |
+| `config/privilege` → username/groupname | `docker-juju` |
+| `app/ui/config` → 入口 ID | `juju.Application` |
+| compose → `container_name` | `juju` |
+| 安装后路径 | `/var/apps/juju/...` |
+
+`display_name`（"Juju 家庭管家"）是展示名，不受此限。历史上曾因 `appname=Juju`
+（大写 J）导致安装报错 `invalid project name "Juju"`，改名为 `juju` 后修复。
+
 ## 目录结构
 
 ```
 deploy/fnos/
-├── manifest                 # 应用元信息（名称/版本/平台/端口/changelog）
+├── manifest                 # 应用元信息（名称/版本/平台/changelog）
 ├── ICON.PNG / ICON_256.PNG  # 应用图标（应用中心展示）
 ├── app/
 │   ├── docker/
 │   │   └── docker-compose.yaml   # 容器定义（镜像 tag = 应用版本）
 │   └── ui/
 │       ├── config               # 桌面入口（URL 类型，端口 ${wizard_port}）
-│       └── images/icon_64.png   # 桌面入口小图标
+│       ├── images/icon_64.png   # 桌面入口小图标
 │       └── images/icon_256.png
 ├── cmd/                     # 生命周期脚本（飞牛平台调用，均要求幂等）
 │   ├── main                 # start/stop/status 入口
@@ -30,7 +49,7 @@ deploy/fnos/
 │   ├── resource            # docker-project + data-share 声明
 │   └── privilege           # 运行身份（run-as: package）
 └── wizard/
-    ├── install             # 安装向导：服务端口（默认 3000）
+    ├── install             # 安装向导：服务端口（默认 3000，1—65535）
     └── uninstall           # 卸载向导：保留/删除数据（默认保留）
 ```
 
@@ -49,35 +68,44 @@ deploy/fnos/
 
    ```bash
    # fnpack 工具（飞牛官方，需 Linux x86_64）
-   fnpack build          # 在 deploy/fnos/ 目录执行，产出 Juju.fpk
+   # 下载：https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64
+   fnpack build          # 在 deploy/fnos/ 目录执行，产出 juju.fpk（文件名取自 appname）
    ```
 
 4. **分发**（二选一）：
-   - 上传 GitHub Release assets（随版本发布，附 `Juju.fpk`）——
-     v0.0.27 安装包：<https://github.com/daiqiongzhao-bit/Juju/releases/download/v0.0.27/Juju.fpk>；
+   - 上传 GitHub Release assets（随版本发布，附 `juju.fpk`）——
+     v0.0.27 安装包：<https://github.com/daiqiongzhao-bit/Juju/releases/download/v0.0.27/juju.fpk>；
    - 登录 [飞牛开发者中心](https://developer.fnnas.com/) 提交上架
      （需先注册并通过开发者认证，账号操作只能由本人完成）。
 
 ## 安装后行为说明
 
-- **端口**：安装向导收集 `wizard_port`（默认 3000），写入
-  `docker/.env` 供 compose 的 `${wizard_port}` 占位使用。
+- **端口**：安装向导收集 `wizard_port`（默认 3000）。`install_callback`
+  把它写入 compose 同目录的 `.env`（供 `${wizard_port}` 占位），并持久化到
+  `etc/port`；升级时从 `etc/port` 恢复，**端口不会因升级被改回默认值**。
+- **数据目录**：`config/resource` 声明 `juju/data`、`juju/backups` 两个共享
+  （用户在飞牛文件管理器"应用文件"中可见）。官方文档明确共享目录的宿主机
+  路径拼写（`share/` vs `shares/`）随版本有差异，**不硬编码**：安装/升级
+  脚本把 `TRIM_DATA_SHARE_PATHS`（`:` 分隔、按名称后缀匹配、不依赖顺序）
+  解析成实际路径写入 `.env`，compose 通过 `${JUJU_DATA_DIR}` /
+  `${JUJU_BACKUP_DIR}` 挂载。解析失败时兜底 `TRIM_PKGVAR`（持久运行数据目录）。
 - **密钥**：首次安装由 `install_callback` 自动生成
   `DB_ENCRYPTION_KEY` / `JUJU_SM4_KEY` / `SESSION_SECRET`，保存在
-  `/var/apps/Juju/etc/juju.env`（权限 600）。**升级与重装不会覆盖**
-  ——覆盖会导致已加密数据库无法解密。重装前请先备份
-  `/var/apps/Juju/shares/Juju/data`。
-- **数据**：数据库与上传文件位于共享目录 `Juju/data`（用户在飞牛文件
-  管理器中可见）；每日自动备份在 `Juju/backups`，保留最近 7 份。
-- **卸载**：默认保留全部数据，仅当用户在卸载向导选择"删除数据"时才清理。
+  `/var/apps/juju/etc/juju.env`（权限 600）。**升级与重装不会覆盖**
+  ——覆盖会导致已加密数据库无法解密。升级即使 target 目录被整体替换，
+  `upgrade_init`/`upgrade_callback` 也会重建 `.env` 并保留原端口与数据路径。
+- **卸载**：默认保留全部数据，仅当用户在卸载向导选择"删除数据"时，才按
+  `.env` 记录的路径清除数据目录与密钥（`TRIM_PKGVAR` 本身不动）。
 
 ## 注意事项 / 已知限制
 
 - **平台架构**：当前 `platform = x86`，镜像仅推送 x86_64。飞牛 ARM
   机型无法安装，需为镜像补齐 `linux/arm64` 多架构（buildx
   `--platform linux/amd64,linux/arm64`）后再发 ARM 版 FPK。
-- **未经真机验证**：本包按 fnpack 1.2.3 模板与官方文档制作，尚未在真实
-  飞牛设备上测试。首次上架建议先通过"应用中心 → 手动安装"本地验证
-  安装/升级/卸载全流程，再提交商店审核。
+- **未经真机验证**：本包按 fnpack 1.2.3 模板与官方文档制作，生命周期脚本
+  已在本地模拟飞牛环境变量（TRIM_APPDEST/PKGETC/PKGVAR/DATA_SHARE_PATHS）
+  完成安装/重装/升级/卸载全流程测试与 `docker compose config` 校验，但尚未
+  在真实飞牛设备上运行。首次上架建议先通过"应用中心 → 手动安装"本地验证，
+  再提交商店审核。
 - 若飞牛后续调整 FPK 规范，以 `fnpack create` 生成的新模板为准，
   对照更新本目录的 `wizard/`、`config/`、`cmd/` 结构。

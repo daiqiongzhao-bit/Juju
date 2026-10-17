@@ -3,6 +3,6 @@
     {
         "run-as": "package"
     },
-    "username": "docker-Juju",
-    "groupname": "docker-Juju"
+    "username": "docker-juju",
+    "groupname": "docker-juju"
 }

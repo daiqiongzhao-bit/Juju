@@ -2,7 +2,7 @@
   "docker-project": {
     "projects": [
       {
-        "name": "Juju",
+        "name": "juju",
         "path": "docker"
       }
     ]
@@ -10,10 +10,10 @@
   "data-share": {
     "shares": [
       {
-        "name": "Juju/data"
+        "name": "juju/data"
       },
       {
-        "name": "Juju/backups"
+        "name": "juju/backups"
       }
     ]
   }

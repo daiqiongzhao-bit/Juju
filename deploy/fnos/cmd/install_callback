@@ -1,12 +1,17 @@
 #!/bin/bash
 
-### 安装后执行：写入 compose 端口 .env 与 Juju 应用密钥 env。
+### 安装后执行：写入 compose 变量文件 .env（端口 + 数据目录）与 Juju 应用密钥 env。
 ### 幂等：密钥仅在首次生成，重装/升级不覆盖（否则数据库将无法解密）。
+###
+### 数据目录解析：compose 中不硬编码共享目录路径（飞牛文档明确 share/shares
+### 拼写随版本有差异），而是在安装/升级时把 TRIM_DATA_SHARE_PATHS 解析成
+### 实际路径写入 .env。多个共享路径以 : 分隔，按名称后缀匹配，不依赖顺序。
 
 set -u
 
 APPDEST="${TRIM_APPDEST}"
 ETCDIR="${TRIM_PKGETC}"
+ENVFILE="$APPDEST/docker/.env"
 
 # ---- 端口（安装向导收集；缺失或非法时回落 3000）----
 PORT_VALUE="${wizard_port:-3000}"
@@ -14,11 +19,45 @@ case "$PORT_VALUE" in
   ''|*[!0-9]*) PORT_VALUE=3000 ;;
 esac
 
-# compose 工作目录 .env：为 docker-compose.yaml 的 ${wizard_port} 占位提供值
-cat > "$APPDEST/docker/.env" <<EOF
+# ---- 解析 data-share 实际路径 ----
+# 优先按后缀匹配 TRIM_DATA_SHARE_PATHS（权威、当前版本声明）；
+# 其次沿用已有 .env 的值；最后兜底 TRIM_PKGVAR（持久运行数据目录）。
+DATA_DIR=""
+BACKUP_DIR=""
+if [ -n "${TRIM_DATA_SHARE_PATHS:-}" ]; then
+  IFS=':' read -r -a _share_paths <<< "$TRIM_DATA_SHARE_PATHS"
+  for _p in "${_share_paths[@]}"; do
+    case "$_p" in
+      */data)    [ -n "$DATA_DIR" ]   || DATA_DIR="$_p" ;;
+      */backups) [ -n "$BACKUP_DIR" ] || BACKUP_DIR="$_p" ;;
+    esac
+  done
+fi
+if [ -z "$DATA_DIR" ] && [ -f "$ENVFILE" ]; then
+  _old_data="$(sed -n 's/^JUJU_DATA_DIR=//p' "$ENVFILE" | tail -n1)"
+  [ -n "$_old_data" ] && DATA_DIR="$_old_data"
+fi
+if [ -z "$BACKUP_DIR" ] && [ -f "$ENVFILE" ]; then
+  _old_bak="$(sed -n 's/^JUJU_BACKUP_DIR=//p' "$ENVFILE" | tail -n1)"
+  [ -n "$_old_bak" ] && BACKUP_DIR="$_old_bak"
+fi
+[ -n "$DATA_DIR" ]   || DATA_DIR="${TRIM_PKGVAR}/data"
+[ -n "$BACKUP_DIR" ] || BACKUP_DIR="${TRIM_PKGVAR}/backups"
+
+# ---- compose 变量文件（与 docker-compose.yaml 同目录，docker compose 自动读取）----
+mkdir -p "$APPDEST/docker"
+cat > "$ENVFILE" <<EOF
 wizard_port=$PORT_VALUE
+JUJU_DATA_DIR=$DATA_DIR
+JUJU_BACKUP_DIR=$BACKUP_DIR
 EOF
-chmod 600 "$APPDEST/docker/.env"
+chmod 600 "$ENVFILE"
+
+# 端口持久化到 etc（升级时无向导问答，从此处恢复，避免端口被改回默认值）
+echo "$PORT_VALUE" > "$ETCDIR/port" 2>/dev/null || true
+
+# 预建数据子目录（以包用户身份创建，保证属主/ACL 正确）
+mkdir -p "$DATA_DIR" "$BACKUP_DIR" 2>/dev/null || true
 
 # ---- 应用密钥（仅首次生成）----
 if [ ! -f "$ETCDIR/juju.env" ]; then

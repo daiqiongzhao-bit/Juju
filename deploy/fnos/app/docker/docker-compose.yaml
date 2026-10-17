@@ -1,17 +1,16 @@
-version: "3.8"
-
 services:
   juju:
     image: daiqiongzhao/juju:0.0.27
-    container_name: Juju
-    restart: unless-stopped
+    container_name: juju
+    restart: always
     ports:
       # 宿主机端口来自安装向导（wizard_port），容器内固定 3000
       - "${wizard_port}:3000"
     env_file:
-      - /var/apps/Juju/etc/juju.env
+      - /var/apps/juju/etc/juju.env
     volumes:
-      # 数据库与上传文件（飞牛自动创建共享目录，用户在文件管理器中可见）
-      - /var/apps/Juju/shares/Juju/data:/data
+      # 数据库与上传文件（data-share 声明的共享目录，用户在文件管理器中可见）
+      # 实际路径由 install/upgrade 脚本解析 TRIM_DATA_SHARE_PATHS 后写入同目录 .env
+      - "${JUJU_DATA_DIR}:/data"
       # 每日自动备份（保留最近 7 份）
-      - /var/apps/Juju/shares/Juju/backups:/backups
+      - "${JUJU_BACKUP_DIR}:/backups"

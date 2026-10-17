@@ -1,14 +1,58 @@
 #!/bin/bash
 
 ### 卸载后执行：默认保留数据；仅当用户在卸载向导选择"删除数据"时才清理。
+### 清理范围：compose .env 中记录的数据目录 → TRIM_DATA_SHARE_PATHS → TRIM_PKGVAR 兜底，
+### 以及 etc 下的密钥与端口文件。全部路径均做非空与目录存在校验，绝不碰 TRIM_PKGVAR 本身。
 ### 幂等：重复执行安全（rm -rf 对不存在的路径无操作）。
 
 set -u
 
 if [ "${wizard_data_choice:-keep}" = "delete" ]; then
-  rm -f /var/apps/Juju/etc/juju.env
-  rm -rf /var/apps/Juju/shares/Juju/data
-  rm -rf /var/apps/Juju/shares/Juju/backups
+  APPDEST="${TRIM_APPDEST:-}"
+  ETCDIR="${TRIM_PKGETC:-}"
+  ENVFILE=""
+  [ -n "$APPDEST" ] && ENVFILE="$APPDEST/docker/.env"
+
+  # 收集待删目录（去重）
+  declare -a _dirs=()
+  _add_dir() {
+    local d="$1"
+    [ -n "$d" ] && [ -d "$d" ] || return 0
+    local e
+    for e in "${_dirs[@]:-}"; do
+      [ "$e" = "$d" ] && return 0
+    done
+    _dirs+=("$d")
+  }
+
+  # 1) .env 中记录的实际数据目录（安装/升级时写入，最准确）
+  if [ -n "$ENVFILE" ] && [ -f "$ENVFILE" ]; then
+    _d="$(sed -n 's/^JUJU_DATA_DIR=//p' "$ENVFILE" | tail -n1)"
+    _b="$(sed -n 's/^JUJU_BACKUP_DIR=//p' "$ENVFILE" | tail -n1)"
+    _add_dir "$_d"
+    _add_dir "$_b"
+  fi
+
+  # 2) TRIM_DATA_SHARE_PATHS 中的共享目录
+  if [ -n "${TRIM_DATA_SHARE_PATHS:-}" ]; then
+    IFS=':' read -r -a _share_paths <<< "$TRIM_DATA_SHARE_PATHS"
+    for _p in "${_share_paths[@]}"; do
+      _add_dir "$_p"
+    done
+  fi
+
+  # 3) TRIM_PKGVAR 兜底（仅子目录，绝不删 PKGVAR 本身）
+  if [ -n "${TRIM_PKGVAR:-}" ]; then
+    _add_dir "${TRIM_PKGVAR}/data"
+    _add_dir "${TRIM_PKGVAR}/backups"
+  fi
+
+  for _d in "${_dirs[@]:-}"; do
+    [ -n "$_d" ] && rm -rf "$_d"
+  done
+
+  # 密钥与端口记录
+  [ -n "$ETCDIR" ] && rm -f "$ETCDIR/juju.env" "$ETCDIR/port"
 fi
 
 exit 0
