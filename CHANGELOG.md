@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 修复
+
+- **fnOS 启动崩溃「[DB] Wrong encryption key — /data/yuvomi.db could not be decrypted」**：`entrypoint.sh` 的密钥自生成（0.0.28 引入）此前只要文件缺失就无条件生成新密钥。一旦 `/data/.juju-secrets` 丢失而加密数据库还在（fnOS 卸载重装后数据卷残留 DB、手动迁移/同步漏掉点文件、恢复旧版裸 `.db` 备份、密钥文件权限/属主异常），新密钥会让实例**每次启动直接崩溃**，且原数据库因密钥被覆盖而永久不可读。现在：
+  - 生成新密钥前先探测 `DB_PATH`（含 legacy `oikos.db`）是否已是**加密** SQLite 文件（Klartext-Header 检测）；是则**拒绝启动**并输出完整恢复指引（从 /backups 的 `.zip` 备份包取回 `.juju-secrets`、Web 界面带密钥恢复、或显式弃库重建），磁盘上的数据库文件保持字节级原样。
+  - 传统 Docker/Compose/Podman 栈（密钥来自 `.env` 环境变量）：环境中已有的 `DB_ENCRYPTION_KEY` 现在被**原样持久化**进 `/data/.juju-secrets`，而不是被新生成的值覆盖——这条路径修复了镜像升级（≥0.0.28）时传统栈被静默 rekey 导致崩溃的第二个变体。
+  - `server/db.js init()` 的 "Wrong encryption key" 报错补充可操作的恢复提示（从最新备份包恢复密钥文件）。
+  - 测试：`test/entrypoint-secrets.test.sh`（11 个场景：全新安装、密钥文件复用、env 供钥持久化、env 部分供钥、加密 DB 防护、legacy oikos.db、明文 DB、空 DB、自定义 DB_PATH、0600 权限）+ `test/entrypoint-e2e-encrypted.sh`（真实镜像 Node 24 + 真实 SQLCipher 加密库端到端：防护生效、DB 字节级不变、密钥恢复后可读）。
+
 ## [0.0.31] - 2026-10-18
 
 > 通用数据导入 + AI 菜谱生成。

@@ -197,7 +197,8 @@ function init({ plaintextBackup = true } = {}) {
     } catch {
       throw new Error(
         `[DB] Wrong encryption key — ${DB_PATH} could not be decrypted. ` +
-        'Check DB_ENCRYPTION_KEY against the value used when the database was created.'
+        'Check DB_ENCRYPTION_KEY against the value used when the database was created. ' +
+        'If the secrets file (/data/.juju-secrets) was lost or replaced, restore it from the newest backup bundle — a fresh key cannot decrypt an existing database.'
       );
     }
   }
