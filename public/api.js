@@ -196,6 +196,18 @@ const auth = {
   deleteUser: (id) => api.delete(`/auth/users/${id}`),
   forgotPassword: (identifier) => api.post('/auth/forgot-password', { identifier }),
   resetPassword: (token, password) => api.post('/auth/reset-password', { token, password }),
+  // 2FA (TOTP): Einrichtung in den Einstellungen, zweiter Schritt im Login.
+  // /verify liefert nach Erfolg dieselbe Antwort wie /login (user + permissions).
+  twoFactorStatus: () => api.get('/auth/2fa/status'),
+  twoFactorSetup: (password) => api.post('/auth/2fa/setup', { password }),
+  twoFactorEnable: (code) => api.post('/auth/2fa/enable', { code }),
+  twoFactorDisable: (password, code) => api.post('/auth/2fa/disable', { password, code }),
+  twoFactorRegenerateCodes: (code) => api.post('/auth/2fa/recovery-codes', { code }),
+  twoFactorVerify: async (code) => {
+    const res = await api.post('/auth/2fa/verify', { code });
+    setPermissions(res?.permissions);
+    return res;
+  },
   // Einladungen: die ersten drei sind Admin-Routen, die letzten beiden öffentlich
   // (die /join-Seite ruft sie ohne Session auf).
   createInvite: (data) => api.post('/auth/invites', data),

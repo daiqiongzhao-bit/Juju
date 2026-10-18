@@ -2893,3 +2893,75 @@
    Dasselbe Muster steht in budget.css:86, calendar.css:596 und
    documents.css:140 - dort jeweils punktuell. */
 .settings-page [hidden] { display: none !important; }
+
+/* ── 2FA (TOTP) ──────────────────────────────────────────────────────────── */
+.settings-twofa-setup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4, 16px);
+  align-items: flex-start;
+  margin-bottom: var(--space-3, 12px);
+}
+
+.settings-twofa-qr {
+  background: #fff;
+  border-radius: var(--radius-md, 10px);
+  padding: 8px;
+  line-height: 0;
+  flex: 0 0 auto;
+}
+
+.settings-twofa-qr svg {
+  width: 168px;
+  height: 168px;
+}
+
+.settings-twofa-manual {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.settings-twofa-secret code,
+.settings-twofa-uri {
+  display: block;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.85rem;
+}
+
+.settings-twofa-details {
+  margin-top: 8px;
+}
+
+.settings-twofa-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+}
+
+.settings-twofa-state--on {
+  color: var(--color-success, #16a34a);
+}
+
+.settings-recovery-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-surface-alt, rgba(127, 127, 127, 0.12));
+}
+
+.settings-recovery-list code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* Checkbox im Sicherheitsbereich (Restore-Option „Schlüsseldatei mitrestoren") */
+.settings-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

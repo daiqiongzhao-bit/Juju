@@ -44,6 +44,7 @@ function renderPage(container) {
         <div class="settings-backup-card__body">
           <h3 class="settings-card__title">${t('settings.backupDownloadTitle')}</h3>
           <p class="form-hint">${t('settings.backupDownloadHint')}</p>
+          <p class="form-hint">${t('settings.backupDownloadSecretsHint')}</p>
           <div class="settings-form-actions">
             <a class="btn btn--primary" href="/api/v1/backup/database" download>${t('settings.backupDownloadButton')}</a>
           </div>
@@ -63,7 +64,15 @@ function renderPage(container) {
               <span>${t('settings.backupDropzoneTitle')}</span>
               <small>${t('settings.backupDropzoneHint')}</small>
             </label>
-            <input class="sr-only" type="file" id="backup-restore-file" accept=".db,.sqlite,.sqlite3,application/octet-stream" />
+            <input class="sr-only" type="file" id="backup-restore-file" accept=".db,.sqlite,.sqlite3,.zip,application/octet-stream" />
+            <p class="form-hint">${t('settings.backupSecretsWarning')}</p>
+            <div class="form-group">
+              <label class="form-label settings-checkbox-label" for="backup-restore-secrets">
+                <input type="checkbox" id="backup-restore-secrets" />
+                ${t('settings.backupRestoreSecretsLabel')}
+              </label>
+              <p class="form-hint">${t('settings.backupRestoreSecretsHint')}</p>
+            </div>
             <div class="settings-backup-file" id="backup-selected-file" hidden></div>
             <div id="backup-restore-error" class="form-error" role="alert" hidden></div>
             <div class="settings-form-actions">
@@ -71,6 +80,12 @@ function renderPage(container) {
             </div>
           </form>
         </div>
+      </div>
+
+      <div class="settings-card" id="backup-secrets-card">
+        <h3 class="settings-card__title">${t('settings.backupSecretsTitle')}</h3>
+        <p class="form-hint">${t('settings.backupSecretsHint')}</p>
+        <div class="settings-info-grid" id="backup-secrets-info"></div>
       </div>
 
       <div class="settings-card" id="backup-scheduler-card">
@@ -199,6 +214,8 @@ async function loadBackupSchedulerStatus(container) {
       failWithRetry(new Error(t('settings.loadError')));
       return;
     }
+
+    renderSecretsInfo(container, res.data?.secrets_file);
 
     const { enabled, schedule, keepCount, lastBackup } = scheduler;
 
@@ -465,6 +482,42 @@ function bindWebdavBackupEvents(container) {
   });
 }
 
+/**
+ * Zeigt, ob die Schlüsseldatei vorhanden ist — und damit, ob Sicherungen
+ * überhaupt wiederherstellbar sind. Ohne sie ist jede Datenbank-Sicherung
+ * nur die Hälfte wert.
+ */
+function renderSecretsInfo(container, secrets) {
+  const target = container.querySelector('#backup-secrets-info');
+  if (!target) return;
+
+  if (!secrets) {
+    target.replaceChildren(createRetryState({
+      message: t('settings.loadError'),
+      onRetry: () => loadBackupSchedulerStatus(container),
+    }));
+    return;
+  }
+
+  const rows = [
+    createInfoRow({ label: t('settings.backupSecretsFileLabel'), value: secrets.path || '—', code: true }),
+    createInfoRow({
+      label: t('settings.backupSecretsStatusLabel'),
+      value: secrets.available ? t('settings.backupSecretsPresent') : t('settings.backupSecretsMissing'),
+      tone: secrets.available ? 'success' : 'danger',
+    }),
+  ];
+
+  if (!secrets.available) {
+    const warning = document.createElement('p');
+    warning.className = 'form-hint';
+    warning.textContent = t('settings.backupSecretsMissingHint');
+    rows.push(warning);
+  }
+
+  target.replaceChildren(...rows);
+}
+
 function bindRestoreEvents(container) {
   const form = container.querySelector('#backup-restore-form');
   const fileInput = container.querySelector('#backup-restore-file');
@@ -529,7 +582,11 @@ function bindRestoreEvents(container) {
     restoreBtn.disabled = true;
     restoreBtn.textContent = t('settings.backupRestoring');
     try {
-      await api.rawPost('/backup/restore', file);
+      // Nur wenn der Admin es ausdrücklich will: die Schlüsseldatei aus dem
+      // Paket mit zurückspielen. Sie ersetzt die kryptographische Identität der
+      // Installation — nichts, was automatisch passieren darf.
+      const withSecrets = container.querySelector('#backup-restore-secrets')?.checked === true;
+      await api.rawPost(withSecrets ? '/backup/restore?restore_secrets=1' : '/backup/restore', file);
       window.yuvomi?.showToast(t('settings.backupRestoredToast'), 'success');
       window.location.reload();
     } catch (err) {

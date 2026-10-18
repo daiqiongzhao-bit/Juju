@@ -1,5 +1,5 @@
 appname               = juju
-version               = 0.0.28
+version               = 0.0.29
 display_name          = Juju 家庭管家
 desc                  = 自托管家庭事务中心：日历、任务、购物清单、餐食计划、预算记账、家庭记忆时间线、影音库与联系人管理。数据全部留在自己的 NAS，无需订阅。<br/><br/>Self-hosted family hub: calendar, tasks, shopping, meal planning, budget, family memories, media library and contacts. All data stays on your NAS.
 platform              = x86
@@ -12,4 +12,4 @@ desktop_uidir         = ui
 desktop_applaunchname = juju.Application
 disable_authorization_path = true
 install_type          =
-changelog             = v0.0.28：fnOS 安装修复——加密密钥改由容器首次启动自动生成（不再依赖安装回调写 env_file，规避 fnOS 安装期校验）；数据库路径显式指向数据卷。新增妻子/丈夫家庭角色、联系人批量导出、影音详情简介与完结状态、版本更新提示。
+changelog             = v0.0.29：新增 TOTP 双因素认证（兼容 Google Authenticator 等，含一次性恢复码，零新增依赖）；加密密钥文件纳入备份闭环，备份改为 .zip 包，恢复到全新实例时先校验再落地、失败完整回滚。新增妻子/丈夫家庭角色、联系人批量导出、影音详情简介与完结状态、版本更新提示。

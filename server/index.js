@@ -59,6 +59,7 @@ import remindersRouter from './routes/reminders.js';
 import searchRouter from './routes/search.js';
 import familyRouter from './routes/family.js';
 import backupRouter from './routes/backup.js';
+import twoFactorRouter from './routes/twofactor.js';
 import housekeepingRouter from './routes/housekeeping.js';
 import modulesRouter from './routes/modules.js';
 import pushRouter from './routes/push.js';
@@ -381,6 +382,7 @@ app.use('/api/v1', (req, res, next) => {
     const allowed = req.path.startsWith('/split-expenses')
       || req.path === '/auth/me'
       || req.path === '/auth/logout'
+      || req.path.startsWith('/auth/2fa')
       || req.path === '/version';
     if (allowed) return next();
     return res.status(403).json({ error: 'This account can only access Split expenses.', code: 403 });
@@ -446,6 +448,12 @@ app.use('/api/v1/documents/dms', dmsRouter);
 app.use('/api/v1/documents', documentsRouter);
 app.use('/api/v1/split-expenses', splitExpensesRouter);
 app.use('/api/v1/weather', weatherRouter);
+// 2FA (TOTP): Einrichtung in den Einstellungen + zweiter Schritt des Logins.
+// Eigener Router, damit server/auth.js nicht weiter aufbläht. Er hängt hier
+// und nicht direkt neben dem authRouter, weil er DIESELBE Kette braucht wie
+// alle anderen API-Router: requireAuth → Guest-Gate → CSRF. Weiter oben
+// stünde er vor requireAuth und wäre ungeschützt.
+app.use('/api/v1/auth/2fa', twoFactorRouter);
 app.use('/api/v1/preferences', preferencesRouter);
 app.use('/api/v1/reminders', remindersRouter);
 app.use('/api/v1/search', searchRouter);

@@ -28,7 +28,13 @@ import { encryptField, phoneHash } from './services/sm4.js';
 
 const log = createLogger('DB');
 
-const DB_KEY = process.env.DB_ENCRYPTION_KEY;
+// Der Schlüssel ist bewusst KEIN const-Snapshot mehr. Beim Restore eines
+// fremden Sicherungspakets wird er zur Laufzeit ausgetauscht (siehe
+// setEncryptionKey()). Als `const` ignorierte die Variable jede Änderung an
+// process.env — die Folge war ein mit dem ALTEN Schlüssel geöffnetes, fremd
+// verschlüsseltes Datenbankfile ("file is not a database") und nach dem
+// nächsten Neustart ein Container, der nicht mehr hochkam.
+let DB_KEY = process.env.DB_ENCRYPTION_KEY;
 
 // --------------------------------------------------------
 // Pfad-Auflösung (Legacy-Migration oikos.db → yuvomi.db)
@@ -218,6 +224,79 @@ function applyEncryptionKey(database) {
   // SQLCipher-Format (statt des Default-Ciphers ChaCha20).
   database.pragma("cipher = 'sqlcipher'");
   database.pragma(`key="x'${Buffer.from(DB_KEY, 'utf8').toString('hex')}'"`);
+}
+
+/**
+ * Verbindung schliessen und die Modulvariable leeren.
+ *
+ * Nur mit `db === null` öffnet init() überhaupt neu — deshalb ist das der
+ * gemeinsame erste Schritt von Restore und Schlüsselwechsel. Ein
+ * WAL-Checkpoint vorher verhindert, dass noch nicht geschriebene Seiten im
+ * -wal-File hängen bleiben, das anschliessend weggeworfen wird.
+ */
+function closeConnection() {
+  if (!db) return;
+  try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* best effort */ }
+  try { db.close(); } catch { /* best effort */ }
+  db = null;
+}
+
+/**
+ * Aktuell wirksamer Verschlüsselungs-Schlüssel.
+ * @returns {string|undefined}
+ */
+function getEncryptionKey() {
+  return DB_KEY;
+}
+
+/**
+ * Setzt den Verschlüsselungs-Schlüssel zur LAUFZEIT neu.
+ *
+ * Die Funktion schreibt ausschliesslich die Modulvariable — das Öffnen bleibt
+ * beim Aufrufer. Genau das braucht der Restore: er tauscht erst die Datei,
+ * dann init() (siehe restoreFromFile()).
+ *
+ * @param {string|null} newKey neuer Schlüssel (null/leer = unverschlüsselt)
+ * @returns {string|undefined} der vorherige Schlüssel — für den Rollback
+ */
+function setEncryptionKey(newKey) {
+  const previous = DB_KEY;
+  DB_KEY = newKey ?? '';
+  return previous;
+}
+
+/**
+ * Öffnet die Datenbankverbindung mit einem neuen Schlüssel neu — OHNE Neustart.
+ *
+ * Das ist der Grund, warum ein Restore heute keinen Container-Neustart mehr
+ * verlangt: unter `restart: on-failure` (Umbrel-Templates) hätte ein sauberes
+ * exit(0) den Container schlicht nicht wieder aufgenommen, die Instanz wäre
+ * also bis zum manuellen Eingriff mit dem alten Schlüssel im Speicher gelaufen.
+ *
+ * Schlägt das Öffnen fehl, wird der alte Schlüssel wiederhergestellt und mit
+ * ihm neu geöffnet. Der Prozess endet nie in einem Zustand "neuer Schlüssel,
+ * alte Datei" — das war der Defekt, der Instanzen dauerhaft unstartbar machte.
+ *
+ * @param {string|null} newKey
+ * @returns {string|undefined} der vorherige Schlüssel
+ * @throws {Error} wenn die Datei mit dem neuen Schlüssel nicht lesbar ist
+ */
+function reopenWithEncryptionKey(newKey) {
+  const previous = setEncryptionKey(newKey);
+  try {
+    closeConnection();
+    init({ plaintextBackup: false });
+    return previous;
+  } catch (err) {
+    setEncryptionKey(previous);
+    try {
+      closeConnection();
+      init({ plaintextBackup: false });
+    } catch (rollbackErr) {
+      log.error('Reopen with previous encryption key failed:', rollbackErr?.message || rollbackErr);
+    }
+    throw err;
+  }
 }
 
 function assertReadable(database) {
@@ -5428,6 +5507,17 @@ const MIGRATIONS = [
     `,
   },
 
+  {
+    version: 152,
+    description: '2FA/TOTP per Nutzer: totp_secret, totp_enabled, totp_enabled_at, totp_recovery_codes (SM4)',
+    up: `
+      ALTER TABLE users ADD COLUMN totp_secret TEXT;
+      ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE users ADD COLUMN totp_enabled_at TEXT;
+      ALTER TABLE users ADD COLUMN totp_recovery_codes TEXT;
+    `,
+  },
+
 ];
 
 /**
@@ -5622,18 +5712,30 @@ async function unlinkIfExists(filePath) {
   }
 }
 
-async function restoreFromFile(sourcePath) {
-  const backupVersion = validateBackupFile(sourcePath);
+async function restoreFromFile(sourcePath, { encryptionKey } = {}) {
+  // Schlüsselwechsel VOR der Validierung: stammt das Backup von einer anderen
+  // Installation, muss validateBackupFile() schon mit DEM Schlüssel prüfen,
+  // mit dem die Datei später auch geöffnet wird.
+  const keyProvided = encryptionKey !== undefined && encryptionKey !== DB_KEY;
+  const previousKey = keyProvided ? setEncryptionKey(encryptionKey) : null;
+  // Idempotent — darf mehrfach laufen und stellt immer den alten Schlüssel her.
+  const restoreKey = () => { if (keyProvided) setEncryptionKey(previousKey); };
+
+  let backupVersion = 0;
+  try {
+    backupVersion = validateBackupFile(sourcePath);
+  } catch (err) {
+    // Hier ist noch nichts angefasst: Verbindung läuft, Datei liegt unberührt.
+    // Einzige Nebenwirkung war der Schlüsselwechsel — den nehmen wir zurück.
+    restoreKey();
+    throw err;
+  }
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const rollbackPath = `${DB_PATH}.pre-restore-${timestamp}`;
   let rollbackCreated = false;
 
   try {
-    if (db) {
-      try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* best effort */ }
-      db.close();
-      db = null;
-    }
+    closeConnection();
 
     await fs.mkdir(path.dirname(DB_PATH), { recursive: true });
     try {
@@ -5661,12 +5763,14 @@ async function restoreFromFile(sourcePath) {
       rollbackPath: rollbackCreated ? rollbackPath : null,
     };
   } catch (err) {
+    // ZUERST den Schlüssel zurücknehmen. Die Rolle `.pre-restore-*` ist mit dem
+    // ALTEN Schlüssel verschlüsselt — liefe init() unten mit dem neuen, wäre
+    // auch der Rollback kaputt und die Instanz dauerhaft unstartbar. Genau das
+    // ist der Fehler, den dieser Block schliesst.
+    restoreKey();
     if (rollbackCreated) {
       try {
-        if (db) {
-          db.close();
-          db = null;
-        }
+        closeConnection();
         await unlinkIfExists(`${DB_PATH}-wal`);
         await unlinkIfExists(`${DB_PATH}-shm`);
         await fs.copyFile(rollbackPath, DB_PATH);
@@ -5727,4 +5831,4 @@ function _resetTestDatabase() {
 
 init();   // auto-initialise when module is first imported
 
-export { init, get, transaction, currentVersion, getPath, backupToFile, restoreFromFile, MIGRATIONS, reconcileCriticalSchema, _setTestDatabase, _resetTestDatabase };
+export { init, get, transaction, currentVersion, getPath, backupToFile, restoreFromFile, MIGRATIONS, reconcileCriticalSchema, _setTestDatabase, _resetTestDatabase, closeConnection, getEncryptionKey, setEncryptionKey, reopenWithEncryptionKey };

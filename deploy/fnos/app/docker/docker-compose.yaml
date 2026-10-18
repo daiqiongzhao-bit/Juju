@@ -1,6 +1,6 @@
 services:
   juju:
-    image: daiqiongzhao/juju:0.0.28
+    image: daiqiongzhao/juju:0.0.29
     container_name: juju
     restart: unless-stopped
     ports:
@@ -14,7 +14,7 @@ services:
     volumes:
       # 数据库与上传文件：飞牛运行时数据目录（TRIM_PKGVAR，升级保留/卸载可选清除）。
       # 首次启动时容器自动生成 /data/.juju-secrets（权限 600，勿删勿改——
-      # 丢了它已加密的数据无法解密）。
+      # 丢了它已加密的数据无法解密）。备份时该文件会一并打进备份包。
       - "${TRIM_PKGVAR}/data:/data"
-      # 每日自动备份（保留最近 7 份）
+      # 每日自动备份（保留最近 7 份，产物为 .zip：数据库 + 密钥文件）
       - "${TRIM_PKGVAR}/backups:/backups"

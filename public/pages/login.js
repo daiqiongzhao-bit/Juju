@@ -108,6 +108,35 @@ export async function render(container) {
             </button>
 
           </form>
+
+          <form id="twofa-form" class="auth-form" novalidate hidden>
+            <p class="auth-form__twofa-hint">${esc(t('login.twoFactorHint'))}</p>
+            <div class="form-group">
+              <label class="label" for="twofa-code">${esc(t('login.twoFactorCodeLabel'))}</label>
+              <input
+                class="input"
+                type="text"
+                id="twofa-code"
+                name="twofa-code"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                pattern="[0-9]*"
+                maxlength="16"
+                placeholder="000000"
+                required
+              />
+              <p class="form-hint">${esc(t('login.twoFactorRecoveryHint'))}</p>
+            </div>
+
+            <div class="form-error" id="twofa-error" role="alert" tabindex="-1" hidden></div>
+
+            <button type="submit" class="btn btn--primary auth-form__submit" id="twofa-btn">
+              <span class="twofa-btn__label">${esc(t('login.twoFactorSubmit'))}</span>
+            </button>
+            <button type="button" class="btn btn--secondary auth-form__submit" id="twofa-cancel">
+              ${esc(t('login.twoFactorCancel'))}
+            </button>
+          </form>
         </section>
         <p class="auth-bottom-tagline" id="auth-version"></p>
       </div>
@@ -191,6 +220,63 @@ export async function render(container) {
       if (versionEl) versionEl.textContent = t('login.tagline');
     });
 
+  // ── Zweiter Faktor (2FA/TOTP) ───────────────────────────────────────────
+  // Das Passwort war schon erfolgreich; jetzt fehlt nur noch der Code aus der
+  // Authenticator-App (oder ein Wiederherstellungscode).
+  const twofaForm = container.querySelector('#twofa-form');
+  const twofaError = container.querySelector('#twofa-error');
+  const twofaBtn = container.querySelector('#twofa-btn');
+  const twofaLabel = twofaBtn?.querySelector('.twofa-btn__label');
+  const twofaInput = container.querySelector('#twofa-code');
+
+  function showTwoFactorStep() {
+    if (!twofaForm) return;
+    form.hidden = true;
+    twofaForm.hidden = false;
+    twofaInput?.focus();
+  }
+
+  // Ein Reload während der 2FA-Abfrage soll nicht zurück zum Passwortformular
+  // springen: die „pending"-Session ist noch gültig, also direkt den Code fragen.
+  // Absichtlich ein nackter fetch — die api.js würde bei 401 ein globales
+  // „Sitzung abgelaufen"-Ereignis auslösen, das hier bedeutungslos ist.
+  try {
+    const pending = await fetch('/api/v1/auth/2fa/status', { credentials: 'same-origin', cache: 'no-store' });
+    if (pending.ok) {
+      const pendingData = await pending.json().catch(() => null);
+      if (pendingData?.data?.two_factor_pending) showTwoFactorStep();
+    }
+  } catch { /* nicht angemeldet — der Normalfall auf der Login-Seite */ }
+
+  container.querySelector('#twofa-cancel')?.addEventListener('click', async () => {
+    try { await auth.logout(); } catch { /* best effort */ }
+    window.yuvomi?.clearSession?.();
+    window.yuvomi?.navigate('/login');
+  });
+
+  twofaForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (twofaError) twofaError.hidden = true;
+    if (twofaBtn) twofaBtn.disabled = true;
+    if (twofaLabel) twofaLabel.textContent = t('login.twoFactorVerifying');
+    try {
+      const result = await auth.twoFactorVerify((twofaInput?.value || '').trim());
+      window.yuvomi.navigate('/', result.user);
+    } catch (err) {
+      let message = t('login.twoFactorInvalid');
+      if (err?.status === 429 || err?.data?.reason === 'rate_limited') message = t('login.tooManyAttempts');
+      else if (err?.data?.reason === 'not_pending') message = t('login.invalidCredentials');
+      if (twofaError) {
+        twofaError.textContent = message;
+        twofaError.hidden = false;
+        twofaError.focus();
+      }
+    } finally {
+      if (twofaBtn) twofaBtn.disabled = false;
+      if (twofaLabel) twofaLabel.textContent = t('login.twoFactorSubmit');
+    }
+  });
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorEl.hidden = true;
@@ -228,6 +314,12 @@ export async function render(container) {
 
     try {
       const result = await auth.login(username, password);
+      // 2FA: Passwort stimmte, der zweite Faktor fehlt. Kein Sprung ins Haus —
+      // die Session bleibt bis zur Bestätigung im Zustand „pending".
+      if (result?.two_factor_required) {
+        showTwoFactorStep();
+        return;
+      }
       window.yuvomi.navigate('/', result.user);
     } catch (err) {
       // Fehler-Ehrlichkeit: nur 401 heißt „falsche Zugangsdaten". 429 ist die

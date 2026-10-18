@@ -7,9 +7,9 @@
 import cron from 'node-cron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { backupToFile } from '../db.js';
 import { createLogger } from '../logger.js';
 import * as webdav from './backup-webdav.js';
+import * as backupBundle from './backup-bundle.js';
 
 const log = createLogger('BackupScheduler');
 
@@ -22,6 +22,8 @@ const BACKUP_ENABLED = process.env.BACKUP_ENABLED !== 'false'; // Default: enabl
 let scheduledTask = null;
 let lastBackup = null;
 let lastError = null;
+/** Ergebnis des letzten Paketlaufs (nur für Log/Status). */
+let lastBundle = null;
 
 // New backups use the `yuvomi-` prefix; pre-rebrand files use `oikos-`.
 // Both are still recognised for listing/rotation so legacy backups are not
@@ -29,10 +31,15 @@ let lastError = null;
 const BACKUP_FILE_PREFIX = 'yuvomi-backup-';
 const LEGACY_FILE_PREFIX = 'oikos-backup-';
 
-/** Whether a filename is a backup file (new or legacy naming). */
+/**
+ * Whether a filename is a backup file (new or legacy naming).
+ * `.zip` = Sicherungspaket (Datenbank + Schlüsseldatei, seit dem
+ * Schlüsseldatei-Kreislauf), `.db` = ältere nackte Datenbanksicherung. Beide
+ * bleiben in Rotation und Liste, damit Altbestände nicht verwaist liegen.
+ */
 function isBackupFile(name) {
   return (name.startsWith(BACKUP_FILE_PREFIX) || name.startsWith(LEGACY_FILE_PREFIX))
-    && name.endsWith('.db');
+    && (name.endsWith('.db') || name.endsWith('.zip'));
 }
 
 /**
@@ -40,7 +47,7 @@ function isBackupFile(name) {
  */
 function backupFileName() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return `${BACKUP_FILE_PREFIX}${stamp}.db`;
+  return `${BACKUP_FILE_PREFIX}${stamp}.zip`;
 }
 
 /**
@@ -134,8 +141,18 @@ export async function createLocalBackup() {
   const fileName = backupFileName();
   const filePath = path.join(BACKUP_DIR, fileName);
 
-  await backupToFile(filePath);
-  log.info(`Backup created: ${fileName}`);
+  // Sicherungspaket statt nackter .db: seit 0.0.28 steht der
+  // Datenbankschlüssel in /data/.juju-secrets, und ohne ihn ist die
+  // verschlüsselte Datenbank nach einem Neuaufsetzen unlesbar.
+  const built = await backupBundle.createBundle(filePath);
+  if (built.secretsIncluded) {
+    log.info(`Backup created: ${fileName} (incl. key file)`);
+  } else {
+    // Kein Grund zum Abbruch — ein Backup ohne Schlüssel ist besser als keins.
+    // Aber es ist ein lauter Hinweis, weil es im Ernstfall nicht reicht.
+    log.warn(`Backup created: ${fileName} WITHOUT key file — this backup alone cannot restore the database.`);
+  }
+  lastBundle = built;
 
   // Rotate old local backups
   await rotateBackups();
@@ -157,6 +174,7 @@ async function performBackup() {
       timestamp: new Date().toISOString(),
       file: fileName,
       success: true,
+      secretsIncluded: Boolean(lastBundle?.secretsIncluded),
     };
     lastError = null;
 
@@ -229,6 +247,7 @@ export function getStatus() {
     running: scheduledTask !== null,
     lastBackup,
     lastError,
+    lastBundleSecretsIncluded: lastBundle ? Boolean(lastBundle.secretsIncluded) : null,
     webdav: webdav.getStatus(),
   };
 }

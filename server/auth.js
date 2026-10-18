@@ -459,6 +459,22 @@ function requireAuth(req, res, next) {
   }
 
   if (req.session && req.session.userId) {
+    // 2FA-Zwischenzustand („pending"): das Passwort stimmte, der zweite Faktor
+    // fehlt noch. So eine Session ist NICHT vollwertig authentifiziert — sie
+    // darf nur die 2FA-Endpunkte erreichen (dazu /auth/me, um den Zustand zu
+    // erkennen, und /auth/logout, um abzubrechen). Sonst wäre 2FA Dekoration.
+    if (req.session.pending2fa) {
+      const target = String(req.originalUrl || req.url || '');
+      const allowedWhilePending =
+        target.includes('/auth/2fa') || target.includes('/auth/me') || target.includes('/auth/logout');
+      if (!allowedWhilePending) {
+        return res.status(401).json({
+          error: 'Two-factor verification required.',
+          code: 401,
+          two_factor_required: true,
+        });
+      }
+    }
     req.authMethod = 'session';
     req.authUserId = req.session.userId;
     req.user = { id: req.session.userId, role: req.session.role };
@@ -679,6 +695,21 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     try {
       await setupAuthSession(req, res, user);
+
+      // 2FA: Passwort stimmt, der zweite Faktor fehlt. Die Session wird schon
+      // angelegt (damit CSRF-Token und Rate-Limiting greifen), bleibt aber
+      // „pending" — die Freigaben dafür stehen in requireAuth weiter oben.
+      if (Number(user.totp_enabled) === 1) {
+        req.session.pending2fa = true;
+        req.session.pending2faSince = new Date().toISOString();
+        res.json({
+          two_factor_required: true,
+          user: { id: user.id, username: user.username },
+          csrfToken: req.session.csrfToken,
+        });
+        return;
+      }
+
       res.json({
         user: {
           id:           user.id,
@@ -1682,4 +1713,4 @@ setInterval(() => {
   try { defaultInviteService.cleanupExpired(); } catch { /* best effort */ }
 }, 60 * 60_000).unref();
 
-export { router, sessionMiddleware, requireAuth, requireAdmin, syncFamilyMemberArtifacts, normalizeAvatarData };
+export { router, sessionMiddleware, requireAuth, requireAdmin, syncFamilyMemberArtifacts, normalizeAvatarData, setupAuthSession };

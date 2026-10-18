@@ -6,6 +6,8 @@ import {
 } from '/i18n.js';
 import { esc } from '/utils/html.js';
 import { prefersInkText } from '/utils/contrast.js';
+// 2FA-Karte: eigenes Modul, damit diese Seite nicht weiter aufbläht.
+import { mountTwoFactor } from '/settings/twofactor.js';
 
 const MAX_AVATAR_DATA_LENGTH = 768 * 1024;
 
@@ -203,6 +205,16 @@ function renderPage(container, user, refreshFailed, accessNotice) {
     </section>
 
     <section class="settings-section">
+      <h2 class="settings-section__title">${t('settings.sectionSecurity')}</h2>
+
+      <div class="settings-card">
+        <h3 class="settings-card__title">${t('settings.twoFactorTitle')}</h3>
+        <p class="form-hint">${t('settings.twoFactorHint')}</p>
+        <div id="twofa-container"></div>
+      </div>
+    </section>
+
+    <section class="settings-section">
       <button class="btn btn--danger-outline settings-logout-btn" id="logout-btn">${t('settings.logout')}</button>
     </section>
   `);
@@ -346,6 +358,7 @@ export async function render(container, { user }) {
     container.querySelector('#account-retry')?.addEventListener('click', () => {
       render(container, { user: currentUser });
     });
+    mountTwoFactor(container.querySelector('#twofa-container'));
     window.lucide?.createIcons({ el: container });
   } catch (error) {
     container.replaceChildren();

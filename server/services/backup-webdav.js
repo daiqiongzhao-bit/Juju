@@ -27,12 +27,15 @@ const ENV_KEEP     = process.env.WEBDAV_BACKUP_KEEP;
 // orphaned (never rotated, invisible to the UI) after the rename.
 const BACKUP_FILE_PREFIX = 'yuvomi-backup-';
 const LEGACY_FILE_PREFIX = 'oikos-backup-';
-const BACKUP_FILE_SUFFIX = '.db';
+// Seit dem Schlüsseldatei-Kreislauf ist ein Sicherungspaket ein ZIP: es
+// enthält die Datenbank UND /data/.juju-secrets. Ältere nackte .db-Dateien
+// bleiben gültig, damit Altbestände im Remote-Ziel nicht verwaist liegen.
+const BACKUP_FILE_SUFFIXES = ['.db', '.zip'];
 
 /** Whether a basename is a backup file (new or legacy naming). */
 function isBackupFile(name) {
   return (name.startsWith(BACKUP_FILE_PREFIX) || name.startsWith(LEGACY_FILE_PREFIX))
-    && name.endsWith(BACKUP_FILE_SUFFIX);
+    && BACKUP_FILE_SUFFIXES.some((suffix) => name.endsWith(suffix));
 }
 
 // ─── DB-Helpers ───────────────────────────────────────────────────────────────
