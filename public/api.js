@@ -250,4 +250,26 @@ const mealie = {
   getStatus: () => api.get('/mealie/status'),
 };
 
-export { api, auth, email, notifications, mealie, ApiError };
+// --------------------------------------------------------
+// Allgemeiner Datenimport (CSV/JSON) – Admin-Werkzeug
+// --------------------------------------------------------
+
+const dataImport = {
+  modules: () => api.get('/import/modules'),
+  preview: (body) => api.post('/import/preview', body),
+  run: (body) => api.post('/import/run', body),
+  history: (limit = 20) => api.get(`/import/history?limit=${encodeURIComponent(String(limit))}`),
+};
+
+// --------------------------------------------------------
+// KI (Rezeptgenerierung) – Konfiguration Admin, Erzeugung fuer alle
+// --------------------------------------------------------
+
+const aiRecipe = {
+  getConfig: () => api.get('/ai/config'),
+  saveConfig: (cfg) => api.put('/ai/config', cfg),
+  test: () => api.post('/ai/test', {}),
+  generate: (body) => api.post('/ai/recipes/generate', body),
+};
+
+export { api, auth, email, notifications, mealie, dataImport, aiRecipe, ApiError };

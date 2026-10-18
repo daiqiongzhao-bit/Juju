@@ -18,6 +18,27 @@ const router = express.Router();
 // DMS-Vorschau-Proxy (server/routes/dms.js) - dort wie hier landet ein
 // Content-Type, den ein Drittsystem liefert, direkt im Response-Header.
 const THUMBNAIL_MIME = new Set(['image/webp', 'image/jpeg', 'image/png']);
+
+/**
+ * 份数 / 时长（v154）：只接受非负整数。
+ * 这两个字段是「锦上添花」的信息 —— AI 生成的菜谱或 CSV 导入都可能给出奇怪
+ * 的数值，因此越界一律收敛成 null，而不是拒绝整个保存请求。
+ * @param {unknown} value
+ * @param {number} max
+ * @returns {number|null}
+ */
+function optionalInt(value, max = 100000) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.min(Math.round(parsed), max);
+}
+
+/** 标签串（v154）：逗号分隔，过长截断；空串归 null。 */
+function optionalTags(value) {
+  return String(value ?? '').trim().slice(0, MAX_SHORT) || null;
+}
+
 function normalizeMime(value) { return String(value || '').split(';')[0].trim().toLowerCase(); }
 
 // Mirror-Rezepte (source: 'mealie') tragen mealie_account_id; native Rezepte
@@ -101,9 +122,11 @@ router.post('/', (req, res) => {
 
     const recipeId = db.transaction(() => {
       const result = db.get().prepare(`
-        INSERT INTO recipes (title, notes, recipe_url, meal_types, created_by)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(vTitle.value, vNotes.value, vRecipeUrl.value, mealTypes.join(','), req.authUserId || req.session.userId);
+        INSERT INTO recipes (title, notes, recipe_url, meal_types, servings, duration_minutes, tags, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(vTitle.value, vNotes.value, vRecipeUrl.value, mealTypes.join(','),
+        optionalInt(req.body.servings, 999), optionalInt(req.body.duration_minutes, 100000), optionalTags(req.body.tags),
+        req.authUserId || req.session.userId);
 
       const rid = Number(result.lastInsertRowid);
       const insertIng = db.get().prepare(`
@@ -155,9 +178,12 @@ router.put('/:id', (req, res) => {
     db.transaction(() => {
       db.get().prepare(`
         UPDATE recipes
-        SET title = ?, notes = ?, recipe_url = ?, meal_types = ?
+        SET title = ?, notes = ?, recipe_url = ?, meal_types = ?,
+            servings = ?, duration_minutes = ?, tags = ?
         WHERE id = ?
-      `).run(vTitle.value, vNotes.value, vRecipeUrl.value, mealTypes.join(','), id);
+      `).run(vTitle.value, vNotes.value, vRecipeUrl.value, mealTypes.join(','),
+        optionalInt(req.body.servings, 999), optionalInt(req.body.duration_minutes, 100000), optionalTags(req.body.tags),
+        id);
 
       db.get().prepare('DELETE FROM recipe_ingredients WHERE recipe_id = ?').run(id);
 

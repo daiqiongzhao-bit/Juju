@@ -3,8 +3,9 @@
  * Zweck: Gespeicherte Rezepte verwalten und in den Essensplan uebernehmen
  */
 
-import { api } from '/api.js';
+import { api, aiRecipe } from '/api.js';
 import { t, formatDate, formatDateInput, parseDateInput, isDateInputValid } from '/i18n.js';
+import { aiErrorKey } from '/utils/ai-errors.js';
 import { esc } from '/utils/html.js';
 import { openModal as openSharedModal, closeModal as closeSharedModal, advancedSection, wireBlurValidation, reportFieldError } from '/components/modal.js';
 import { DEFAULT_CATEGORY_NAME } from '/utils/shopping-categories.js';
@@ -199,10 +200,21 @@ export async function render(container) {
   // denen fast immer "Alle" aktiv ist. Nur sichtbar, sobald mindestens ein
   // gespiegeltes Rezept existiert (renderSourceFilter füllt/versteckt sie nach
   // dem Laden).
+  // head，grid 上 grid 的一个 Action-Slot：KI-Einstieg bleibt immer sichtbar,
+  // im Gegensatz zum Mealie-Quellfilter, der erst mit gespiegelten Rezepten
+  // auftaucht (siehe renderSourceFilter).
   const actions = document.createElement('div');
   actions.className = 'page-toolbar__actions';
-  actions.id = 'recipes-source-filter';
-  actions.hidden = true;
+  actions.insertAdjacentHTML('beforeend', `
+    <button type="button" class="btn btn--ghost btn--icon" id="recipes-ai-generate"
+            aria-label="${esc(t('ai.generateButton'))}" title="${esc(t('ai.generateButton'))}">
+      <i data-lucide="sparkles" class="icon-md" aria-hidden="true"></i>
+    </button>`);
+  const sourceFilterSlot = document.createElement('div');
+  sourceFilterSlot.className = 'recipes-source-filter-slot';
+  sourceFilterSlot.id = 'recipes-source-filter';
+  sourceFilterSlot.hidden = true;
+  actions.appendChild(sourceFilterSlot);
   toolbar.appendChild(actions);
 
   const list = document.createElement('div');
@@ -240,6 +252,8 @@ export async function render(container) {
   renderRecipeList();
 
   fab.addEventListener('click', () => openRecipeModal('create'));
+  _container?.querySelector('#recipes-ai-generate')
+    ?.addEventListener('click', openAiRecipeModal);
 
   // Handle im Modul halten: der Zurücksetzen-Pfad des Suchtreffer-Leerzustands
   // braucht `clear()`, nicht nur `input.value = ''` - sonst bliebe der
@@ -786,6 +800,212 @@ function openRecipeModal(mode, recipe = null) {
 
 function closeModal({ force = false } = {}) {
   closeSharedModal({ force });
+}
+
+// --------------------------------------------------------
+// KI-Rezeptgenerierung
+// --------------------------------------------------------
+
+/** 最后一次 AI 结果的完整数据：ingredients 不进 DOM，保存时再从这里取。 */
+let _aiDraft = null;
+
+/**
+ * „KI generieren"：需求 → 模型 → 结构化菜谱 → 预览 → 保存。
+ * 失败时不崩、不 Toast 一堆技术细节：错误码经 /utils/ai-errors.js 翻成一句人话。
+ */
+function openAiRecipeModal() {
+  openSharedModal({
+    title: t('ai.modalTitle'),
+    size: 'md',
+    content: `
+      <div class="form-group">
+        <label class="form-label" for="ai-prompt">${esc(t('ai.promptLabel'))}</label>
+        <textarea id="ai-prompt" class="form-input" rows="3"
+          placeholder="${esc(t('ai.promptPlaceholder'))}"></textarea>
+        <p class="form-hint">${esc(t('ai.promptHint'))}</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="ai-servings">${esc(t('ai.requestServings'))}</label>
+        <input id="ai-servings" class="form-input" type="number" min="1" max="99"
+          inputmode="numeric" placeholder="2" />
+      </div>
+      <div id="ai-error" role="alert"></div>
+      <div id="ai-result" hidden></div>
+      <div class="modal-panel__footer modal-panel__footer--plain">
+        <button class="btn btn--secondary" id="ai-cancel">${esc(t('common.cancel'))}</button>
+        <button class="btn btn--primary" id="ai-generate">${esc(t('ai.generate'))}</button>
+      </div>
+    `,
+    onSave(panel) {
+      panel.querySelector('#ai-cancel')?.addEventListener('click', () => closeModal({ force: true }));
+      panel.querySelector('#ai-generate')?.addEventListener('click', () => requestAiRecipe(panel));
+      if (window.lucide) window.lucide.createIcons({ el: panel });
+    },
+  });
+}
+
+/** 错误码 → 面向用户的句子，贴在输入框正上方而不是飘忽的 Toast。 */
+function showAiError(panel, code) {
+  const box = panel.querySelector('#ai-error');
+  if (!box) return;
+  box.replaceChildren();
+  box.insertAdjacentHTML('beforeend',
+    `<p class="settings-inline-error" role="alert">${esc(t(aiErrorKey(code)))}</p>`);
+}
+
+/** 调用服务端生成；结果分「结构化」与「纯文本降级」两种。 */
+async function requestAiRecipe(panel) {
+  const promptEl = panel.querySelector('#ai-prompt');
+  const prompt = promptEl?.value.trim() ?? '';
+  if (!prompt) {
+    reportFieldError(promptEl, t('ai.errorEmptyPrompt'));
+    return;
+  }
+  const servingsRaw = Number.parseInt(panel.querySelector('#ai-servings')?.value, 10);
+  const servings = Number.isFinite(servingsRaw) ? servingsRaw : null;
+
+  const btn = panel.querySelector('#ai-generate');
+  const result = panel.querySelector('#ai-result');
+  const errorBox = panel.querySelector('#ai-error');
+  errorBox?.replaceChildren();
+  btn.disabled = true;
+  btn.textContent = t('ai.generating');
+
+  try {
+    const res = await aiRecipe.generate({ prompt, servings });
+    const data = res?.data ?? {};
+    if (!data.ok) {
+      showAiError(panel, data.code);
+      return;
+    }
+    if (data.mode === 'json' && data.recipe) {
+      _aiDraft = data.recipe;
+      _aiDraft.prompt = prompt;
+      renderAiPreview(panel, data.recipe);
+    } else {
+      // 模型没按约定返回 JSON —— 原文给出来，用户可以照着手动建一条。
+      _aiDraft = { title: prompt.slice(0, 120), notes: data.rawText ?? '', ingredients: [], servings, durationMinutes: null, tags: [] };
+      renderAiTextPreview(panel, data.rawText ?? '', prompt);
+    }
+  } catch (err) {
+    showAiError(panel, 'unexpected');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('ai.generate');
+  }
+}
+
+/** 结构化结果的可编辑预览。 */
+function renderAiPreview(panel, recipe) {
+  const result = panel.querySelector('#ai-result');
+  if (!result) return;
+  const ingredients = (recipe.ingredients ?? [])
+    .map((ing) => `<li>${esc(ing.name)}${ing.quantity ? ` — ${esc(ing.quantity)}` : ''}</li>`)
+    .join('');
+
+  result.hidden = false;
+  result.insertAdjacentHTML('beforeend', `
+    <h3 class="modal-panel__heading">${esc(t('ai.previewTitle'))}</h3>
+    <div class="form-group">
+      <label class="form-label" for="ai-out-title">${esc(t('common.nameLabel'))}</label>
+      <input id="ai-out-title" class="form-input" type="text" value="${esc(recipe.title)}" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="ai-out-notes">${esc(t('recipes.notesLabel'))}</label>
+      <textarea id="ai-out-notes" class="form-input" rows="6">${esc(recipe.notes ?? '')}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="ai-out-servings">${esc(t('recipes.servingsLabel'))}</label>
+      <input id="ai-out-servings" class="form-input" type="number" min="1" max="99"
+        inputmode="numeric" value="${esc(String(recipe.servings ?? ''))}" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="ai-out-duration">${esc(t('recipes.durationLabel'))}</label>
+      <input id="ai-out-duration" class="form-input" type="number" min="0" max="100000"
+        inputmode="numeric" value="${esc(String(recipe.durationMinutes ?? ''))}" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="ai-out-tags">${esc(t('recipes.tagsLabel'))}</label>
+      <input id="ai-out-tags" class="form-input" type="text" value="${esc((recipe.tags ?? []).join(', '))}" />
+    </div>
+    <div class="form-group">
+      <span class="form-label">${esc(t('recipes.ingredientsLabel'))}</span>
+      <ul class="recipe-ai-ingredients">${ingredients || `<li class="form-hint">${esc(t('recipes.toShoppingNoIngredients'))}</li>`}</ul>
+    </div>
+    <div class="modal-panel__footer modal-panel__footer--plain">
+      <button class="btn btn--secondary" id="ai-out-discard">${esc(t('common.cancel'))}</button>
+      <button class="btn btn--primary" id="ai-out-save">${esc(t('recipes.addRecipe'))}</button>
+    </div>
+  `);
+
+  result.querySelector('#ai-out-discard')?.addEventListener('click', () => {
+    result.replaceChildren();
+    result.hidden = true;
+  });
+  result.querySelector('#ai-out-save')?.addEventListener('click', () => saveAiRecipe(panel, result));
+  if (window.lucide) window.lucide.createIcons({ el: result });
+}
+
+/** 纯文本降级结果：给出原文 + 一键存成菜谱（正文进备注）。 */
+function renderAiTextPreview(panel, rawText, prompt) {
+  const result = panel.querySelector('#ai-result');
+  if (!result) return;
+  result.hidden = false;
+  result.insertAdjacentHTML('beforeend', `
+    <h3 class="modal-panel__heading">${esc(t('ai.textFallbackTitle'))}</h3>
+    <p class="form-hint">${esc(t('ai.textFallbackHint'))}</p>
+    <pre class="recipe-ai-raw">${esc(rawText)}</pre>
+    <div class="modal-panel__footer modal-panel__footer--plain">
+      <button class="btn btn--secondary" id="ai-out-discard">${esc(t('common.cancel'))}</button>
+      <button class="btn btn--primary" id="ai-out-save">${esc(t('recipes.addRecipe'))}</button>
+    </div>
+  `);
+  result.querySelector('#ai-out-discard')?.addEventListener('click', () => {
+    result.replaceChildren();
+    result.hidden = true;
+  });
+  result.querySelector('#ai-out-save')?.addEventListener('click', () => saveAiRecipe(panel, result));
+}
+
+/** 把预览结果落库：存完直接刷新列表，用户可以马上在列表里继续编辑。 */
+async function saveAiRecipe(panel, resultEl) {
+  const draft = _aiDraft ?? {};
+  const readValue = (id) => panel.querySelector(id)?.value ?? resultEl.querySelector(id)?.value ?? '';
+  const title = String(readValue('#ai-out-title') ?? draft.title ?? '').trim()
+    || String(draft.title ?? '').trim();
+  if (!title) return;
+
+  const servingsRaw = Number.parseInt(String(readValue('#ai-out-servings')), 10);
+  const durationRaw = Number.parseInt(String(readValue('#ai-out-duration')), 10);
+  const tags = String(readValue('#ai-out-tags') ?? '')
+    .split(',').map((tag) => tag.trim()).filter(Boolean).join(',');
+
+  const saveBtn = resultEl.querySelector('#ai-out-save');
+  saveBtn.disabled = true;
+
+  try {
+    await api.post('/recipes', {
+      title,
+      notes: readValue('#ai-out-notes') || null,
+      recipe_url: null,
+      meal_types: RECIPE_MEAL_TYPE_KEYS,
+      ingredients: (draft.ingredients ?? []).map((ing) => ({
+        name: ing.name,
+        quantity: ing.quantity ?? null,
+        category: ing.category ?? DEFAULT_CATEGORY_NAME,
+      })),
+      servings: Number.isFinite(servingsRaw) ? servingsRaw : null,
+      duration_minutes: Number.isFinite(durationRaw) ? durationRaw : null,
+      tags: tags || null,
+    });
+    closeModal({ force: true });
+    await loadRecipes();
+    renderRecipeList();
+    window.yuvomi?.showToast(t('recipes.created'), 'success');
+  } catch (err) {
+    saveBtn.disabled = false;
+    showAiError(panel, 'unexpected');
+  }
 }
 
 async function saveRecipe(panel, mode, recipe) {

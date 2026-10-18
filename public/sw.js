@@ -236,6 +236,8 @@ const PAGE_MODULES = [
   '/settings/pages/admin-backup.js',
   '/settings/pages/admin-weather.js',
   '/settings/pages/admin-system.js',
+  '/settings/pages/admin-import.js',
+  '/settings/pages/admin-ai.js',
 ];
 
 // Routing-Nachschlag für den fetch-Handler: hält Precache-Liste und

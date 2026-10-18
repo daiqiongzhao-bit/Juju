@@ -2,7 +2,8 @@
  * 测试：数据库迁移（server/db.js 的 MIGRATIONS + init/迁移引擎）
  *
  * 覆盖：迁移编号连续无重复、结构完整、在临时库上从零跑到最新版本、
- *       2FA 相关列（v152）确实落地、完整性/外键检查通过、可重复冷启动。
+ *       2FA 相关列（v152）确实落地、批次三的新对象（v153-v155）存在、
+ *       完整性/外键检查通过、可重复冷启动。
  *
  * 环境：DB_PATH 指向 mkdtemp 生成的临时目录，JUJU_SM4_KEY 注入合法密钥，
  *       不设置 DB_ENCRYPTION_KEY（明文库跑迁移最快），结束后删除临时目录。
@@ -18,8 +19,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/** 期望的最新迁移版本（v0.0.29：2FA/TOTP 列）。 */
-const EXPECTED_LATEST = 152;
+/** 期望的最新迁移版本（v0.0.31 批次三：AI 配置 + 菜谱 AI 字段 + 导入表）。 */
+const EXPECTED_LATEST = 155;
 /** v152 落到 users 表上的四个列。 */
 const TOTP_COLUMNS = ['totp_secret', 'totp_enabled', 'totp_enabled_at', 'totp_recovery_codes'];
 
@@ -41,7 +42,7 @@ const savedEnv = {
 // 必须在 import('../server/db.js') 之前设置：db.js 在模块加载时就解析 DB_PATH。
 process.env.DB_PATH = dbFile;
 process.env.JUJU_SM4_KEY = '0123456789abcdef0123456789abcdef';
-process.env.LOG_LEVEL = 'error'; // 152 条迁移日志会淹没测试输出
+process.env.LOG_LEVEL = 'error'; // 150+ 条迁移日志会淹没测试输出
 delete process.env.DB_ENCRYPTION_KEY;
 
 /** 惰性加载 db 模块（模块级会自动 init 并跑迁移）。 */
@@ -73,7 +74,7 @@ test('迁移列表：编号从 1 连续、无重复、结构完整', { skip: DB_
   assert.equal(MIGRATIONS[MIGRATIONS.length - 1].version, EXPECTED_LATEST);
 });
 
-test('冷启动：空库一次跑到 v152，且 schema_migrations 记录齐全', { skip: DB_SKIP }, async () => {
+test('冷启动：空库一次跑到最新版本，且 schema_migrations 记录齐全', { skip: DB_SKIP }, async () => {
   const db = await loadDb();
 
   assert.equal(db.currentVersion(), EXPECTED_LATEST);
@@ -94,6 +95,34 @@ test('v152：users 表上的 2FA 四列确实存在', { skip: DB_SKIP }, async (
   }
 });
 
+test('v153-v155：批次三新增对象（ai_config / 菜谱 AI 字段 / 导入表）确实存在', { skip: DB_SKIP }, async () => {
+  const db = await loadDb();
+  const columns = (table) => db.get().prepare(`PRAGMA table_info(${table})`).all().map((row) => row.name);
+  const hasTable = (name) => db.get()
+    .prepare('SELECT name FROM sqlite_master WHERE type = ? AND name = ?')
+    .get('table', name) != null;
+
+  // v153：AI 提供方配置（密钥列存的是 SM4 密文）
+  assert.ok(hasTable('ai_config'), '缺少表 ai_config');
+  for (const column of ['provider', 'base_url', 'api_key', 'model', 'enabled']) {
+    assert.ok(columns('ai_config').includes(column), `ai_config 缺少列 ${column}`);
+  }
+  assert.equal(db.get().prepare('SELECT COUNT(*) AS n FROM ai_config').get().n, 1, 'ai_config 应有预置行');
+
+  // v154：菜谱的 AI 字段
+  for (const column of ['servings', 'duration_minutes', 'tags', 'ai_generated']) {
+    assert.ok(columns('recipes').includes(column), `recipes 缺少列 ${column}`);
+  }
+
+  // v155：导入批次 + 幂等指纹
+  assert.ok(hasTable('import_batches'), '缺少表 import_batches');
+  assert.ok(hasTable('import_row_map'), '缺少表 import_row_map');
+  const indexes = db.get()
+    .prepare('SELECT name FROM sqlite_master WHERE type = ? AND name = ?')
+    .get('index', 'idx_import_row_map_unique');
+  assert.ok(indexes, '缺少幂等唯一索引 idx_import_row_map_unique');
+});
+
 test('迁移结果：完整性检查与外键检查均通过', { skip: DB_SKIP }, async () => {
   const db = await loadDb();
 
@@ -104,7 +133,7 @@ test('迁移结果：完整性检查与外键检查均通过', { skip: DB_SKIP }
   assert.deepEqual(db.get().pragma('foreign_key_check'), []);
 });
 
-test('可重复性：删库后重新 init 仍能一次跑到 v152', { skip: DB_SKIP }, async () => {
+test('可重复性：删库后重新 init 仍能一次跑到最新版本', { skip: DB_SKIP }, async () => {
   const db = await loadDb();
 
   db.closeConnection();

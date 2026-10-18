@@ -983,8 +983,7 @@
         "selectAll": "Alle auswählen",
         "exportSelected": "Auswahl exportieren",
         "selectCount": "{{count}} ausgewählt",
-        "bulkDeletedToast": "{{count}} Kontakte gelöscht"
-    ,
+        "bulkDeletedToast": "{{count}} Kontakte gelöscht",
         "birthdayLunarLabel": "Lunarer Geburtstag",
         "birthdayLunarHint": "Automatisch aus dem Sonnengeburtstag berechnet, nur lesbar. Wird bei Änderung des Geburtstags neu berechnet.",
         "zodiacLabel": "Chinesisches Tierkreiszeichen",
@@ -996,7 +995,8 @@
         "priorityIntroHint": "Wenn aktiviert, erscheint ein ★-Abzeichen auf der Personen-Karte.",
         "priorityIntroOn": "★ Ja",
         "callThemLabel": "Ich nenne sie/ihn",
-        "callMeLabel": "Sie/er nennt mich"},
+        "callMeLabel": "Sie/er nennt mich"
+    },
     "relationships": {
         "subtitle": "Dein Netzwerk der Menschen — Verbindungen, gemeinsame Kontakte, Momente und Jahrestage.",
         "tabsLabel": "Beziehungsansichten",
@@ -1200,8 +1200,7 @@
         "tagsNew": "Neuer Tag",
         "tagsNewHint": "z. B. VIP, Uni-Freund",
         "today": "Heute",
-        "wechat": "WeChat"
-    ,
+        "wechat": "WeChat",
         "priorityIntroBadge": "★",
         "groupsButton": "Gruppen",
         "groupsTitle": "Gruppen",
@@ -1228,7 +1227,8 @@
         "constellationLabel": "Sternzeichen",
         "spouseNoteLabel": "Notiz für Angehörige",
         "priorityIntroLabel": "Bevorzugt vorstellen",
-        "enumUnset": "Nicht gesetzt"},
+        "enumUnset": "Nicht gesetzt"
+    },
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
         "calendarEventDescription": "{{title}} von {{name}} am {{date}}"
@@ -2597,7 +2597,11 @@
         "embyWebhookSecretSave": "Geheimnis speichern",
         "embyWebhookSecretSaved": "Geheimnis gespeichert",
         "embyWebhookLastReceived": "Zuletzt empfangen",
-        "embyWebhookLastReceivedNone": "Noch keine Ereignisse empfangen"
+        "embyWebhookLastReceivedNone": "Noch keine Ereignisse empfangen",
+        "pageImport": "Datenimport",
+        "pageImportDescription": "Aufgaben, Kontakte, Einkaufsartikel und Rezepte aus CSV oder JSON übernehmen.",
+        "pageAi": "KI",
+        "pageAiDescription": "OpenAI-kompatibles Modell für KI-Rezeptideen anbinden."
     },
     "login": {
         "tagline": "Willkommen zurück bei eurem Familienplaner.",
@@ -2820,7 +2824,10 @@
         "sourceMealie": "Mealie",
         "sourceNative": "Nativ",
         "sourceAll": "Alle",
-        "sourceFilterLabel": "Nach Quelle filtern"
+        "sourceFilterLabel": "Nach Quelle filtern",
+        "servingsLabel": "Portionen",
+        "durationLabel": "Minuten",
+        "tagsLabel": "Schlagworte"
     },
     "onboarding": {
         "step1Title": "Willkommen bei {{name}}",
@@ -4422,5 +4429,139 @@
         "folderErr": "Ordner konnte nicht gelesen werden",
         "folderListing": "Ordner wird gelesen …",
         "folderImported": "{{imported}} Bilder importiert ({{skipped}} uebersprungen)"
+    },
+    "import": {
+        "purposeHint": "Umzug von Notion, Feishu, Google Kalender oder einer anderen Familien-App? Export hochladen, Vorschau prüfen, Spalten zuordnen - dann importieren. Geparst wird auf deinem eigenen Server; nichts geht an Dritte.",
+        "module": {
+            "tasks": "Aufgaben",
+            "contacts": "Kontakte",
+            "shopping": "Einkauf",
+            "recipes": "Rezepte"
+        },
+        "file": "Datei",
+        "fileHint": "CSV oder JSON, bis 8 MB. UTF-8 - mit oder ohne BOM.",
+        "paste": "Oder Inhalt einfügen",
+        "pasteHint": "Für Exporte, die per Mail oder Chat kamen statt als Datei.",
+        "analyze": "Datei lesen",
+        "history": "Verlauf",
+        "previewTitle": "Vorschau",
+        "previewHint": "{{rows}} Zeilen in {{columns}} Spalten gefunden. Unten: die ersten Zeilen genau so, wie sie gelesen wurden.",
+        "previewTruncated": "Zeige {{count}} von {{total}} Zeilen. Importiert werden alle Zeilen, nur die Vorschau ist gekürzt.",
+        "mappingTitle": "Spaltenzuordnung",
+        "mappingHint": "Ordne jeder Spalte deiner Datei das Zielfeld zu. Leere Felder bleiben leer; fehlgeschlagene Zeilen werden am Ende aufgelistet, statt alle anderen zu blockieren.",
+        "missingRequired": "{{count}} Pflichtfeld(er) haben noch keine Spalte.",
+        "dryRun": "Trockenlauf",
+        "commit": "Importieren",
+        "dryRunDone": "Trockenlauf beendet - es wurde nichts geschrieben.",
+        "done": "Import beendet.",
+        "failed": "Der Import ist fehlgeschlagen. {{error}}",
+        "previewFailed": "Die Datei konnte nicht gelesen werden. {{error}}",
+        "loadModulesFailed": "Die Importziele konnten nicht geladen werden. {{error}}",
+        "noModules": "Es sind keine Importziele verfügbar.",
+        "errorNoSource": "Wähle zuerst eine Datei oder füge Inhalt ein.",
+        "errorEmptyFile": "Die Datei enthält keine Zeilen.",
+        "reportRows": "Gelesene Zeilen",
+        "reportCreated": "Angelegt",
+        "reportWouldCreate": "Würde anlegen",
+        "reportSkipped": "Übersprungen (bereits importiert)",
+        "reportFailed": "Fehlgeschlagen",
+        "failuresTitle": "Fehlgeschlagene Zeilen",
+        "rowLabel": "Zeile {{row}}",
+        "failuresTruncated": "...und {{count}} weitere.",
+        "historyTitle": "Letzte Importe",
+        "historyEmpty": "Es wurde noch nichts importiert.",
+        "historySummary": "{{created}} angelegt · {{skipped}} Duplikat · {{failed}} fehlgeschlagen (von {{total}})",
+        "pasted": "eingefügter Inhalt",
+        "hint": {
+            "tasks": "Eine Zeile = eine Aufgabe. Datumsformen: JJJJ-MM-TT, TT.MM.JJJJ und JJJJ/MM/TT.",
+            "contacts": "Telefonnummern und Adressen werden verschlüsselt gespeichert - genau wie direkt in der App angelegte Kontakte.",
+            "shopping": "Eine Zeile = ein Artikel. Noch nicht vorhandene Listen werden automatisch angelegt.",
+            "recipes": "Zutaten als \"Tomate|2 Stück|Gemüse\" schreiben; mehrere mit Semikolon trennen."
+        },
+        "field": {
+            "tasks": {
+                "title": "Titel",
+                "description": "Beschreibung",
+                "category": "Kategorie",
+                "priority": "Priorität",
+                "status": "Status",
+                "due_date": "Fällig am",
+                "due_time": "Fällig um"
+            },
+            "contacts": {
+                "name": "Name",
+                "category": "Kategorie",
+                "phone": "Telefon",
+                "email": "E-Mail",
+                "address": "Adresse",
+                "notes": "Notizen",
+                "birthday": "Geburtstag",
+                "organization": "Firma",
+                "job_title": "Position",
+                "nickname": "Spitzname"
+            },
+            "shopping": {
+                "list": "Liste",
+                "name": "Artikel",
+                "quantity": "Menge",
+                "category": "Kategorie",
+                "notes": "Notizen"
+            },
+            "recipes": {
+                "title": "Titel",
+                "notes": "Zubereitung",
+                "recipe_url": "Rezept-Link",
+                "meal_types": "Mahlzeiten",
+                "servings": "Portionen",
+                "duration_minutes": "Minuten",
+                "tags": "Schlagworte",
+                "ingredients": "Zutaten"
+            }
+        }
+    },
+    "ai": {
+        "purposeHint": "Richte Juju auf einen beliebigen OpenAI-kompatiblen Endpunkt. Anbieter, Basis-URL und Schlüssel bleiben in deiner eigenen Datenbank; der Schlüssel wird verschlüsselt gespeichert und kann nie wieder angezeigt, sondern nur ersetzt werden.",
+        "enabledLabel": "KI-Rezepte aktivieren",
+        "enabledHint": "Ausgeschaltet heißt: es verlässt nie eine Anfrage das Haus - keine Wartezeit, keine Token-Kosten.",
+        "enabled": "KI-Rezepte",
+        "provider": "Anbieter",
+        "baseUrl": "Basis-URL",
+        "baseUrlHint": "Leer lassen, um die Voreinstellung des gewählten Anbieters zu nutzen. Muss mit http:// oder https:// beginnen.",
+        "model": "Modell",
+        "modelHint": "Der genaue Modellname laut Anbieter-Dokumentation, z. B. gpt-4o-mini.",
+        "apiKey": "API-Schlüssel",
+        "apiKeyHint": "Verschlüsselt gespeichert (SM4). Nach dem Speichern wird er nie wieder angezeigt.",
+        "apiKeyKeep": "Ein Schlüssel ist bereits gespeichert. Nur ausfüllen, wenn er ersetzt werden soll.",
+        "clearKey": "Schlüssel entfernen",
+        "keyCleared": "API-Schlüssel entfernt.",
+        "saved": "KI-Einstellungen gespeichert.",
+        "saveFailed": "Die KI-Einstellungen konnten nicht gespeichert werden. {{error}}",
+        "test": "Verbindung testen",
+        "testing": "Teste…",
+        "testSuccess": "Verbunden - Antwort nach {{ms}} ms.",
+        "testFailed": "Der Verbindungstest ist fehlgeschlagen. {{error}}",
+        "modalTitle": "Rezept mit KI erstellen",
+        "generateButton": "Mit KI erstellen",
+        "promptLabel": "Was soll gekocht werden?",
+        "promptPlaceholder": "Drei Portionen, in 30 Minuten fertig, vegetarisch - ich habe noch Eier, Reis und Frühlingszwiebeln.",
+        "promptHint": "Vorräte, verfügbare Zeit, Ernährung, Anzahl der Esser - je mehr, desto besser.",
+        "requestServings": "Portionen (optional)",
+        "generate": "Erstellen",
+        "generating": "Erstelle…",
+        "previewTitle": "Ergebnis - vor dem Speichern anpassbar",
+        "textFallbackTitle": "Das Modell hat nicht mit JSON geantwortet",
+        "textFallbackHint": "Hier steht die Antwort als Text. Als Rezept speichern und danach aufräumen - oder neu versuchen.",
+        "errorNoConfig": "Es ist noch kein KI-Endpunkt konfiguriert - siehe Einstellungen > Verwaltung > KI.",
+        "errorDisabled": "KI-Rezepte sind ausgeschaltet. Aktiviere sie unter Einstellungen > Verwaltung > KI.",
+        "errorNoKey": "Es ist noch kein API-Schlüssel gespeichert. Hinterlege ihn unter Einstellungen > Verwaltung > KI.",
+        "errorNoModel": "Es ist noch kein Modellname gespeichert. Hinterlege ihn unter Einstellungen > Verwaltung > KI.",
+        "errorTimeout": "Der Anbieter hat nicht rechtzeitig geantwortet. Bitte gleich noch einmal versuchen.",
+        "errorHttp": "Der Anbieter hat die Anfrage abgelehnt. Bitte Basis-URL und Modellnamen prüfen.",
+        "errorAuth": "Die Zugangsdaten wurden abgelehnt. Bitte API-Schlüssel prüfen.",
+        "errorNetwork": "Der Anbieter war nicht erreichbar. Bitte Netzwerkeinstellungen prüfen.",
+        "errorEmptyPrompt": "Bitte beschreibe, was gekocht werden soll.",
+        "errorPromptTooLong": "Die Anfrage ist zu lang. Bitte etwas kürzen.",
+        "errorEmptyResponse": "Der Anbieter hat eine leere Antwort geliefert. Bitte noch einmal versuchen.",
+        "errorUnexpected": "Das Rezept konnte nicht erstellt werden. Bitte später noch einmal versuchen."
     }
 }

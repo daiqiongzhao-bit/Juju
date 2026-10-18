@@ -5518,6 +5518,69 @@ const MIGRATIONS = [
     `,
   },
 
+  {
+    version: 153,
+    description: 'AI provider config: ai_config (Base URL / model plaintext, API key SM4-encrypted)',
+    up: `
+      CREATE TABLE IF NOT EXISTS ai_config (
+        id         INTEGER PRIMARY KEY CHECK (id = 1),
+        provider   TEXT    NOT NULL DEFAULT 'custom',
+        base_url   TEXT,
+        api_key    TEXT,
+        model      TEXT,
+        enabled    INTEGER NOT NULL DEFAULT 0,
+        updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      -- 全站一份 AI 配置：预置空行，省掉每次读取时的 exists 判断。
+      INSERT OR IGNORE INTO ai_config (id, provider, enabled) VALUES (1, 'openai', 0);
+    `,
+  },
+
+  {
+    version: 154,
+    description: 'Recipes: servings / duration_minutes / tags / ai_generated (AI-generated recipes)',
+    up: `
+      ALTER TABLE recipes ADD COLUMN servings INTEGER;
+      ALTER TABLE recipes ADD COLUMN duration_minutes INTEGER;
+      ALTER TABLE recipes ADD COLUMN tags TEXT;
+      ALTER TABLE recipes ADD COLUMN ai_generated INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+
+  {
+    version: 155,
+    description: 'Generic import tool: import_batches (run log) + import_row_map (idempotency fingerprints)',
+    up: `
+      CREATE TABLE IF NOT EXISTS import_batches (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        module       TEXT    NOT NULL,
+        file_name    TEXT,
+        dry_run      INTEGER NOT NULL DEFAULT 0,
+        rows_total   INTEGER NOT NULL DEFAULT 0,
+        created_rows INTEGER NOT NULL DEFAULT 0,
+        skipped_rows INTEGER NOT NULL DEFAULT 0,
+        failed_rows  INTEGER NOT NULL DEFAULT 0,
+        created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_import_batches_module ON import_batches(module);
+
+      -- 幂等指纹表：(module, fingerprint) 唯一 —— 同一份文件重复导入只会命中
+      -- skipped，不会复制出第二份数据。见 services/import-runner.js。
+      CREATE TABLE IF NOT EXISTS import_row_map (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        module       TEXT    NOT NULL,
+        fingerprint  TEXT    NOT NULL,
+        entity_table TEXT    NOT NULL,
+        entity_id    INTEGER NOT NULL,
+        batch_id     INTEGER REFERENCES import_batches(id) ON DELETE CASCADE,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_import_row_map_unique ON import_row_map(module, fingerprint);
+    `,
+  },
+
 ];
 
 /**

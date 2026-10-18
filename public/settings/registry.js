@@ -253,6 +253,31 @@ export const SETTINGS_LEAVES = freezeEntries([
     loader: () => import('/settings/pages/admin-backup.js'),
   },
   {
+    // Datenimport: CSV/JSON aus Notion, Feishu, Google Kalender und anderen
+    // Familien-Apps. Wer hier nicht reinkommt, fängt bei Null an - deshalb ist
+    // das Werkzeug Administration, nicht optionaler Schnickschnack.
+    id: 'admin-import',
+    domainId: 'admin',
+    path: '/settings/admin/import',
+    labelKey: 'settings.pageImport',
+    descriptionKey: 'settings.pageImportDescription',
+    icon: 'file-up',
+    adminOnly: true,
+    loader: () => import('/settings/pages/admin-import.js'),
+  },
+  {
+    // KI-Zugangsdaten (Provider/Base URL/Key). Die Rezepterzeugung selbst ist
+    // für alle Mitglieder frei, konfiguriert wird sie haushaltweit.
+    id: 'admin-ai',
+    domainId: 'admin',
+    path: '/settings/admin/ai',
+    labelKey: 'settings.pageAi',
+    descriptionKey: 'settings.pageAiDescription',
+    icon: 'sparkles',
+    adminOnly: true,
+    loader: () => import('/settings/pages/admin-ai.js'),
+  },
+  {
     id: 'admin-email',
     domainId: 'admin',
     path: '/settings/admin/email',

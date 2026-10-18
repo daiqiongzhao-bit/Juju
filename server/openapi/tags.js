@@ -31,4 +31,6 @@ export const apiTags = [
       { name: 'Notifications' },
       { name: 'Health' },
       { name: 'Rewards' },
+      { name: 'Import' },
+      { name: 'AI' },
 ];

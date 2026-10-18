@@ -1,5 +1,5 @@
 appname               = juju
-version               = 0.0.30
+version               = 0.0.31
 display_name          = Juju 家庭管家
 desc                  = 自托管家庭事务中心：日历、任务、购物清单、餐食计划、预算记账、家庭记忆时间线、影音库与联系人管理。数据全部留在自己的 NAS，无需订阅。<br/><br/>Self-hosted family hub: calendar, tasks, shopping, meal planning, budget, family memories, media library and contacts. All data stays on your NAS.
 platform              = x86
@@ -12,4 +12,4 @@ desktop_uidir         = ui
 desktop_applaunchname = juju.Application
 disable_authorization_path = true
 install_type          =
-changelog             = v0.0.30：新增 76 个单元测试（零依赖 node:test，覆盖 TOTP/SM4/ZIP/二维码/备份密钥/数据库迁移）；镜像支持 linux/amd64 + linux/arm64 多架构。含 v0.0.29 的 TOTP 双因素认证与密钥备份闭环。
+changelog             = v0.0.31：新增通用数据导入（CSV/JSON，覆盖任务/联系人/购物/菜谱，含列映射、预演、逐行容错与幂等）与 AI 菜谱生成（设置页自填 API 提供方/密钥/模型，菜谱页一键生成并保存）；测试增至 119 个。含 v0.0.29 的 TOTP 双因素认证、密钥备份闭环与 v0.0.30 的 ARM64 多架构。

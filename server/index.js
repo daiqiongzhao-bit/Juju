@@ -71,6 +71,9 @@ import permissionsRouter from './routes/permissions.js';
 import changelogRouter from './routes/changelog.js';
 import updateRouter from './routes/update.js';
 import mediaRouter from './routes/media.js';
+// 批次三：通用导入（CSV/JSON）与应用内 AI 菜谱生成。
+import importRouter from './routes/import.js';
+import aiRouter from './routes/ai.js';
 import { handleEmbyWebhook } from './services/media-emby.js';
 import memoryRouter from './routes/memory.js';
 import giftLedgerRouter from './routes/gift-ledger.js';
@@ -467,6 +470,10 @@ app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/health', healthRouter);
 app.use('/api/v1/rewards', rewardsRouter);
 app.use('/api/v1/permissions', permissionsRouter);
+// 导入与 AI 是「工具性」路由：管理员身份在各路由内部用 requireAdmin 判定
+// （生成菜谱对所有登录成员开放，配置只对管理员开放）。
+app.use('/api/v1/import', importRouter);
+app.use('/api/v1/ai', aiRouter);
 
 // Admin: Ein-Klick-Update (erfordert Admin + CSRF; nutzt gemounteten Docker-Socket)
 app.use('/api/v1/update', requireAdmin, updateRouter);
