@@ -1,6 +1,6 @@
 {
   "name": "juju",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "Self-hosted family planner - calendar, tasks, shopping, meal planning, budget and more. Private, open-source, no subscription.",
   "main": "server/index.js",
   "type": "module",
@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node --import dotenv/config server/index.js",
     "dev": "node --import dotenv/config --watch server/index.js",
-    "setup": "node --import dotenv/config setup.js"
+    "setup": "node --import dotenv/config setup.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

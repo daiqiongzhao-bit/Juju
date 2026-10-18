@@ -121,6 +121,10 @@ DEV_LOG.md
 scripts-tmp/
 test/
 tests/
+# 单元测试必须入库：上面两条本是为了忽略遗留的临时测试目录，这里给
+# test/ 下的 node:test 用例（npm test）开例外，否则新写的用例不会被提交。
+!test/
+!test/*.test.js
 
 # fnOS FPK build artifacts (built by fnpack, distributed via GitHub Release assets)
 deploy/fnos/*.fpk

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.30] - 2026-10-18
+
+> 工程质量：76 个单元测试骨架，镜像支持 ARM64 多架构。
+
+### 新增
+
+- **测试骨架**：引入 Node 内置 `node:test` + `node:assert`（`npm test`），**零新增依赖**。覆盖 TOTP（RFC 6238 官方向量、base32、otpauth URI、恢复码用后作废）、SM4 加解密往返、ZIP 读写与 zip-slip 防护、二维码 SVG 生成、备份密钥内容校验与原子写回（0600）、数据库迁移（1–152 编号连续性、冷启动到 v152、完整性/外键检查）、备份包校验。共 **76 个用例**，Node 24 下全部通过（约 3 秒），无网络依赖、无副作用。此前项目没有任何测试脚本。
+- **ARM64 多架构镜像**：`daiqiongzhao/juju` 现同时提供 `linux/amd64` 与 `linux/arm64`，飞牛 ARM 机型、树莓派、Apple Silicon 等可直接部署；飞牛 FPK 同步提供 ARM 版安装包 `juju-0.0.30-arm64.fpk`。
+
+### 变更
+
+- `.gitignore` 此前忽略 `test/`，已加例外使测试用例入库。
+
 ## [0.0.29] - 2026-10-18
 
 > 安全兜底：TOTP 双因素认证，加密密钥纳入备份闭环。
