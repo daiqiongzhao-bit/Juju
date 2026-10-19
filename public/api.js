@@ -60,7 +60,19 @@ async function apiFetch(path, options = {}, _retried = false) {
     // Beim Login-Endpunkt bedeutet 401 "falsche Zugangsdaten", nicht "Session abgelaufen".
     // auth:expired würde die Login-Seite neu rendern und die Fehlermeldung verwerfen.
     if (path !== '/auth/login') {
-      window.dispatchEvent(new CustomEvent('auth:expired'));
+      // R2b (v0.0.33): eine „pending"-2FA-Session (Passwort ok, zweiter Faktor
+      // fehlt) ist kein Sitzungsablauf, sondern ein fehlender Schritt. Der
+      // Server markiert das mit `two_factor_required` im Body - das Detail
+      // geht mit ins Event, damit der Router die richtige Ansage zeigt
+      // („需要两步验证" statt generischem „Sitzung abgelaufen").
+      let detail = {};
+      try {
+        const body = await response.clone().json();
+        if (body?.two_factor_required) detail = { twoFactorRequired: true };
+      } catch {
+        /* nicht JSON oder schon konsumiert - generischer 401 */
+      }
+      window.dispatchEvent(new CustomEvent('auth:expired', { detail }));
       throw new Error('Sitzung abgelaufen.');
     }
     // Für /auth/login: fall-through zum generischen !response.ok-Handler unten.

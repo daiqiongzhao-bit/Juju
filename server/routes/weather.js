@@ -3,12 +3,20 @@
  * Zweck: Serverseitiger Proxy für Open-Meteo (Default, kein API-Key) und
  *        OpenWeatherMap (Legacy, via .env). Provider-Auflösung: DB-Präferenzen
  *        zuerst, dann Env-Vars.
+ *
+ * R3 (v0.0.33): Ist keine Stadt konfiguriert, Koordinaten aber schon, wird die
+ *        Stadt einmalig per Reverse-Geocoding (BigDataCloud, kostenlos, kein
+ *        API-Key) ermittelt und in `sync_config.weather_city` persistiert -
+ *        das Widget zeigt „深圳市" statt „22.543, 114.0579". Drei Wiederholungs-
+ *        bremsen: 30-Minuten-Antwort-Cache, 24h/50-Einträge-Geocode-Cache,
+ *        Persistenz. Fehler schalten still auf den Koordinaten-String zurück.
  * Abhängigkeiten: express, db (sync_config), natives global fetch (Node >=22)
  */
 
 import { createLogger } from '../logger.js';
 import express from 'express';
 import * as db from '../db.js';
+import { DEFAULT_LOCALE, isSupportedLocale } from '../utils/i18n.js';
 
 const log = createLogger('Weather');
 
@@ -16,6 +24,23 @@ const log = createLogger('Weather');
 const cache = new Map();
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 50;
+
+// Reverse-Geocode-Cache: `${lat4},${lon4}|${lang}` → { name, ts }.
+// TTL 24h, max 50 Einträge - der Haushalt hat EINE Koordinate, die Sprach-
+// variablen der Familie teilen sich denselben Eintrag. Fehler werden NICHT
+// gecacht (nächster Wetter-Request versucht es erneut); der 30-Minuten-
+// Antwort-Cache drosselt das automatisch.
+const geocodeCache = new Map();
+const GEOCODE_TTL_MS = 24 * 60 * 60 * 1000;
+const GEOCODE_MAX_ENTRIES = 50;
+
+// BigDataCloud reverse-geocode-client: kostenlos, ohne API-Key, CORS-offen,
+// unterstützt `localityLanguage` (zh → „深圳市"). Host ist api.bigdatacloud.NET
+// (laut https://www.bigdatacloud.com/docs/api-domains die Domain der kosten-
+// losen Client-seitigen Endpoints; das .com-Pendant existiert nicht).
+// Nominatim scheidet aus (UA-Pflicht, 1 req/s - im Mehrnutzer-Selbsthosting
+// ein Compliance-Risiko).
+const GEOCODE_ENDPOINT = 'https://api.bigdatacloud.net/data/reverse-geocode-client';
 
 // ----------------------------------------------------------------
 // WMO Weather Interpretation Code → Lucide icon name
@@ -46,6 +71,42 @@ function cfgGet(key) {
 }
 
 // ----------------------------------------------------------------
+// Upsert a sync_config key (same pattern as routes/preferences.js).
+// ISO-8601-UTC timestamp, genau wie dort.
+// ----------------------------------------------------------------
+function cfgSet(key, value) {
+  db.get().prepare(`
+    INSERT INTO sync_config (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value,
+                                   updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+  `).run(key, value);
+}
+
+// ----------------------------------------------------------------
+// Sprache für das Reverse-Geocoding: der Client schickt seine UI-Locale
+// (`?lang=zh`). Nur der Basis-Sprachsubt zählt; unbekannte Werte fallen auf
+// die App-Default-Locale (zh) zurück - BigDataCloud bekommt nie Rohinput.
+// ----------------------------------------------------------------
+function sanitizeLang(raw) {
+  const base = String(raw ?? '').trim().toLowerCase().split('-')[0];
+  return isSupportedLocale(base) ? base : DEFAULT_LOCALE;
+}
+
+// ----------------------------------------------------------------
+// Stadt aus einer BigDataCloud-Antwort: city → locality →
+// principalSubdivision, erste nicht leere Stufe (深圳市 → 福田区 → 广东省).
+// ----------------------------------------------------------------
+function pickCityName(json) {
+  if (!json || typeof json !== 'object') return null;
+  for (const field of ['city', 'locality', 'principalSubdivision']) {
+    const value = json[field];
+    if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 100);
+  }
+  return null;
+}
+
+// ----------------------------------------------------------------
 // OWM city param: "q=Berlin" or "id=12345"
 // (Ortsnamen mit Ländercode disambiguieren, z.B. "Wellington,NZ".)
 // ----------------------------------------------------------------
@@ -55,10 +116,10 @@ function cityParam(city) {
 }
 
 // ----------------------------------------------------------------
-// Factory used by tests to inject a custom fetch function and cfgGet.
+// Factory used by tests to inject a custom fetch function, cfgGet and cfgSet.
 // The router exported as default uses real global fetch + real DB.
 // ----------------------------------------------------------------
-export function buildRouter({ cfgGet: cfgGetFn = cfgGet, fetchFn = null } = {}) {
+export function buildRouter({ cfgGet: cfgGetFn = cfgGet, cfgSet: cfgSetFn = cfgSet, fetchFn = null } = {}) {
   const router = express.Router();
 
   // Per-User-Wert vor Haushalt: liest '{key}:user:{id}' über denselben cfgGet.
@@ -77,6 +138,46 @@ export function buildRouter({ cfgGet: cfgGetFn = cfgGet, fetchFn = null } = {}) 
   }
 
   // ---------------------------------------------------------------
+  // Reverse-Geocoding (R3): Koordinaten → Stadtname.
+  // Cache-Treffer beantwortet ohne HTTP; Timeout/5xx/leere Antwort
+  // degradieren still auf null (nicht cachen - nächster Call erneut).
+  // ---------------------------------------------------------------
+  async function reverseGeocode(lat, lon, lang) {
+    const cacheKey = `${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}|${lang}`;
+    const hit = geocodeCache.get(cacheKey);
+    if (hit && Date.now() - hit.ts < GEOCODE_TTL_MS) return hit.name;
+
+    try {
+      const url = [
+        GEOCODE_ENDPOINT,
+        `?latitude=${encodeURIComponent(lat)}`,
+        `&longitude=${encodeURIComponent(lon)}`,
+        `&localityLanguage=${encodeURIComponent(lang)}`,
+      ].join('');
+      const res = await doFetch(url, { signal: AbortSignal.timeout(6000) });
+      if (!res.ok) {
+        log.warn(`Reverse-geocode API error: ${res.status}`);
+        return null;
+      }
+      const name = pickCityName(await res.json().catch(() => null));
+      if (!name) return null;
+
+      if (geocodeCache.size >= GEOCODE_MAX_ENTRIES) {
+        for (const k of geocodeCache.keys()) {
+          if (geocodeCache.size < GEOCODE_MAX_ENTRIES) break;
+          geocodeCache.delete(k);
+        }
+      }
+      geocodeCache.set(cacheKey, { name, ts: Date.now() });
+      return name;
+    } catch (err) {
+      // Timeout/Netz: still degradieren, kein Cache, kein Error-Screen.
+      log.warn('Reverse-geocode failed:', err?.message || err);
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------
   // GET /api/v1/weather
   // Response: { data: { provider, city, units, current, forecast } } | { data: null }
   // ---------------------------------------------------------------
@@ -84,6 +185,7 @@ export function buildRouter({ cfgGet: cfgGetFn = cfgGet, fetchFn = null } = {}) 
     try {
       // ── 1. Resolve provider ──────────────────────────────────
       const userId = req.authUserId;
+      const lang = sanitizeLang(req.query.lang);
       const dbProvider = cfgGetFn('weather_provider');
       const dbLat      = effective('weather_lat', userId);
       const dbLon      = effective('weather_lon', userId);
@@ -99,16 +201,21 @@ export function buildRouter({ cfgGet: cfgGetFn = cfgGet, fetchFn = null } = {}) 
       const owmLang  = String(req.query.lang  || process.env.OPENWEATHER_LANG || 'en');
 
       let provider, lat, lon, city, units;
+      // Koordinaten aus der DB? Nur dann wird eine ermittelte Stadt auch
+      // persistiert - env-Koordinaten sind Server-Konfiguration, kein User-State.
+      let coordsFromDb = false;
 
       if (dbProvider === 'open-meteo' && dbLat && dbLon) {
         provider = 'open-meteo';
         lat = dbLat; lon = dbLon; city = dbCity; units = dbUnits;
+        coordsFromDb = true;
       } else if (dbProvider === 'openweathermap' && owmKey) {
         provider = 'openweathermap';
         units = dbUnits !== 'metric' ? dbUnits : (process.env.OPENWEATHER_UNITS ?? 'metric');
       } else if (!dbProvider && dbLat && dbLon) {
         provider = 'open-meteo';
         lat = dbLat; lon = dbLon; city = dbCity; units = dbUnits;
+        coordsFromDb = true;
       } else if (!dbProvider && envLat && envLon) {
         provider = 'open-meteo';
         lat = envLat; lon = envLon; city = envCity; units = envUnits;
@@ -168,9 +275,25 @@ export function buildRouter({ cfgGet: cfgGetFn = cfgGet, fetchFn = null } = {}) 
           .filter((d) => d.date !== today)
           .slice(0, 5);
 
+        // R3: keine Stadt, aber Koordinaten → einmalig reverse-geocoden.
+        // Persistiert wird nur bei DB-Koordinaten; bei persönlicher Übersteuerung
+        // (`weather_lat:user:<id>`) geht der Wert in den persönlichen Schlüssel,
+        // damit die Familien-Default-Stadt sauber bleibt.
+        let resolvedCity = city;
+        if (!resolvedCity && lat && lon) {
+          const geo = await reverseGeocode(lat, lon, lang);
+          if (geo) {
+            resolvedCity = geo;
+            if (coordsFromDb) {
+              const userScoped = userId && cfgGetFn(`weather_lat:user:${userId}`) != null;
+              cfgSetFn(userScoped ? `weather_city:user:${userId}` : 'weather_city', geo);
+            }
+          }
+        }
+
         data = {
           provider: 'open-meteo',
-          city: city || `${lat}, ${lon}`,
+          city: resolvedCity || `${lat}, ${lon}`,
           units,
           current: {
             temp:       Math.round(cur.temperature_2m),

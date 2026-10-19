@@ -133,6 +133,7 @@ function template() {
         <i data-lucide="shield-check" aria-hidden="true"></i> ${t('settings.twoFactorEnabled')}
       </p>
       <p class="form-hint">${t('settings.twoFactorRecoveryRemaining', { count: state.remaining })}</p>
+      <p class="form-hint">${t('settings.twoFactorOtherSessionsHint')}</p>
       <form id="twofa-manage-form" class="settings-form">
         <div class="form-group">
           <label class="form-label" for="twofa-action-code">${t('settings.twoFactorCodeLabel')}</label>

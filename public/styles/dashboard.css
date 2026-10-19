@@ -287,10 +287,24 @@
   }
 }
 
-/* Kein eigener 1440px-Block mehr: `repeat(auto-fill, minmax(240px, 1fr))` ab 1024px
- * leitet die Spaltenzahl aus der Breite ab und deckt Wide-Screens (4–6 Spalten)
- * stufenlos ab — die frühere feste 3-→4-Spalten-Stufe war die Quelle der starren
- * halbleeren Spalte. Breite Widgets kappen bei span 3 (siehe 1024px-Block). */
+/* R4 (v0.0.33): breite Viewports skalieren die Karten mit. Ab 1440px
+ * mindestens 300px, ab 1920px 340px Mindestspaltenbreite - bei 100%-Zoom
+ * auf 1920×1080 bleiben die Karten angenehm groß statt sechs schmaler
+ * 240px-Streifen. Alles andere (dense-Füllung, widget spans) erbt sich aus
+ * dem 1024px-Block; <= 1024px zero regression. Bewusst NUR die
+ * minmax-Untergrenze - kein zweites Grid-System. */
+
+@media (min-width: 1440px) {
+  .dashboard__grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  }
+}
+
+@media (min-width: 1920px) {
+  .dashboard__grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  }
+}
 
 /* Primäre Widgets: subtile Akzentlinie oben — auf Dashboard einheitlich gedämpft */
 .widget-size--1x2 > .widget,

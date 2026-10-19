@@ -1086,7 +1086,15 @@
             "knows": "Kennt",
             "met-through": "Kennengelernt über",
             "spouse": "Ehepartner/in",
-            "child": "Kind"
+            "child": "Kind",
+            "classmate": "Mitschüler",
+            "client": "Kunde",
+            "landlord": "Vermieter",
+            "roommate": "Mitbewohner",
+            "in-law": "Schwiegerverwandtschaft",
+            "ex": "Ex-Partner",
+            "doctor": "Arzt",
+            "teacher": "Lehrer"
         },
         "date": "Datum",
         "note": "Notiz",
@@ -1227,7 +1235,8 @@
         "constellationLabel": "Sternzeichen",
         "spouseNoteLabel": "Notiz für Angehörige",
         "priorityIntroLabel": "Bevorzugt vorstellen",
-        "enumUnset": "Nicht gesetzt"
+        "enumUnset": "Nicht gesetzt",
+        "typePresetHint": "Das sind vorgefertigte Beziehungstypen — einfach auswählen, nichts selbst anlegen."
     },
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
@@ -2180,8 +2189,8 @@
         "weatherLatPlaceholder": "z. B. 52.52",
         "weatherLonLabel": "Längengrad",
         "weatherLonPlaceholder": "z. B. 13.41",
-        "weatherCityLabel": "Ortsname (optional)",
-        "weatherCityPlaceholder": "z. B. Berlin",
+        "weatherCityLabel": "Ortsname",
+        "weatherCityPlaceholder": "z. B. Berlin (erscheint im Wetter-Widget)",
         "weatherUnitsLabel": "Einheiten",
         "weatherUnitsMetric": "Metrisch (°C, km/h)",
         "weatherUnitsImperial": "Imperial (°F, mph)",
@@ -2601,7 +2610,9 @@
         "pageImport": "Datenimport",
         "pageImportDescription": "Aufgaben, Kontakte, Einkaufsartikel und Rezepte aus CSV oder JSON übernehmen.",
         "pageAi": "KI",
-        "pageAiDescription": "OpenAI-kompatibles Modell für KI-Rezeptideen anbinden."
+        "pageAiDescription": "OpenAI-kompatibles Modell für KI-Rezeptideen anbinden.",
+        "weatherCityAutoHint": "Leer lassen: die Stadt wird aus den Koordinaten automatisch ermittelt und im Wetter-Widget angezeigt.",
+        "twoFactorOtherSessionsHint": "Bereits angemeldete Geräte sind nicht betroffen; sie fragen erst bei der nächsten Anmeldung nach einem Code."
     },
     "login": {
         "tagline": "Willkommen zurück bei eurem Familienplaner.",
@@ -2632,7 +2643,11 @@
         "welcomeSubtitle": "Melde dich an, um deinen Familienplaner zu öffnen.",
         "featureCalendar": "Gemeinsamer Kalender",
         "featureTasks": "Aufgaben & Einkauf",
-        "featurePrivate": "Privat & selbst gehostet"
+        "featurePrivate": "Privat & selbst gehostet",
+        "twoFactorUseRecovery": "Mit Wiederherstellungscode anmelden",
+        "twoFactorUseOtp": "Stattdessen Bestätigungscode verwenden",
+        "twoFactorRecoveryFormat": "Wiederherstellungscodes sehen aus wie ABCDE-12345 und gelten einmalig.",
+        "twoFactorRequiredToast": "Zwei-Faktor-Authentifizierung erforderlich — Code eingeben, um fortzufahren."
     },
     "setup": {
         "title": "Willkommen bei Juju",
@@ -4388,7 +4403,10 @@
         "batchDelete": "Auswahl löschen",
         "confirmDeleteBatch": "Die {{count}} ausgewählten Einträge löschen?",
         "groupByStatus": "Nach Status gruppieren",
-        "source": "Quelle"
+        "source": "Quelle",
+        "selectAll": "Alle auswählen",
+        "deselectAll": "Auswahl aufheben",
+        "selectedAll": "Alle {{count}} Einträge ausgewählt"
     },
     "memory": {
         "tags": "Tags",
@@ -4562,6 +4580,16 @@
         "errorEmptyPrompt": "Bitte beschreibe, was gekocht werden soll.",
         "errorPromptTooLong": "Die Anfrage ist zu lang. Bitte etwas kürzen.",
         "errorEmptyResponse": "Der Anbieter hat eine leere Antwort geliefert. Bitte noch einmal versuchen.",
-        "errorUnexpected": "Das Rezept konnte nicht erstellt werden. Bitte später noch einmal versuchen."
+        "errorUnexpected": "Das Rezept konnte nicht erstellt werden. Bitte später noch einmal versuchen.",
+        "providerHint": {
+            "doubao": "Volcano Engine Ark abrechnet pro Endpunkt: im Konsolen-Portal zuerst ein Modell freischalten, dann die Endpunkt-ID unten eintragen.",
+            "siliconflow": "SiliconFlow bündelt viele Modelle und gibt neuen Nutzern ein Gratis-Kontingent — ideal zum kostenlosen Ausprobieren.",
+            "qianfan": "Baidu Qianfan: v2-Basis-URL verwenden und in der Qianfan-Konsole einen statischen API-Key anlegen.",
+            "custom": "Vollständig selbst definiert: eigene Basis-URL und Modellnamen eintragen — funktioniert mit jedem OpenAI-kompatiblen Gateway."
+        },
+        "modelHints": {
+            "doubao": "Endpunkt-ID eintragen (beginnt mit ep-, Modell-Endpunkt zuerst in Volcano Engine Ark anlegen) — nicht den Anzeigenamen des Modells."
+        },
+        "getApiKey": "API-Key anfordern"
     }
 }

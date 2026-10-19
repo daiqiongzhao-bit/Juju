@@ -104,7 +104,7 @@ export function aiPaths() {
               schema: {
                 type: 'object',
                 properties: {
-                  provider: { type: 'string', enum: ['openai', 'deepseek', 'qwen', 'custom'] },
+                  provider: { type: 'string', enum: ['openai', 'deepseek', 'qwen', 'zhipu', 'moonshot', 'doubao', 'minimax', 'qianfan', 'hunyuan', 'siliconflow', 'custom'] },
                   baseUrl: { type: 'string', description: 'Empty uses the provider preset.' },
                   apiKey: { type: 'string', description: 'Write-only, SM4-encrypted at rest. Omit to keep the stored key.' },
                   clearKey: { type: 'boolean' },

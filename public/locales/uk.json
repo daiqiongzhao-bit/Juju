@@ -1818,8 +1818,8 @@
         "weatherLatPlaceholder": "напр. 50.45",
         "weatherLonLabel": "Довгота",
         "weatherLonPlaceholder": "напр. 30.52",
-        "weatherCityLabel": "Назва міста (необов'язково)",
-        "weatherCityPlaceholder": "напр. Київ",
+        "weatherCityLabel": "Назва міста",
+        "weatherCityPlaceholder": "напр. Київ (shown on the dashboard weather card)",
         "weatherUnitsLabel": "Одиниці",
         "weatherUnitsMetric": "Метричні (°C, км/год)",
         "weatherUnitsImperial": "Імперські (°F, миль/год)",
@@ -2305,7 +2305,9 @@
         "pageImport": "Data import",
         "pageImportDescription": "Bring tasks, contacts, shopping items and recipes in from CSV or JSON.",
         "pageAi": "AI",
-        "pageAiDescription": "Connect an OpenAI-compatible model used for AI recipe ideas."
+        "pageAiDescription": "Connect an OpenAI-compatible model used for AI recipe ideas.",
+        "weatherCityAutoHint": "Leave empty to detect the city from your coordinates automatically — it shows on the dashboard weather card.",
+        "twoFactorOtherSessionsHint": "Other signed-in devices are unaffected; they will be asked for a code at the next sign-in."
     },
     "login": {
         "tagline": "З поверненням до вашого сімейного планувальника.",
@@ -2336,7 +2338,11 @@
         "twoFactorSubmit": "Verify",
         "twoFactorVerifying": "Verifying…",
         "twoFactorInvalid": "That code is not valid.",
-        "twoFactorCancel": "Cancel sign-in"
+        "twoFactorCancel": "Cancel sign-in",
+        "twoFactorUseRecovery": "Sign in with a recovery code",
+        "twoFactorUseOtp": "Use a verification code instead",
+        "twoFactorRecoveryFormat": "Recovery codes look like ABCDE-12345 and can be used once.",
+        "twoFactorRequiredToast": "Two-factor verification required — enter your code to continue."
     },
     "setup": {
         "title": "Ласкаво просимо до Juju",
@@ -4106,7 +4112,10 @@
         "batchDelete": "Видалити вибране",
         "confirmDeleteBatch": "Видалити {{count}} вибраних елементів?",
         "groupByStatus": "Групувати за статусом",
-        "source": "Source"
+        "source": "Source",
+        "selectAll": "Select all",
+        "deselectAll": "Deselect all",
+        "selectedAll": "All {{count}} items selected"
     },
     "memory": {
         "tags": "Tags",
@@ -4237,7 +4246,15 @@
             "knows": "Knows",
             "met-through": "Met through",
             "spouse": "Spouse",
-            "child": "Child"
+            "child": "Child",
+            "classmate": "Classmate",
+            "client": "Client",
+            "landlord": "Landlord",
+            "roommate": "Roommate",
+            "in-law": "In-law",
+            "ex": "Ex-partner",
+            "doctor": "Doctor",
+            "teacher": "Teacher"
         },
         "date": "Date",
         "note": "Note",
@@ -4378,7 +4395,8 @@
         "constellationLabel": "Sternzeichen",
         "spouseNoteLabel": "Notiz für Angehörige",
         "priorityIntroLabel": "Bevorzugt vorstellen",
-        "enumUnset": "Nicht gesetzt"
+        "enumUnset": "Nicht gesetzt",
+        "typePresetHint": "These relationship types are presets — just pick one, no need to create your own."
     },
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
@@ -4562,6 +4580,16 @@
         "errorEmptyPrompt": "Please describe what you want to cook.",
         "errorPromptTooLong": "That request is too long. Please shorten it a little.",
         "errorEmptyResponse": "The provider returned an empty answer. Please try again.",
-        "errorUnexpected": "The recipe could not be generated. Please try again later."
+        "errorUnexpected": "The recipe could not be generated. Please try again later.",
+        "providerHint": {
+            "doubao": "Volcano Engine Ark bills per endpoint: create a model endpoint in the console first, then enter its endpoint ID below.",
+            "siliconflow": "SiliconFlow aggregates many models and gives new users a free quota — great for a zero-cost try.",
+            "qianfan": "Baidu Qianfan: use the v2 base URL and create a static API Key in the Qianfan console.",
+            "custom": "Fully custom: enter your own base URL and model name — works with any OpenAI-compatible gateway."
+        },
+        "modelHints": {
+            "doubao": "Enter the endpoint ID (starts with ep-, create the model endpoint in Volcano Engine Ark first) — not the model's display name."
+        },
+        "getApiKey": "Get an API key"
     }
 }

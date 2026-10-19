@@ -77,13 +77,14 @@ export async function render(container) {
             <datalist id="ai-model-options">
               ${(providers.find((p) => p.key === cfg.provider)?.models ?? []).map((m) => `<option value="${esc(m)}"></option>`).join('')}
             </datalist>
-            <p class="form-hint">${esc(t('ai.modelHint'))}</p>
+            <p class="form-hint" id="ai-model-hint">${esc(t('ai.modelHint'))}</p>
           </div>
           <div class="form-group">
             <label class="label" for="ai-key">${esc(t('ai.apiKey'))}</label>
             <input class="input" id="ai-key" name="apiKey" type="password" autocomplete="new-password"
               placeholder="${esc(cfg.keySet ? cfg.maskedKey : '')}" />
             <p class="form-hint">${esc(cfg.keySet ? t('ai.apiKeyKeep') : t('ai.apiKeyHint'))}</p>
+            <p class="form-hint" id="ai-key-link"></p>
           </div>
           <div class="settings-form-actions">
             <button type="submit" class="btn btn--primary" id="ai-save">${esc(t('common.save'))}</button>
@@ -98,6 +99,8 @@ export async function render(container) {
   const form = container.querySelector('#ai-form');
   const notice = container.querySelector('#ai-notice');
   const providerHint = container.querySelector('#ai-provider-hint');
+  const modelHint = container.querySelector('#ai-model-hint');
+  const keyLink = container.querySelector('#ai-key-link');
   const baseUrlInput = container.querySelector('#ai-base-url');
   const modelInput = container.querySelector('#ai-model');
   const modelOptions = container.querySelector('#ai-model-options');
@@ -123,11 +126,44 @@ export async function render(container) {
   if (toggleInput) toggleInput.addEventListener('change', () => { enabled = toggleInput.checked; });
   toggleSlot.appendChild(toggle);
 
+  /**
+   * R1 (v0.0.33): provider-spezifische Hinweise. Der Server liefert je
+   * Preset optional `hintKey` / `modelHintKey` / `keyUrl` mit; fehlt ein
+   * Feld, greifen die generischen Texte (ai.baseUrlHint / ai.modelHint).
+   *
+   * Hinweis zur Key-Wahl: `ai.modelHint` ist ein bestehender String (der
+   * generische Text) - die Dot-Notation von t() kann darunter kein
+   * `ai.modelHint.doubao` ablegen, ohne den String zu ersetzen. Die
+   * modellspezifischen Texte leben deshalb im Geschwister-Objekt
+   * `ai.modelHints.<modelHintKey>` (analog zum reinen Objekt
+   * `ai.providerHint`, das keinen String-Vorfahren hat).
+   * @param {object} provider  Eintrag aus AI_PROVIDERS
+   */
+  function applyProviderHints(provider) {
+    providerHint.textContent = provider.hintKey
+      ? t(`ai.providerHint.${provider.hintKey}`)
+      : t('ai.baseUrlHint');
+    modelHint.textContent = provider.modelHintKey
+      ? t(`ai.modelHints.${provider.modelHintKey}`)
+      : t('ai.modelHint');
+    if (provider.keyUrl) {
+      keyLink.replaceChildren();
+      const link = document.createElement('a');
+      link.href = provider.keyUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = t('ai.getApiKey');
+      keyLink.appendChild(link);
+    } else {
+      keyLink.replaceChildren();
+    }
+  }
+
   /** 切换提供方时同步「预设 Base URL / 模型建议」，用户填过的不覆盖。 */
   form.provider.addEventListener('change', () => {
     const provider = providers.find((p) => p.key === form.provider.value) ?? providers[0];
     baseUrlInput.placeholder = provider.baseUrl || 'https://api.openai.com/v1';
-    providerHint.textContent = t('ai.baseUrlHint');
+    applyProviderHints(provider);
     modelOptions.replaceChildren();
     for (const model of provider.models ?? []) {
       const option = document.createElement('option');
@@ -135,6 +171,9 @@ export async function render(container) {
       modelOptions.appendChild(option);
     }
   });
+
+  // Initialzustand: Hinweise des gespeicherten Providers (nicht nur on change).
+  applyProviderHints(providers.find((p) => p.key === cfg.provider) ?? providers[0]);
 
   /**
    * 组装保存载荷。密钥的「留空 = 保持原值」由后端保证，这里不用传空字符串。

@@ -7130,9 +7130,20 @@ window.addEventListener('popstate', (e) => {
 
 // Session abgelaufen
 
-window.addEventListener('auth:expired', () => {
+window.addEventListener('auth:expired', (e) => {
 
   currentUser = null;
+
+  // R2b (v0.0.33): fehlender zweiter Faktor ist kein Sitzungsablauf. api.js
+  // liefert im Event-Detail `twoFactorRequired`, wenn der Server eine
+  // „pending"-2FA-Session abgewiesen hat - dann die gezielte Ansage statt
+  // der generischen (der Router zeigt sonst gar keinen Text; die Aussage
+  // „Sitzung abgelaufen" käme sonst von den Seitenmodulen).
+  if (e.detail?.twoFactorRequired) {
+
+    showToast(t('login.twoFactorRequiredToast'), 'warning');
+
+  }
 
   // Offline-API-Cache leeren: Session-Ende → keine gecachten Daten zurücklassen,
 

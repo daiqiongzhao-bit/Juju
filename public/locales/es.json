@@ -1818,8 +1818,8 @@
         "weatherLatPlaceholder": "ej. 40.42",
         "weatherLonLabel": "Longitud",
         "weatherLonPlaceholder": "ej. -3.70",
-        "weatherCityLabel": "Nombre de ciudad (opcional)",
-        "weatherCityPlaceholder": "ej. Madrid",
+        "weatherCityLabel": "Nombre de ciudad",
+        "weatherCityPlaceholder": "ej. Madrid (se muestra en la tarjeta del tiempo)",
         "weatherUnitsLabel": "Unidades",
         "weatherUnitsMetric": "Métrico (°C, km/h)",
         "weatherUnitsImperial": "Imperial (°F, mph)",
@@ -2305,7 +2305,9 @@
         "pageImport": "Data import",
         "pageImportDescription": "Bring tasks, contacts, shopping items and recipes in from CSV or JSON.",
         "pageAi": "AI",
-        "pageAiDescription": "Connect an OpenAI-compatible model used for AI recipe ideas."
+        "pageAiDescription": "Connect an OpenAI-compatible model used for AI recipe ideas.",
+        "weatherCityAutoHint": "Déjalo vacío para detectar la ciudad desde las coordenadas; se muestra en la tarjeta del tiempo.",
+        "twoFactorOtherSessionsHint": "Los demás dispositivos con sesión iniciada no se ven afectados; pedirán el código en el próximo inicio de sesión."
     },
     "login": {
         "tagline": "Bienvenido de nuevo a tu planificador familiar.",
@@ -2336,7 +2338,11 @@
         "twoFactorSubmit": "Verify",
         "twoFactorVerifying": "Verifying…",
         "twoFactorInvalid": "That code is not valid.",
-        "twoFactorCancel": "Cancel sign-in"
+        "twoFactorCancel": "Cancel sign-in",
+        "twoFactorUseRecovery": "Iniciar sesión con un código de recuperación",
+        "twoFactorUseOtp": "Usar mejor un código de verificación",
+        "twoFactorRecoveryFormat": "Los códigos de recuperación tienen el formato ABCDE-12345 y se usan una sola vez.",
+        "twoFactorRequiredToast": "Se requiere verificación en dos pasos: introduce tu código para continuar."
     },
     "setup": {
         "title": "Bienvenido a Juju",
@@ -4106,7 +4112,10 @@
         "batchDelete": "Eliminar selección",
         "confirmDeleteBatch": "¿Eliminar los {{count}} elementos seleccionados?",
         "groupByStatus": "Agrupar por estado",
-        "source": "Source"
+        "source": "Source",
+        "selectAll": "Seleccionar todo",
+        "deselectAll": "Deseleccionar todo",
+        "selectedAll": "Los {{count}} elementos están todos seleccionados"
     },
     "memory": {
         "tags": "Tags",
@@ -4237,7 +4246,15 @@
             "knows": "Knows",
             "met-through": "Met through",
             "spouse": "Spouse",
-            "child": "Child"
+            "child": "Child",
+            "classmate": "Compañero de clase",
+            "client": "Cliente",
+            "landlord": "Arrendador",
+            "roommate": "Compañero de piso",
+            "in-law": "Familia política",
+            "ex": "Expareja",
+            "doctor": "Médico",
+            "teacher": "Profesor"
         },
         "date": "Date",
         "note": "Note",
@@ -4378,7 +4395,8 @@
         "constellationLabel": "Sternzeichen",
         "spouseNoteLabel": "Notiz für Angehörige",
         "priorityIntroLabel": "Bevorzugt vorstellen",
-        "enumUnset": "Nicht gesetzt"
+        "enumUnset": "Nicht gesetzt",
+        "typePresetHint": "Estos tipos de relación son predefinidos: elige uno, no hace falta crear el tuyo."
     },
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
@@ -4562,6 +4580,16 @@
         "errorEmptyPrompt": "Please describe what you want to cook.",
         "errorPromptTooLong": "That request is too long. Please shorten it a little.",
         "errorEmptyResponse": "The provider returned an empty answer. Please try again.",
-        "errorUnexpected": "The recipe could not be generated. Please try again later."
+        "errorUnexpected": "The recipe could not be generated. Please try again later.",
+        "providerHint": {
+            "doubao": "Volcano Engine Ark factura por punto de acceso: activa primero un modelo en la consola y luego introduce su ID abajo.",
+            "siliconflow": "SiliconFlow reúne muchos modelos y da cuota gratuita a los nuevos usuarios: ideal para probar sin coste.",
+            "qianfan": "Baidu Qianfan: usa la URL base v2 y crea una clave API estática en la consola de Qianfan.",
+            "custom": "Totalmente personalizado: introduce tu propia URL base y nombre de modelo; compatible con cualquier puerta de enlace OpenAI."
+        },
+        "modelHints": {
+            "doubao": "Introduce el ID del punto de acceso (empieza por ep-; créalo primero en Volcano Engine Ark), no el nombre del modelo."
+        },
+        "getApiKey": "Obtener clave API"
     }
 }

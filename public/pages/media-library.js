@@ -84,6 +84,7 @@ export async function render(container, { user } = {}) {
       <div class="mk-grid" id="mk-grid"><div class="mk-empty">${esc(t('media.loading'))}</div></div>
       <div class="mk-bar" id="mk-bar">
         <span id="mk-bar-count"></span>
+        <button class="mk-btn ghost" id="mk-bar-selectall"></button>
         <div class="mk-spacer" style="flex:1"></div>
         <button class="mk-btn ghost" id="mk-bar-cancel">${esc(t('media.cancelSelect'))}</button>
         <button class="mk-btn danger" id="mk-bar-del">${esc(t('media.batchDelete'))}</button>
@@ -91,7 +92,7 @@ export async function render(container, { user } = {}) {
     </div>
   `;
 
-  const state = { type: 'all', status: '', member: '', tag: '', q: '', page: 1, members: [], selectMode: false, selected: new Set(), groupByStatus: false };
+  const state = { type: 'all', status: '', member: '', tag: '', q: '', page: 1, members: [], selectMode: false, selected: new Set(), allIds: null, groupByStatus: false };
   const grid = container.querySelector('#mk-grid');
   const bar = container.querySelector('#mk-bar');
 
@@ -142,6 +143,8 @@ export async function render(container, { user } = {}) {
   container.querySelector('#mk-select').addEventListener('click', () => toggleSelectMode());
   container.querySelector('#mk-bar-cancel').addEventListener('click', () => toggleSelectMode(false));
   container.querySelector('#mk-bar-del').addEventListener('click', () => doBatchDelete());
+  // R5 (v0.0.33): 全选 / 取消全选（当前筛选条件全部，跨页）
+  container.querySelector('#mk-bar-selectall').addEventListener('click', () => toggleSelectAll());
 
   // Gruppieren nach Status (wish/doing/finished)
   container.querySelector('#mk-group').addEventListener('click', (e) => {
@@ -209,7 +212,10 @@ export async function render(container, { user } = {}) {
 
   function toggleSelectMode(force) {
     state.selectMode = typeof force === 'boolean' ? force : !state.selectMode;
-    if (!state.selectMode) state.selected.clear();
+    if (!state.selectMode) {
+      state.selected.clear();
+      state.allIds = null; // 退出多选零残留（R5）
+    }
     const btn = container.querySelector('#mk-select');
     btn.textContent = state.selectMode ? t('media.cancelSelect') : t('media.selectMode');
     btn.classList.toggle('active', state.selectMode);
@@ -220,9 +226,49 @@ export async function render(container, { user } = {}) {
     load();
   }
 
+  /** 当前页的 Checkbox-Bilder an state.selected angleichen（ ohne Reload）。 */
+  function syncCheckboxes() {
+    grid.querySelectorAll('.mk-card__check input').forEach((cb) => {
+      const id = parseInt(cb.dataset.id, 10);
+      cb.checked = state.selected.has(id);
+      cb.closest('.mk-card').classList.toggle('selected', cb.checked);
+    });
+  }
+
+  /**
+   * R5: 全选 = 当前筛选条件下的全部条目（跨页）。GET /media/ids  verwendet
+   * exakt dieselben Filter und dieselbe Sichtbarkeit wie /list (Server-Seite),
+   * deshalb hier dieselbe filterParams()-Quelle wie load().
+   */
+  async function toggleSelectAll() {
+    if (state.allIds === null) {
+      let ids;
+      try {
+        ids = (await api.get('/media/ids?' + filterParams().toString())).data || [];
+      } catch {
+        window.yuvomi?.showToast?.(t('common.error') || 'Fehler', 'danger');
+        return;
+      }
+      state.allIds = ids;
+      state.selected = new Set(ids);
+    } else {
+      state.selected.clear();
+      state.allIds = null;
+    }
+    syncCheckboxes();
+    updateBar();
+  }
+
   function updateBar() {
     const el = container.querySelector('#mk-bar-count');
-    if (el) el.textContent = t('media.selected', { count: state.selected.size });
+    const allBtn = container.querySelector('#mk-bar-selectall');
+    const allSelected = state.allIds !== null && state.selected.size === state.allIds.length;
+    if (el) {
+      el.textContent = allSelected
+        ? t('media.selectedAll', { count: state.selected.size })
+        : t('media.selected', { count: state.selected.size });
+    }
+    if (allBtn) allBtn.textContent = allSelected ? t('media.deselectAll') : t('media.selectAll');
   }
 
   async function doBatchDelete() {
@@ -236,15 +282,26 @@ export async function render(container, { user } = {}) {
     }
   }
 
+  /**
+   * Filter als Query-String - EINMALIG gebaut, von load() UND toggleSelectAll()
+   * benutzt (R5): „全选" muss exakt die Liste treffen, die gerade sichtbar ist.
+   * Pagination gehört nicht dazu (die steuert load() allein).
+   * @returns {URLSearchParams}
+   */
+  function filterParams() {
+    const params = new URLSearchParams();
+    if (state.type !== 'all') params.set('type', state.type);
+    if (state.status) params.set('status', state.status);
+    if (state.member) params.set('member', state.member);
+    if (state.tag) params.set('tag', state.tag);
+    if (state.q) params.set('q', state.q);
+    return params;
+  }
+
   async function load() {
     grid.innerHTML = `<div class="mk-empty">${esc(t('media.loading'))}</div>`;
     try {
-      const params = new URLSearchParams();
-      if (state.type !== 'all') params.set('type', state.type);
-      if (state.status) params.set('status', state.status);
-      if (state.member) params.set('member', state.member);
-      if (state.tag) params.set('tag', state.tag);
-      if (state.q) params.set('q', state.q);
+      const params = filterParams();
       params.set('page', state.page);
       const r = await api.get('/media/list?' + params.toString());
       const items = (r.data || []).filter((it) => !(it.is_private && it.creator_uid && user && it.creator_uid !== user.id));

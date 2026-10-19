@@ -1072,7 +1072,15 @@
             "knows": "认识",
             "met-through": "经人介绍",
             "spouse": "配偶",
-            "child": "子女"
+            "child": "子女",
+            "classmate": "同学",
+            "client": "客户",
+            "landlord": "房东",
+            "roommate": "室友",
+            "in-law": "姻亲",
+            "ex": "前任",
+            "doctor": "医生",
+            "teacher": "老师"
         },
         "date": "日期",
         "note": "备注",
@@ -1213,7 +1221,8 @@
         "groupsUsage": "{{count}} 人",
         "aclLabel": "对谁隐藏",
         "aclHint": "选中的用户将看不到此联系人（仅管理员可设置）。",
-        "aclEmpty": "暂无可屏蔽用户"
+        "aclEmpty": "暂无可屏蔽用户",
+        "typePresetHint": "系统预设的关系类型，直接选择即可，无需自行创建。"
     },
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
@@ -2144,8 +2153,8 @@
         "weatherLatPlaceholder": "例如 39.90",
         "weatherLonLabel": "经度",
         "weatherLonPlaceholder": "例如 116.40",
-        "weatherCityLabel": "城市名称（可选）",
-        "weatherCityPlaceholder": "例如 北京",
+        "weatherCityLabel": "城市名称",
+        "weatherCityPlaceholder": "例如 北京（显示在概览天气卡片）",
         "weatherUnitsLabel": "单位",
         "weatherUnitsMetric": "公制 (°C, km/h)",
         "weatherUnitsImperial": "英制 (°F, mph)",
@@ -2586,7 +2595,9 @@
         "pageImport": "数据导入",
         "pageImportDescription": "从 CSV 或 JSON 导入任务、联系人、购物清单与菜谱。",
         "pageAi": "AI",
-        "pageAiDescription": "接入 OpenAI 兼容模型，用于 AI 生成菜谱。"
+        "pageAiDescription": "接入 OpenAI 兼容模型，用于 AI 生成菜谱。",
+        "weatherCityAutoHint": "留空时将根据坐标自动识别城市，显示在概览天气卡片。",
+        "twoFactorOtherSessionsHint": "其他已登录设备不受影响，下次登录时才会要求验证码。"
     },
     "login": {
         "tagline": "欢迎回到您的家庭计划工具。",
@@ -2617,7 +2628,11 @@
         "welcomeSubtitle": "登录以继续使用你的家庭计划。",
         "featureCalendar": "共享日历",
         "featureTasks": "任务与采购",
-        "featurePrivate": "私密且自托管"
+        "featurePrivate": "私密且自托管",
+        "twoFactorUseRecovery": "使用恢复码登录",
+        "twoFactorUseOtp": "改用验证码",
+        "twoFactorRecoveryFormat": "恢复码格式 ABCDE-12345，仅可使用一次",
+        "twoFactorRequiredToast": "需要两步验证，请输入验证码后继续"
     },
     "setup": {
         "title": "欢迎使用 Juju",
@@ -4387,7 +4402,10 @@
         "batchDelete": "删除所选",
         "confirmDeleteBatch": "确定删除选中的 {{count}} 个条目吗？",
         "groupByStatus": "按状态分组",
-        "source": "数据源"
+        "source": "数据源",
+        "selectAll": "全选",
+        "deselectAll": "取消全选",
+        "selectedAll": "已选择全部 {{count}} 项"
     },
     "memory": {
         "tags": "标签",
@@ -4561,6 +4579,16 @@
         "errorEmptyPrompt": "请先描述你想做什么菜。",
         "errorPromptTooLong": "描述太长了，请精简一下。",
         "errorEmptyResponse": "提供方返回了空内容，请重试。",
-        "errorUnexpected": "菜谱生成失败，请稍后再试。"
+        "errorUnexpected": "菜谱生成失败，请稍后再试。",
+        "providerHint": {
+            "doubao": "火山方舟按接入点计费：先在控制台开通模型，再把「接入点 ID」填到下方模型字段。",
+            "siliconflow": "硅基流动聚合多家大模型，新用户有免费额度，适合零成本试用。",
+            "qianfan": "百度千帆：请使用 v2 接口地址，并在千帆控制台创建静态 API Key。",
+            "custom": "完全自定义：Base URL 与模型名自行填写，适用于任何 OpenAI 兼容网关。"
+        },
+        "modelHints": {
+            "doubao": "填接入点 ID（ep- 开头，需先在火山方舟开通模型），不要填模型显示名。"
+        },
+        "getApiKey": "申请密钥"
     }
 }

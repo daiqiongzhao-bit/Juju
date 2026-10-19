@@ -2014,6 +2014,7 @@ async function openContactModal(contact) {
           <option value="">${t('relationships.type.unset')}</option>
           ${state.options.relationTypes.map((rt) => `<option value="${rt}" ${(c.relationship_type || '') === rt ? 'selected' : ''}>${esc(relLabel(rt))}</option>`).join('')}
         </select>
+        <p class="form-hint">${t('relationships.typePresetHint')}</p>
       </div>
 
       <div class="form-group">

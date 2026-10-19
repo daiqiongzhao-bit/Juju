@@ -22,26 +22,87 @@ const log = createLogger('AIConfig');
 /**
  * 预设提供方。全部走 OpenAI 兼容的 /chat/completions，
  * 换成别的协议不是这个版本的事（扩展时在 blossom 处加 SDK 即可）。
+ *
+ * R1 (v0.0.33)：4 → 11 项（国内主流 + OpenAI + 自定义）。新增可选字段
+ * （既有条目形状兼容，旧数据不失效）：
+ *   keyUrl       密钥申请地址（设置页渲染「申请密钥」外链；缺省不显示）
+ *   hintKey      i18n-Key 后缀 → t(`ai.providerHint.${hintKey}`)，缺省用
+ *                通用 ai.baseUrlHint
+ *   modelHintKey 模型输入框专属提示后缀 → t(`ai.modelHints.${modelHintKey}`)，
+ *                缺省用 ai.modelHint（豆包方舟要接入点 ID，不是模型名。
+ *                注意： NICHT t(`ai.modelHint.${...}`) - ai.modelHint 是既有
+ *                字符串键，Dot-Resolver 无法在其下挂嵌套键）
+ *
+ * custom 必须保持末位：providerByKey() 对未知 key 回落最后一项。
  */
 export const AI_PROVIDERS = Object.freeze([
   {
     key: 'openai', label: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
+    keyUrl: 'https://platform.openai.com',
   },
   {
     key: 'deepseek', label: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',
     models: ['deepseek-chat', 'deepseek-reasoner'],
+    keyUrl: 'https://platform.deepseek.com',
   },
   {
-    key: 'qwen', label: 'Qwen (Tongyi Qianwen)',
+    key: 'qwen', label: '通义千问（阿里百炼）',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    models: ['qwen-plus', 'qwen-turbo', 'qwen-max'],
+    models: ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen-long'],
+    keyUrl: 'https://bailian.console.aliyun.com',
   },
   {
-    key: 'custom', label: 'Custom (OpenAI-compatible)',
+    key: 'zhipu', label: '智谱 GLM',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    models: ['glm-4.6', 'glm-4.5', 'glm-4.5-air'],
+    keyUrl: 'https://open.bigmodel.cn',
+  },
+  {
+    key: 'moonshot', label: 'Kimi（月之暗面）',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    models: ['kimi-k2-0905-preview', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+    keyUrl: 'https://platform.moonshot.cn',
+  },
+  {
+    key: 'doubao', label: '豆包（火山方舟）',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    models: [],
+    keyUrl: 'https://console.volcengine.com/ark',
+    hintKey: 'doubao', modelHintKey: 'doubao',
+  },
+  {
+    key: 'minimax', label: 'MiniMax',
+    baseUrl: 'https://api.minimaxi.com/v1',
+    models: ['MiniMax-M2', 'abab7-chat'],
+    keyUrl: 'https://www.minimaxi.com',
+  },
+  {
+    key: 'qianfan', label: '百度千帆（文心）',
+    baseUrl: 'https://qianfan.baidubce.com/v2',
+    models: ['ernie-4.5-turbo', 'ernie-speed', 'ernie-lite'],
+    keyUrl: 'https://qianfan.baidubce.com',
+    hintKey: 'qianfan',
+  },
+  {
+    key: 'hunyuan', label: '腾讯混元',
+    baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
+    models: ['hunyuan-turbos', 'hunyuan-t1'],
+    keyUrl: 'https://console.cloud.tencent.com/hunyuan',
+  },
+  {
+    key: 'siliconflow', label: '硅基流动 SiliconFlow',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    models: ['Qwen/Qwen3-8B', 'deepseek-ai/DeepSeek-V3.2', 'THUDM/GLM-4.6'],
+    keyUrl: 'https://siliconflow.cn',
+    hintKey: 'siliconflow',
+  },
+  {
+    key: 'custom', label: '自定义（OpenAI 兼容）',
     baseUrl: '', models: [],
+    hintKey: 'custom',
   },
 ]);
 

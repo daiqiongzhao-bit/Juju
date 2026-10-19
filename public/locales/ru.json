@@ -1818,8 +1818,8 @@
         "weatherLatPlaceholder": "напр. 55.75",
         "weatherLonLabel": "Долгота",
         "weatherLonPlaceholder": "напр. 37.62",
-        "weatherCityLabel": "Название города (необязательно)",
-        "weatherCityPlaceholder": "напр. Москва",
+        "weatherCityLabel": "Название города",
+        "weatherCityPlaceholder": "напр. Москва (отображается в виджете погоды)",
         "weatherUnitsLabel": "Единицы",
         "weatherUnitsMetric": "Метрические (°C, км/ч)",
         "weatherUnitsImperial": "Имперские (°F, миль/ч)",
@@ -2305,7 +2305,9 @@
         "pageImport": "Data import",
         "pageImportDescription": "Bring tasks, contacts, shopping items and recipes in from CSV or JSON.",
         "pageAi": "AI",
-        "pageAiDescription": "Connect an OpenAI-compatible model used for AI recipe ideas."
+        "pageAiDescription": "Connect an OpenAI-compatible model used for AI recipe ideas.",
+        "weatherCityAutoHint": "Оставьте пустым — город определится автоматически по координатам и отобразится в виджете погоды.",
+        "twoFactorOtherSessionsHint": "Другие вошедшие устройства не затрагиваются; код будет запрошен при следующем входе."
     },
     "login": {
         "tagline": "С возвращением в ваш семейный планировщик.",
@@ -2336,7 +2338,11 @@
         "twoFactorSubmit": "Verify",
         "twoFactorVerifying": "Verifying…",
         "twoFactorInvalid": "That code is not valid.",
-        "twoFactorCancel": "Cancel sign-in"
+        "twoFactorCancel": "Cancel sign-in",
+        "twoFactorUseRecovery": "Войти с кодом восстановления",
+        "twoFactorUseOtp": "Переключиться на код подтверждения",
+        "twoFactorRecoveryFormat": "Коды восстановления выглядят как ABCDE-12345 и используются один раз.",
+        "twoFactorRequiredToast": "Требуется двухфакторная проверка — введите код, чтобы продолжить."
     },
     "setup": {
         "title": "Добро пожаловать в Juju",
@@ -4106,7 +4112,10 @@
         "batchDelete": "Удалить выбранное",
         "confirmDeleteBatch": "Удалить {{count}} выбранных элементов?",
         "groupByStatus": "Группировать по статусу",
-        "source": "Source"
+        "source": "Source",
+        "selectAll": "Выбрать все",
+        "deselectAll": "Снять выделение",
+        "selectedAll": "Выбраны все {{count}} элементов"
     },
     "memory": {
         "tags": "Tags",
@@ -4237,7 +4246,15 @@
             "knows": "Knows",
             "met-through": "Met through",
             "spouse": "Spouse",
-            "child": "Child"
+            "child": "Child",
+            "classmate": "Одноклассник",
+            "client": "Клиент",
+            "landlord": "Арендодатель",
+            "roommate": "Сосед по комнате",
+            "in-law": "Родня супруга",
+            "ex": "Бывший партнёр",
+            "doctor": "Врач",
+            "teacher": "Учитель"
         },
         "date": "Date",
         "note": "Note",
@@ -4378,7 +4395,8 @@
         "constellationLabel": "Sternzeichen",
         "spouseNoteLabel": "Notiz für Angehörige",
         "priorityIntroLabel": "Bevorzugt vorstellen",
-        "enumUnset": "Nicht gesetzt"
+        "enumUnset": "Nicht gesetzt",
+        "typePresetHint": "Это предустановленные типы отношений — просто выберите подходящий, создавать свой не нужно."
     },
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
@@ -4562,6 +4580,16 @@
         "errorEmptyPrompt": "Please describe what you want to cook.",
         "errorPromptTooLong": "That request is too long. Please shorten it a little.",
         "errorEmptyResponse": "The provider returned an empty answer. Please try again.",
-        "errorUnexpected": "The recipe could not be generated. Please try again later."
+        "errorUnexpected": "The recipe could not be generated. Please try again later.",
+        "providerHint": {
+            "doubao": "Volcano Engine Ark тарифицирует по эндпоинтам: сначала создайте модель в консоли, затем введите её ID ниже.",
+            "siliconflow": "SiliconFlow объединяет множество моделей и даёт новым пользователям бесплатный лимит — отличный вариант начать без затрат.",
+            "qianfan": "Baidu Qianfan: используйте базовый URL v2 и создайте статический API-ключ в консоли Qianfan.",
+            "custom": "Полностью настраиваемо: укажите свой базовый URL и имя модели — подходит для любого совместимого с OpenAI шлюза."
+        },
+        "modelHints": {
+            "doubao": "Введите ID эндпоинта (начинается с ep-, сначала создайте модель в Volcano Engine Ark) — не отображаемое имя модели."
+        },
+        "getApiKey": "Получить API-ключ"
     }
 }

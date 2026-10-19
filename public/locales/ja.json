@@ -1818,8 +1818,8 @@
         "weatherLatPlaceholder": "例: 35.68",
         "weatherLonLabel": "経度",
         "weatherLonPlaceholder": "例: 139.69",
-        "weatherCityLabel": "都市名（任意）",
-        "weatherCityPlaceholder": "例: 東京",
+        "weatherCityLabel": "都市名",
+        "weatherCityPlaceholder": "例: 東京（ダッシュボードの天気カードに表示）",
         "weatherUnitsLabel": "単位",
         "weatherUnitsMetric": "メートル法 (°C, km/h)",
         "weatherUnitsImperial": "ヤード・ポンド法 (°F, mph)",
@@ -2305,7 +2305,9 @@
         "pageImport": "Data import",
         "pageImportDescription": "Bring tasks, contacts, shopping items and recipes in from CSV or JSON.",
         "pageAi": "AI",
-        "pageAiDescription": "Connect an OpenAI-compatible model used for AI recipe ideas."
+        "pageAiDescription": "Connect an OpenAI-compatible model used for AI recipe ideas.",
+        "weatherCityAutoHint": "空欄のままで座標から都市を自動判別し、ダッシュボードの天気カードに表示します。",
+        "twoFactorOtherSessionsHint": "他のログイン中デバイスには影響ありません。次回ログイン時にコードが求められます。"
     },
     "login": {
         "tagline": "家族のプランナーへおかえりなさい。",
@@ -2336,7 +2338,11 @@
         "twoFactorSubmit": "Verify",
         "twoFactorVerifying": "Verifying…",
         "twoFactorInvalid": "That code is not valid.",
-        "twoFactorCancel": "Cancel sign-in"
+        "twoFactorCancel": "Cancel sign-in",
+        "twoFactorUseRecovery": "回復コードでログイン",
+        "twoFactorUseOtp": "確認コードに切り替える",
+        "twoFactorRecoveryFormat": "回復コードの形式は ABCDE-12345 で、一度だけ使えます。",
+        "twoFactorRequiredToast": "二段階認証が必要です。コードを入力して続行してください。"
     },
     "setup": {
         "title": "Juju へようこそ",
@@ -4106,7 +4112,10 @@
         "batchDelete": "選択を削除",
         "confirmDeleteBatch": "選択した {{count}} 件を削除しますか？",
         "groupByStatus": "状態でグループ化",
-        "source": "Source"
+        "source": "Source",
+        "selectAll": "すべて選択",
+        "deselectAll": "選択解除",
+        "selectedAll": "全 {{count}} 件を選択しました"
     },
     "memory": {
         "tags": "Tags",
@@ -4237,7 +4246,15 @@
             "knows": "Knows",
             "met-through": "Met through",
             "spouse": "Spouse",
-            "child": "Child"
+            "child": "Child",
+            "classmate": "同級生",
+            "client": "顧客",
+            "landlord": "大家さん",
+            "roommate": "ルームメイト",
+            "in-law": "姻戚",
+            "ex": "元恋人",
+            "doctor": "医師",
+            "teacher": "先生"
         },
         "date": "Date",
         "note": "Note",
@@ -4378,7 +4395,8 @@
         "constellationLabel": "Sternzeichen",
         "spouseNoteLabel": "Notiz für Angehörige",
         "priorityIntroLabel": "Bevorzugt vorstellen",
-        "enumUnset": "Nicht gesetzt"
+        "enumUnset": "Nicht gesetzt",
+        "typePresetHint": "関係の種類はプリセットです。選ぶだけで、自作の必要はありません。"
     },
     "anniversaries": {
         "calendarEventTitle": "{{title}} · {{name}}",
@@ -4562,6 +4580,16 @@
         "errorEmptyPrompt": "Please describe what you want to cook.",
         "errorPromptTooLong": "That request is too long. Please shorten it a little.",
         "errorEmptyResponse": "The provider returned an empty answer. Please try again.",
-        "errorUnexpected": "The recipe could not be generated. Please try again later."
+        "errorUnexpected": "The recipe could not be generated. Please try again later.",
+        "providerHint": {
+            "doubao": "火山方舟はエンドポイント単位の課金です。まずコンソールでモデルを開通し、下の欄にエンドポイント ID を入力してください。",
+            "siliconflow": "シリコンフローは多数のモデルを集約し、新規ユーザーには無料枠があります。無料で試すのに最適です。",
+            "qianfan": "百度千帆：v2 のベース URL を使い、千帆コンソールで静的 API キーを作成してください。",
+            "custom": "完全カスタム：ベース URL とモデル名を自由に入力できます。OpenAI 互換のゲートウェイなら何でも使えます。"
+        },
+        "modelHints": {
+            "doubao": "エンドポイント ID を入力してください（ep- 始頭、まず火山方舟でモデルを開通）。モデルの表示名ではありません。"
+        },
+        "getApiKey": "API キーを取得"
     }
 }

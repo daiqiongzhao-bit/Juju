@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.33] - 2026-10-19
+> AI 国内供应商预置、天气城市反编码、概览宽屏适配、影音全选、关系类型全语言翻译、2FA 登录体验打磨。
+
+### 新增
+
+- **AI 供应商预置扩展（R1）**：设置 → 管理 → AI 的提供方下拉从 4 项扩展到 **11 项**——OpenAI、DeepSeek、通义千问（阿里百炼）、智谱 GLM、Kimi（月之暗面）、豆包（火山方舟）、MiniMax、百度千帆（文心）、腾讯混元、硅基流动 SiliconFlow、自定义（OpenAI 兼容，保持末位）。选中任一预选项自动联动 Base URL 占位符与代表模型 datalist；密钥仅 SM4 密文落库、界面只显示掩码的约定不变。豆包方舟的模型字段为接入点 ID（ep- 开头），输入框有针对性提示；硅基流动标注「聚合多模型 + 免费额度」，适合零成本试用。未知 provider key 仍按末项 custom 处理，存量配置不受影响。
+- **概览天气显示当前城市（R3）**：`weather_city` 未填写且配置了坐标时，服务端自动调用 BigDataCloud 反向地理编码（免费、无需 API key，`localityLanguage` 跟随界面语言）解析城市名并持久化到 `sync_config.weather_city`——不再显示「22.543, 114.0579」式的经纬度。三层防重：30 分钟天气响应缓存 + 进程内反编码缓存（坐标+语言为 key，24h / 50 条）+ 持久化结果；反编码失败静默回退坐标串，不白屏不报错，下次请求重试。个人坐标覆盖（`weather_lat:user:<id>`）时写入个人键 `weather_city:user:<id>`，不污染家庭默认。设置页城市字段新增引导文案，定位成功后自动回填城市名（仅空框，失败静默）。
+- **影音库全选（R5）**：多选批量栏新增「全选 / 取消全选」，范围为**当前筛选条件下的全部条目**（跨页，新增只读端点 `GET /api/v1/media/ids`，与 `/list` 共用过滤与可见性规则、`ORDER BY updated_at DESC` 不分页）。批量删除复用既有 `/media/batch-delete`，确认框数量与全集一致；退出多选状态零残留。
+- **关系类型全语言翻译（R6）**：18 项预设关系类型中的 8 项（同学/客户/房东/室友/姻亲/前任/医生/老师）此前在全部 24 个语言包中缺失、界面回退显示英文 key，现已全部补齐（zh 权威，en/de/fr/es/ja/ko/ru 人工翻译，其余语言借英文词但无裸 key）。联系人编辑弹窗的关系下拉下新增「预设、无需自建」说明，直接回答「是否需要自己设置关系」的疑问。存储 key 不变，存量联系人零影响。
+
+### 变更
+
+- **AI 设置页体验（R1）**：provider 切换时联动显示提供方说明（`ai.providerHint.*`）与「申请密钥」外链；豆包选中时模型提示改为「接入点 ID（ep- 开头，需先在火山方舟开通模型）」。
+- **概览宽屏适配（R4）**：≥1440px 视口下概览卡片最小列宽提升至 300px，≥1920px 提升至 340px（追加在既有 1024px 网格规则之后，`row dense` 填充与 widget span 逻辑不变，≤1024px 零回归）。1920×1080、100% 缩放下卡片不再「显得小」。
+- **2FA 登录体验打磨（R2b）**：登录页 OTP 输入满 6 位纯数字自动提交（恢复码格式不触发）；新增「使用恢复码登录 / 改用验证码」切换与格式提示（ABCDE-12345，一次性）；pending 会话访问业务页面时提示语明确为「需要两步验证」而非泛化的「会话过期」；设置页开启 2FA 成功提示补充「其他已登录设备不受影响」。服务端 2FA 逻辑（TOTP ±1 窗口、5 次/分钟限流、恢复码一次性）零改动。
+- **版本号修正**：`package.json` 此前后滞于 CHANGELOG（0.0.31 vs 0.0.32），本版起以 package.json = CHANGELOG = git tag 三者一致为准。
+
 ## [0.0.32] - 2026-10-19
 > fnOS 启动防护：密钥文件缺失 + 加密数据库存在时拒绝生成新密钥。
 

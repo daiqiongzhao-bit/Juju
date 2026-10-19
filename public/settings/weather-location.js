@@ -1,4 +1,4 @@
-import { t } from '/i18n.js';
+import { t, getLocale } from '/i18n.js';
 import { esc } from '/utils/html.js';
 import { toggleRowHtml } from '/settings/components.js';
 
@@ -66,6 +66,7 @@ export function weatherLocationFieldsHtml({ scope, values = {}, autoLocateDisabl
       <label class="form-label" for="${scope}-city">${t('settings.weatherCityLabel')}</label>
       <input class="form-input" type="text" id="${scope}-city" maxlength="100"
         value="${esc(values.city ?? '')}" placeholder="${t('settings.weatherCityPlaceholder')}">
+      <p class="form-hint">${t('settings.weatherCityAutoHint')}</p>
     </div>
     <div class="form-group">
       <label class="form-label" for="${scope}-units">${t('settings.weatherUnitsLabel')}</label>
@@ -87,6 +88,45 @@ export function readWeatherLocation(container, scope) {
   };
 }
 
+/**
+ * R3 (v0.0.33): Nach erfolgreicher Geolokalisierung die Stadt clientseitig
+ * vorbelegen - dieselbe BigDataCloud-Quelle wie der Server (kein Key), Sprache
+ * folgt der UI-Locale. Host ist api.bigdatacloud.NET (die Domain der kosten-
+ * losen Client-seitigen Endpoints laut api-domains-Doku). Nur bei leerem Feld:
+ * eine gespeicherte Stadt ist eine bewusste Entscheidung und wird nie
+ * überschrieben. Fehler (Timeout 6s, Netz, fremde Antwort) schweigen - der
+ * Server fällt beim ersten Wetter-Load auf denselben Dienst zurück und füllt
+ * die Stadt dann serverseitig.
+ *
+ * @param {HTMLElement} container
+ * @param {string} scope
+ * @param {number|string} lat
+ * @param {number|string} lon
+ * @returns {Promise<void>}
+ */
+async function autoFillCity(container, scope, lat, lon) {
+  const cityInput = container.querySelector(`#${scope}-city`);
+  if (!cityInput || cityInput.value.trim()) return;
+  try {
+    const url = [
+      'https://api.bigdatacloud.net/data/reverse-geocode-client',
+      `?latitude=${encodeURIComponent(lat)}`,
+      `&longitude=${encodeURIComponent(lon)}`,
+      `&localityLanguage=${encodeURIComponent(getLocale())}`,
+    ].join('');
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return;
+    const json = await res.json().catch(() => null);
+    const name = json?.city || json?.locality || json?.principalSubdivision;
+    if (!name) return;
+    // Blattwechsel während des Requests: nicht in ein fremdes Formular schreiben.
+    if (!isConnectedWeatherControl(cityInput, container)) return;
+    cityInput.value = String(name).slice(0, 100);
+  } catch {
+    /* still: Feld leer lassen, der Server übernimmt beim Wetter-Laden */
+  }
+}
+
 function requestLocation(container, scope, locateButton) {
   if (!navigator.geolocation) {
     window.yuvomi?.showToast(t('settings.weatherLocateUnsupported'), 'warning');
@@ -100,10 +140,15 @@ function requestLocation(container, scope, locateButton) {
       // Formular nicht mehr zum Dokument und darf nicht mehr beschrieben werden.
       if (!isConnectedWeatherControl(locateButton, container)) return;
 
-      container.querySelector(`#${scope}-lat`).value = position.coords.latitude.toFixed(4);
-      container.querySelector(`#${scope}-lon`).value = position.coords.longitude.toFixed(4);
+      const lat = position.coords.latitude.toFixed(4);
+      const lon = position.coords.longitude.toFixed(4);
+      container.querySelector(`#${scope}-lat`).value = lat;
+      container.querySelector(`#${scope}-lon`).value = lon;
       locateButton.disabled = false;
       window.yuvomi?.showToast(t('settings.weatherLocateSuccess'), 'success');
+      // Stadt vorbelegen (nur leeres Feld, still bei Fehlern) - nicht awaited:
+      // der Toast darf nicht auf einen Reverse-Geocode-Call warten.
+      autoFillCity(container, scope, lat, lon);
     },
     (error) => {
       if (!isConnectedWeatherControl(locateButton, container)) return;

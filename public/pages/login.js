@@ -125,7 +125,10 @@ export async function render(container) {
                 placeholder="000000"
                 required
               />
-              <p class="form-hint">${esc(t('login.twoFactorRecoveryHint'))}</p>
+              <p class="form-hint" id="twofa-mode-hint">${esc(t('login.twoFactorRecoveryHint'))}</p>
+              <div class="auth-form__row">
+                <button type="button" class="auth-link" id="twofa-toggle">${esc(t('login.twoFactorUseRecovery'))}</button>
+              </div>
             </div>
 
             <div class="form-error" id="twofa-error" role="alert" tabindex="-1" hidden></div>
@@ -228,6 +231,25 @@ export async function render(container) {
   const twofaBtn = container.querySelector('#twofa-btn');
   const twofaLabel = twofaBtn?.querySelector('.twofa-btn__label');
   const twofaInput = container.querySelector('#twofa-code');
+  const twofaModeHint = container.querySelector('#twofa-mode-hint');
+  const twofaToggle = container.querySelector('#twofa-toggle');
+  // R2b (v0.0.33): zwei Eingabemodi - TOTP (6 Ziffern, auto-submit) und
+  // Wiederherstellungscode (ABCDE-12345, einmalig, kein auto-submit).
+  let recoveryMode = false;
+
+  function setRecoveryMode(on) {
+    recoveryMode = on;
+    if (!twofaInput) return;
+    twofaInput.inputMode = on ? 'text' : 'numeric';
+    twofaInput.autocomplete = on ? 'off' : 'one-time-code';
+    twofaInput.pattern = on ? '' : '[0-9]*';
+    twofaInput.maxLength = on ? 14 : 16; // ABCDE-12345 + Sicherheitsreserve
+    twofaInput.placeholder = on ? 'ABCDE-12345' : '000000';
+    if (twofaModeHint) twofaModeHint.textContent = on ? t('login.twoFactorRecoveryFormat') : t('login.twoFactorRecoveryHint');
+    if (twofaToggle) twofaToggle.textContent = on ? t('login.twoFactorUseOtp') : t('login.twoFactorUseRecovery');
+    twofaInput.value = '';
+    twofaInput.focus();
+  }
 
   function showTwoFactorStep() {
     if (!twofaForm) return;
@@ -235,6 +257,15 @@ export async function render(container) {
     twofaForm.hidden = false;
     twofaInput?.focus();
   }
+
+  // Auto-Submit: volle 6 Ziffern = vollständiger TOTP-Code, kein extra Klick
+  // nötig (P1-a). Wiederherstellungscodes (ABCDE-12345) matchen nie und
+  // lösen bewusst nichts aus - der Nutzer bestätigt sie selbst.
+  twofaInput?.addEventListener('input', () => {
+    if (recoveryMode) return;
+    if (/^\d{6}$/.test(twofaInput.value)) twofaForm?.requestSubmit();
+  });
+  twofaToggle?.addEventListener('click', () => setRecoveryMode(!recoveryMode));
 
   // Ein Reload während der 2FA-Abfrage soll nicht zurück zum Passwortformular
   // springen: die „pending"-Session ist noch gültig, also direkt den Code fragen.

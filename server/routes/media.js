@@ -139,45 +139,59 @@ function syncSharedMemory(mediaId) {
   }
 }
 
+// ------------------------------------------------------------
+// Filter-/Sichtbarkeits-Bedingungen für Listen-Endpunkte.
+// Wird von GET /list UND GET /ids benutzt - „全选" muss exakt die
+// sichtbare Liste treffen, daher eine gemeinsame Quelle statt zwei
+// Kopien, die auseinanderlaufen können. Sichtbarkeit: öffentliche
+// Einträge + eigene; Admins sehen alles.
+// @returns {{whereSql: string, params: Array}}
+// ------------------------------------------------------------
+function mediaFilters(req, me, admin) {
+  const type = req.query.type;
+  const status = req.query.status;
+  const member = req.query.member ? parseInt(req.query.member, 10) : null;
+  const tag = req.query.tag;
+  const q = req.query.q;
+
+  const where = [];
+  const params = [];
+  where.push('(is_private = 0 OR creator_uid = ?' + (admin ? ' OR 1=1' : '') + ')');
+  params.push(me);
+  if (type && MEDIA_TYPES.includes(type)) {
+    where.push('media_type = ?');
+    params.push(type);
+  }
+  if (status && STATUSES.includes(status)) {
+    where.push('status = ?');
+    params.push(status);
+  }
+  if (tag) {
+    where.push('tags LIKE ?');
+    params.push(`%${tag}%`);
+  }
+  if (q) {
+    where.push('(title LIKE ? OR comment LIKE ?)');
+    params.push(`%${q}%`, `%${q}%`);
+  }
+  if (member) {
+    where.push('id IN (SELECT media_id FROM media_member_rel WHERE member_uid = ?)');
+    params.push(member);
+  }
+  const whereSql = where.length ? ' WHERE ' + where.join(' AND ') : '';
+  return { whereSql, params };
+}
+
 // GET /api/v1/media/list
 router.get('/list', (req, res) => {
   try {
     const me = uid(req);
     const admin = isAdmin(req);
-    const type = req.query.type;
-    const status = req.query.status;
-    const member = req.query.member ? parseInt(req.query.member, 10) : null;
-    const tag = req.query.tag;
-    const q = req.query.q;
     const page = Math.max(1, parseInt(req.query.page || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '50', 10)));
     const offset = (page - 1) * limit;
 
-    const where = [];
-    const params = [];
-    where.push('(is_private = 0 OR creator_uid = ?' + (admin ? ' OR 1=1' : '') + ')');
-    params.push(me);
-    if (type && MEDIA_TYPES.includes(type)) {
-      where.push('media_type = ?');
-      params.push(type);
-    }
-    if (status && STATUSES.includes(status)) {
-      where.push('status = ?');
-      params.push(status);
-    }
-    if (tag) {
-      where.push('tags LIKE ?');
-      params.push(`%${tag}%`);
-    }
-    if (q) {
-      where.push('(title LIKE ? OR comment LIKE ?)');
-      params.push(`%${q}%`, `%${q}%`);
-    }
-    if (member) {
-      where.push('id IN (SELECT media_id FROM media_member_rel WHERE member_uid = ?)');
-      params.push(member);
-    }
-    const whereSql = where.length ? ' WHERE ' + where.join(' AND ') : '';
+    const { whereSql, params } = mediaFilters(req, me, admin);
     const total = db.get().prepare(`SELECT COUNT(*) AS n FROM media_item${whereSql}`).get(...params).n;
     const rows = db
       .get()
@@ -194,6 +208,27 @@ router.get('/list', (req, res) => {
     res.json({ data: items, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (err) {
     log.error('GET /list', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// GET /api/v1/media/ids  (vor /:id! - sonst matcht der Param-Router „ids")
+// R5 (v0.0.33): reine ID-Liste für „全选" im Batch-Modus - dieselben Filter
+// und dieselbe Sichtbarkeit wie /list, aber OHNE Pagination (der Haushalt
+// wählt „alles unter diesem Filter", nicht „die erste Seite"). Sortierung wie
+// /list: updated_at DESC. Antwort: { data: number[] }.
+router.get('/ids', (req, res) => {
+  try {
+    const me = uid(req);
+    const admin = isAdmin(req);
+    const { whereSql, params } = mediaFilters(req, me, admin);
+    const rows = db
+      .get()
+      .prepare(`SELECT id FROM media_item${whereSql} ORDER BY updated_at DESC`)
+      .all(...params);
+    res.json({ data: rows.map((r) => r.id) });
+  } catch (err) {
+    log.error('GET /ids', err);
     res.status(500).json({ error: 'Interner Fehler', code: 500 });
   }
 });
