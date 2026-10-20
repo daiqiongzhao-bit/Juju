@@ -1,6 +1,6 @@
 services:
   juju:
-    image: daiqiongzhao/juju:0.0.33
+    image: daiqiongzhao/juju:0.0.34
     container_name: juju
     restart: unless-stopped
     ports:

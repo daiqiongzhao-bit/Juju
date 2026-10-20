@@ -1,5 +1,5 @@
 appname               = juju
-version               = 0.0.33
+version               = 0.0.34
 display_name          = Juju 家庭管家
 desc                  = 自托管家庭事务中心：日历、任务、购物清单、餐食计划、预算记账、家庭记忆时间线、影音库与联系人管理。数据全部留在自己的 NAS，无需订阅。<br/><br/>Self-hosted family hub: calendar, tasks, shopping, meal planning, budget, family memories, media library and contacts. All data stays on your NAS.
 platform              = x86
@@ -12,4 +12,4 @@ desktop_uidir         = ui
 desktop_applaunchname = juju.Application
 disable_authorization_path = true
 install_type          =
-changelog             = v0.0.33：AI 菜谱新增国内大模型供应商一键接入（DeepSeek/通义千问/智谱GLM/Kimi/豆包/MiniMax/百度千帆/腾讯混元/硅基流动）并支持完全自定义；概览天气自动显示当前城市（反向地理编码）；影音书库支持全选批量操作；关系类型英文化项全部补齐中文翻译；概览宽屏自适应；2FA 登录体验打磨（OTP 自动提交、恢复码登录、会话过期提示）。含 v0.0.32 密钥崩溃防护。
+changelog             = v0.0.34：修复 2FA 设置流程——输错密码不再被误踢回登录页，改为页面内联提示；会话失效与两步验证 pending 行为不变。含 v0.0.33 国内 AI 供应商、天气城市、关系中文化、响应式、影音全选全部改进。

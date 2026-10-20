@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.34] - 2026-10-20
+
+### Fixed
+- **2FA 设置流程**：设置页「开始设置两步验证」输错密码不再被误踢回登录页——401 区分为业务错误（带 reason，如 invalid_password，页面内联报错）与会话失效（跳登录页），pending 两步验证会话行为不变（R2c 修复，新增 classify401 纯函数与 10 个测试）
+
 ## [0.0.33] - 2026-10-19
 > AI 国内供应商预置、天气城市反编码、概览宽屏适配、影音全选、关系类型全语言翻译、2FA 登录体验打磨。
 
