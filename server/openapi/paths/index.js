@@ -11,6 +11,7 @@ import { shoppingPaths } from './shopping.js';
 import { mealsPaths } from './meals.js';
 import { recipesPaths } from './recipes.js';
 import { pantryPaths } from './pantry.js';
+import { homeInventoryPaths } from './home-inventory.js';
 import { kitchenPaths } from './kitchen.js';
 import { calendarPaths } from './calendar.js';
 import { notesPaths } from './notes.js';
@@ -46,6 +47,7 @@ export function buildPaths() {
     ...mealsPaths(),
     ...recipesPaths(),
     ...pantryPaths(),
+    ...homeInventoryPaths(),
     ...kitchenPaths(),
     ...calendarPaths(),
     ...notesPaths(),

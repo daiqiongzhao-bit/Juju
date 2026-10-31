@@ -41,6 +41,7 @@ import shoppingRouter from './routes/shopping.js';
 import mealsRouter from './routes/meals.js';
 import recipesRouter from './routes/recipes.js';
 import pantryRouter from './routes/pantry.js';
+import homeInventoryRouter from './routes/home-inventory.js';
 import kitchenRouter from './routes/kitchen.js';
 import calendarRouter from './routes/calendar.js';
 import notesRouter from './routes/notes.js';
@@ -459,6 +460,8 @@ app.use('/api/v1/meals', mealsRouter);
 app.use('/api/v1/recipes', recipesRouter);
 app.use('/api/v1/mealie', mealieRouter);
 app.use('/api/v1/pantry', pantryRouter);
+// 家庭库存：独立于厨房 Vorrat 的日用品模块（自有表/分类/单位）。
+app.use('/api/v1/home-inventory', homeInventoryRouter);
 // Kreislauf-Zustand der vier Küchen-Tabs in einer Abfrage (utils/kitchen-tabs.js).
 app.use('/api/v1/kitchen', kitchenRouter);
 app.use('/api/v1/calendar', calendarRouter);

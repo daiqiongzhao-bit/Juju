@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.69] - 2026-10-31
+
+### 家庭库存升级为独立模块
+- **真正的独立日用品库存**：「家庭库存」不再是厨房库存的快捷方式——新增独立数据表
+  `home_inventory_items`（Migration 170）与独立 API（`/api/v1/home-inventory`），
+  与厨房食材库存完全分开归类管理，互不混入。
+- **日用品专属分类**：清洁洗护、纸品、个护美妆、家纺织物、零食饮品、家居日用、
+  医药应急、其他 —— 按类别分组展示与筛选（类别计数实时更新）。
+- **日用品专属单位**：个/瓶/盒/包/袋/卷/支/罐/双/片/套，与厨房食材单位体系分离。
+- **完整管理能力**：添加、编辑、删除（可撤销）、数量步进器（+/− 直接在列表上记账）、
+  低量提醒（数量不高于阈值时标记"需要补货"）、备注、按名称/备注搜索。
+- **权限与集成**：独立模块权限键 `home-inventory`（成员可见性单独管控），
+  API Token/MCP scope 同步注册，OpenAPI 文档收录；界面词条 zh/en 已录入，
+  其余语言回退中文显示。
+- 0.0.68 中作为快捷入口的 `/family-inventory` 路由保持不变，现指向独立页面。
+
 ## [0.0.68] - 2026-10-28
 
 ### 家庭库存管理（一级模块）

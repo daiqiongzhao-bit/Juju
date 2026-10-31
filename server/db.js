@@ -5888,6 +5888,31 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 170,
+    description: 'Home inventory: standalone daily-goods stock (separate from kitchen pantry)',
+    up: `
+      -- 家庭库存（一级模块，独立于厨房 Vorrat）：日用品（洗衣液/纸巾/个护等）。
+      -- category/unit 存的是 public/utils/home-inventory-taxonomy.js 的固定
+      -- key（cleaning/paper/... 与 pcs/bottle/...），标签由 i18n 渲染；先固定
+      -- 清单起步，将来要用户自定义时再照 pantry_units 的模式迁移。
+      -- 没有 MHD 和 Lagerort —— 日用品不看保质期，按"低量提醒"补货。
+      CREATE TABLE IF NOT EXISTS home_inventory_items (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT    NOT NULL,
+        category     TEXT    NOT NULL DEFAULT 'household',
+        quantity     REAL    NOT NULL DEFAULT 1,
+        unit         TEXT    NOT NULL DEFAULT 'pcs',
+        min_quantity REAL,
+        notes        TEXT    NOT NULL DEFAULT '',
+        created_by   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_home_inventory_name     ON home_inventory_items(name);
+      CREATE INDEX IF NOT EXISTS idx_home_inventory_category ON home_inventory_items(category);
+    `,
+  },
 ];
 
 /**
