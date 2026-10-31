@@ -12,7 +12,7 @@
  * Abhängigkeiten: lunar-javascript（纯 JS，前后端可复用）
  */
 
-import { Solar } from 'lunar-javascript';
+import { Lunar, Solar, LunarYear } from 'lunar-javascript';
 import { createLogger } from '../logger.js';
 
 const log = createLogger('LunarFields');
@@ -98,6 +98,68 @@ export function deriveLunarFields(birthday) {
   } catch (err) {
     log.warn(`deriveLunarFields: conversion failed for "${value}" — derived fields set to NULL.`, err);
     return { ...NULL_FIELDS };
+  }
+}
+
+/**
+ * 农历生日 → 公历生日 + 派生三字段（deriveLunarFields 的逆换算）。
+ *
+ * 农历闰月格式与 deriveLunarFields 一致：`YYYY-LMM-DD`（如 2020-L04-15）。
+ * 生肖取农历年（`getYearShengXiao`），星座由换算出的公历月日决定
+ * （`getXingzuo` 返回「金牛」等形式，按 PRD 枚举补「座」后缀）。
+ *
+ * 非法入参（年越界 1900-2100、月/日越界、不存在的农历日期——如该年无此闰月、
+ * 该月无 30 日）→ 返回 null，不抛错、不记日志（调用方据此转 400 或置 NULL）。
+ *
+ * @param {number} year   农历年（1900-2100）
+ * @param {number} month  农历月（1-12）
+ * @param {number} day    农历日（1-30）
+ * @param {boolean} [isLeap=false] 是否闰月（该年该月必须实际有闰月）
+ * @returns {{ birthday: string, birthdayLunar: string, zodiac: string, constellation: string }|null}
+ *          换算成功返回四字段，失败返回 null
+ */
+export function deriveFromLunar(year, month, day, isLeap = false) {
+  if (!Number.isInteger(year) || year < LUNAR_MIN_YEAR || year > LUNAR_MAX_YEAR) return null;
+  if (!Number.isInteger(month) || month < 1 || month > 12) return null;
+  if (!Number.isInteger(day) || day < 1 || day > 30) return null;
+
+  try {
+    // lunar-javascript 约定：闰月用负数月（-4 = 闰四月）；不存在的农历日期
+    // （无此闰月、日超出该月天数）会抛错，收敛为 null。
+    const lunar = Lunar.fromYmd(year, isLeap ? -month : month, day);
+    const solar = lunar.getSolar();
+
+    const monthPart = String(month).padStart(2, '0');
+    const dayPart = String(day).padStart(2, '0');
+    const birthdayLunar = isLeap
+      ? `${year}-L${monthPart}-${dayPart}`
+      : `${year}-${monthPart}-${dayPart}`;
+
+    // getXingzuo() liefert z. B. 「金牛」 — PRD-Enum verlangt 「金牛座」.
+    const constellation = `${solar.getXingzuo()}座`;
+
+    return {
+      birthday: solar.toYmd(),
+      birthdayLunar,
+      zodiac: lunar.getYearShengXiao(),
+      constellation,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 查询某个农历年的闰月序号（0 = 该年无闰月）。前端据此决定「闰月」选项是否可选。
+ * @param {number} year 农历年
+ * @returns {number} 闰月序号（1-12），无闰月返回 0；入参非法返回 0
+ */
+export function leapMonthOf(year) {
+  if (!Number.isInteger(year) || year < LUNAR_MIN_YEAR || year > LUNAR_MAX_YEAR) return 0;
+  try {
+    return LunarYear.fromYear(year).getLeapMonth() || 0;
+  } catch {
+    return 0;
   }
 }
 

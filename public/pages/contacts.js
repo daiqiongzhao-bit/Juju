@@ -35,7 +35,11 @@ function catByKey(key) {
 // Label auflösen: Seed → i18n via label_key, Custom → name; unbekannt → key.
 function catLabel(key) {
   const c = catByKey(key);
-  if (!c) return key;
+  if (!c) {
+    // 遗留默认分类 'Sonstiges'（德语原文）→ 本地化“其他”，避免显示原文（D3 根因3）。
+    if (key === 'Sonstiges') return t('category.sonstiges');
+    return key;
+  }
   return c.label_key ? t(c.label_key) : (c.name || c.key);
 }
 
@@ -1089,8 +1093,26 @@ function buildContactForm({ mode, contact = null }) {
     </div>
     <div class="form-group">
       <label class="form-label" for="cm-birthday">${t('contacts.birthdayLabel')}</label>
-      <yuvomi-datepicker id="cm-birthday" type="date" value="${v('birthday')}"></yuvomi-datepicker>
+      <div class="contact-cal-switch" role="group" aria-label="${t('contacts.birthdayLabel')}">
+        <button type="button" class="btn btn--secondary" id="cm-cal-solar" aria-pressed="true">${t('contacts.calendarSolar')}</button>
+        <button type="button" class="btn btn--ghost" id="cm-cal-lunar" aria-pressed="false">${t('contacts.calendarLunar')}</button>
+      </div>
+      <div id="cm-birthday-solar-wrap">
+        <yuvomi-datepicker id="cm-birthday" type="date" value="${v('birthday')}"></yuvomi-datepicker>
+      </div>
+      <div id="cm-birthday-lunar-wrap" hidden>
+        <div class="contact-lunar-grid">
+          <select class="form-input" id="cm-lunar-year" aria-label="${t('contacts.birthdayLunarYear')}"></select>
+          <select class="form-input" id="cm-lunar-month" aria-label="${t('contacts.birthdayLunarMonth')}"></select>
+          <select class="form-input" id="cm-lunar-day" aria-label="${t('contacts.birthdayLunarDay')}"></select>
+        </div>
+        <label class="cm-switch" for="cm-lunar-leap">
+          <input type="checkbox" id="cm-lunar-leap">
+          <span>${t('contacts.birthdayLunarLeap')}</span>
+        </label>
+      </div>
       <p class="form-hint">${t('contacts.birthdayHint')}</p>
+      <p class="form-hint" id="cm-lunar-preview" hidden></p>
     </div>
     <div class="form-group">
       <label class="form-label" for="cm-birthday-lunar">${t('contacts.birthdayLunarLabel')}</label>
@@ -1123,6 +1145,41 @@ function buildContactForm({ mode, contact = null }) {
         <span>${t('contacts.priorityIntroLabel')}</span>
       </label>
       <p class="form-hint">${t('contacts.priorityIntroHint')}</p>
+    </div>
+    <div class="modal-grid modal-grid--2">
+      <div class="form-group">
+        <label class="form-label" for="cm-gender">${t('relationships.gender')}</label>
+        <select class="form-input" id="cm-gender">
+          <option value="">${t('relationships.genderUnset')}</option>
+          <option value="male" ${v('gender') === 'male' ? 'selected' : ''}>${t('relationships.genderMale')}</option>
+          <option value="female" ${v('gender') === 'female' ? 'selected' : ''}>${t('relationships.genderFemale')}</option>
+          <option value="other" ${v('gender') === 'other' ? 'selected' : ''}>${t('relationships.genderOther')}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cm-hometown">${t('relationships.hometown')}</label>
+        <input type="text" class="form-input" id="cm-hometown" maxlength="120" value="${v('hometown')}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cm-wechat">${t('relationships.wechat')}</label>
+        <input type="text" class="form-input" id="cm-wechat" maxlength="64" value="${v('wechat')}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cm-qq">${t('relationships.qq')}</label>
+        <input type="text" class="form-input" id="cm-qq" maxlength="64" value="${v('qq')}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cm-douyin">${t('relationships.douyin')}</label>
+        <input type="text" class="form-input" id="cm-douyin" maxlength="64" value="${v('douyin')}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cm-plate">${t('relationships.vehiclePlate')}</label>
+        <input type="text" class="form-input" id="cm-plate" maxlength="64" value="${v('vehiclePlate')}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cm-school">${t('relationships.school')}</label>
+        <input type="text" class="form-input" id="cm-school" maxlength="120" value="${v('school')}" autocomplete="off">
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label" for="cm-notes">${t('contacts.notesLabel')}</label>
@@ -1191,6 +1248,148 @@ function buildContactForm({ mode, contact = null }) {
       // ausschließlich der rohe Feldinhalt gespeichert (kein Datenverlust).
       wirePhoneHints(panel);
 
+      // ── 双历法生日录入（公历|农历分段开关，0.0.39）───────────────────
+      // 公历模式保留原 datepicker；农历模式为 年/月/日 三下拉 + 闰月选项
+      // （仅该农历年实际有闰月时可选）。输入变化（debounce 150ms）调
+      // /contacts/lunar-convert 实时回填公历 birthday + 只读农历/生肖/星座
+      // 预览；保存仍只提交公历 birthday。生肖/星座下拉的手动覆盖语义不变。
+      const CAL_MIN_YEAR = 1900;
+      const CAL_MAX_YEAR = 2100;
+      const dpSolar     = panel.querySelector('#cm-birthday');
+      const solarWrap   = panel.querySelector('#cm-birthday-solar-wrap');
+      const lunarWrap   = panel.querySelector('#cm-birthday-lunar-wrap');
+      const yearSel     = panel.querySelector('#cm-lunar-year');
+      const monthSel    = panel.querySelector('#cm-lunar-month');
+      const daySel      = panel.querySelector('#cm-lunar-day');
+      const leapChk     = panel.querySelector('#cm-lunar-leap');
+      const lunarInput  = panel.querySelector('#cm-birthday-lunar');
+      const previewEl   = panel.querySelector('#cm-lunar-preview');
+      const solarBtn    = panel.querySelector('#cm-cal-solar');
+      const lunarBtn    = panel.querySelector('#cm-cal-lunar');
+
+      // 农历三下拉选项：年倒序（常用年份在顶部）、月 1-12、日 1-30。
+      if (yearSel && yearSel.options.length === 0) {
+        for (let y = CAL_MAX_YEAR; y >= CAL_MIN_YEAR; y -= 1) yearSel.add(new Option(String(y), String(y)));
+        for (let m = 1; m <= 12; m += 1) monthSel.add(new Option(String(m), String(m)));
+        for (let d = 1; d <= 30; d += 1) daySel.add(new Option(String(d), String(d)));
+      }
+
+      let lunarMode = false;
+      let convertTimer = 0;
+
+      // 生肖/星座下拉回填：值不在枚举里时补一个「现值」选项（同 enumOpts 的
+      // orphan 处理），再选中——避免 stummes Select 静默改写用户数据。
+      const setEnumSelect = (sel, val) => {
+        if (!sel || !val) return;
+        if (![...sel.options].some((o) => o.value === val)) {
+          sel.insertAdjacentHTML('afterbegin', `<option value="${esc(val)}">${esc(val)}</option>`);
+        }
+        sel.value = val;
+      };
+
+      // 农历生日串（YYYY-MM-DD / 闰月 YYYY-LMM-DD）→ {y, m, d, leap}。
+      const parseLunarParts = (value) => {
+        const m = /^(\d{4})(?:-L(\d{2})|-(\d{2}))-(\d{2})$/.exec(String(value || '').trim());
+        if (!m) return null;
+        return { y: Number(m[1]), m: Number(m[2] || m[3]), d: Number(m[4]), leap: Boolean(m[2]) };
+      };
+
+      // 农历 → 公历实时换算：回填公历 datepicker（保存路径不变）+ 只读预览。
+      const convertLunar = async () => {
+        const year = Number(yearSel.value);
+        const month = Number(monthSel.value);
+        const day = Number(daySel.value);
+        if (!year || !month || !day) return;
+        const isLeap = leapChk.checked && !leapChk.disabled;
+        try {
+          const res = await api.post('/contacts/lunar-convert', { calendar: 'lunar', year, month, day, isLeap });
+          const data = res?.data ?? {};
+          // 保存只提交公历 birthday：换算结果直接落进公历 datepicker。
+          if (data.birthday) dpSolar.value = data.birthday;
+          if (lunarInput && data.birthdayLunar) lunarInput.value = data.birthdayLunar;
+          setEnumSelect(panel.querySelector('#cm-zodiac'), data.zodiac);
+          setEnumSelect(panel.querySelector('#cm-constellation'), data.constellation);
+          // 闰月仅在该农历年实际有闰月时可勾选（leapMonth 0 = 无闰月）。
+          const hasLeap = Number(data.leapMonth ?? 0) > 0;
+          leapChk.disabled = !hasLeap;
+          if (!hasLeap) leapChk.checked = false;
+          if (previewEl) {
+            previewEl.hidden = false;
+            previewEl.textContent = t('contacts.lunarPreview', { date: data.birthday || '—' });
+          }
+        } catch { /* 无效农历日期（如无此闰月）：保持现状，不打断输入 */ }
+      };
+
+      const scheduleConvert = () => {
+        if (!lunarMode) return;
+        clearTimeout(convertTimer);
+        convertTimer = setTimeout(() => { convertLunar(); }, 150);
+      };
+
+      const applyModeUI = () => {
+        solarBtn.setAttribute('aria-pressed', String(!lunarMode));
+        lunarBtn.setAttribute('aria-pressed', String(lunarMode));
+        solarBtn.classList.toggle('btn--secondary', !lunarMode);
+        solarBtn.classList.toggle('btn--ghost', lunarMode);
+        lunarBtn.classList.toggle('btn--secondary', lunarMode);
+        lunarBtn.classList.toggle('btn--ghost', !lunarMode);
+        solarWrap.hidden = lunarMode;
+        lunarWrap.hidden = !lunarMode;
+      };
+
+      // 切到农历：用现有 birthday 值反推初值（已存农历生日优先，其次公历换算，
+      // 都没有则落到今年 1 月 1 日）。
+      const enterLunarMode = async () => {
+        if (lunarMode) return;
+        lunarMode = true;
+        applyModeUI();
+
+        const stored = isEdit ? contact.birthday_lunar : null;
+        const parts = parseLunarParts(stored);
+        if (parts) {
+          yearSel.value = String(parts.y);
+          monthSel.value = String(parts.m);
+          daySel.value = String(parts.d);
+          leapChk.checked = parts.leap;
+          scheduleConvert();
+          return;
+        }
+
+        const iso = /^\d{4}-\d{2}-\d{2}$/.test(dpSolar.value || '') ? dpSolar.value : '';
+        if (iso) {
+          // 公历 → 农历反推走 solar 换算端点（与保存时的自动派生同源）。
+          try {
+            const [y, m, d] = iso.split('-').map(Number);
+            const res = await api.post('/contacts/lunar-convert', { calendar: 'solar', year: y, month: m, day: d });
+            const lunarParts = parseLunarParts(res?.data?.birthdayLunar);
+            if (lunarParts) {
+              yearSel.value = String(lunarParts.y);
+              monthSel.value = String(lunarParts.m);
+              daySel.value = String(lunarParts.d);
+              leapChk.checked = lunarParts.leap;
+            }
+          } catch { /* 换算失败则保留默认初值 */ }
+          scheduleConvert();
+          return;
+        }
+
+        const todayYear = Math.min(Math.max(new Date().getFullYear(), CAL_MIN_YEAR), CAL_MAX_YEAR);
+        yearSel.value = String(todayYear);
+        monthSel.value = '1';
+        daySel.value = '1';
+        scheduleConvert();
+      };
+
+      solarBtn.addEventListener('click', () => {
+        lunarMode = false;
+        clearTimeout(convertTimer);
+        applyModeUI();
+      });
+      lunarBtn.addEventListener('click', () => { enterLunarMode(); });
+      for (const sel of [yearSel, monthSel, daySel]) sel.addEventListener('change', scheduleConvert);
+      leapChk.addEventListener('change', scheduleConvert);
+      // ── 双历法生日录入结束 ────────────────────────────────────────────
+
       // Kategorie-Vorschau live aktualisieren (Icon links neben dem Select).
       const catSel  = panel.querySelector('#cm-category');
       const catIcon = panel.querySelector('#cm-cat-icon');
@@ -1251,6 +1450,14 @@ function buildContactForm({ mode, contact = null }) {
         const priorityIntro = panel.querySelector('#cm-priority').checked;
         const callThem      = panel.querySelector('#cm-callthem').value.trim() || null;
         const callMe        = panel.querySelector('#cm-callme').value.trim() || null;
+        // 与「人际关系」模块共用 contacts 表，这些资料字段的人两处都能填、互相可见。
+        const gender        = panel.querySelector('#cm-gender')?.value || null;
+        const hometown      = panel.querySelector('#cm-hometown')?.value.trim() || null;
+        const wechat        = panel.querySelector('#cm-wechat')?.value.trim() || null;
+        const qq            = panel.querySelector('#cm-qq')?.value.trim() || null;
+        const douyin        = panel.querySelector('#cm-douyin')?.value.trim() || null;
+        const vehiclePlate  = panel.querySelector('#cm-plate')?.value.trim() || null;
+        const school        = panel.querySelector('#cm-school')?.value.trim() || null;
 
         if (!name) {
           window.yuvomi?.showToast(t('contacts.nameRequiredHint'), 'danger');
@@ -1270,6 +1477,13 @@ function buildContactForm({ mode, contact = null }) {
           body.priorityIntro = priorityIntro;
           body.callThem      = callThem;
           body.callMe        = callMe;
+          body.gender        = gender;
+          body.hometown      = hometown;
+          body.wechat        = wechat;
+          body.qq            = qq;
+          body.douyin        = douyin;
+          body.vehiclePlate  = vehiclePlate;
+          body.school        = school;
           if (isEdit) {
             // 仅传变化项: 不改 → 服务端自动换算/原值兜底 (siehe oben).
             if (zodiac !== (contact.zodiac || null)) body.zodiac = zodiac;

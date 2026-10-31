@@ -1245,6 +1245,14 @@
     --fab-size: var(--target-lg);
     --fab-gap: var(--space-8);
     --fab-offset-bottom: var(--fab-gap);
+    /* Kein 104px-Leerband unter dem Inhalt (Feedback 2026-10-23): mobil
+     * muss --fab-safe-zone den FAB über der Bottom-Nav freihalten, aber auf
+     * dem Desktop schwebt der FAB nur in der Ecke - eine volle Breite aus
+     * Leerraum unter dem letzten Widget Block war reine Verschwendung.
+     * 32px Atemzug genügen; dass der FAB bei ganz nach unten gescrolltem
+     * Inhalt die letzte Karten-Ecke knapp überlappt, ist das übliche
+     * Desktop-FAB-Verhalten (wie auf jedem Material-Desktop-Portal). */
+    --fab-safe-zone: var(--space-8);
   }
 }
 

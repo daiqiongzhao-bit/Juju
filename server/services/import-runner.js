@@ -18,6 +18,7 @@ import crypto from 'node:crypto';
 import * as db from '../db.js';
 import { encryptField, phoneHash } from './sm4.js';
 import { getImportModule } from './import-mapping.js';
+import { applyLunarFields } from './lunar-fields.js';
 import { normalizeRecipeMealTypes } from '../../public/utils/recipe-meal-types.js';
 import { createLogger } from '../logger.js';
 
@@ -193,7 +194,17 @@ function writeContact(record, userId) {
   if (record.organization !== undefined) { columns.push('organization'); params.push(record.organization); }
   if (record.job_title !== undefined) { columns.push('job_title'); params.push(record.job_title); }
   if (record.nickname !== undefined) { columns.push('nickname'); params.push(record.nickname); }
-  if (birthday !== null) { columns.push('birthday'); params.push(birthday); }
+  if (birthday !== null) {
+    columns.push('birthday');
+    params.push(birthday);
+    // v147 派生三件套：与 routes/contacts.js 的保存路径同源（applyLunarFields）——
+    // birthday 有值时自动换算 birthday_lunar/zodiac/constellation；日期非法或
+    // 年份超出 1900-2100 时返回三 NULL（置 NULL 不崩，该行照常导入）。
+    const lunar = applyLunarFields({ birthday });
+    columns.push('birthday_lunar', 'zodiac', 'constellation');
+    // camelCase（applyLunarFields 返回键）→ snake_case（contacts 列名）。
+    params.push(lunar.birthdayLunar ?? null, lunar.zodiac ?? null, lunar.constellation ?? null);
+  }
   if (phonePlain !== null) {
     columns.push('phone', 'phone_hash');
     params.push(encryptField(phonePlain), phoneHash(phonePlain));

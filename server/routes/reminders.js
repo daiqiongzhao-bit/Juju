@@ -37,6 +37,7 @@ router.get('/pending', (req, res) => {
           WHEN 'task'  THEN (SELECT title FROM tasks           WHERE id = r.entity_id)
           WHEN 'event' THEN (SELECT title FROM calendar_events WHERE id = r.entity_id)
           WHEN 'subscription' THEN (SELECT name FROM budget_subscriptions WHERE id = r.entity_id)
+          WHEN 'medication'   THEN (SELECT '⏰ ' || name || COALESCE(' (' || expiry_date || ')', '') FROM medications WHERE id = r.entity_id)
         END AS entity_title
       FROM reminders r
       WHERE r.created_by  = ?

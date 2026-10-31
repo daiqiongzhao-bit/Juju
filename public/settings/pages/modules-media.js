@@ -1,6 +1,7 @@
 import { t } from '/i18n.js';
 import { api } from '/api.js';
 import { confirmModal } from '/components/modal.js';
+import { esc } from '/utils/html.js';
 
 // UTC-Zeitstempel (…Z) in lokale Zeitzone formatieren, z.B. "2026/10/17 12:26"
 function fmtLocalDateTime(iso) {
@@ -99,6 +100,12 @@ function renderPage(container, cfg) {
             <button type="button" class="btn btn--secondary" id="emby-import">${t('settings.embyImport')}</button>
           </div>
         </form>
+      </div>
+
+      <div class="settings-card">
+        <h3 class="settings-card__title">${t('settings.embyMembersTitle')}</h3>
+        <p class="settings-card-description">${t('settings.embyMembersDesc')}</p>
+        <div id="emby-members"><p class="form-hint">${t('common.loading')}</p></div>
       </div>
 
       <div class="settings-card">
@@ -339,4 +346,93 @@ export async function render(container, { user }) {
       .then((r) => populateEmbyUsers((r.data || {}).users, cfg.embyUserId))
       .catch(() => { /* Server nicht erreichbar — Auto-Auswahl bleibt */ });
   }
+
+  wireEmbyMembers(container);
+}
+
+/**
+ * Mitglieder → Emby-Konten (nur Admin). Die Auswahlliste mit allen Emby-
+ * Benutzern bleibt bewusst hier: Mitglieder sehen in ihrem Profil nur das
+ * Ergebnis ihrer eigenen Zuordnung (Feedback 2026-10-26).
+ */
+async function wireEmbyMembers(container) {
+  const host = container.querySelector('#emby-members');
+  if (!host) return;
+
+  let data;
+  try {
+    data = (await api.get('/media/emby/bindings')).data || {};
+  } catch {
+    host.innerHTML = `<p class="form-hint">${esc(t('common.errorGeneric'))}</p>`;
+    return;
+  }
+  if (!data.configured) {
+    host.innerHTML = `<p class="form-hint">${esc(t('settings.embyNotConfigured'))}</p>`;
+    return;
+  }
+  const embyUsers = Array.isArray(data.embyUsers) ? data.embyUsers : [];
+  const rows = Array.isArray(data.users) ? data.users : [];
+  if (!rows.length) {
+    host.innerHTML = `<p class="form-hint">${esc(t('settings.embyMembersEmpty'))}</p>`;
+    return;
+  }
+
+  host.innerHTML = rows
+    .map((u) => {
+      const options = [`<option value="">${esc(t('settings.embyMembersNone'))}</option>`]
+        .concat(
+          embyUsers.map(
+            (eu) =>
+              `<option value="${esc(eu.id)}" ${eu.id === u.emby_user_id ? 'selected' : ''}>${esc(eu.name)}</option>`
+          )
+        )
+        .join('');
+      return `<div class="form-group" data-emby-member="${u.id}">
+        <label class="form-label">${esc(u.display_name || u.username)} <span class="form-hint">@${esc(u.username)}</span></label>
+        <div class="settings-copy-row">
+          <select class="form-input" data-emby-select>${options}</select>
+          <button type="button" class="btn btn--secondary" data-emby-save>${esc(t('common.save'))}</button>
+          <button type="button" class="btn btn--ghost" data-emby-clear ${u.emby_user_id ? '' : 'hidden'}>${esc(t('settings.embyMembersClear'))}</button>
+        </div>
+      </div>`;
+    })
+    .join('');
+
+  host.querySelectorAll('[data-emby-member]').forEach((row) => {
+    const userId = row.dataset.embyMember;
+    const sel = row.querySelector('[data-emby-select]');
+    const saveBtn = row.querySelector('[data-emby-save]');
+    const clearBtn = row.querySelector('[data-emby-clear]');
+
+    saveBtn.addEventListener('click', async () => {
+      if (!sel.value) return;
+      saveBtn.disabled = true;
+      try {
+        const res = await api.put(`/media/emby/bindings/${userId}`, { embyUserId: sel.value });
+        const synced = res?.data?.synced;
+        window.yuvomi?.showToast(
+          synced
+            ? t('settings.embyMembersSavedSynced', { matched: synced.matched || 0 })
+            : t('settings.embyMembersSaved'),
+          'success'
+        );
+        clearBtn.hidden = false;
+      } catch (err) {
+        window.yuvomi?.showToast(err.data?.error || t('common.errorGeneric'), 'danger');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    clearBtn.addEventListener('click', async () => {
+      try {
+        await api.delete(`/media/emby/bindings/${userId}`);
+        sel.value = '';
+        clearBtn.hidden = true;
+        window.yuvomi?.showToast(t('settings.embyMembersCleared'), 'success');
+      } catch (err) {
+        window.yuvomi?.showToast(err.data?.error || t('common.errorGeneric'), 'danger');
+      }
+    });
+  });
 }

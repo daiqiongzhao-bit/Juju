@@ -205,6 +205,20 @@ function renderPage(container, user, refreshFailed, accessNotice) {
     </section>
 
     <section class="settings-section">
+      <h2 class="settings-section__title">${t('settings.embyPersonalSection')}</h2>
+      <div class="settings-card">
+        <h3 class="settings-card__title">${t('settings.embyPersonalTitle')}</h3>
+        <p class="settings-card-description">${t('settings.embyPersonalDesc')}</p>
+        <p class="form-hint" id="my-emby-hint">…</p>
+        <div class="settings-form__actions">
+          <button type="button" class="btn btn--secondary" id="my-emby-sync" hidden>${t('settings.embyMySync')}</button>
+          <button type="button" class="btn btn--ghost" id="my-emby-import" hidden>${t('settings.embyMyImport')}</button>
+        </div>
+        <p class="form-hint" id="my-emby-auto" hidden>${t('settings.embyAutoSyncHint')}</p>
+      </div>
+    </section>
+
+    <section class="settings-section">
       <h2 class="settings-section__title">${t('settings.sectionSecurity')}</h2>
 
       <div class="settings-card">
@@ -221,6 +235,7 @@ function renderPage(container, user, refreshFailed, accessNotice) {
 }
 
 function bindEvents(container, user, profileState) {
+  wireMyEmbyAccount(container);
   const profileError = container.querySelector('#profile-error');
   const avatarFile = container.querySelector('#profile-avatar-file');
   const displayName = container.querySelector('#profile-display-name');
@@ -364,4 +379,79 @@ export async function render(container, { user }) {
     container.replaceChildren();
     throw error;
   }
+}
+
+
+/**
+ * „Mein Emby-Konto" (v0.0.50): jeder Haushalts-Benutzer wählt seinen eigenen
+ * Emby-Benutzer auf demselben Server. Der Admin-Key bleibt global; gespeichert
+ * wird nur die Zuordnung, der Sehstatus landet in media_user_state.
+ */
+async function wireMyEmbyAccount(container) {
+  const hint = container.querySelector('#my-emby-hint');
+  const syncBtn = container.querySelector('#my-emby-sync');
+  const importBtn = container.querySelector('#my-emby-import');
+  const autoHint = container.querySelector('#my-emby-auto');
+  if (!hint) return;
+
+  const load = async () => {
+    try {
+      const d = (await api.get('/media/emby/my-account')).data || {};
+      if (!d.configured) {
+        hint.textContent = t('settings.embyNotConfigured');
+        if (syncBtn) syncBtn.hidden = true;
+        return;
+      }
+      if (d.bound) {
+        hint.textContent = `${t('settings.embyBoundAs')} ${d.embyUserName || ''}`;
+        if (syncBtn) syncBtn.hidden = false;
+        if (importBtn) importBtn.hidden = false;
+        if (autoHint) autoHint.hidden = false;
+      } else {
+        hint.textContent = t('settings.embyNotAssigned');
+        if (syncBtn) syncBtn.hidden = true;
+        if (importBtn) importBtn.hidden = true;
+        if (autoHint) autoHint.hidden = true;
+      }
+    } catch {
+      hint.textContent = t('common.errorGeneric');
+    }
+  };
+
+  // 自助同步：只拉自己的观看记录，不暴露任何其他 Emby 账号。
+  syncBtn?.addEventListener('click', async () => {
+    syncBtn.disabled = true;
+    try {
+      const res = await api.post('/media/emby/my-sync', {});
+      const d = res?.data || {};
+      window.yuvomi?.showToast(
+        t('settings.embyMySyncDone', { matched: d.matched || 0, updated: d.updated || 0 }),
+        'success'
+      );
+      await load();
+    } catch (err) {
+      window.yuvomi?.showToast(err.data?.error || t('common.errorGeneric'), 'danger');
+    } finally {
+      syncBtn.disabled = false;
+    }
+  });
+
+  // 导入：把 Emby 里已有的播放历史补建成影音库条目（只读自己的账号）。
+  importBtn?.addEventListener('click', async () => {
+    importBtn.disabled = true;
+    try {
+      const res = await api.post('/media/emby/my-import', {});
+      const d = res?.data || {};
+      window.yuvomi?.showToast(
+        t('settings.embyMyImportDone', { imported: d.imported || 0, skipped: d.skipped || 0 }),
+        'success'
+      );
+    } catch (err) {
+      window.yuvomi?.showToast(err.data?.error || t('common.errorGeneric'), 'danger');
+    } finally {
+      importBtn.disabled = false;
+    }
+  });
+
+  await load();
 }

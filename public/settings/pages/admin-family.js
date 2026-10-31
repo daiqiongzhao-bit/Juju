@@ -241,6 +241,17 @@ function renderPage(container) {
             <label class="form-label" for="invite-email">${t('settings.memberEmailLabel')}</label>
             <input class="form-input" type="email" id="invite-email" autocomplete="email" />
           </div>
+          <div class="form-group">
+            <label class="form-label" for="invite-valid-days">${t('settings.invites.validDays')}</label>
+            <select class="form-input" id="invite-valid-days">
+              <option value="1">${t('settings.invites.days1')}</option>
+              <option value="3">${t('settings.invites.days3')}</option>
+              <option value="7" selected>${t('settings.invites.days7')}</option>
+              <option value="30">${t('settings.invites.days30')}</option>
+              <option value="90">${t('settings.invites.days90')}</option>
+            </select>
+            <p class="form-hint">${t('settings.invites.validDaysHint')}</p>
+          </div>
           ${toggleRowHtml({
             label: t('settings.invites.sendEmail'),
             attrs: { id: 'invite-send-email' },
@@ -298,10 +309,14 @@ function inviteHtml(invite) {
     roleLabel === primary ? '' : roleLabel,
     invite.role === 'admin' ? t('settings.systemAdminBadge') : '',
   ].filter(Boolean).map(esc).join(' · ');
+  // Abgelaufene Einladungen bleiben sichtbar (mit Zustand), statt still zu verschwinden.
+  const expiredBadge = invite.expired
+    ? `<span class="settings-invite-expired">${esc(t('settings.invites.expiredBadge'))}</span>`
+    : '';
   return `
     <li class="settings-member" data-invite-id="${invite.id}">
       <div class="settings-member__info">
-        <span class="settings-member__name">${esc(primary)}</span>
+        <span class="settings-member__name">${esc(primary)} ${expiredBadge}</span>
         ${meta ? `<span class="settings-member__meta">${meta}</span>` : ''}
         <span class="settings-member__meta">${esc(t('settings.invites.expires', { date: formatDate(invite.expires_at) }))}</span>
       </div>
@@ -395,6 +410,7 @@ function bindInviteEvents(container, initialInvites) {
     const btn = form.querySelector('[type=submit]');
     btn.disabled = true;
     try {
+      payload.valid_days = Number(container.querySelector('#invite-valid-days')?.value) || 7;
       const res = await auth.createInvite(payload);
       invites.unshift(res.data.invite);
       renderInviteList(container, invites);

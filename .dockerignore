@@ -49,8 +49,9 @@ podman-compose.yml
 scripts/
 scripts-tmp/
 
-# Markdown files (README, CHANGELOG, etc.)
+# Markdown files — CHANGELOG.md 在运行时被 server/routes/changelog.js 读取（更新日志弹窗），必须保留；其余 md 排除
 *.md
+!CHANGELOG.md
 
 # Installer tools (not part of the running app)
 tools/

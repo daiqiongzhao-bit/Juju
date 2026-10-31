@@ -156,6 +156,18 @@
   opacity: 0.5;
 }
 
+/* Status-Badge auf der Medien-Widget-Karte (Mixed-Ansicht): oben rechts über
+ * dem Cover, pro Status eingefärbt (doing=blau, wish=grau, finished=grün). */
+.media-widget-card { position: relative; }
+.media-widget-card__badge {
+  position: absolute; top: 4px; right: 4px;
+  font-size: 10px; line-height: 1; padding: 3px 5px; border-radius: 999px;
+  color: #fff; background: #888; backdrop-filter: blur(2px);
+}
+.media-widget-card__badge--doing { background: #2f6fed; }
+.media-widget-card__badge--wish { background: #8a8f98; }
+.media-widget-card__badge--finished { background: #1f9d55; }
+
 /* Geschenke: Punkte + Betraege. Die Punktfarbe und die Zeilenfuellung
  * kommen als --gift-dot / --gift-row-bg aus dem Template (Rot/Weiß-
  * Semantik des Moduls, s. giftLedger.css .gl-stat-bar). */

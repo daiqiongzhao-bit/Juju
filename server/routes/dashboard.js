@@ -393,25 +393,40 @@ router.get('/', (req, res) => {
   try {
     const admin = !!(req.user && (req.user.role === 'admin' || req.user.isAdmin === 1 || req.user.is_admin === 1));
     const adminParam = admin ? 1 : 0;
-    const watching = d.prepare(`
-      SELECT id, media_type, title, cover_url, status, updated_at
-      FROM media_item
-      WHERE status = 'doing' AND (is_private = 0 OR creator_uid = @me OR @admin = 1)
-      ORDER BY updated_at DESC LIMIT 8
+    // Mixed-Ansicht: die letzten N Einträge über ALLE Status
+    // (doing/wish/finished) -> das Widget zeigt die familiäre Media-Sammlung
+    // gemischt, mit Status-Badge pro Karte (siehe renderMediaWidget).
+    // Sichtbarkeit wie /media/list: private Einträge nur für Ersteller/Admin.
+    // v162: persönlicher Emby-Status überlagert den gemeinsamen Status.
+    // Isolation wie /media/list (0.0.61): eigene Einträge + Teilnahme.
+    const visSql = adminParam
+      ? '(1=1)'
+      : `(mi.creator_uid = @me OR EXISTS (SELECT 1 FROM media_member_rel mmr WHERE mmr.media_id = mi.id AND mmr.member_uid = @me))`;
+    const recent = d.prepare(`
+      SELECT mi.id, mi.media_type, mi.title, mi.cover_url,
+             COALESCE(ms.status, mi.status) AS status, mi.updated_at
+      FROM media_item mi
+      LEFT JOIN media_user_state ms ON ms.media_item_id = mi.id AND ms.user_id = @me
+      WHERE COALESCE(ms.status, mi.status) IN ('doing','wish','finished')
+        AND ${visSql}
+      ORDER BY mi.updated_at DESC LIMIT 12
     `).all({ me: userId, admin: adminParam });
     const counts = d.prepare(`
-      SELECT status, COUNT(*) AS n FROM media_item
-      WHERE (is_private = 0 OR creator_uid = @me OR @admin = 1)
-      GROUP BY status
+      SELECT COALESCE(ms.status, mi.status) AS status, COUNT(*) AS n
+      FROM media_item mi
+      LEFT JOIN media_user_state ms ON ms.media_item_id = mi.id AND ms.user_id = @me
+      WHERE ${visSql}
+      GROUP BY COALESCE(ms.status, mi.status)
     `).all({ me: userId, admin: adminParam });
     result.media = {
-      watching,
+      recent,
       doingCount: counts.find((c) => c.status === 'doing')?.n || 0,
+      wishCount: counts.find((c) => c.status === 'wish')?.n || 0,
       finishedCount: counts.find((c) => c.status === 'finished')?.n || 0,
     };
   } catch (err) {
     log.error('media error:', err.message);
-    result.media = { watching: [], doingCount: 0, finishedCount: 0 };
+    result.media = { recent: [], doingCount: 0, wishCount: 0, finishedCount: 0 };
   }
 
   // Geschenkregister: Monatssummen je Typ (red = 红事, white = 白事) —

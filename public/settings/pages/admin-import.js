@@ -77,14 +77,15 @@ export async function render(container) {
         <div id="import-notice" role="status"></div>
         <form class="settings-form" id="import-form" novalidate>
           <div class="form-group">
-            <label class="label" for="import-module">${esc(t('import.module'))}</label>
+            <label class="label" for="import-module">${esc(t('import.moduleLabel'))}</label>
             <select class="input" id="import-module" name="module"></select>
             <p class="form-hint" id="import-module-hint"></p>
           </div>
           <div class="form-group">
             <label class="label" for="import-file">${esc(t('import.file'))}</label>
-            <input class="input" id="import-file" type="file" accept=".csv,.json,text/csv,application/json" />
+            <input class="input" id="import-file" type="file" accept=".csv,.json,.vcf,.vcard,text/csv,application/json,text/vcard" />
             <p class="form-hint">${esc(t('import.fileHint'))}</p>
+            <p class="form-hint">${esc(t('import.vcardHint'))}</p>
           </div>
           <div class="form-group">
             <label class="label" for="import-content">${esc(t('import.paste'))}</label>
@@ -94,6 +95,7 @@ export async function render(container) {
           </div>
           <div class="settings-form-actions">
             <button type="button" class="btn btn--secondary" id="import-analyze" disabled>${esc(t('import.analyze'))}</button>
+            <button type="button" class="btn btn--ghost" id="import-template">${esc(t('import.template'))}</button>
             <button type="button" class="btn btn--ghost" id="import-history">${esc(t('import.history'))}</button>
           </div>
         </form>
@@ -120,6 +122,7 @@ export async function render(container) {
   const fileInput = container.querySelector('#import-file');
   const contentInput = container.querySelector('#import-content');
   const analyzeBtn = container.querySelector('#import-analyze');
+  const templateBtn = container.querySelector('#import-template');
   const historyBtn = container.querySelector('#import-history');
   const mappingCard = container.querySelector('#import-mapping-card');
   const previewBox = container.querySelector('#import-preview');
@@ -181,14 +184,18 @@ export async function render(container) {
   async function readSource() {
     const file = fileInput.files?.[0];
     if (file) {
-      state.format = /\.json$/i.test(file.name) ? 'json' : 'csv';
+      // 格式识别：扩展名优先（.vcf/.vcard = vCard，.json = JSON，其余 CSV）。
+      if (/\.(vcf|vcard)$/i.test(file.name)) state.format = 'vcard';
+      else state.format = /\.json$/i.test(file.name) ? 'json' : 'csv';
       state.fileName = file.name;
       state.sourceContent = await file.text();
     } else {
       const text = contentInput.value.trim();
       if (!text) return false;
-      // 首尾字符是最便宜的格式探针：JSON 一定以 [ 或 { 开头。
-      state.format = /^[[\s{]/.test(text) ? 'json' : 'csv';
+      // 首尾字符是最便宜的格式探针：JSON 一定以 [ 或 { 开头；vCard 一定含
+      // BEGIN:VCARD 标记（粘贴场景没有文件名可依）。
+      if (/BEGIN:VCARD/i.test(text)) state.format = 'vcard';
+      else state.format = /^[[\s{]/.test(text) ? 'json' : 'csv';
       state.fileName = '';
       state.sourceContent = text;
     }
@@ -265,6 +272,35 @@ export async function render(container) {
 
   dryRunBtn.addEventListener('click', () => execute(true, dryRunBtn));
   commitBtn.addEventListener('click', () => execute(false, commitBtn));
+
+  // ---------------------------------------------------------------
+  // 模板下载：按当前模块拉 /import/template，转 Blob 触发浏览器下载。
+  // ---------------------------------------------------------------
+  templateBtn.addEventListener('click', async () => {
+    clearNotice();
+    templateBtn.disabled = true;
+    try {
+      const url = `/api/v1/import/template?module=${encodeURIComponent(state.module)}`;
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (!res.ok) {
+        showError(t('import.templateFailed', { error: `${res.status} ${res.statusText || ''}`.trim() }));
+        return;
+      }
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `juju-import-${state.module}-template.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      showToast(t('import.templateDone'));
+    } catch (error) {
+      showError(t('import.templateFailed', { error: error?.message || t('common.errorGeneric') }));
+    } finally {
+      templateBtn.disabled = false;
+    }
+  });
 
   // ---------------------------------------------------------------
   // Verlauf

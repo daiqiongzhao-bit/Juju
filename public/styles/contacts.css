@@ -793,3 +793,19 @@ html:has(.contacts-page.is-selecting) .page-fab {
   height: 18px;
   margin: 0;
 }
+
+/* --------------------------------------------------------
+   双历法生日录入（0.0.39）：公历|农历 分段开关 + 农历三下拉。
+   -------------------------------------------------------- */
+.contact-cal-switch {
+  display: inline-flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.contact-lunar-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}

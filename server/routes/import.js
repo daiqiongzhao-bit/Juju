@@ -1,5 +1,5 @@
 /**
- * Modul: 通用数据导入（CSV / JSON）
+ * Modul: 通用数据导入（CSV / JSON / vCard）
  * Zweck: 让用户在迁移进来时不必重新手敲 —— 上传文件 → 预览 → 列映射 → 导入。
  *
  * 权限：全部 requireAdmin（照搬 server/routes/backup.js）。导入会向全家人可见的
@@ -15,8 +15,9 @@ import express from 'express';
 
 import { requireAdmin } from '../auth.js';
 import { createLogger } from '../logger.js';
-import { getImportModule, listImportModules, autoMapHeaders, buildRecords } from '../services/import-mapping.js';
+import { getImportModule, listImportModules, autoMapHeaders, buildRecords, buildTemplateCsv } from '../services/import-mapping.js';
 import { parseCsvDetailed, parseJsonRecords, rowsToRecords } from '../services/import-csv.js';
+import { vcardToContactTable } from '../services/vcard-import.js';
 import { runImport, recentBatches, MAX_ROWS } from '../services/import-runner.js';
 
 const router = express.Router();
@@ -61,8 +62,20 @@ function readContent(body) {
 }
 
 /**
+ * 统一格式解析：'csv' | 'json' | 'vcard'（其他一律回落 csv，与历史行为一致）。
+ * @param {unknown} value
+ * @returns {'csv'|'json'|'vcard'}
+ */
+function readFormat(value) {
+  const format = String(value ?? 'csv').trim().toLowerCase();
+  if (format === 'json') return 'json';
+  if (format === 'vcard') return 'vcard';
+  return 'csv';
+}
+
+/**
  * 根据格式把内容解析成「表头 + 数据行（二维）」。
- * @param {string} format 'csv' | 'json'
+ * @param {string} format 'csv' | 'json' | 'vcard'
  * @param {string} content
  * @param {Record<string, unknown>} options
  * @returns {{headers: string[], rows: string[][], delimiter?: string, parseError?: string}}
@@ -88,6 +101,13 @@ function extractTable(format, content, options = {}) {
     return { headers: headerSet, rows, delimiter: undefined };
   }
 
+  // vCard（.vcf/.vcard）：走 vcardToContactTable，输出 CONTACT_FIELDS 同名表头，
+  // autoMapHeaders 对每个表头 1:1 命中——联系人导入无需手动重排列。
+  if (format === 'vcard') {
+    const table = vcardToContactTable(content, { fallbackCategory: 'misc' });
+    return { headers: table.headers, rows: table.rows, delimiter: undefined };
+  }
+
   const hasHeader = options.hasHeader !== false;
   const { rows: rawRows, delimiter } = parseCsvDetailed(content, { delimiter: options.delimiter });
   if (rawRows.length === 0) return { headers: [], rows: [], delimiter, parseError: 'import.errorEmptyFile' };
@@ -111,6 +131,26 @@ router.get('/history', requireAdmin, (req, res) => {
   }
 });
 
+/**
+ * GET /api/v1/import/template?module=contacts
+ * 导入模板下载：表头 = 模块目标字段 key（autoMapHeaders 1:1 命中），后带 1 行示例。
+ * 未知 module → 400。响应为附件下载（text/csv; charset=utf-8）。
+ */
+router.get('/template', requireAdmin, (req, res) => {
+  try {
+    const moduleKey = String(req.query.module ?? '').trim();
+    const template = buildTemplateCsv(moduleKey);
+    if (!template) return res.status(400).json({ error: 'Unknown import module.', code: 400 });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="juju-import-${moduleKey}-template.csv"`);
+    res.send(template.csv);
+  } catch (err) {
+    log.error('GET /template failed:', err?.message || err);
+    res.status(500).json({ error: 'Could not generate the template.', code: 500 });
+  }
+});
+
 router.post('/preview', requireAdmin, rawText, (req, res) => {
   try {
     const body = readBody(req);
@@ -118,7 +158,7 @@ router.post('/preview', requireAdmin, rawText, (req, res) => {
     const module = getImportModule(moduleKey);
     if (!module) return res.status(400).json({ error: 'Unknown import module.', code: 400 });
 
-    const format = String(body.format ?? 'csv').toLowerCase() === 'json' ? 'json' : 'csv';
+    const format = readFormat(body.format);
     const { content, tooLarge } = readContent(body);
     if (tooLarge) return res.status(413).json({ error: 'File is too large (max 8 MB).', code: 413 });
 
@@ -164,7 +204,7 @@ router.post('/run', requireAdmin, rawText, (req, res) => {
     const module = getImportModule(moduleKey);
     if (!module) return res.status(400).json({ error: 'Unknown import module.', code: 400 });
 
-    const format = String(body.format ?? 'csv').toLowerCase() === 'json' ? 'json' : 'csv';
+    const format = readFormat(body.format);
     const mapping = (body.mapping && typeof body.mapping === 'object') ? body.mapping : {};
     if (Object.keys(mapping).length === 0) {
       return res.status(400).json({ error: 'No column mapping was provided.', code: 400 });

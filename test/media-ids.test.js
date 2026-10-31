@@ -36,7 +36,7 @@ function seedDatabase(Database) {
       id INTEGER PRIMARY KEY,
       media_type TEXT, title TEXT, status TEXT, is_private INTEGER,
       creator_uid INTEGER, updated_at TEXT, comment TEXT, tags TEXT,
-      cover_url TEXT, rating REAL, watch_date TEXT, metadata_json TEXT
+      cover_url TEXT, rating REAL, progress REAL, watch_date TEXT, metadata_json TEXT
     );
     CREATE TABLE media_member_rel (
       id INTEGER PRIMARY KEY,
@@ -44,6 +44,12 @@ function seedDatabase(Database) {
       is_shared_memory INTEGER DEFAULT 0, member_status TEXT
     );
     CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, display_name TEXT);
+    -- v162: persönlicher Emby-Sehstatus (LEFT JOIN in /list und /ids)
+    CREATE TABLE media_user_state (
+      user_id INTEGER NOT NULL, media_item_id INTEGER NOT NULL,
+      status TEXT NOT NULL, progress REAL, watch_date TEXT, updated_at TEXT,
+      PRIMARY KEY (user_id, media_item_id)
+    );
   `);
   const ins = db.prepare(`
     INSERT INTO media_item (id, media_type, title, status, is_private, creator_uid, updated_at, comment, tags)
@@ -97,12 +103,12 @@ async function serveMedia(user) {
   };
 }
 
-test('/ids：与 /list 同过滤条件下 ID 集合与顺序一致，他人私有不可见', { skip: DB_SKIP }, async () => {
+test('/ids：与 /list 同过滤条件下 ID 集合与顺序一致，隔离模型', { skip: DB_SKIP }, async () => {
   const app = await serveMedia({ id: 1 });
   try {
     const ids = (await app.get('/ids')).data;
-    // user 1 看得见：公开(1,4,5) + 自己的私有(2)；看不见 user 2 的私有(3)
-    assert.deepEqual(ids, [1, 2, 5, 4]); // updated_at DESC
+    // 0.0.61 隔离：user 1 只看自己的(1,2,5)；他人条目(3,4)未参与不可见
+    assert.deepEqual(ids, [1, 2, 5]); // updated_at DESC
 
     const list = (await app.get('/list?limit=100')).data.map((it) => it.id);
     assert.deepEqual(list, ids);
@@ -119,8 +125,8 @@ test('/ids：type/status/member/q 过滤与 /list 逐一一致', { skip: DB_SKIP
       const list = (await app.get(`/list?limit=100&${filter}`)).data.map((it) => it.id);
       assert.deepEqual(ids, list, `Filter ${filter} weicht ab`);
     }
-    // 具体值抽检：movie 且 user1 可见 → 1,5,4；member=5 → [5]
-    assert.deepEqual((await app.get('/ids?type=movie')).data, [1, 5, 4]);
+    // 具体值抽检：movie 且 user1 可见（隔离后只有自己的 1,5）；member=5 → [5]
+    assert.deepEqual((await app.get('/ids?type=movie')).data, [1, 5]);
     assert.deepEqual((await app.get('/ids?member=5')).data, [5]);
     assert.deepEqual((await app.get('/ids?q=Dune')).data, [2]);
   } finally {
@@ -128,7 +134,7 @@ test('/ids：type/status/member/q 过滤与 /list 逐一一致', { skip: DB_SKIP
   }
 });
 
-test('/ids：管理员可见他人私有条目', { skip: DB_SKIP }, async () => {
+test('/ids：管理员保留管理视角（全见）', { skip: DB_SKIP }, async () => {
   const app = await serveMedia({ id: 2, role: 'admin' });
   try {
     const ids = (await app.get('/ids')).data;

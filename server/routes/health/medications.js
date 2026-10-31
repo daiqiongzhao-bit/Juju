@@ -13,6 +13,25 @@ import {
   viewerId, careAwareClause, toBit, applyUpdate, badRequest,
   resolveOwner, writableClause,
 } from './helpers.js';
+import { syncMedicationExpiryReminder } from './cabinet.js';
+import { DRUG_CATEGORY_KEYS } from '../../services/drug-catalog.js';
+
+// Schrank-Felder (v165): Haltbarkeit, Kaufdatum, Beipackzettel, Kategorie.
+const INFO_SOURCES = ['manual', 'builtin', 'ai'];
+
+/** Validiert ein ISO-Datum (YYYY-MM-DD) oder null. */
+function vDate(value, label) {
+  if (value === undefined || value === null || value === '') return { value: null };
+  const text = String(value).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? { value: text } : { error: `${label} must be YYYY-MM-DD.` };
+}
+
+/** Validiert Kategorie/Quelle gegen die erlaubten Schlüssel. */
+function vKey(value, label, allowed) {
+  if (value === undefined || value === null || value === '') return { value: null };
+  const text = String(value).trim();
+  return allowed.includes(text) ? { value: text } : { error: `${label} must be one of: ${allowed.join(', ')}.` };
+}
 
 const router = express.Router();
 
@@ -70,7 +89,21 @@ router.post('/medications', (req, res) => {
     const note       = v.str(b.note, 'note', { max: v.MAX_TEXT, required: false });
     const visibility = v.oneOf(b.visibility, VISIBILITIES, 'visibility');
 
-    const errors = v.collectErrors([name, dosageText, form, stockQty, stockUnit, refill, note, visibility]);
+    const category     = vKey(b.category, 'category', DRUG_CATEGORY_KEYS);
+    const purchaseDate = vDate(b.purchase_date, 'purchase_date');
+    const expiryDate   = vDate(b.expiry_date, 'expiry_date');
+    const efficacy     = v.str(b.efficacy, 'efficacy', { max: v.MAX_SHORT, required: false });
+    const indications  = v.str(b.indications, 'indications', { max: v.MAX_TEXT, required: false });
+    const usageText    = v.str(b.usage_text, 'usage_text', { max: v.MAX_TEXT, required: false });
+    const cautions     = v.str(b.cautions, 'cautions', { max: v.MAX_TEXT, required: false });
+    const infoSource   = vKey(b.info_source, 'info_source', INFO_SOURCES);
+    const brand        = v.str(b.brand, 'brand', { max: v.MAX_SHORT, required: false });
+    const manufacturer = v.str(b.manufacturer, 'manufacturer', { max: v.MAX_SHORT, required: false });
+    const barcode      = v.str(b.barcode, 'barcode', { max: 64, required: false });
+
+    const errors = v.collectErrors([name, dosageText, form, stockQty, stockUnit, refill, note, visibility,
+                                    category, purchaseDate, expiryDate, efficacy, indications, usageText, cautions, infoSource,
+                                    brand, manufacturer, barcode]);
     if (errors.length) return badRequest(res, errors);
 
     const active = toBit(b.active); // undefined → default 1
@@ -82,13 +115,21 @@ router.post('/medications', (req, res) => {
     if (owner.error) return res.status(owner.status).json({ error: owner.error, code: owner.status });
 
     const result = db.get().prepare(`
-      INSERT INTO medications (user_id, name, dosage_text, form, active, prn, stock_qty, stock_unit, refill_threshold, note, visibility)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO medications (user_id, name, dosage_text, form, active, prn, stock_qty, stock_unit, refill_threshold, note, visibility,
+                               category, purchase_date, expiry_date, efficacy, indications, usage_text, cautions, info_source,
+                               brand, manufacturer, barcode)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(owner.ownerId, name.value, dosageText.value, form.value,
            active === undefined ? 1 : active, prn === undefined ? 0 : prn,
-           stockQty.value, stockUnit.value, refill.value, note.value, visibility.value || 'private');
+           stockQty.value, stockUnit.value, refill.value, note.value, visibility.value || 'private',
+           category.value, purchaseDate.value, expiryDate.value,
+           efficacy.value, indications.value, usageText.value, cautions.value,
+           infoSource.value || 'manual',
+           brand.value, manufacturer.value, barcode.value);
 
     const row = db.get().prepare('SELECT * FROM medications WHERE id = ?').get(result.lastInsertRowid);
+    // Ablaufdatum → zentrale Erinnerung (30 Tage vorher), sonst entfernen.
+    try { syncMedicationExpiryReminder(row); } catch (err) { log.warn('Expiry reminder sync failed:', err.message); }
     res.status(201).json({ data: row });
   } catch (err) {
     log.error('Error creating medication:', err.message);
@@ -121,11 +162,28 @@ router.patch('/medications/:id', (req, res) => {
     if (b.active !== undefined) { const bit = toBit(b.active); if (bit === undefined) checks.push({ error: 'active must be a boolean.' }); else fields.active = bit; }
     if (b.prn !== undefined)    { const bit = toBit(b.prn);    if (bit === undefined) checks.push({ error: 'prn must be a boolean.' });    else fields.prn = bit; }
 
+    if (b.category !== undefined)      { const r = vKey(b.category, 'category', DRUG_CATEGORY_KEYS); checks.push(r); if (!r.error) fields.category = r.value; }
+    if (b.purchase_date !== undefined) { const r = vDate(b.purchase_date, 'purchase_date'); checks.push(r); if (!r.error) fields.purchase_date = r.value; }
+    if (b.expiry_date !== undefined)   { const r = vDate(b.expiry_date, 'expiry_date');   checks.push(r); if (!r.error) fields.expiry_date = r.value; }
+    if (b.efficacy !== undefined)      { const r = v.str(b.efficacy, 'efficacy', { max: v.MAX_SHORT, required: false }); checks.push(r); if (!r.error) fields.efficacy = r.value; }
+    if (b.indications !== undefined)   { const r = v.str(b.indications, 'indications', { max: v.MAX_TEXT, required: false }); checks.push(r); if (!r.error) fields.indications = r.value; }
+    if (b.usage_text !== undefined)    { const r = v.str(b.usage_text, 'usage_text', { max: v.MAX_TEXT, required: false }); checks.push(r); if (!r.error) fields.usage_text = r.value; }
+    if (b.cautions !== undefined)      { const r = v.str(b.cautions, 'cautions', { max: v.MAX_TEXT, required: false }); checks.push(r); if (!r.error) fields.cautions = r.value; }
+    if (b.info_source !== undefined)   { const r = vKey(b.info_source, 'info_source', INFO_SOURCES); checks.push(r); if (!r.error && r.value) fields.info_source = r.value; }
+    if (b.brand !== undefined)        { const r = v.str(b.brand, 'brand', { max: v.MAX_SHORT, required: false }); checks.push(r); if (!r.error) fields.brand = r.value; }
+    if (b.manufacturer !== undefined) { const r = v.str(b.manufacturer, 'manufacturer', { max: v.MAX_SHORT, required: false }); checks.push(r); if (!r.error) fields.manufacturer = r.value; }
+    if (b.barcode !== undefined)      { const r = v.str(b.barcode, 'barcode', { max: 64, required: false }); checks.push(r); if (!r.error) fields.barcode = r.value; }
+
     const errors = v.collectErrors(checks);
     if (errors.length) return badRequest(res, errors);
 
     applyUpdate('medications', id, fields);
-    res.json({ data: db.get().prepare('SELECT * FROM medications WHERE id = ?').get(id) });
+    const updated = db.get().prepare('SELECT * FROM medications WHERE id = ?').get(id);
+    // Haltbarkeit geändert? Erinnerung nachziehen.
+    if (updated && (fields.expiry_date !== undefined || fields.user_id !== undefined)) {
+      try { syncMedicationExpiryReminder(updated); } catch (err) { log.warn('Expiry reminder sync failed:', err.message); }
+    }
+    res.json({ data: updated });
   } catch (err) {
     log.error('Error updating medication:', err.message);
     res.status(500).json({ error: 'Internal error.', code: 500 });
@@ -142,6 +200,8 @@ router.delete('/medications/:id', (req, res) => {
     const existing = medicationWritable(id, viewer);
     if (!existing) return res.status(404).json({ error: 'Medikament nicht gefunden.', code: 404 });
 
+    // reminders.entity_id hat keinen FK - die Ablauf-Erinnerung miträumen.
+    db.get().prepare("DELETE FROM reminders WHERE entity_type = 'medication' AND entity_id = ?").run(id);
     db.get().prepare('DELETE FROM medications WHERE id = ?').run(id);
     res.status(204).end();
   } catch (err) {

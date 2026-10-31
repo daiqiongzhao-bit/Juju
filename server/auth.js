@@ -13,6 +13,7 @@ import { generateToken, csrfMiddleware } from './middleware/csrf.js';
 import { collectErrors, date as validateDate, str, MAX_SHORT, MAX_TITLE } from './middleware/validate.js';
 import { createLogger } from './logger.js';
 import { deleteBirthdayArtifacts, syncBirthdayArtifacts } from './services/birthdays.js';
+import { encryptField, decryptField } from './services/sm4.js';
 import * as oidcClient from 'openid-client';
 import { isOidcEnabled, getConfig as getOidcConfig } from './services/oidc.js';
 import { emailService as defaultEmailService } from './services/email.js';
@@ -248,7 +249,10 @@ function publicUser(row) {
     role: row.role,
     family_role: row.family_role,
     access_scope: row.access_scope ?? 'family',
-    phone: row.phone ?? null,
+    // contacts.phone ist eine SM4-Chiffre-Spalte (v149): /auth/me liest sie
+    // über einen Unterselect, deshalb muss hier entschlüsselt werden - sonst
+    // steht im Profilformular der Chiffretext („v1.…", Feedback 2026-10-26).
+    phone: decryptField(row.phone ?? null),
     email: row.email ?? null,
     birth_date: row.birth_date ?? null,
     created_at: row.created_at,
@@ -302,7 +306,9 @@ function syncFamilyMemberArtifacts(database, userId, {
       WHERE id = ?
     `).run(
       name,
-      phone !== undefined ? phone : contact.phone,
+      // In der Kontakt-Tabelle liegt die Nummer verschlüsselt; ohne
+      // encryptField() würde hier Klartext in eine Chiffre-Spalte geschrieben.
+      phone !== undefined ? encryptField(phone) : contact.phone,
       email !== undefined ? email : contact.email,
       contact.id,
     );
@@ -323,7 +329,7 @@ function syncFamilyMemberArtifacts(database, userId, {
     database.prepare(`
       INSERT INTO contacts (name, category, phone, email, family_user_id)
       VALUES (?, 'Sonstiges', ?, ?, ?)
-    `).run(name, phone ?? null, email ?? null, userId);
+    `).run(name, encryptField(phone ?? null), email ?? null, userId);
   }
 
   const birthday = database.prepare('SELECT * FROM birthdays WHERE family_user_id = ?').get(userId);
@@ -891,6 +897,7 @@ export function buildInviteRoutes(targetRouter, {
         role,
         familyRole,
         createdBy: req.authUserId,
+        validDays: body.valid_days,
       });
       // Die frisch angelegte Zeile ohne token_hash - gleiche Form wie GET /invites.
       const invite = inviteService.verifyToken(token);

@@ -1029,8 +1029,8 @@ function dashCoverSrc(url) {
 }
 
 function renderMediaWidget(media) {
-  const watching = Array.isArray(media?.watching) ? media.watching : [];
-  if (!watching.length) {
+  const recent = Array.isArray(media?.recent) ? media.recent : [];
+  if (!recent.length) {
     return `<div class="widget widget--media">
       ${widgetHeader('film', t('nav.media'), null, '/media')}
       <div class="widget__empty">
@@ -1040,18 +1040,26 @@ function renderMediaWidget(media) {
       </div>
     </div>`;
   }
-  const cards = watching.map((m) => {
+  const statusLabel = (s) => {
+    if (s === 'doing') return t('media.status.doing') || '正在看';
+    if (s === 'wish') return t('media.status.wish') || '想看';
+    if (s === 'finished') return t('media.status.finished') || '已看完';
+    return s || '';
+  };
+  const total = (media?.doingCount || 0) + (media?.wishCount || 0) + (media?.finishedCount || 0);
+  const cards = recent.map((m) => {
     const cover = m.cover_url
       ? `<img src="${esc(dashCoverSrc(m.cover_url))}" alt="" loading="lazy" class="media-widget-cover">`
       : `<span class="media-widget-cover media-widget-cover--placeholder"><i data-lucide="film" class="icon-lg media-widget-cover__icon" aria-hidden="true"></i></span>`;
     return `
       <div class="media-widget-card" data-route="/media?item=${m.id}" role="button" tabindex="0">
         <div class="media-widget-card__cover">${cover}</div>
+        <span class="media-widget-card__badge media-widget-card__badge--${esc(m.status)}">${esc(statusLabel(m.status))}</span>
         <div class="media-widget-card__title">${esc(m.title)}</div>
       </div>`;
   }).join('');
   return `<div class="widget widget--media">
-    ${widgetHeader('film', t('nav.media'), media.doingCount || watching.length, '/media')}
+    ${widgetHeader('film', t('nav.media'), total || recent.length, '/media')}
     <div class="widget__body media-widget-grid">${cards}</div>
   </div>`;
 }

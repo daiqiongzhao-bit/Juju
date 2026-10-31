@@ -1,105 +1,102 @@
 /**
- * 测试：401 响应分类（public/utils/auth-401.js）
+ * 测试：401 分流分类器（R2c hotfix，public/utils/auth-401.js）
  *
- * 覆盖：三种 401 类型（TWO_FACTOR/BUSINESS/SESSION）、空 reason 字符串、
- * reason 非字符串、two_factor_required 与 reason 并存时 TWO_FACTOR 优先、
- * 非 401 返回 null、body 为 null/非对象、纯函数不改写入参、
- * 真实服务端响应体形状防漂移（server/routes/twofactor.js 的 fail() 形状）。
- * 约束：node:test + node:assert，零依赖、无网络、无 DOM。
+ * 背景：v0.0.33 的 api.js 对所有 401（/auth/login 除外）无条件派发
+ * auth:expired → router.js 无条件 navigate('/login')。用户在 2FA 设置页
+ * 输错密码（业务 401 `reason:'invalid_password'`）被直接踢回登录页，
+ * 永远见不到二维码（#R2c）。修复：按 body 分流——
+ *   - two_factor_required → 维持 auth:expired + detail（pending-2FA 会话）
+ *   - reason             → 业务错误，不派发，ApiError 带 data.reason 给调用方
+ *   - 裸 401              → 维持 auth:expired（会话真失效）
+ *
+ * 覆盖：三条主路径 + 服务端真实响应体形状 + 边界（空 reason、假 flag、
+ *       非 JSON、非对象 body、非 401 状态）。
+ *
+ * 说明：auth-401.js 是零依赖纯 ESM（刻意不 import 任何 DOM/sw-register），
+ *       因此可在 node:test 直接导入——api.js 本身依赖 window/document，
+ *       只能在浏览器跑，逻辑全部下沉到本模块后此处即可全量覆盖。
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { AUTH_401_KIND, classify401 } from '../public/utils/auth-401.js';
+import { classify401, AUTH_401_KIND } from '../public/utils/auth-401.js';
 
-// 1) TWO_FACTOR：two_factor_required 为真 → two_factor
-test('401 + two_factor_required → TWO_FACTOR', () => {
-  assert.equal(classify401(401, { two_factor_required: true }), AUTH_401_KIND.TWO_FACTOR);
-  assert.equal(classify401(401, { two_factor_required: true, error: 'x' }), AUTH_401_KIND.TWO_FACTOR);
-});
-
-// 2) BUSINESS：reason 为非空字符串 → business
-test('401 + 非空 reason 字符串 → BUSINESS', () => {
-  assert.equal(classify401(401, { reason: 'invalid_password' }), AUTH_401_KIND.BUSINESS);
-  assert.equal(classify401(401, { reason: 'rate_limited' }), AUTH_401_KIND.BUSINESS);
-});
-
-// 3) SESSION：裸 401、无 reason、无 two_factor_required → session
-test('401 + 无附加信息 → SESSION', () => {
-  assert.equal(classify401(401, {}), AUTH_401_KIND.SESSION);
-  assert.equal(classify401(401, { error: 'Not authenticated.', code: 401 }), AUTH_401_KIND.SESSION);
-});
-
-// 4) 空 reason 字符串不构成业务拒绝 → session
-test('401 + 空 reason 字符串 → SESSION', () => {
-  assert.equal(classify401(401, { reason: '' }), AUTH_401_KIND.SESSION);
-});
-
-// 5) reason 非字符串 → session
-test('401 + 非字符串 reason → SESSION', () => {
-  assert.equal(classify401(401, { reason: 42 }), AUTH_401_KIND.SESSION);
-  assert.equal(classify401(401, { reason: null }), AUTH_401_KIND.SESSION);
-  assert.equal(classify401(401, { reason: ['a'] }), AUTH_401_KIND.SESSION);
-});
-
-// 6) two_factor_required 与 reason 并存 → TWO_FACTOR 优先；
-//    two_factor_required 为假值时回落到 reason 判定
-test('401 + two_factor_required 与 reason 并存 → TWO_FACTOR 优先', () => {
-  assert.equal(
-    classify401(401, { two_factor_required: true, reason: 'invalid_password' }),
-    AUTH_401_KIND.TWO_FACTOR,
+test('AUTH_401_KIND：四个取值齐全且冻结', () => {
+  assert.deepEqual(
+    Object.values(AUTH_401_KIND).sort(),
+    ['business', 'not_401', 'session', 'two_factor'],
   );
-  assert.equal(
-    classify401(401, { two_factor_required: false, reason: 'invalid_password' }),
-    AUTH_401_KIND.BUSINESS,
-  );
-  assert.equal(classify401(401, { two_factor_required: false }), AUTH_401_KIND.SESSION);
+  assert.ok(Object.isFrozen(AUTH_401_KIND));
 });
 
-// 7) 非 401 → null（与本模块无关的状态码不接管）
-test('非 401 状态码 → null', () => {
-  assert.equal(classify401(200, { reason: 'x' }), null);
-  assert.equal(classify401(403, { two_factor_required: true }), null);
-  assert.equal(classify401(500, {}), null);
-});
+// ── 服务端真实响应体形状（防止分类器与服务端契约漂移） ────────────────────
 
-// 8) body 为 null / 非对象 → session（不抛异常）
-test('401 + body 为 null/非对象 → SESSION', () => {
-  assert.equal(classify401(401, null), AUTH_401_KIND.SESSION);
-  assert.equal(classify401(401, undefined), AUTH_401_KIND.SESSION);
-  assert.equal(classify401(401, 'Invalid credentials.'), AUTH_401_KIND.SESSION);
-  assert.equal(classify401(401, 401), AUTH_401_KIND.SESSION);
-});
-
-// 9) 纯函数不改写入参（冻结对象 + 快照比对）
-test('纯函数：不改写入参', () => {
-  const body = Object.freeze({ two_factor_required: true, reason: 'invalid_password' });
-  const snapshot = JSON.stringify(body);
-  assert.doesNotThrow(() => classify401(401, body));
-  assert.equal(JSON.stringify(body), snapshot);
-});
-
-// 10) 真实服务端响应体形状防漂移（server/routes/twofactor.js fail() 的
-//     { error, code, reason } 契约；server/auth.js 的 pending-2FA 标记）
-test('真实服务端响应体形状 → 期望分类', () => {
-  // 2FA 密码错误：业务拒绝，err.data.reason 供 twofactor.js message() 映射
-  assert.equal(
-    classify401(401, { error: 'Invalid password.', code: 401, reason: 'invalid_password' }),
-    AUTH_401_KIND.BUSINESS,
-  );
-  // 未登录访问受保护资源：会话过期
+test('会话真失效：server/auth.js:499 的裸 401（Not authenticated，无 reason）→ session', () => {
   assert.equal(
     classify401(401, { error: 'Not authenticated.', code: 401 }),
     AUTH_401_KIND.SESSION,
   );
-  // 待验证 2FA 的 pending 会话
+});
+
+test('pending-2FA 会话：server/auth.js:471 的 two_factor_required 401 → two_factor', () => {
   assert.equal(
-    classify401(401, {
-      error: 'Two-factor verification required.',
-      code: 401,
-      two_factor_required: true,
-    }),
+    classify401(401, { error: 'Two-factor verification required.', code: 401, two_factor_required: true }),
     AUTH_401_KIND.TWO_FACTOR,
   );
+});
+
+test('业务错误：server/routes/twofactor.js:213 的 invalid_password 401 → business', () => {
+  assert.equal(
+    classify401(401, { error: 'Invalid password.', code: 401, reason: 'invalid_password' }),
+    AUTH_401_KIND.BUSINESS,
+  );
+});
+
+test('业务错误：invalid_code / rate_limited 等同理走 business', () => {
+  for (const reason of ['invalid_code', 'rate_limited', 'password_required', 'already_enabled', 'not_enabled', 'setup_required']) {
+    assert.equal(
+      classify401(401, { error: 'x', code: 401, reason }),
+      AUTH_401_KIND.BUSINESS,
+      `reason=${reason} 应判为 business`,
+    );
+  }
+});
+
+// ── 边界：坏 body / 空标记不得静默改判 ─────────────────────────────────────
+
+test('非 JSON（body=null）或空对象 → session（维持既有全局处理）', () => {
+  assert.equal(classify401(401, null), AUTH_401_KIND.SESSION);
+  assert.equal(classify401(401), AUTH_401_KIND.SESSION); // 默认参数
+  assert.equal(classify401(401, {}), AUTH_401_KIND.SESSION);
+  assert.equal(classify401(401, 'Not authenticated.'), AUTH_401_KIND.SESSION); // 非对象
+  assert.equal(classify401(401, []), AUTH_401_KIND.SESSION);
+});
+
+test('空串 reason / 假 two_factor_required 不构成业务/挑战标记 → session', () => {
+  assert.equal(classify401(401, { reason: '' }), AUTH_401_KIND.SESSION);
+  assert.equal(classify401(401, { reason: null }), AUTH_401_KIND.SESSION);
+  assert.equal(classify401(401, { reason: 401 }), AUTH_401_KIND.SESSION); // 非字符串
+  assert.equal(classify401(401, { two_factor_required: false }), AUTH_401_KIND.SESSION);
+  assert.equal(classify401(401, { two_factor_required: 0 }), AUTH_401_KIND.SESSION);
+});
+
+test('两个标记同时出现时 two_factor_required 优先（保 v0.0.33 既有行为）', () => {
+  assert.equal(
+    classify401(401, { two_factor_required: true, reason: 'invalid_code' }),
+    AUTH_401_KIND.TWO_FACTOR,
+  );
+});
+
+test('非 401 状态一律 not_401（含 200/403/429/500）', () => {
+  for (const status of [200, 204, 302, 403, 429, 500, 0]) {
+    assert.equal(classify401(status, { reason: 'invalid_password' }), AUTH_401_KIND.NOT_401);
+  }
+});
+
+test('分类是纯函数：同一入参多次调用结果一致、不改写入参', () => {
+  const body = { error: 'Invalid password.', code: 401, reason: 'invalid_password' };
+  const snapshot = JSON.stringify(body);
+  assert.equal(classify401(401, body), classify401(401, body));
+  assert.equal(JSON.stringify(body), snapshot);
 });

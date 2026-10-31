@@ -45,6 +45,8 @@ const state = {
   items: [],
   locations: [],
   categories: [],
+  /** Benutzerverwaltete Einheiten (v157); Fallback = kanonische Liste. */
+  units: [],
   /** Einkaufslisten - erst beim ersten „Auf die Einkaufsliste" nachgeladen. */
   lists: null,
   query: '',
@@ -74,13 +76,12 @@ function formatQuantity(value) {
 }
 
 /**
- * Einheit übersetzen, mit Rückfall auf den Rohwert. Alle Schreibpfade der App
- * normalisieren über normalizePantryUnit() auf die zehn kanonischen Einheiten,
- * ein unbekannter Wert ist also nicht über die Oberfläche erreichbar - wohl
- * aber über einen direkten Datenbankzugriff, einen Fremdimport oder eine
- * künftige Einheit, deren Locale-Key noch fehlt. Ohne diesen Rückfall stünde
- * dann der nackte Schlüssel in der Zeile („1 pantry.units.Stk"), und zwar an
- * der Stelle, an der die Menge steht. Der Rohwert ist immer noch lesbar.
+ * Einheit übersetzen, mit Rückfall auf den Rohwert. Die kanonischen Einheiten
+ * haben Locale-Keys (pantry.units.*); seit v157 können Nutzer eigene Einheiten
+ * anlegen - deren Name ist bereits Klartext und wird unverändert angezeigt.
+ * Ohne den Rückfall stünde bei einer Einheit ohne Locale-Key der nackte
+ * Schlüssel in der Zeile („1 pantry.units.Stk") - genau dort, wo die Menge
+ * steht. Der Rohwert ist immer noch lesbar.
  */
 function unitLabel(unit) {
   const key = `pantry.units.${unit}`;
@@ -129,6 +130,7 @@ async function loadPantry() {
   state.items = res.data ?? [];
   state.locations = res.locations ?? [];
   state.categories = res.categories ?? [];
+  state.units = res.units ?? [];
 }
 
 /** Einkaufslisten nachladen (erst wenn eine Übergabe ansteht). */
@@ -194,7 +196,7 @@ function groupedItems(items) {
 // Render
 // --------------------------------------------------------
 
-export async function render(container) {
+export async function render(container, opts = {}) {
   _container = container;
   state.todayKey = toLocalDateKey();
   // Frische Seite: die Chip-Leiste darf beim ersten Zeichnen wieder scrollen.
@@ -205,9 +207,11 @@ export async function render(container) {
 
   // sr-only: die Küchen-Tab-Leiste benennt das Modul bereits sichtbar -
   // dieselbe Kopf-Grammatik wie Mahlzeiten/Rezepte/Einkauf.
+  // titleKey-Option: die 一级导航 "家庭库存" (/family-inventory) rendert dieselbe
+  // Seite außerhalb der Küchen-Tab-Leiste und benennt sich dort selbst.
   const title = document.createElement('h1');
   title.className = 'sr-only';
-  title.textContent = t('nav.pantry');
+  title.textContent = t(opts.titleKey || 'nav.pantry');
 
   // Eine geteilte Live-Region für die ganze Seite statt einer je Zeile.
   const live = document.createElement('div');
@@ -241,6 +245,11 @@ export async function render(container) {
       <button class="btn btn--ghost btn--icon" data-action="manage-locations"
               aria-label="${esc(t('pantry.manageLocations'))}" title="${esc(t('pantry.manageLocations'))}">
         <i data-lucide="archive" class="icon-md" aria-hidden="true"></i>
+      </button>
+      <button class="btn btn--ghost btn--icon" data-action="manage-taxonomy"
+              aria-label="${esc(t('pantry.categoryLabel'))} · ${esc(t('pantry.unitLabel'))}"
+              title="${esc(t('pantry.categoryLabel'))} · ${esc(t('pantry.unitLabel'))}">
+        <i data-lucide="tags" class="icon-md" aria-hidden="true"></i>
       </button>
     </div>`);
 
@@ -293,6 +302,7 @@ export async function render(container) {
   });
 
   toolbar.querySelector('[data-action="manage-locations"]').addEventListener('click', openLocationManager);
+  toolbar.querySelector('[data-action="manage-taxonomy"]').addEventListener('click', openTaxonomyManager);
   fab.addEventListener('click', () => openItemModal('create'));
 
   filters.addEventListener('click', (e) => {
@@ -958,7 +968,7 @@ function openItemModal(mode, item = null) {
   const locations = state.locations;
   const categories = state.categories;
 
-  const unitOptions = PANTRY_UNITS
+  const unitOptions = unitNamesList()
     .map((unit) => `<option value="${esc(unit)}">${esc(unitLabel(unit))}</option>`)
     .join('');
   const locationOptions = [
@@ -1106,6 +1116,76 @@ async function removeItem(item) {
     restore: (err) => {
       if (rowEl_) rowEl_.style.display = '';
       if (err) window.yuvomi?.showToast(err.data?.error ?? t('common.unknownError'), 'danger');
+    },
+  });
+}
+
+// --------------------------------------------------------
+// Kategorien- und Einheiten-Verwaltung
+// --------------------------------------------------------
+
+/** Einheitennamen aus der Benutzerliste; vor dem ersten Laden die kanonische Liste. */
+function unitNamesList() {
+  return state.units.length ? state.units.map((u) => u.name) : [...PANTRY_UNITS];
+}
+
+/**
+ * Ein Modal für beide Taxonomien: links/rechts untereinander zwei Instanzen der
+ * geteilten category-manager-Komponente. Kategorien teilen sich bewusst die
+ * Tabelle mit dem Einkauf (pantry_items.category speichert den Namen), 
+ * Einheiten sind seit v157 eine eigene, benutzerverwaltete Tabelle.
+ */
+async function openTaxonomyManager() {
+  await import('/components/category-manager.js');
+
+  let changed = false;
+  const managers = [];
+  const onChanged = () => { changed = true; };
+
+  openSharedModal({
+    title: `${t('pantry.categoryLabel')} · ${t('pantry.unitLabel')}`,
+    content: `
+      <h3 class="form-label">${esc(t('pantry.categoryLabel'))}</h3>
+      <yuvomi-category-manager data-kind="categories"></yuvomi-category-manager>
+      <h3 class="form-label" style="margin-top:var(--space-5)">${esc(t('pantry.unitLabel'))}</h3>
+      <yuvomi-category-manager data-kind="units"></yuvomi-category-manager>`,
+    onSave: (panel) => {
+      panel.querySelectorAll('yuvomi-category-manager').forEach((manager) => {
+        managers.push(manager);
+        manager.addEventListener('category-manager-changed', onChanged);
+        if (manager.dataset.kind === 'units') {
+          manager.configure({
+            basePath: '/pantry/units',
+            labelResolver: (unit) => unitLabel(unit.name),
+            titleKey: 'pantry.manageUnits',
+            hintKey: 'pantry.manageUnitsHint',
+            addPlaceholderKey: 'pantry.addUnit',
+            deleteDetailKey: 'pantry.unitDeleteConfirmDetail',
+            groups: [{ key: '', labelKey: '', addLabelKey: 'common.add' }],
+          });
+        } else {
+          // Dieselbe Tabelle wie die Einkaufskategorien - deshalb auch dieselben
+          // Texte und derselbe CRUD-Vertrag.
+          manager.configure({
+            basePath: '/shopping/categories',
+            labelResolver: (cat) => categoryLabel(cat.name),
+            titleKey: 'shopping.manageCategories',
+            hintKey: 'settings.shoppingCategoriesHint',
+            deleteDetailKey: 'shopping.categoryDeleteConfirmDetail',
+            groups: [{ key: '', labelKey: '', addLabelKey: 'common.add' }],
+          });
+        }
+      });
+    },
+    onClose: async () => {
+      managers.forEach((m) => m.removeEventListener('category-manager-changed', onChanged));
+      managers.length = 0;
+      if (!changed) return;
+      try {
+        await loadPantry();
+      } catch { /* Fehler meldet die Komponente */ }
+      renderFilters();
+      renderList();
     },
   });
 }

@@ -924,3 +924,15 @@ button.rel-gen__node--picked {
   height: 18px;
   margin: 0;
 }
+
+/* 连线上的关系文字 —— 2026-10-25 */
+.rel-edge__label {
+  font-size: 10px;
+  fill: var(--color-text-secondary);
+  paint-order: stroke;
+  stroke: var(--color-surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+  user-select: none;
+}

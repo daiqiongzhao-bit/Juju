@@ -904,6 +904,8 @@ function renderAiPreview(panel, recipe) {
     .join('');
 
   result.hidden = false;
+  // 连续点「生成」会叠加两份预览——插入前先清空旧结果。
+  result.replaceChildren();
   result.insertAdjacentHTML('beforeend', `
     <h3 class="modal-panel__heading">${esc(t('ai.previewTitle'))}</h3>
     <div class="form-group">
@@ -911,8 +913,8 @@ function renderAiPreview(panel, recipe) {
       <input id="ai-out-title" class="form-input" type="text" value="${esc(recipe.title)}" />
     </div>
     <div class="form-group">
-      <label class="form-label" for="ai-out-notes">${esc(t('recipes.notesLabel'))}</label>
-      <textarea id="ai-out-notes" class="form-input" rows="6">${esc(recipe.notes ?? '')}</textarea>
+      <label class="form-label" for="ai-out-notes">${esc(t('ai.stepsLabel'))}</label>
+      <textarea id="ai-out-notes" class="form-input">${esc(recipe.notes ?? '')}</textarea>
     </div>
     <div class="form-group">
       <label class="form-label" for="ai-out-servings">${esc(t('recipes.servingsLabel'))}</label>
@@ -943,6 +945,19 @@ function renderAiPreview(panel, recipe) {
     result.hidden = true;
   });
   result.querySelector('#ai-out-save')?.addEventListener('click', () => saveAiRecipe(panel, result));
+
+  // 做法 textarea 自适应高度：渲染后 + 输入时 auto-grow，长做法不再被裁切。
+  // 首测 scrollHeight 可能因字体尚未就绪而偏小（iOS 常见，表现为文字被内部
+  // 滚动裁掉一截），所以在 rAF 与字体就绪后各补测一次。
+  const notesEl = result.querySelector('#ai-out-notes');
+  const autoGrowNotes = (el) => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+  if (notesEl) {
+    autoGrowNotes(notesEl);
+    notesEl.addEventListener('input', () => autoGrowNotes(notesEl));
+    requestAnimationFrame(() => autoGrowNotes(notesEl));
+    document.fonts?.ready?.then(() => autoGrowNotes(notesEl)).catch(() => {});
+  }
+
   if (window.lucide) window.lucide.createIcons({ el: result });
 }
 
@@ -951,6 +966,7 @@ function renderAiTextPreview(panel, rawText, prompt) {
   const result = panel.querySelector('#ai-result');
   if (!result) return;
   result.hidden = false;
+  result.replaceChildren();
   result.insertAdjacentHTML('beforeend', `
     <h3 class="modal-panel__heading">${esc(t('ai.textFallbackTitle'))}</h3>
     <p class="form-hint">${esc(t('ai.textFallbackHint'))}</p>

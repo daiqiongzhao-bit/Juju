@@ -1158,3 +1158,28 @@
   align-items: center;
   gap: var(--space-0h);
 }
+
+/* --------------------------------------------------------
+ * Leerzustand mobil kompakt (Feedback 2026-10-23)
+ *
+ * Der geteilte .empty-state-Block (48px-Polster, 56px-Icon, Hinweis-Box,
+ * CTA-Button) nahm auf schmalen Screens fast die halbe Resthöhe ein —
+ * quadrupelte sich mit Suche + Filterchips + Tabbar fast zum Vollbild.
+ * Mobile gilt: Icon + Titel + Beschreibung + CTA reichen; die
+ * Hinweis-Box wiederholt nur Beschreibung und Gesten und entfällt.
+ * -------------------------------------------------------- */
+@media (max-width: 640px) {
+  #task-list .empty-state {
+    padding: var(--space-6) var(--space-4);
+    gap: var(--space-2);
+  }
+
+  #task-list .empty-state__icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  #task-list .empty-state__hint {
+    display: none;
+  }
+}

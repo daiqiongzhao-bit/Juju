@@ -20,7 +20,7 @@ import { str, oneOf, date, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT } from 
 import { uniqueKey } from '../utils/category-slug.js';
 import { composeDisplayName, normalizeNameParts } from '../../public/utils/contact-name.js';
 import { toE164, defaultCountryFromConfig } from '../utils/phone.js';
-import { applyLunarFields, ZODIACS, CONSTELLATIONS } from '../services/lunar-fields.js';
+import { applyLunarFields, deriveLunarFields, deriveFromLunar, leapMonthOf, ZODIACS, CONSTELLATIONS } from '../services/lunar-fields.js';
 import { encryptField, decryptField, phoneHash } from '../services/sm4.js';
 import { visibilityFilter } from '../services/contact-visibility.js';
 
@@ -399,7 +399,12 @@ router.get('/', (req, res) => {
   try {
     let sql    = 'SELECT * FROM contacts';
     const params = [];
-    const where  = ['NOT EXISTS (SELECT 1 FROM housekeeping_workers hw WHERE hw.user_id = contacts.family_user_id)'];
+    // 注：不再按 housekeeping_workers 过滤联系人。housekeeping_workers 关联的是
+    // user_id（家政人员账号），并非联系人本身；此前 `NOT EXISTS(hw.user_id =
+    // contacts.family_user_id)` 会把“也是家政人员”的家庭成员名下所有联系人误排除
+    // （D3 根因2：联系人不同步）。联系人的可见性已由 visibilityFilter
+    // （hidden + contact_node_acl）统一管控，无需在此额外过滤。
+    const where  = [];
 
     if (req.query.category && validContactCategoryKeys().includes(req.query.category)) {
       where.push('category = ?');
@@ -422,15 +427,32 @@ router.get('/', (req, res) => {
       }
     }
 
-    if (where.length) sql += ' WHERE ' + where.join(' AND ');
     // R4: 协作者可见性（hidden + contact_node_acl）；admin 返回空片段（不过滤）。
+    // 可见性片段以 " AND " 开头，统一并入 where 再拼一次 WHERE——此前「无其他
+    // 筛选 + 成员账号」会拼出 "FROM contacts AND ..." 语法错误（0.0.61 修复）。
     const vis = visibilityFilter(req, 'contacts');
-    sql += vis.sql;
-    params.push(...vis.params);
+    if (vis.sql) {
+      where.push(vis.sql.replace(/^\s*AND\s+/i, ''));
+      params.push(...vis.params);
+    }
+    if (where.length) sql += ' WHERE ' + where.join(' AND ');
     // Sortiert nach Nachname, wo er bekannt ist; sonst nach dem Anzeigenamen (#535).
     sql += ' ORDER BY category ASC, COALESCE(NULLIF(last_name, \'\'), name) COLLATE NOCASE ASC, name COLLATE NOCASE ASC';
 
-    const contacts = db.get().prepare(sql).all(...params).map(presentContact);
+    // Eine einzelne kaputte Zeile (z. B. fehlerhaftes Chiffrat) darf nicht die
+    // ganze Liste auf 500 werfen - sie wird geloggt und übersprungen.
+    const contacts = db.get()
+      .prepare(sql)
+      .all(...params)
+      .map((row) => {
+        try {
+          return presentContact(row);
+        } catch (err) {
+          log.error(`presentContact failed for contact ${row?.id}:`, err);
+          return null;
+        }
+      })
+      .filter(Boolean);
     res.json({ data: contacts });
   } catch (err) {
     log.error('', err);
@@ -855,6 +877,70 @@ router.get('/meta', (_req, res) => {
   } catch (err) {
     log.error('', err);
     res.status(500).json({ error: 'Interner Fehler' });
+  }
+});
+
+/**
+ * POST /api/v1/contacts/lunar-convert
+ * 双历法生日换算（联系人编辑页「公历|农历」分段开关的实时预览后端）。
+ * Body: { calendar: 'solar'|'lunar', year, month, day, isLeap? }
+ *   - solar：公历年月日 → deriveLunarFields（与联系人保存时的自动派生完全一致）
+ *   - lunar：农历年月日(+闰月) → deriveFromLunar，返回公历生日
+ * Response: { data: { birthday, birthdayLunar, zodiac, constellation, leapMonth } }
+ *   leapMonth 为该农历年的闰月序号（0 = 无闰月），前端据此控制「闰月」选项可点性。
+ * 校验失败 → 400 + 稳定 reason（lunar_invalid_calendar / lunar_out_of_range /
+ *   lunar_invalid_date 等），不抛堆栈。
+ *
+ * 注：本端点为只读换算，不触碰数据库。
+ */
+router.post('/lunar-convert', (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const calendar = String(body.calendar ?? '').trim().toLowerCase();
+    if (calendar !== 'solar' && calendar !== 'lunar') {
+      return res.status(400).json({ error: 'calendar must be "solar" or "lunar".', code: 400, reason: 'lunar_invalid_calendar' });
+    }
+
+    const year  = Number(body.year);
+    const month = Number(body.month);
+    const day   = Number(body.day);
+
+    // 年越界（农历数据覆盖范围 1900-2100）单独给码，前端可提示「超出可换算范围」。
+    if (!Number.isInteger(year) || year < 1900 || year > 2100) {
+      return res.status(400).json({ error: 'Year must be an integer between 1900 and 2100.', code: 400, reason: 'lunar_out_of_range' });
+    }
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      return res.status(400).json({ error: 'Month must be an integer between 1 and 12.', code: 400, reason: 'lunar_invalid_month' });
+    }
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      return res.status(400).json({ error: 'Day must be an integer between 1 and 31.', code: 400, reason: 'lunar_invalid_day' });
+    }
+
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const leapMonth = leapMonthOf(year);
+
+    if (calendar === 'solar') {
+      // 公历模式：拼出 YYYY-MM-DD 后走 deriveLunarFields，与保存路径一字不差。
+      const birthday = `${year}-${pad2(month)}-${pad2(day)}`;
+      const derived = deriveLunarFields(birthday);
+      if (!derived.birthdayLunar) {
+        // deriveLunarFields 对「非真实日期/越界年」返回三 NULL——这里已有年份
+        // 守卫，走到这里只剩「日不存在」（如 1990-02-30）。
+        return res.status(400).json({ error: 'Not a real calendar date.', code: 400, reason: 'lunar_invalid_date' });
+      }
+      return res.json({ data: { birthday, ...derived, leapMonth } });
+    }
+
+    // 农历模式：deriveFromLunar 对不存在的农历日期（无此闰月/该月无此日）返回 null。
+    const isLeap = body.isLeap === true;
+    const derived = deriveFromLunar(year, month, day, isLeap);
+    if (!derived) {
+      return res.status(400).json({ error: 'Lunar date does not exist (e.g. no such leap month or day).', code: 400, reason: 'lunar_invalid_date' });
+    }
+    return res.json({ data: { ...derived, leapMonth } });
+  } catch (err) {
+    log.error('POST /lunar-convert error:', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
   }
 });
 

@@ -13,7 +13,7 @@
  *                 /settings/components.js
  */
 
-import { aiRecipe } from '/api.js';
+import { aiRecipe, api } from '/api.js';
 import { t } from '/i18n.js';
 import { esc } from '/utils/html.js';
 import { createInlineError, createToggleRow } from '/settings/components.js';
@@ -78,6 +78,7 @@ export async function render(container) {
               ${(providers.find((p) => p.key === cfg.provider)?.models ?? []).map((m) => `<option value="${esc(m)}"></option>`).join('')}
             </datalist>
             <p class="form-hint" id="ai-model-hint">${esc(t('ai.modelHint'))}</p>
+            <button type="button" class="btn btn--ghost" id="ai-fetch-models">${esc(t('ai.fetchModels'))}</button>
           </div>
           <div class="form-group">
             <label class="label" for="ai-key">${esc(t('ai.apiKey'))}</label>
@@ -90,6 +91,26 @@ export async function render(container) {
             <button type="submit" class="btn btn--primary" id="ai-save">${esc(t('common.save'))}</button>
             <button type="button" class="btn btn--secondary" id="ai-test">${esc(t('ai.test'))}</button>
             <button type="button" class="btn btn--ghost" id="ai-clear-key">${esc(t('ai.clearKey'))}</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="settings-card">
+        <h3 class="settings-card__title">${esc(t('barcode.configTitle'))}</h3>
+        <p class="form-hint">${esc(t('barcode.configDesc'))}</p>
+        <p class="form-hint" id="bc-status">${esc(t('common.loading'))}</p>
+        <form class="settings-form" id="bc-form" novalidate>
+          <div class="form-group">
+            <label class="label" for="bc-app-id">App ID</label>
+            <input class="input" id="bc-app-id" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label class="label" for="bc-app-secret">App Secret</label>
+            <input class="input" id="bc-app-secret" type="password" autocomplete="new-password" />
+            <p class="form-hint" id="bc-secret-hint"></p>
+          </div>
+          <div class="settings-form-actions">
+            <button type="submit" class="btn btn--primary" id="bc-save">${esc(t('common.save'))}</button>
           </div>
         </form>
       </div>
@@ -107,6 +128,7 @@ export async function render(container) {
   const saveBtn = container.querySelector('#ai-save');
   const testBtn = container.querySelector('#ai-test');
   const clearKeyBtn = container.querySelector('#ai-clear-key');
+  const fetchModelsBtn = container.querySelector('#ai-fetch-models');
 
   const showError = (msg) => notice.replaceChildren(createInlineError(msg));
   const clearNotice = () => notice.replaceChildren();
@@ -239,6 +261,95 @@ export async function render(container) {
     } finally {
       testBtn.disabled = false;
       testBtn.textContent = t('ai.test');
+    }
+  });
+
+  /**
+   * 拉取模型清单（新增按钮）：用刚存进库的 key 实时从提供方端点取模型列表，
+   * 替换 datalist 候选。doubao 方舟语义不同，直接提示手填接入点 ID，不发请求。
+   * 复用 testBtn 的「先保存再操作」+ loading 防重复点击模式。
+   */
+  fetchModelsBtn.addEventListener('click', async () => {
+    clearNotice();
+    // 豆包方舟：/models 返回接入点而非模型，直接提示手填接入点 ID（ep- 开头）。
+    if (form.provider.value === 'doubao') {
+      showError(t('ai.fetchModelsUnsupported'));
+      return;
+    }
+    fetchModelsBtn.disabled = true;
+    fetchModelsBtn.textContent = t('ai.testing'); // loading 态复用「测试中…」
+    try {
+      // 先静默保存当前表单：拉取用的是刚存进库的 key（与 test 同模式）。
+      await aiRecipe.saveConfig(collect());
+      form.apiKey.value = '';
+      const res = await aiRecipe.fetchModels();
+      if (res?.ok) {
+        const models = Array.isArray(res.data?.models) ? res.data.models : [];
+        // 用返回的清单替换候选（而非追加），避免与旧快照叠加。
+        modelOptions.replaceChildren();
+        for (const m of models) {
+          const option = document.createElement('option');
+          option.value = m;
+          modelOptions.appendChild(option);
+        }
+        showToast(t('ai.fetchModelsSuccess', { n: models.length }));
+      } else {
+        showError(t(mapErrorKey(res?.code)));
+      }
+    } catch (error) {
+      showError(t('ai.testFailed', { error: error?.message || t('common.errorGeneric') }));
+    } finally {
+      fetchModelsBtn.disabled = false;
+      fetchModelsBtn.textContent = t('ai.fetchModels');
+    }
+  });
+
+  // 条码配置卡（与 AI 配置同页）——必须在 render 内、container 可用时接线。
+  wireBarcodeConfig(container);
+}
+
+
+/**
+ * Waren-Barcode-API (mxnzp) konfigurieren -同一个外部凭据区（Feedback 2026-10-27）。
+ * Secret 留空 = 保持不变；保存后药箱的条码查询立即生效。
+ */
+async function wireBarcodeConfig(container) {
+  const status = container.querySelector('#bc-status');
+  const form = container.querySelector('#bc-form');
+  if (!form) return;
+  const appIdEl = container.querySelector('#bc-app-id');
+  const secretEl = container.querySelector('#bc-app-secret');
+  const secretHint = container.querySelector('#bc-secret-hint');
+
+  try {
+    const d = (await api.get('/health/cabinet/barcode-config')).data || {};
+    appIdEl.value = d.appId || '';
+    secretHint.textContent = d.hasSecret ? t('barcode.secretKeep') : t('barcode.secretEmpty');
+    status.textContent = d.configured
+      ? t('barcode.statusOn')
+      : t('barcode.statusOff');
+  } catch {
+    status.textContent = t('common.errorGeneric');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = container.querySelector('#bc-save');
+    btn.disabled = true;
+    try {
+      await api.put('/health/cabinet/barcode-config', {
+        appId: appIdEl.value.trim(),
+        appSecret: secretEl.value, // 空 = 保持原值
+        enabled: true,
+      });
+      window.yuvomi?.showToast(t('barcode.saved'), 'success');
+      secretEl.value = '';
+      const d = (await api.get('/health/cabinet/barcode-config')).data || {};
+      status.textContent = d.configured ? t('barcode.statusOn') : t('barcode.statusOff');
+    } catch (err) {
+      window.yuvomi?.showToast(err?.data?.error || t('common.errorGeneric'), 'danger');
+    } finally {
+      btn.disabled = false;
     }
   });
 }

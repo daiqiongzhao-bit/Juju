@@ -19,6 +19,18 @@ const TYPES = [
   { key: 'white', label: () => t('giftLedger.type.white') },
 ];
 
+const DIRECTIONS = [
+  { key: 'all', label: () => t('giftLedger.tabAll') },
+  { key: 'received', label: () => t('giftLedger.dir.received') },
+  { key: 'given', label: () => t('giftLedger.dir.given') },
+];
+
+function dirLabel(direction) {
+  return direction === 'given'
+    ? t('giftLedger.dir.given')
+    : t('giftLedger.dir.received');
+}
+
 function typeLabel(type) {
   return type === 'red'
     ? t('giftLedger.type.red')
@@ -37,6 +49,27 @@ function formatAmount(n) {
 // 关联联系人（#relationships）：giver/related contact id → 姓名映射（懒加载一次）
 let _user = null;
 let _contactNames = new Map();
+// 家庭成员（送礼人/收礼人）——v164：人员字段是家庭成员，不再是外部姓名
+let _members = [];
+
+async function ensureMembers() {
+  if (_members.length) return;
+  try {
+    const res = await api.get('/auth/users');
+    _members = (res?.data || []).filter((u) => !u.is_worker);
+  } catch { /* 降级：空列表，编辑旧记录时仍可显示原文本 */ }
+}
+
+function memberOptions(selectedId, legacyName) {
+  const opts = _members
+    .map((m) => `<option value="${m.id}" data-name="${esc(m.display_name || m.username)}" ${String(m.id) === String(selectedId) ? 'selected' : ''}>${esc(m.display_name || m.username)}</option>`)
+    .join('');
+  // 旧记录只有姓名文本：保留为可选项，避免编辑时丢失
+  const legacy = legacyName && !_members.some((m) => (m.display_name || m.username) === legacyName)
+    ? `<option value="legacy:${esc(legacyName)}" data-name="${esc(legacyName)}" selected>${esc(legacyName)}</option>`
+    : '';
+  return opts + legacy;
+}
 
 async function ensureContactNames() {
   if (_contactNames.size) return;
@@ -62,6 +95,52 @@ function contactOptions(selectedId) {
     .join('');
 }
 
+// 送礼人输入框的候选：直接用联系人姓名（datalist 只提供建议，输入框仍可
+// 自由编辑）。选中后由 wireGiver 反查 id 建立联系。
+function contactDatalist() {
+  return [...new Set(_contactNames.values())]
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => `<option value="${esc(name)}"></option>`)
+    .join('');
+}
+
+// 关系预设：复用 relationships 模块已有的类型翻译键，避免再维护一套
+// 24 语言的重复文案。选中即写入输入框，仍可自由输入新关系。
+const REL_PRESET_KEYS = ['family', 'friend', 'colleague', 'classmate', 'neighbor', 'partner', 'acquaintance'];
+function relationshipPresets() {
+  return REL_PRESET_KEYS.map((k) => t('relationships.type.' + k));
+}
+/**
+ * 关系改为严格下拉（用户反馈：datalist 悬浮提示挡住下方字段、且要清空文字
+ * 才能再次触发）。预设 + 「自定义」；选中自定义时显示文本输入框。
+ */
+const REL_CUSTOM = '__custom__';
+
+function relSelectOptions(selectedValue) {
+  const presets = relationshipPresets();
+  const isPreset = presets.includes(selectedValue);
+  return ['<option value="">' + esc(t('giftLedger.relNone')) + '</option>']
+    .concat(presets.map((label) =>
+      `<option value="${esc(label)}" ${label === selectedValue ? 'selected' : ''}>${esc(label)}</option>`))
+    .concat(`<option value="${REL_CUSTOM}" ${selectedValue && !isPreset ? 'selected' : ''}>${esc(t('giftLedger.relCustom'))}</option>`)
+    .join('');
+}
+
+/** 下拉与自定义文本框联动：编辑回显自定义值时切到自定义模式。 */
+function wireRelField(body, initialValue) {
+  const sel = body.querySelector('#f-rel-select');
+  const input = body.querySelector('#f-rel');
+  const sync = () => {
+    const isCustom = sel.value === REL_CUSTOM;
+    input.style.display = isCustom ? '' : 'none';
+    if (isCustom && !input.value) input.value = initialValue && !relationshipPresets().includes(initialValue) ? initialValue : '';
+    if (!isCustom) input.value = '';
+  };
+  sel.addEventListener('change', sync);
+  sync();
+  return () => (sel.value === REL_CUSTOM ? input.value.trim() : sel.value || null);
+}
+
 export async function render(container, { user } = {}) {
   _user = user || null;
   container.innerHTML = `
@@ -74,6 +153,7 @@ export async function render(container, { user } = {}) {
         <button class="gl-btn" id="gl-add">+ ${esc(t('giftLedger.add'))}</button>
       </div>
       <div class="gl-tabs" id="gl-tabs"></div>
+      <div class="gl-dir" id="gl-dir"></div>
       <div class="gl-filters">
         <input id="gl-q" placeholder="${esc(t('giftLedger.searchPlaceholder'))}">
       </div>
@@ -83,13 +163,14 @@ export async function render(container, { user } = {}) {
       <div class="gl-bar" id="gl-bar">
         <span id="gl-bar-count">${esc(t('giftLedger.selected', { count: 0 }))}</span>
         <div class="gl-spacer" style="flex:1"></div>
+        <button class="gl-btn ghost" id="gl-bar-all">${esc(t('giftLedger.selectAll'))}</button>
         <button class="gl-btn ghost" id="gl-bar-cancel">${esc(t('giftLedger.cancelSelect'))}</button>
         <button class="gl-btn danger" id="gl-bar-del">${esc(t('giftLedger.batchDelete'))}</button>
       </div>
     </div>
   `;
 
-  const state = { type: 'all', q: '', items: [], selectMode: false, selected: new Set() };
+  const state = { type: 'all', direction: 'all', q: '', items: [], selectMode: false, selected: new Set() };
   const list = container.querySelector('#gl-list');
   const tabsEl = container.querySelector('#gl-tabs');
   const bar = container.querySelector('#gl-bar');
@@ -109,6 +190,20 @@ export async function render(container, { user } = {}) {
     })
   );
 
+  // 方向筛选（收礼/送礼）与红白事标签相互独立
+  const dirEl = container.querySelector('#gl-dir');
+  dirEl.innerHTML = DIRECTIONS.map(
+    (d) =>
+      `<button type="button" class="gl-dir-chip ${d.key === state.direction ? 'active' : ''}" data-direction="${d.key}">${esc(d.label())}</button>`
+  ).join('');
+  dirEl.querySelectorAll('.gl-dir-chip').forEach((el) =>
+    el.addEventListener('click', () => {
+      state.direction = el.dataset.direction;
+      dirEl.querySelectorAll('.gl-dir-chip').forEach((x) => x.classList.toggle('active', x === el));
+      load();
+    })
+  );
+
   let debounce;
   qEl.addEventListener('input', () => {
     clearTimeout(debounce);
@@ -121,6 +216,18 @@ export async function render(container, { user } = {}) {
   container.querySelector('#gl-add').addEventListener('click', () => openForm());
   container.querySelector('#gl-select').addEventListener('click', () => toggleSelectMode());
   container.querySelector('#gl-bar-cancel').addEventListener('click', () => toggleSelectMode(false));
+  container.querySelector('#gl-bar-all').addEventListener('click', () => {
+    const all = state.items.map((it) => it.id);
+    const every = all.every((id) => state.selected.has(id));
+    state.selected = new Set(every ? [] : all);
+    list.querySelectorAll('.gl-card').forEach((el) => {
+      const id = parseInt(el.dataset.id, 10);
+      const cb = el.querySelector('.gl-card__check input');
+      if (cb) cb.checked = state.selected.has(id);
+      el.classList.toggle('selected', state.selected.has(id));
+    });
+    updateBar();
+  });
   container.querySelector('#gl-bar-del').addEventListener('click', () => doBatchDelete());
   container.querySelector('#gl-stats').addEventListener('click', () => toggleStats());
 
@@ -128,7 +235,8 @@ export async function render(container, { user } = {}) {
   // Statistik: Monatsbalken + Jahressummen + Top-Beziehungen
   // --------------------------------------------------------
   const statsPanel = container.querySelector('#gl-stats-panel');
-  const statsState = { open: false, year: new Date().getFullYear() };
+  // 默认“全部”：统计首先回答“总共收/送了多少”，年度是可选细分。
+  const statsState = { open: false, year: 'all' };
 
   async function toggleStats() {
     statsState.open = !statsState.open;
@@ -140,18 +248,20 @@ export async function render(container, { user } = {}) {
   async function loadStats() {
     statsPanel.innerHTML = `<div class="gl-empty">${esc(t('giftLedger.loading'))}</div>`;
     try {
-      const d = (await api.get('/gift-ledger/summary?year=' + statsState.year)).data || {};
-      const maxMonth = Math.max(1, ...d.months.map((m) => m.redTotal + m.whiteTotal));
-      const yearOptions = [];
-      if (d.years?.length) {
-        for (const y of d.years) yearOptions.push(y.year);
-        if (!yearOptions.includes(String(statsState.year))) yearOptions.push(String(statsState.year));
-      }
-      if (!yearOptions.includes(String(statsState.year))) yearOptions.push(String(statsState.year));
-      yearOptions.sort().reverse();
-
+      // 默认“全部”（跨年份）：用户关心的是“这个人一共收了多少、送了多少”，
+      // 年度只是可选的细分视图（Feedback 2026-10-25）。
+      const period = statsState.year === 'all' ? 'all' : statsState.year;
+      const d = (await api.get('/gift-ledger/summary?year=' + encodeURIComponent(period))).data || {};
+      const allTime = d.allTime === true;
       const fmt = (n) => formatAmount(Math.round(n * 100) / 100);
-      const monthRows = d.months
+      // 结余可能为负：符号放货币符号前（-¥1,234，而不是 ¥-1,234）。
+      const fmtSigned = (n) => `${n < 0 ? '-' : ''}¥${formatAmount(Math.abs(Math.round(n * 100) / 100))}`;
+
+      const yearOptions = ['all', ...(d.years || []).map((y) => String(y.year))];
+      if (!yearOptions.includes(String(statsState.year))) yearOptions.push(String(statsState.year));
+
+      const maxMonth = Math.max(1, ...(d.months || []).map((m) => m.redTotal + m.whiteTotal));
+      const monthRows = (d.months || [])
         .map((m) => {
           const total = m.redTotal + m.whiteTotal;
           if (!total && !m.redCount && !m.whiteCount) return '';
@@ -164,6 +274,31 @@ export async function render(container, { user } = {}) {
               <span class="gl-stat-bar gl-stat-bar--white" style="width:${whiteW.toFixed(1)}%"></span>
             </span>
             <span class="gl-stat-month__total">¥${esc(fmt(total))}<small> (${m.redCount + m.whiteCount})</small></span>
+          </div>`;
+        })
+        .join('');
+
+      // 按人：同一个人可能既有收礼又有送礼，合成一行显示 收/送/结余。
+      const personMap = new Map();
+      for (const g of d.givers || []) {
+        const cur = personMap.get(g.giver) || { name: g.giver, inTotal: 0, outTotal: 0, count: 0 };
+        if (g.direction === 'given') cur.outTotal += g.total;
+        else cur.inTotal += g.total;
+        cur.count += g.count;
+        personMap.set(g.giver, cur);
+      }
+      const personRows = [...personMap.values()]
+        .sort((a, b) => (b.inTotal + b.outTotal) - (a.inTotal + a.outTotal))
+        .slice(0, 30)
+        .map((p) => {
+          const net = Math.round((p.inTotal - p.outTotal) * 100) / 100;
+          return `<div class="gl-person">
+            <div class="gl-person__name">${esc(p.name)}</div>
+            <div class="gl-person__figures">
+              <span class="gl-person__in">${esc(t('giftLedger.dir.received'))} <b>¥${esc(fmt(p.inTotal))}</b></span>
+              <span class="gl-person__out">${esc(t('giftLedger.dir.given'))} <b>¥${esc(fmt(p.outTotal))}</b></span>
+              <span class="gl-person__net ${net >= 0 ? 'is-pos' : 'is-neg'}">${esc(t('giftLedger.net'))} <b>${esc(fmtSigned(net))}</b></span>
+            </div>
           </div>`;
         })
         .join('');
@@ -189,21 +324,46 @@ export async function render(container, { user } = {}) {
         )
         .join('');
 
+      const periodLabel = allTime
+        ? t('giftLedger.statsAllTime')
+        : t('giftLedger.statsYear', { year: statsState.year });
+
       statsPanel.innerHTML = `
         <div class="gl-stats-head">
-          <strong>${esc(t('giftLedger.statsYear', { year: statsState.year }))}</strong>
-          <select id="gl-stats-year">${yearOptions.map((y) => `<option value="${esc(y)}" ${String(y) === String(statsState.year) ? 'selected' : ''}>${esc(y)}</option>`).join('')}</select>
-          <span class="gl-spacer" style="flex:1"></span>
-          <span class="gl-stat-kpi gl-stat-kpi--red">${esc(t('giftLedger.type.red'))} <strong>¥${esc(fmt(d.yearTotals?.redTotal || 0))}</strong><small>${d.yearTotals?.redCount || 0}</small></span>
-          <span class="gl-stat-kpi gl-stat-kpi--white">${esc(t('giftLedger.type.white'))} <strong>¥${esc(fmt(d.yearTotals?.whiteTotal || 0))}</strong><small>${d.yearTotals?.whiteCount || 0}</small></span>
+          <strong>${esc(periodLabel)}</strong>
+          <select id="gl-stats-year">${yearOptions
+            .map((y) => `<option value="${esc(y)}" ${String(y) === String(statsState.year) ? 'selected' : ''}>${y === 'all' ? esc(t('giftLedger.statsAllTime')) : esc(y)}</option>`)
+            .join('')}</select>
         </div>
-        <div class="gl-stats-months">${monthRows || `<div class="gl-empty">${esc(t('giftLedger.empty'))}</div>`}</div>
-        ${relRows ? `<div class="gl-stats-rels"><h4>${esc(t('giftLedger.statsTopRel'))}</h4>${relRows}</div>` : ''}
+        <div class="gl-kpis">
+          <div class="gl-kpi gl-kpi--in">
+            <span class="gl-kpi__label">${esc(t('giftLedger.dir.received'))}</span>
+            <strong class="gl-kpi__value">¥${esc(fmt(d.yearTotals?.receivedTotal || 0))}</strong>
+            <span class="gl-kpi__meta">${d.yearTotals?.receivedCount || 0} ${esc(t('giftLedger.statsEntries'))}</span>
+          </div>
+          <div class="gl-kpi gl-kpi--out">
+            <span class="gl-kpi__label">${esc(t('giftLedger.dir.given'))}</span>
+            <strong class="gl-kpi__value">¥${esc(fmt(d.yearTotals?.givenTotal || 0))}</strong>
+            <span class="gl-kpi__meta">${d.yearTotals?.givenCount || 0} ${esc(t('giftLedger.statsEntries'))}</span>
+          </div>
+          <div class="gl-kpi gl-kpi--net ${(d.yearTotals?.net || 0) >= 0 ? 'is-pos' : 'is-neg'}">
+            <span class="gl-kpi__label">${esc(t('giftLedger.net'))}</span>
+            <strong class="gl-kpi__value">${esc(fmtSigned(d.yearTotals?.net || 0))}</strong>
+            <span class="gl-kpi__meta">${esc(t('giftLedger.netHint'))}</span>
+          </div>
+        </div>
+        <div class="gl-typekpis">
+          <span class="gl-typekpi gl-typekpi--red">${esc(t('giftLedger.type.red'))} · ${d.yearTotals?.redCount || 0} · ¥${esc(fmt(d.yearTotals?.redTotal || 0))}</span>
+          <span class="gl-typekpi gl-typekpi--white">${esc(t('giftLedger.type.white'))} · ${d.yearTotals?.whiteCount || 0} · ¥${esc(fmt(d.yearTotals?.whiteTotal || 0))}</span>
+        </div>
+        ${allTime ? '' : `<div class="gl-stats-months">${monthRows || `<div class="gl-empty">${esc(t('giftLedger.empty'))}</div>`}</div>`}
+        ${personRows ? `<div class="gl-stats-rels"><h4>${esc(t('giftLedger.statsByPerson'))}</h4>${personRows}</div>` : ''}
+        ${relRows ? `<div class="gl-stats-rels"><h4>${esc(allTime ? t('giftLedger.statsTopRelAll') : t('giftLedger.statsTopRel'))}</h4>${relRows}</div>` : ''}
         ${yearList ? `<div class="gl-stats-years"><h4>${esc(t('giftLedger.statsByYear'))}</h4>${yearList}</div>` : ''}
       `;
 
       statsPanel.querySelector('#gl-stats-year').addEventListener('change', (e) => {
-        statsState.year = parseInt(e.target.value, 10);
+        statsState.year = e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10);
         loadStats();
       });
       statsPanel.querySelectorAll('.gl-stat-year').forEach((el) =>
@@ -244,7 +404,7 @@ export async function render(container, { user } = {}) {
     `;
   }
 
-  function toggleSelectMode(force) {
+  async function toggleSelectMode(force) {
     state.selectMode = typeof force === 'boolean' ? force : !state.selectMode;
     if (!state.selectMode) state.selected.clear();
     container.querySelector('#gl-select').textContent = state.selectMode
@@ -252,12 +412,9 @@ export async function render(container, { user } = {}) {
       : t('giftLedger.selectMode');
     bar.classList.toggle('show', state.selectMode);
     updateBar();
-    list.querySelectorAll('.gl-card').forEach((el) => {
-      const id = parseInt(el.dataset.id, 10);
-      el.classList.toggle('selected', state.selected.has(id));
-      const cb = el.querySelector('.gl-card__check input');
-      if (cb) cb.checked = state.selected.has(id);
-    });
+    // 关键：checkbox 只在 selectMode 下渲染，必须重绘列表，
+    // 否则工具条出现了但卡片上没有勾选框（用户 2026-10-26 反馈）。
+    await load();
   }
 
   function updateBar() {
@@ -278,6 +435,7 @@ export async function render(container, { user } = {}) {
         <div class="gl-card__title">
           ${esc(it.event_name)}
           <span class="gl-type ${it.type}">${esc(typeLabel(it.type))}</span>
+          <span class="gl-chip gl-chip--${it.direction === 'given' ? 'given' : 'received'}">${esc(dirLabel(it.direction))}</span>
           ${lock}
         </div>
         <div class="gl-meta">
@@ -300,6 +458,7 @@ export async function render(container, { user } = {}) {
     try {
       const params = new URLSearchParams();
       if (state.type !== 'all') params.set('type', state.type);
+      if (state.direction !== 'all') params.set('direction', state.direction);
       if (state.q) params.set('q', state.q);
       const r = (await api.get('/gift-ledger/list?' + params.toString())).data || [];
       state.items = r;
@@ -357,28 +516,41 @@ export async function render(container, { user } = {}) {
   }
 
   async function openForm(id) {
-    await ensureContactNames();
+    await Promise.all([ensureContactNames(), ensureMembers()]);
     const body = document.createElement('div');
     body.className = 'gl-modal-body';
     const editing = !!id;
     body.innerHTML = `
+      <div class="gl-field"><label>${esc(t('giftLedger.direction'))}</label>
+        <div class="gl-seg" id="f-direction" role="radiogroup" aria-label="${esc(t('giftLedger.direction'))}">
+          <label class="gl-seg__opt" data-v="received"><input type="radio" name="gl-dir" value="received">${esc(t('giftLedger.dir.received'))}</label>
+          <label class="gl-seg__opt" data-v="given"><input type="radio" name="gl-dir" value="given" ${editing ? '' : 'checked'}>${esc(t('giftLedger.dir.given'))}</label>
+        </div>
+      </div>
       <div class="gl-field"><label>${esc(t('giftLedger.type.label') || '类型')}</label>
-        <div class="gl-radios" id="f-type">
-          <label class="active-white" data-v="white"><input type="radio" name="gl-type" value="white" ${editing ? '' : 'checked'}> ${esc(t('giftLedger.type.white'))}</label>
-          <label data-v="red"><input type="radio" name="gl-type" value="red"> ${esc(t('giftLedger.type.red'))}</label>
+        <div class="gl-seg gl-seg--type" id="f-type" role="radiogroup" aria-label="${esc(t('giftLedger.type.label') || '类型')}">
+          <label class="gl-seg__opt" data-v="red"><input type="radio" name="gl-type" value="red" ${editing ? '' : 'checked'}>${esc(t('giftLedger.type.red'))}</label>
+          <label class="gl-seg__opt" data-v="white"><input type="radio" name="gl-type" value="white">${esc(t('giftLedger.type.white'))}</label>
         </div>
       </div>
       <div class="gl-field"><label>${esc(t('giftLedger.eventName'))}</label><input id="f-name" placeholder="${esc(t('giftLedger.eventNamePh') || '')}"></div>
       <div class="gl-field"><label>${esc(t('giftLedger.eventDate'))}</label><input id="f-date" type="date"></div>
-      <div class="gl-field"><label>${esc(t('giftLedger.giver'))}</label><input id="f-giver" placeholder=""></div>
-      <div class="gl-field"><label>${esc(t('giftLedger.giverContact'))}</label>
-        <select id="f-giver-contact"><option value="">${esc(t('giftLedger.noContact'))}</option>${contactOptions(null)}</select>
+      <div class="gl-field">
+        <label><input type="checkbox" id="f-anniv" checked> ${esc(t('giftLedger.addToAnniversary'))}</label>
+        <div class="gl-hint" id="f-anniv-hint">${esc(t('giftLedger.addToAnniversaryHint'))}</div>
       </div>
-      <div class="gl-field"><label>${esc(t('giftLedger.relatedContact'))}</label>
+      <div class="gl-field"><label id="f-giver-label">${esc(t('giftLedger.giver'))} *</label>
+        <select id="f-giver-user" class="form-input" required>${memberOptions(null, null)}</select>
+      </div>
+      <div class="gl-field"><label>${esc(t('giftLedger.eventObject'))}</label>
         <select id="f-related-contact"><option value="">${esc(t('giftLedger.noContact'))}</option>${contactOptions(null)}</select>
+        <div class="gl-hint">${esc(t('giftLedger.eventObjectHint'))}</div>
       </div>
-      <div class="gl-field"><label>${esc(t('giftLedger.amount'))}</label><input id="f-amount" type="number" step="0.01" min="0" inputmode="decimal"></div>
-      <div class="gl-field"><label>${esc(t('giftLedger.relationship'))}</label><input id="f-rel"></div>
+      <div class="gl-field"><label>${esc(t('giftLedger.amount'))} *</label><input id="f-amount" type="number" step="0.01" min="0" inputmode="decimal" required></div>
+      <div class="gl-field"><label>${esc(t('giftLedger.relationship'))}</label>
+        <select id="f-rel-select">${relSelectOptions(null)}</select>
+        <input id="f-rel" style="display:none" maxlength="20" placeholder="${esc(t('giftLedger.relCustomPh'))}">
+      </div>
       <div class="gl-field"><label>${esc(t('giftLedger.note'))}</label><textarea id="f-note" rows="3"></textarea></div>
       <div class="gl-field"><label><input type="checkbox" id="f-returned"> ${esc(t('giftLedger.returned'))}</label></div>
       <div class="gl-field"><label><input type="checkbox" id="f-private"> ${esc(t('giftLedger.private'))}</label>
@@ -398,21 +570,60 @@ export async function render(container, { user } = {}) {
 
     // Radio-Highlight
     const typeWrap = body.querySelector('#f-type');
-    const syncRadio = () => {
-      typeWrap.querySelectorAll('label').forEach((l) => {
-        const checked = l.querySelector('input').checked;
-        l.classList.toggle('active-red', l.dataset.v === 'red' && checked);
-        l.classList.toggle('active-white', l.dataset.v === 'white' && checked);
+    const syncSeg = (wrap) => {
+      wrap.querySelectorAll('.gl-seg__opt').forEach((l) => {
+        l.classList.toggle('is-active', l.querySelector('input').checked);
       });
     };
+    const syncRadio = () => syncSeg(typeWrap);
     typeWrap.querySelectorAll('input').forEach((r) => r.addEventListener('change', syncRadio));
+    syncRadio();
 
-    // 选中联系人时，若“送礼人”自由文本为空则自动填入姓名（仍可手动改）
-    body.querySelector('#f-giver-contact').addEventListener('change', (e) => {
-      const v = e.target.value;
-      const giverInput = body.querySelector('#f-giver');
-      if (v && !giverInput.value.trim()) giverInput.value = contactName(Number(v)) || '';
-    });
+    // 人员是家庭成员（下拉）；外部当事人在「事件对象」里选联系人。
+    const giverSel = body.querySelector('#f-giver-user');
+    const relatedSel = body.querySelector('#f-related-contact');
+
+    // 关系下拉与自定义文本框联动；getRelValue() 供提交时取值。
+    const getRelValue = wireRelField(body, editing ? (item?.relationship || '') : '');
+
+    // 同步纪念日：anniversaries 必须有联系人 + 日期，因此两者齐备才可用；
+    // 纪念日挂在「事件对象」名下（例如朋友婚礼），不是家庭成员自己。
+    const annivEl = body.querySelector('#f-anniv');
+    const annivHint = body.querySelector('#f-anniv-hint');
+    let annivTouched = false;
+    annivEl.addEventListener('change', () => { annivTouched = true; });
+    const syncAnniv = () => {
+      const eligible = !!relatedSel.value && !!body.querySelector('#f-date').value;
+      if (annivEl.dataset.locked === '1') return; // 编辑已同步记录：保持锁定
+      annivEl.disabled = !eligible;
+      if (!eligible) annivEl.checked = false;
+      else if (!annivTouched) annivEl.checked = true;
+      annivHint.textContent = eligible
+        ? t('giftLedger.addToAnniversaryHint')
+        : t('giftLedger.addToAnniversaryNeeds');
+    };
+    relatedSel.addEventListener('change', syncAnniv);
+    body.querySelector('#f-date').addEventListener('change', syncAnniv);
+    body.querySelector('#f-date').addEventListener('input', syncAnniv);
+    syncAnniv();
+
+    // 方向决定“对方”的称呼：收礼时是送礼人，送礼时是收礼人。
+    const dirWrap = body.querySelector('#f-direction');
+    const giverLabelEl = body.querySelector('#f-giver-label');
+    // 人员是家庭成员：送礼时“我”是送礼人，收礼时“我”是收礼人。
+    const syncDirLabel = () => {
+      const isGiven = dirWrap.querySelector('input:checked')?.value === 'given';
+      giverLabelEl.textContent =
+        (isGiven ? t('giftLedger.giver') : t('giftLedger.recipient')) + ' *';
+    };
+    dirWrap.querySelectorAll('input').forEach((r) =>
+      r.addEventListener('change', () => {
+        syncDirLabel();
+        syncSeg(dirWrap);
+      })
+    );
+    syncDirLabel();
+    syncSeg(dirWrap);
 
     if (editing) {
       let item;
@@ -421,16 +632,38 @@ export async function render(container, { user } = {}) {
       } catch {
         return;
       }
+      body.querySelector('input[name="gl-dir"][value="' + (item.direction || 'received') + '"]').checked = true;
+      syncDirLabel();
       body.querySelector('input[name="gl-type"][value="' + item.type + '"]').checked = true;
       syncRadio();
       body.querySelector('#f-name').value = item.event_name || '';
       body.querySelector('#f-date').value = (item.event_date || '').slice(0, 10);
-      body.querySelector('#f-giver').value = item.giver || '';
-      body.querySelector('#f-giver-contact').value = item.giver_contact_id || '';
+      if (item.anniversary_id) {
+        annivEl.dataset.locked = '1';
+        annivEl.checked = true;
+        annivEl.disabled = true;
+        annivHint.textContent = t('giftLedger.anniversaryLinked');
+      }
+      syncAnniv();
+      // 家庭成员下拉：优先 giver_user_id；旧记录回退到姓名文本
+      const giverSel = body.querySelector('#f-giver-user');
+      if (item.giver_user_id && _members.some((m) => m.id === item.giver_user_id)) {
+        giverSel.value = String(item.giver_user_id);
+      } else if (item.giver && !_members.some((m) => (m.display_name || m.username) === item.giver)) {
+        const opt = document.createElement('option');
+        opt.value = 'legacy:' + item.giver;
+        opt.dataset.name = item.giver;
+        opt.textContent = item.giver;
+        giverSel.appendChild(opt);
+        giverSel.value = opt.value;
+      }
       body.querySelector('#f-related-contact').value = item.related_contact_id || '';
       body.querySelector('#f-returned').checked = !!item.returned;
       body.querySelector('#f-amount').value = item.amount != null ? item.amount : '';
-      body.querySelector('#f-rel').value = item.relationship || '';
+      const relSel = body.querySelector('#f-rel-select');
+      relSel.value = relationshipPresets().includes(item.relationship) ? item.relationship
+        : (item.relationship ? REL_CUSTOM : '');
+      relSel.dispatchEvent(new Event('change'));
       body.querySelector('#f-note').value = item.note || '';
       body.querySelector('#f-private').checked = !!item.is_private;
 
@@ -450,17 +683,35 @@ export async function render(container, { user } = {}) {
         window.yuvomi?.showToast?.(t('giftLedger.eventNameRequired') || t('common.nameRequired') || 'Name erforderlich', 'danger');
         return;
       }
+      // 送礼人/收礼人（家庭成员）与金额为必填
+      const giverSel = body.querySelector('#f-giver-user');
+      const giverOpt = giverSel.selectedOptions[0];
+      const giverRaw = giverSel.value || '';
+      const giver = (giverOpt?.dataset.name || '').trim();
+      if (!giver) {
+        window.yuvomi?.showToast?.(t('common.required'), 'danger');
+        giverSel.focus();
+        return;
+      }
+      const giverUserId = giverRaw && !giverRaw.startsWith('legacy:') ? Number(giverRaw) : null;
       const amountRaw = body.querySelector('#f-amount').value.trim();
+      if (amountRaw === '') {
+        window.yuvomi?.showToast?.(t('common.required'), 'danger');
+        body.querySelector('#f-amount').focus();
+        return;
+      }
       const payload = {
-        type: body.querySelector('input[name="gl-type"]:checked')?.value || 'white',
+        direction: body.querySelector('input[name="gl-dir"]:checked')?.value || 'given',
+        addToAnniversary: !annivEl.disabled && annivEl.checked,
+        type: body.querySelector('input[name="gl-type"]:checked')?.value || 'red',
         event_name: name,
         event_date: body.querySelector('#f-date').value || null,
-        giver: body.querySelector('#f-giver').value.trim() || null,
-        giverContactId: body.querySelector('#f-giver-contact').value ? Number(body.querySelector('#f-giver-contact').value) : null,
+        giver,
+        giverUserId,
         relatedContactId: body.querySelector('#f-related-contact').value ? Number(body.querySelector('#f-related-contact').value) : null,
         returned: body.querySelector('#f-returned').checked,
-        amount: amountRaw === '' ? null : Number(amountRaw),
-        relationship: body.querySelector('#f-rel').value.trim() || null,
+        amount: Number(amountRaw),
+        relationship: getRelValue(),
         note: body.querySelector('#f-note').value.trim() || null,
         is_private: body.querySelector('#f-private').checked,
       };

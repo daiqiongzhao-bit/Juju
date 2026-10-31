@@ -365,7 +365,7 @@ export async function render(container, { user } = {}) {
     return `<div class="mk-member-picker" id="d-members">${state.members
       .map((m) => {
         const rel = (item.members || []).find((x) => x.uid === m.id);
-        const st = rel?.memberStatus || '';
+        const st = rel?.member_status || rel?.memberStatus || '';
         return `<div class="mk-member-chip mk-member-chip--row ${rel ? 'checked' : ''}" data-uid="${m.id}">
           <label><input type="checkbox" data-uid="${m.id}" ${rel ? 'checked' : ''}> ${esc(m.name || m.display_name || '#' + m.id)}</label>
           <select class="mk-member-status" data-uid="${m.id}">
@@ -456,10 +456,18 @@ export async function render(container, { user } = {}) {
       });
     }
     let rating = item.rating || 0;
-    body.querySelector('#d-stars').addEventListener('click', (e) => {
+    // Defensiv verdrahten: fehlende Elemente dürfen das Modal nicht platzen
+    // lassen - der globale Error-Handler zeigt sonst nur „unerwarteter Fehler"
+    // und der Nutzer kann den Eintrag weder ansehen noch bearbeiten.
+    const requireEl = (sel) => {
+      const el = body.querySelector(sel);
+      if (!el) console.warn('[Media] detail modal missing element:', sel);
+      return el;
+    };
+    requireEl('#d-stars')?.addEventListener('click', (e) => {
       if (e.target.dataset.v) rating = parseInt(e.target.dataset.v, 10);
     });
-    body.querySelector('#d-save').addEventListener('click', async () => {
+    requireEl('#d-save').addEventListener('click', async () => {
       const tags = body.querySelector('#d-tags').value.split(',').map((x) => x.trim()).filter(Boolean);
       const payload = {
         status: body.querySelector('#d-status').value,
@@ -487,13 +495,16 @@ export async function render(container, { user } = {}) {
         window.yuvomi?.showToast?.(t('common.error') || 'Fehler', 'danger');
       }
     });
-    body.querySelector('#d-del').addEventListener('click', async () => {
+    requireEl('#d-del').addEventListener('click', async () => {
       if (!(await confirmModal(t('media.confirmDelete') || 'Wirklich löschen?'))) return;
       try {
         await api.delete('/media/' + id);
         closeModal({ force: true });
         load();
-      } catch {}
+      } catch (err) {
+        // 之前静默吞错（403/500 都无提示），用户以为“点了没反应”
+        window.yuvomi?.showToast?.(err?.data?.error || err?.message || t('common.error'), 'danger');
+      }
     });
   }
 
@@ -702,4 +713,13 @@ export async function render(container, { user } = {}) {
     `<option value="">${esc(t('media.allMembers'))}</option>` +
     state.members.map((m) => `<option value="${m.id}">${esc(m.name || m.display_name || '#' + m.id)}</option>`).join('');
   await load();
+
+  // Vom Dashboard mitgebracht (?item=ID, Media-Widget-Karte): Detail direkt öffnen
+  // (Feedback 2026-10-27 „点击这部电影应该弹出这部影视的简介"). Danach die Query
+  // aus der URL entfernen, damit Reload/Soft-Nav nicht erneut aufpoppt.
+  const deepLinkItem = parseInt(new URLSearchParams(window.location.search).get('item'), 10);
+  if (Number.isFinite(deepLinkItem) && deepLinkItem > 0) {
+    history.replaceState(null, '', '/media');
+    openDetail(deepLinkItem);
+  }
 }

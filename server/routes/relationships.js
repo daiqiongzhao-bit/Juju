@@ -40,7 +40,7 @@ const log = createLogger('Relationships');
 const router = express.Router();
 const MAX_PHOTO_LENGTH = 6_990_507; // ~5 MB raw image in base64
 const PHOTO_RE = /^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
-const RELATION_TYPES = ['knows', 'family', 'friend', 'partner', 'colleague', 'neighbor', 'acquaintance', 'met-through', 'spouse', 'child', 'classmate', 'client', 'landlord', 'roommate', 'in-law', 'ex', 'doctor', 'teacher'];
+const RELATION_TYPES = ['knows', 'family', 'friend', 'partner', 'colleague', 'neighbor', 'acquaintance', 'met-through', 'spouse', 'child', 'classmate', 'client', 'landlord', 'roommate', 'in-law', 'ex', 'doctor', 'teacher', 'self'];
 const INTERACTION_TYPES = ['note', 'call', 'meeting', 'message', 'gift', 'other'];
 const STRENGTH_LEVELS = [0, 1, 2, 3];
 const EDGE_DIRECTIONS = ['both', 'oneway'];

@@ -201,7 +201,12 @@
  * Gefragt wird an der SHELL, nicht am Scrollport: der FAB hängt seit #634 in
  * `.fab-layer` neben `.app-content`, nicht mehr darin. */
 .app-shell:has(.fab-layer .page-fab:not([hidden])) .app-content {
-  margin-block-end: var(--fab-safe-zone);
+  /* 2026-10-25: Innenabstand statt Außenmarge. Die Marge verkleinerte den
+   * Scrollport und hinterließ auf jeder Seite mit FAB ein leeres Band über der
+   * Bottom-Nav (gemeldet am 礼金簿). Als Padding gehört die Zone zum scrollbaren
+   * Inhalt: nichts verschwindet dauerhaft unter dem FAB, aber es entsteht kein
+   * toter Streifen mehr. */
+  padding-block-end: var(--fab-safe-zone);
 }
 
 /* #main-content wird nach jeder Navigation programmatisch fokussiert, damit

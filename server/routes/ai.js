@@ -15,6 +15,7 @@ import { requireAdmin } from '../auth.js';
 import { createLogger } from '../logger.js';
 import * as aiConfig from '../services/ai-config.js';
 import * as aiRecipe from '../services/ai-recipe.js';
+import { listProviderModels } from '../services/ai-models.js';
 
 const router = express.Router();
 const log = createLogger('AI');
@@ -59,6 +60,29 @@ router.post('/test', requireAdmin, async (_req, res) => {
   } catch (err) {
     log.error('POST /test failed:', err?.message || err);
     res.json({ data: { ok: false, code: 'unexpected', message: 'The connection test failed.' } });
+  }
+});
+
+router.get('/models', requireAdmin, async (_req, res) => {
+  try {
+    const cfg = aiConfig.getConfig();
+    const provider = aiConfig.providerByKey(cfg.provider);
+    // effectiveBaseUrl：配置 baseUrl 优先，否则提供方预设（与 getPublicConfig 一致）。
+    const effectiveBaseUrl = cfg.baseUrl || provider.baseUrl || '';
+    const result = await listProviderModels({
+      provider: provider.key,
+      baseUrl: effectiveBaseUrl,
+      apiKey: cfg.apiKey,
+    });
+    if (result.ok) {
+      res.json({ ok: true, data: { models: result.models, provider: result.provider } });
+    } else {
+      // 失败也走 200 + { ok:false, code }，与 /test 同款，便于前端统一按 code 取文案。
+      res.json({ ok: false, code: result.code, message: result.message });
+    }
+  } catch (err) {
+    log.error('GET /models failed:', err?.message || err);
+    res.json({ ok: false, code: 'UNEXPECTED', message: 'The model list could not be fetched.' });
   }
 });
 

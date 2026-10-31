@@ -2965,3 +2965,16 @@
   align-items: center;
   gap: 8px;
 }
+
+/* 已过期的邀请：留在列表中并明确标记 —— 2026-10-27 */
+.settings-invite-expired {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+  vertical-align: middle;
+}

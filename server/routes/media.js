@@ -156,26 +156,35 @@ function mediaFilters(req, me, admin) {
 
   const where = [];
   const params = [];
-  where.push('(is_private = 0 OR creator_uid = ?' + (admin ? ' OR 1=1' : '') + ')');
-  params.push(me);
+  // Isolation (Feedback 2026-10-27): jede Person sieht nur eigene Einträge und
+  // solche, zu denen sie als Teilnehmer gepickt wurde. is_private = 1 bleibt
+  // strikt beim Ersteller; die Admin-Sicht dient der Verwaltung.
+  if (admin) {
+    // Admin behält die Verwaltungs-Sicht (alles sichtbar).
+    where.push('(1=1)');
+  } else {
+    where.push('(mi.creator_uid = ? OR EXISTS (SELECT 1 FROM media_member_rel mmr WHERE mmr.media_id = mi.id AND mmr.member_uid = ?))');
+    params.push(me, me);
+  }
   if (type && MEDIA_TYPES.includes(type)) {
-    where.push('media_type = ?');
+    where.push('mi.media_type = ?');
     params.push(type);
   }
   if (status && STATUSES.includes(status)) {
-    where.push('status = ?');
+    // Persönlicher Status überlagert den gemeinsamen (v162).
+    where.push('COALESCE(ms.status, mi.status) = ?');
     params.push(status);
   }
   if (tag) {
-    where.push('tags LIKE ?');
+    where.push('mi.tags LIKE ?');
     params.push(`%${tag}%`);
   }
   if (q) {
-    where.push('(title LIKE ? OR comment LIKE ?)');
+    where.push('(mi.title LIKE ? OR mi.comment LIKE ?)');
     params.push(`%${q}%`, `%${q}%`);
   }
   if (member) {
-    where.push('id IN (SELECT media_id FROM media_member_rel WHERE member_uid = ?)');
+    where.push('mi.id IN (SELECT media_id FROM media_member_rel WHERE member_uid = ?)');
     params.push(member);
   }
   const whereSql = where.length ? ' WHERE ' + where.join(' AND ') : '';
@@ -192,11 +201,19 @@ router.get('/list', (req, res) => {
     const offset = (page - 1) * limit;
 
     const { whereSql, params } = mediaFilters(req, me, admin);
-    const total = db.get().prepare(`SELECT COUNT(*) AS n FROM media_item${whereSql}`).get(...params).n;
+    // 每用户观看状态（v162）：LEFT JOIN 后用 COALESCE 覆盖共同状态。
+    const joinSql = ' FROM media_item mi LEFT JOIN media_user_state ms ON ms.media_item_id = mi.id AND ms.user_id = ?';
+    const total = db.get().prepare(`SELECT COUNT(*) AS n${joinSql}${whereSql}`).get(me, ...params).n;
     const rows = db
       .get()
-      .prepare(`SELECT * FROM media_item${whereSql} ORDER BY updated_at DESC LIMIT ? OFFSET ?`)
-      .all(...params, limit, offset);
+      .prepare(
+        `SELECT mi.*,
+                COALESCE(ms.status, mi.status) AS status,
+                COALESCE(ms.progress, mi.progress) AS progress,
+                COALESCE(ms.watch_date, mi.watch_date) AS watch_date
+         ${joinSql}${whereSql} ORDER BY mi.updated_at DESC LIMIT ? OFFSET ?`
+      )
+      .all(me, ...params, limit, offset);
 
     const items = rows.map((r) => ({
       ...r,
@@ -222,10 +239,11 @@ router.get('/ids', (req, res) => {
     const me = uid(req);
     const admin = isAdmin(req);
     const { whereSql, params } = mediaFilters(req, me, admin);
+    const joinSql = ' FROM media_item mi LEFT JOIN media_user_state ms ON ms.media_item_id = mi.id AND ms.user_id = ?';
     const rows = db
       .get()
-      .prepare(`SELECT id FROM media_item${whereSql} ORDER BY updated_at DESC`)
-      .all(...params);
+      .prepare(`SELECT mi.id${joinSql}${whereSql} ORDER BY mi.updated_at DESC`)
+      .all(me, ...params);
     res.json({ data: rows.map((r) => r.id) });
   } catch (err) {
     log.error('GET /ids', err);
@@ -506,6 +524,174 @@ router.post('/emby/test', async (req, res) => {
   }
 });
 
+// GET /api/v1/media/emby/my-account  (jeder Benutzer)
+// Liefert die eigene Emby-Zuordnung + die Auswahlliste der Emby-Benutzer.
+// Der Server-API-Key bleibt Admin-Sache; hier wird nur der Name/ID benutzt.
+router.get('/emby/my-account', async (req, res) => {
+  try {
+    const me = uid(req);
+    const cfg = emby.getConfig(db.get());
+    const configured = emby.isConfigured(cfg);
+    const binding = emby.getUserBinding(db.get(), me);
+    // Bewusst OHNE Benutzerliste: wer welche Emby-Konten hat, ist Admin-Wissen
+    // (Feedback 2026-10-26). Mitglieder sehen nur ihre eigene Zuordnung.
+    res.json({
+      data: {
+        configured,
+        bound: !!binding,
+        embyUserName: binding?.emby_user_name || null,
+      },
+    });
+  } catch (err) {
+    log.error('GET /emby/my-account', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// GET /api/v1/media/emby/bindings  (nur Admin)
+// Mitgliederliste + deren Emby-Zuordnung + die wählbaren Emby-Benutzer.
+router.get('/emby/bindings', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const cfg = emby.getConfig(db.get());
+    const configured = emby.isConfigured(cfg);
+    const users = db
+      .get()
+      .prepare(
+        `SELECT u.id, u.username, u.display_name,
+                b.emby_user_id, b.emby_user_name
+         FROM users u
+         LEFT JOIN media_user_emby b ON b.user_id = u.id
+         ORDER BY u.display_name COLLATE NOCASE, u.username`
+      )
+      .all();
+    let embyUsers = [];
+    if (configured) {
+      try { embyUsers = await emby.fetchEmbyUsers(cfg); } catch { embyUsers = []; }
+    }
+    res.json({ data: { configured, users, embyUsers } });
+  } catch (err) {
+    log.error('GET /emby/bindings', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// PUT /api/v1/media/emby/bindings/:userId  (nur Admin)  { embyUserId }
+// Der Admin ordnet jedem Familienmitglied dessen Emby-Konto zu und stoesst
+// einmalig einen Sync an, damit der persönliche Status sofort stimmt.
+router.put('/emby/bindings/:userId', async (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const targetId = parseInt(req.params.userId, 10);
+    if (!Number.isFinite(targetId) || targetId <= 0) {
+      return res.status(400).json({ error: 'Ungültige Benutzer-ID.', code: 400 });
+    }
+    const target = db.get().prepare('SELECT id FROM users WHERE id = ?').get(targetId);
+    if (!target) return res.status(404).json({ error: 'Benutzer nicht gefunden.', code: 404 });
+
+    const cfg = emby.getConfig(db.get());
+    if (!emby.isConfigured(cfg)) {
+      return res.status(400).json({ error: 'Emby ist nicht konfiguriert.', code: 400 });
+    }
+    const wanted = String(req.body.embyUserId || '').trim();
+    if (!wanted) return res.status(400).json({ error: 'embyUserId fehlt.', code: 400 });
+    let users = [];
+    try {
+      users = await emby.fetchEmbyUsers(cfg);
+    } catch {
+      return res.status(502).json({ error: 'Emby ist nicht erreichbar.', code: 502 });
+    }
+    const hit = users.find((u) => String(u.id) === wanted);
+    if (!hit) return res.status(404).json({ error: 'Emby-Benutzer nicht gefunden.', code: 404 });
+
+    db.get()
+      .prepare(
+        `INSERT INTO media_user_emby (user_id, emby_user_id, emby_user_name, updated_at)
+         VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+         ON CONFLICT(user_id) DO UPDATE SET
+           emby_user_id = excluded.emby_user_id,
+           emby_user_name = excluded.emby_user_name,
+           updated_at = excluded.updated_at`
+      )
+      .run(targetId, hit.id, hit.name);
+
+    let synced = null;
+    try {
+      synced = await emby.syncWatched(db.get(), cfg, { jujuUserId: targetId, embyUserId: hit.id });
+    } catch (err) {
+      log.warn('Initial sync after binding failed:', err?.message || err);
+    }
+    res.json({ data: { userId: targetId, embyUserId: hit.id, embyUserName: hit.name, synced } });
+  } catch (err) {
+    log.error('PUT /emby/bindings/:userId', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
+// POST /api/v1/media/emby/my-sync  (jeder Benutzer)
+// Zieht die eigene Emby-Sehhistorie sofort - ohne die Konten anderer zu sehen.
+// Die Zuordnung selbst vergibt der Admin (siehe /emby/bindings).
+router.post('/emby/my-sync', async (req, res) => {
+  try {
+    const me = uid(req);
+    const binding = emby.getUserBinding(db.get(), me);
+    if (!binding) {
+      return res.status(400).json({ error: 'Kein Emby-Konto zugeordnet.', code: 400 });
+    }
+    const cfg = emby.getConfig(db.get());
+    if (!emby.isConfigured(cfg)) {
+      return res.status(400).json({ error: 'Emby ist nicht konfiguriert.', code: 400 });
+    }
+    const result = await emby.syncWatched(db.get(), cfg, {
+      jujuUserId: me,
+      embyUserId: binding.emby_user_id,
+    });
+    res.json({ data: result });
+  } catch (err) {
+    log.error('POST /emby/my-sync', err);
+    res.status(502).json({ error: 'Sync fehlgeschlagen: ' + (err?.message || ''), code: 502 });
+  }
+});
+
+// POST /api/v1/media/emby/my-import  (jeder Benutzer)
+// Importiert den eigenen Emby-Verlauf als Einträge in die Mediathek. Nur das
+// zugeordnete Konto wird gelesen; fremde Konten bleiben unsichtbar.
+router.post('/emby/my-import', async (req, res) => {
+  try {
+    const me = uid(req);
+    const binding = emby.getUserBinding(db.get(), me);
+    if (!binding) {
+      return res.status(400).json({ error: 'Kein Emby-Konto zugeordnet.', code: 400 });
+    }
+    const cfg = emby.getConfig(db.get());
+    if (!emby.isConfigured(cfg)) {
+      return res.status(400).json({ error: 'Emby ist nicht konfiguriert.', code: 400 });
+    }
+    const result = await emby.importHistory(db.get(), cfg, me, { embyUserId: binding.emby_user_id });
+    res.json({ data: result });
+  } catch (err) {
+    log.error('POST /emby/my-import', err);
+    res.status(502).json({ error: 'Import fehlgeschlagen: ' + (err?.message || ''), code: 502 });
+  }
+});
+
+// DELETE /api/v1/media/emby/bindings/:userId  (nur Admin)
+router.delete('/emby/bindings/:userId', (req, res) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
+    const targetId = parseInt(req.params.userId, 10);
+    if (!Number.isFinite(targetId) || targetId <= 0) {
+      return res.status(400).json({ error: 'Ungültige Benutzer-ID.', code: 400 });
+    }
+    db.get().prepare('DELETE FROM media_user_emby WHERE user_id = ?').run(targetId);
+    db.get().prepare('DELETE FROM media_user_state WHERE user_id = ?').run(targetId);
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('DELETE /emby/bindings/:userId', err);
+    res.status(500).json({ error: 'Interner Fehler', code: 500 });
+  }
+});
+
 // POST /api/v1/media/emby/sync  (nur Admin): Watched-Status übernehmen
 router.post('/emby/sync', async (req, res) => {
   try {
@@ -541,9 +727,18 @@ router.get('/:id', (req, res) => {
     const id = parseInt(req.params.id, 10);
     const item = getItem(id);
     if (!item) return res.status(404).json({ error: 'Eintrag nicht gefunden', code: 404 });
-    if (item.is_private && item.creator_uid !== uid(req) && !isAdmin(req)) {
-      return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
-    }
+    // Isolation wie /list: fremde Einträge erscheinen als „nicht gefunden" -
+    // außer der Betrachter wurde als Teilnehmer gepickt. is_private = 1 bleibt
+    // beim Ersteller (und Admin).
+    const me = uid(req);
+    const isAdminUser = isAdmin(req);
+    const isCreator = item.creator_uid === me;
+    const isParticipant = !!db.get().prepare(
+      'SELECT 1 FROM media_member_rel WHERE media_id = ? AND member_uid = ?'
+    ).get(id, me);
+    const visible = isCreator || isParticipant
+      || (isAdminUser && !item.is_private);
+    if (!visible) return res.status(404).json({ error: 'Eintrag nicht gefunden', code: 404 });
     res.json({ data: item });
   } catch (err) {
     log.error('GET /:id', err);
@@ -812,12 +1007,13 @@ router.post('/:id/refresh-cover', async (req, res) => {
 
 // POST /api/v1/media/batch-delete  { ids: number[] }  (MUSS vor /:id stehen,
 // sonst matcht der generische /:id-Handler "batch-delete" und antwortet mit 404)
-// Jede ID wird einzeln auf Existenz + Besitzer-/Admin-Recht geprüft; nicht
-// berechtigte oder fehlende IDs werden still übersprungen.
+// Löschen darf jedes Haushaltsmitglied - dieselbe Regel wie DELETE /:id
+// (Feedback 2026-10-26). Bis 0.0.59 stand hier noch das Besitzer-/Admin-Recht,
+// und nicht berechtigte IDs wurden STILL übersprungen: der Nutzer wählte
+// Einträge aus, drückte Löschen und es passierte nichts. Fehlende IDs bleiben
+// weiterhin still übersprungen (es gibt kein „nicht gefunden" je ID).
 router.post('/batch-delete', (req, res) => {
   try {
-    const me = uid(req);
-    const admin = isAdmin(req);
     const ids = Array.isArray(req.body.ids)
       ? req.body.ids.map(Number).filter((n) => Number.isFinite(n) && n > 0)
       : [];
@@ -828,7 +1024,6 @@ router.post('/batch-delete', (req, res) => {
       for (const id of ids) {
         const item = db.get().prepare('SELECT * FROM media_item WHERE id = ?').get(id);
         if (!item) continue;
-        if (item.creator_uid !== me && !admin) continue;
         // Rel-Tabelle zuerst: kein FK-CASCADE garantiert, sonst bleiben Waisen.
         db.get().prepare('DELETE FROM media_member_rel WHERE media_id = ?').run(id);
         const existing = db.get().prepare('SELECT id FROM memory_item WHERE source_media_id = ?').get(id);
@@ -854,9 +1049,9 @@ router.delete('/:id', (req, res) => {
     const id = parseInt(req.params.id, 10);
     const item = db.get().prepare('SELECT * FROM media_item WHERE id = ?').get(id);
     if (!item) return res.status(404).json({ error: 'Eintrag nicht gefunden', code: 404 });
-    if (item.creator_uid !== uid(req) && !isAdmin(req)) {
-      return res.status(403).json({ error: 'Keine Berechtigung', code: 403 });
-    }
+    // 家庭成员均可删除播放记录（用户 2026-10-26 明确要求）：影音库是共享库，
+    // 之前只有创建者/管理员能删，其他人点了没反应（403 被前端吞掉）。
+    // 注意：Emby 同步任务不变——若 Emby 里记录仍在，下次同步会重新导入。
     db.get().prepare('DELETE FROM media_item WHERE id = ?').run(id);
     res.status(204).end();
   } catch (err) {

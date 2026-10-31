@@ -3,7 +3,7 @@
  *
  * 覆盖：迁移编号连续无重复、结构完整、在临时库上从零跑到最新版本、
  *       2FA 相关列（v152）确实落地、批次三的新对象（v153-v155）存在、
- *       完整性/外键检查通过、可重复冷启动。
+ *       联系人分类预设（v156）、库存单位表（v157）、礼金方向（v158）、纪念日关联（v159）、中文姓名顺序（v160）、常用单位（v161）、每用户 Emby（v162）、旧姓名顺序（v163）、礼金家庭成员（v164）、家庭药箱（v165）、药品品牌/条码（v166）与条码配置表（v167）存在、完整性/外键检查通过、可重复冷启动。
  *
  * 环境：DB_PATH 指向 mkdtemp 生成的临时目录，JUJU_SM4_KEY 注入合法密钥，
  *       不设置 DB_ENCRYPTION_KEY（明文库跑迁移最快），结束后删除临时目录。
@@ -19,8 +19,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/** 期望的最新迁移版本（v0.0.31 批次三：AI 配置 + 菜谱 AI 字段 + 导入表）。 */
-const EXPECTED_LATEST = 155;
+/** 期望的最新迁移版本（v167：条码查询配置表）。 */
+const EXPECTED_LATEST = 168;
 /** v152 落到 users 表上的四个列。 */
 const TOTP_COLUMNS = ['totp_secret', 'totp_enabled', 'totp_enabled_at', 'totp_recovery_codes'];
 

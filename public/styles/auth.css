@@ -167,6 +167,10 @@
   flex-direction: column;
   gap: var(--space-4);
 }
+/* hidden 必须赢：作者选择器 `.auth-form { display: flex }` 的优先级高于
+ * UA 的 `[hidden] { display: none }`——没有这条守卫规则时，登录页用
+ * .hidden 切换两步表单（#auth-form ↔ #twofa-form）会两个表单同显。 */
+.auth-form[hidden] { display: none; }
 .auth-form .form-group {
   margin: 0;
 }

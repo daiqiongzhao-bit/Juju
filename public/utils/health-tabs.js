@@ -10,6 +10,7 @@ export const HEALTH_ROUTES = Object.freeze([
   '/health/vitals',
   '/health/cycle',
   '/health/meds',
+  '/health/cabinet',
   '/health/labs',
   '/health/activity',
 ]);
@@ -22,6 +23,7 @@ export const HEALTH_TABS = ({ cycleEnabled = true } = {}) => [
   { route: '/health/vitals',   labelKey: 'health.tabs.vitals',   icon: 'activity'       },
   ...(cycleEnabled ? [{ route: '/health/cycle', labelKey: 'health.tabs.cycle', icon: 'droplet' }] : []),
   { route: '/health/meds',     labelKey: 'health.tabs.meds',     icon: 'pill'           },
+  { route: '/health/cabinet',  labelKey: 'health.tabs.cabinet',  icon: 'briefcase-medical' },
   { route: '/health/labs',     labelKey: 'health.tabs.labs',     icon: 'flask-conical'  },
   { route: '/health/activity', labelKey: 'health.tabs.activity', icon: 'dumbbell'       },
 ];

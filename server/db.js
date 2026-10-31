@@ -5582,6 +5582,312 @@ const MIGRATIONS = [
     `,
   },
 
+  {
+    version: 156,
+    description: 'Contacts: seed family/relatives/friends/work/school/services category presets (contacts module enhancement)',
+    up: `
+      -- 联系人分类预设（用户已拍板的 7 分类方案）。INSERT OR IGNORE 幂等：
+      -- 已存在的 key（如 v84 的 school/misc，或用户自定义的同名分类）不会被
+      -- 覆盖或重命名，sort_order 冲突无害（列表按 sort_order, key 排序）。
+      -- 文案走 label_key（i18n，contacts.categoryFamily 等），name 仅作 fallback。
+      INSERT OR IGNORE INTO contact_categories (key, name, label_key, icon, sort_order) VALUES
+        ('family',    'Family',    'contacts.categoryFamily',    'users',          0),
+        ('relatives', 'Relatives', 'contacts.categoryRelatives', 'heart',          1),
+        ('friends',   'Friends',   'contacts.categoryFriends',   'user',           2),
+        ('work',      'Work',      'contacts.categoryWork',      'briefcase',      3),
+        ('school',    'School',    'contacts.categorySchool',    'graduation-cap', 4),
+        ('services',  'Services',  'contacts.categoryServices',  'wrench',         5);
+    `,
+  },
+
+  {
+    version: 157,
+    description: 'Pantry: user-managed units table (pantry_units) seeded with the canonical units',
+    up: `
+      -- Benutzerdefinierbare Einheiten (Feedback 2026-10-25): die bisherige
+      -- Whitelist in public/utils/pantry-units.js konnte nur per Codeänderung
+      -- wachsen. Die Tabelle ist die neue Quelle der Wahrheit; die Seed-Zeilen
+      -- sind exakt die bisherigen kanonischen Einheiten (Reihenfolge = Anzeige).
+      -- pantry_items.unit bleibt bewusst freier TEXT (kein FK): das Umbenennen
+      -- einer Einheit schreibt die Artikelzeilen mit (siehe Router), ein
+      -- Löschen ist nur ohne Verwendung erlaubt.
+      CREATE TABLE IF NOT EXISTS pantry_units (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL UNIQUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      INSERT OR IGNORE INTO pantry_units (name, sort_order) VALUES
+        ('pcs', 0), ('g', 1), ('kg', 2), ('ml', 3), ('l', 4),
+        ('pkg', 5), ('can', 6), ('bottle', 7), ('jar', 8), ('bag', 9);
+    `,
+  },
+
+  {
+    version: 158,
+    description: 'Gift ledger: direction (received/given) for income vs. outgoing gifts',
+    up: `
+      -- 人情往来的方向 (Feedback 2026-10-25): 'received' = 收礼, 'given' = 送礼.
+      -- Bestandszeilen sind historisch fast immer empfangene Geschenke, daher
+      -- Default 'received'. Kein CHECK: weitere Richtungen (z. B. Leihe) wären
+      -- sonst ein Tabellen-Rebuild; die API validiert die zwei Werte.
+      ALTER TABLE gift_ledger ADD COLUMN direction TEXT NOT NULL DEFAULT 'received';
+      CREATE INDEX IF NOT EXISTS idx_gift_ledger_direction ON gift_ledger(direction);
+    `,
+  },
+
+  {
+    version: 159,
+    description: 'Gift ledger: link to a generated anniversary (anniversary_id)',
+    up: `
+      -- 礼金记录同步到纪念日 (Feedback 2026-10-25): 有日期且已关联联系人的
+      -- 记录可以生成一条纪念日（按 MM-DD 每年提醒）。Die Verknüpfung erlaubt
+      -- späteres Nachziehen von Titel/Datum beim Bearbeiten; ON DELETE SET NULL,
+      -- damit ein gelöschter Jahrestag die Geldzeile nie mitreißt.
+      ALTER TABLE gift_ledger ADD COLUMN anniversary_id INTEGER REFERENCES anniversaries(id) ON DELETE SET NULL;
+    `,
+  },
+
+  {
+    version: 160,
+    description: 'Contacts: CJK names display as family+given (朱定丽 instead of 定丽 朱)',
+    up: 'SELECT 1;',
+    // Reine Datenmigration: vorhandene Anzeigenamen neu ableiten, damit die
+    // Korrektur sofort in Liste, Dashboard und Suche sichtbar ist. Die Regel
+    // entspricht composeDisplayName() in public/utils/contact-name.js; hier
+    // bewusst als Momentaufnahme dupliziert (Migrationen bleiben stabil).
+    afterUp(database) {
+      const CJK_NAME = /[\u3400-\u9FFF\uF900-\uFAFF]/;
+      const rows = database
+        .prepare(
+          `SELECT id, name, first_name, last_name, middle_name FROM contacts
+           WHERE COALESCE(first_name, '') <> '' OR COALESCE(last_name, '') <> ''`
+        )
+        .all();
+      const update = database.prepare(
+        "UPDATE contacts SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?"
+      );
+      let changed = 0;
+      for (const row of rows) {
+        const parts = [row.last_name, row.first_name, row.middle_name]
+          .map((p) => (p || '').trim())
+          .filter(Boolean);
+        if (!parts.some((p) => CJK_NAME.test(p))) continue;
+        if (parts.some((p) => /[A-Za-z]/.test(p))) continue;
+        const name = parts.join('');
+        if (name && name !== row.name) {
+          update.run(name, row.id);
+          changed += 1;
+        }
+      }
+      if (changed) log.info(`Migration 160: ${changed} contact name(s) reordered for CJK`);
+    },
+  },
+
+  {
+    version: 161,
+    description: 'Pantry: seed common Chinese units (斤/两/盒/桶/块/片/条/把/根/颗/只/份/杯/勺/箱/米)',
+    up: `
+      -- 常用中文单位 (Feedback 2026-10-25). INSERT OR IGNORE: bestehende oder
+      -- selbst angelegte Einheiten bleiben unangetastet. sort_order schließt an
+      -- die zehn kanonischen Einheiten (0-9) an.
+      INSERT OR IGNORE INTO pantry_units (name, sort_order) VALUES
+        ('斤', 10), ('两', 11), ('盒', 12), ('桶', 13), ('块', 14),
+        ('片', 15), ('条', 16), ('把', 17), ('根', 18), ('颗', 19),
+        ('只', 20), ('份', 21), ('杯', 22), ('勺', 23), ('箱', 24), ('米', 25);
+    `,
+  },
+
+  {
+    version: 162,
+    description: 'Media: per-user Emby binding and per-user watch state',
+    up: `
+      -- 同一个 Emby 服务器、每个家庭成员各自的 Emby 账号 (Feedback 2026-10-26).
+      -- Der Server-API-Key bleibt global (Admin), hier steht nur, welcher
+      -- Emby-Benutzer zu welchem Juju-Benutzer gehört.
+      CREATE TABLE IF NOT EXISTS media_user_emby (
+        user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        emby_user_id   TEXT    NOT NULL,
+        emby_user_name TEXT,
+        updated_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Gesehen-Status je Juju-Benutzer. media_item.status bleibt der
+      -- gemeinsame/Haushalts-Status; die Liste überlagert ihn mit dem
+      -- persönlichen Status (COALESCE), damit niemand dem anderen die
+      -- Sehhistorie überschreibt.
+      CREATE TABLE IF NOT EXISTS media_user_state (
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        media_item_id INTEGER NOT NULL REFERENCES media_item(id) ON DELETE CASCADE,
+        status        TEXT    NOT NULL,
+        progress      REAL,
+        watch_date    TEXT,
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        PRIMARY KEY (user_id, media_item_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_media_user_state_item ON media_user_state(media_item_id);
+    `,
+  },
+
+  {
+    version: 163,
+    description: 'Contacts: swap legacy CJK "given family" display names to family+given',
+    up: 'SELECT 1;',
+    // Altbestand aus der westlichen composeDisplayName-Zeit: „定丽 朱" statt
+    // „朱定丽". Nur reine CJK-Namen mit genau einem Leerzeichen und ohne
+    // strukturierte Teile werden getauscht; alles andere bleibt unangetastet.
+    afterUp(database) {
+      const CJK = /^[\u3400-\u9FFF\uF900-\uFAFF]+$/;
+      const rows = database
+        .prepare(
+          `SELECT id, name FROM contacts
+           WHERE COALESCE(first_name, '') = '' AND COALESCE(last_name, '') = ''`
+        )
+        .all();
+      const update = database.prepare(
+        "UPDATE contacts SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?"
+      );
+      let changed = 0;
+      for (const row of rows) {
+        const parts = String(row.name || '').trim().split(/\s+/);
+        if (parts.length !== 2) continue;
+        const [given, family] = parts;
+        if (!CJK.test(given) || !CJK.test(family)) continue;
+        if (family.length > 2 || given.length > 4) continue; // 姓 1-2 字，名 1-4 字
+        const swapped = family + given;
+        if (swapped !== row.name) {
+          update.run(swapped, row.id);
+          changed += 1;
+        }
+      }
+      if (changed) log.info(`Migration 163: ${changed} legacy CJK name(s) swapped`);
+    },
+  },
+
+  {
+    version: 164,
+    description: 'Gift ledger: giver/recipient as household member (giver_user_id)',
+    up: `
+      -- 送礼人/收礼人 = 家庭成员 (Feedback 2026-10-26). Die Gegenpartei steht
+      -- in related_contact_id (事件对象). Bestandszeilen behalten ihren Text;
+      -- die ID wird nur gesetzt, wenn das Formular eine Person auswählt.
+      ALTER TABLE gift_ledger ADD COLUMN giver_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    `,
+  },
+
+  {
+    version: 165,
+    description: 'Health: household medicine cabinet (expiry, package info, leaflet fields)',
+    up: `
+      -- Haushalts-Medizinschrank (Feedback 2026-10-26). Die vorhandene Tabelle
+      -- medications bleibt die Basis (Bestand, Einheit, Nachfüll-Schwelle,
+      -- Einnahmeplan); hier kommen die Schrank-Felder dazu: Haltbarkeit,
+      -- Packungsdaten und Beipackzettel. Bestandszeilen bleiben gültig, alle
+      -- neuen Spalten sind NULL-bar.
+      ALTER TABLE medications ADD COLUMN category      TEXT;
+      ALTER TABLE medications ADD COLUMN purchase_date TEXT;
+      ALTER TABLE medications ADD COLUMN expiry_date   TEXT;
+      ALTER TABLE medications ADD COLUMN efficacy      TEXT;
+      ALTER TABLE medications ADD COLUMN indications   TEXT;
+      ALTER TABLE medications ADD COLUMN usage_text    TEXT;
+      ALTER TABLE medications ADD COLUMN cautions      TEXT;
+      -- Herkunft der Beipackzettel-Texte: 'manual' | 'builtin' | 'ai'
+      -- (AI-Texte werden in der Oberfläche als „nur zur Orientierung" markiert).
+      ALTER TABLE medications ADD COLUMN info_source   TEXT NOT NULL DEFAULT 'manual';
+
+      CREATE INDEX IF NOT EXISTS idx_medications_expiry ON medications(expiry_date);
+
+      -- Erinnerungen für ablaufende Medikamente laufen über den bestehenden
+      -- Erinnerungsdienst (reminders) - dafür muss der CHECK-Wert stehen.
+      CREATE TABLE reminders_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT    NOT NULL CHECK(entity_type IN ('task', 'event', 'subscription', 'medication')),
+        entity_id   INTEGER NOT NULL,
+        remind_at   TEXT    NOT NULL,
+        dismissed   INTEGER NOT NULL DEFAULT 0,
+        created_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        pushed_at   TEXT
+      );
+      INSERT INTO reminders_new (id, entity_type, entity_id, remind_at, dismissed, created_by, created_at, pushed_at)
+        SELECT id, entity_type, entity_id, remind_at, dismissed, created_by, created_at, pushed_at FROM reminders;
+      DROP TABLE reminders;
+      ALTER TABLE reminders_new RENAME TO reminders;
+      CREATE INDEX idx_reminders_entity ON reminders(entity_type, entity_id);
+      CREATE INDEX idx_reminders_remind ON reminders(remind_at);
+      CREATE INDEX idx_reminders_user   ON reminders(created_by);
+    `,
+  },
+
+  {
+    version: 166,
+    description: 'Medications: brand, manufacturer, barcode fields',
+    up: `
+      -- Marken-/Hersteller-/Strichcode-Felder für den Medizinschrank
+      -- (Feedback 2026-10-27). NULL-bar, Altbestand bleibt gültig.
+      ALTER TABLE medications ADD COLUMN brand        TEXT;
+      ALTER TABLE medications ADD COLUMN manufacturer TEXT;
+      ALTER TABLE medications ADD COLUMN barcode      TEXT;
+      CREATE INDEX IF NOT EXISTS idx_medications_barcode ON medications(barcode);
+    `,
+  },
+
+  {
+    version: 167,
+    description: 'Barcode lookup API config (single-row table)',
+    up: `
+      -- Strichcode-Abfrage (Feedback 2026-10-27): Eintrag per 69er-Code aus einer
+      -- öffentlichen Warenstammdaten-API (mxnzp). Einzeilig (id = 1), Secret wird
+      -- beim Auslesen maskiert, analog ai_config.
+      CREATE TABLE IF NOT EXISTS barcode_api_config (
+        id          INTEGER PRIMARY KEY CHECK(id = 1),
+        app_id      TEXT,
+        app_secret  TEXT,
+        enabled     INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_by  INTEGER REFERENCES users(id) ON DELETE SET NULL
+      );
+    `,
+  },
+
+  {
+    version: 168,
+    description: 'License activation state (single-row table)',
+    up: `
+      -- License-Key-Aktivierung (Feedback 2026-10-28): Einzeilig (id = 1),
+      -- speichert den aktivierten Key + decodiertes Payload (sub/dev/exp).
+      CREATE TABLE IF NOT EXISTS license_state (
+        id            INTEGER PRIMARY KEY CHECK(id = 1),
+        status        TEXT    NOT NULL DEFAULT 'inactive',
+        license_key   TEXT,
+        payload_json  TEXT,
+        activated_at  TEXT
+      );
+    `,
+  },
+
+  {
+    version: 169,
+    description: 'Pantry ingredient_key for recipe matching (family inventory)',
+    up: `
+      -- 家庭库存（一级导航）/ 菜谱推荐预留：ingredient_key = 归一化食材名
+      -- （trim -> 折叠空白 -> 小写，与 routes/pantry.js 的 normalizeIngredientKey
+      -- 保持一致）。后续根据库存推荐菜谱用它和 recipe_ingredients.name 匹配，
+      -- 避免空白/大小写差异导致对不上。
+      ALTER TABLE pantry_items ADD COLUMN ingredient_key TEXT;
+      UPDATE pantry_items SET ingredient_key = NULLIF(lower(trim(name)), '');
+      CREATE INDEX IF NOT EXISTS idx_pantry_items_ingredient_key ON pantry_items(ingredient_key);
+    `,
+    afterUp: (db) => {
+      // SQLite 无内置 regexp：内部连续空白折叠为单空格，用 JS 补齐回填。
+      const rows = db.prepare('SELECT id, ingredient_key FROM pantry_items WHERE ingredient_key IS NOT NULL').all();
+      const upd = db.prepare('UPDATE pantry_items SET ingredient_key = ? WHERE id = ?');
+      for (const row of rows) {
+        const folded = row.ingredient_key.replace(/\s+/g, ' ').trim();
+        if (folded !== row.ingredient_key) upd.run(folded, row.id);
+      }
+    },
+  },
 ];
 
 /**

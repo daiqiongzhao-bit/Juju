@@ -1800,7 +1800,19 @@ function openCategoryManager() {
           { key: 'income',  labelKey: 'budget.income',   addLabelKey: 'budget.addCategory' },
         ],
         supportsSubcategories: true,
-        labelResolver: (item) => item.label ?? budgetCategoryLabel(item.key, item.name, t),
+        // Der Server lokalisiert `label` nur nach ?lang - der Category-
+        // Manager schickt aber kein lang mit und liefert deshalb immer die
+        // englische Variante. Deshalb hat das Client-i18n-Mapping Vorrang
+        // (Subkategorien via SUBCATEGORY_I18N, Kategorien via
+        // budgetCategoryLabel), erst bei Treffern fällt der Server-Label-
+        // bzw. DB-Name-Fallback durch (#i18n Budget-Kategorienverwaltung).
+        labelResolver: (item) => {
+          const key = String(item?.key ?? '');
+          const sub = SUBCATEGORY_I18N()[key];
+          if (sub) return sub;
+          return budgetCategoryLabel(key, item.name ?? '', t)
+            || item.label || item.name || key;
+        },
         titleKey: 'budget.manageCategories',
         hintKey: 'category.manageHint',
         // Einziger Aufrufer mit Unterkategorien, und der Server weist benutzte

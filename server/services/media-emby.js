@@ -20,6 +20,7 @@ import { createLogger } from '../logger.js';
 
 const log = createLogger('Emby');
 const DEFAULT_TIMEOUT = 12000;
+const EMBY_SYNC_INTERVAL_MS = 60 * 60_000; // 每小时 자동 동기화
 
 function normalizeTitle(s) {
   return String(s || '')
@@ -67,6 +68,22 @@ async function embyFetch(cfg, path, { query = {}, timeoutMs = DEFAULT_TIMEOUT } 
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Liste der Emby-Benutzer (id + Name) fuer die persönliche Zuordnung.
+ * Nutzt den globalen Admin-Key - die Zuordnung selbst bleibt pro Juju-Benutzer.
+ */
+export async function fetchEmbyUsers(cfg) {
+  const users = await embyFetch(cfg, '/Users');
+  return (Array.isArray(users) ? users : []).map((u) => ({ id: u.Id, name: u.Name || u.Id }));
+}
+
+/** Persönliche Emby-Zuordnung eines Juju-Benutzers (oder null). */
+export function getUserBinding(db, jujuUserId) {
+  return db
+    .prepare('SELECT * FROM media_user_emby WHERE user_id = ?')
+    .get(jujuUserId) || null;
 }
 
 async function resolveUserId(cfg) {
@@ -126,9 +143,12 @@ function embyStatusOf(item) {
   const ud = item.UserData || {};
   if (ud.Played) return 'finished';
   if (item.Type === 'Series' && ud.UnplayedItemCount === 0 && (ud.PlayedItemCount || 0) > 0) return 'finished';
-  if ((ud.PlayedPercentage || 0) > 0 || (ud.PlayedItemCount || 0) > 0) return 'doing';
   // Emby meldet explizit "nicht gesehen" -> downgrade (wish) bei Sync.
+  // WICHTIG: DIREKT vor dem Rest-Prozent-Check! Beim Abhaken ("nicht gesehen")
+  // loescht Emby das Rest-Percent oft nicht -> sonst wuerde 'doing' gewinnen
+  // und ein lokales finished/doing bliebe haengen (kein Downgrade moeglich).
   if (ud.Played === false) return 'unplayed';
+  if ((ud.PlayedPercentage || 0) > 0 || (ud.PlayedItemCount || 0) > 0) return 'doing';
   return null;
 }
 
@@ -137,8 +157,9 @@ function embyStatusOf(item) {
  * Matching: normalisierter Titel (+ Jahr ±1, wenn beide bekannt).
  * Nur Status-Upgrades: wish→doing→finished; ein lokales 'finished' bleibt.
  */
-export async function syncWatched(db, cfg) {
-  const userId = await resolveUserId(cfg);
+export async function syncWatched(db, cfg, opts = {}) {
+  const perUser = opts.jujuUserId || null;
+  const userId = opts.embyUserId || (await resolveUserId(cfg));
   const items = await fetchEmbyVideoItems(cfg, userId);
 
   const byTitle = new Map();
@@ -166,6 +187,20 @@ export async function syncWatched(db, cfg) {
   const rank = { wish: 0, doing: 1, finished: 2 };
   const upd = db.prepare("UPDATE media_item SET status = ?, watch_date = COALESCE(watch_date, strftime('%Y-%m-%d','now')), updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?");
   const down = db.prepare("UPDATE media_item SET status = 'wish', progress = NULL, watch_date = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?");
+  // Per-User-Status (v162): der gemeinsame media_item.status bleibt unberührt.
+  // Nur vorbereiten, wenn wirklich pro Benutzer geschrieben wird - so bleibt
+  // der reine Haushalts-Sync unabhängig von der neuen Tabelle.
+  const upsertUserState = perUser
+    ? db.prepare(`
+        INSERT INTO media_user_state (user_id, media_item_id, status, progress, watch_date, updated_at)
+        VALUES (?, ?, ?, ?, strftime('%Y-%m-%d','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        ON CONFLICT(user_id, media_item_id) DO UPDATE SET
+          status = excluded.status,
+          progress = excluded.progress,
+          watch_date = COALESCE(media_user_state.watch_date, excluded.watch_date),
+          updated_at = excluded.updated_at
+      `)
+    : null;
 
   for (const row of localRows) {
     const key = normalizeTitle(row.title);
@@ -191,6 +226,15 @@ export async function syncWatched(db, cfg) {
       continue;
     }
     matched++;
+    if (perUser) {
+      // Persönlicher Status: nur vorhandene Emby-Zustände upserten; ein
+      // fehlender Eintrag heißt "keine Aussage" und lässt den gemeinsamen
+      // Status unangetastet.
+      if (hit.status !== 'unplayed') {
+        upsertUserState.run(perUser, row.id, hit.status, hit.progress ?? null);
+      }
+      continue;
+    }
     // Emby meldet explizit "nicht gesehen" -> Downgrade (wish), nur wenn aktuell higher.
     if (hit.status === 'unplayed') {
       if (row.status === 'finished' || row.status === 'doing') {
@@ -218,6 +262,45 @@ export async function syncWatched(db, cfg) {
   };
 }
 
+// ------------------------------------------------------------
+// 2b) Automatischer Watched-Sync (stuendlicher Timer)
+//     Analog zu mealie-sync.startScheduler(): zieht Emby-Watched-States
+//     automatisch, ohne dass der Nutzer den Sync-Button oder einen Webhook
+//     braucht. Laeuft nur, wenn Emby konfiguriert ist; Fehler werden geloggt,
+//     der Prozess bleibt stehen.
+// ------------------------------------------------------------
+/**
+ * Stuendlicher Timer fuer den Emby-Watched-Sync.
+ * Jeder Tick: nur wenn Emby konfiguriert ist -> syncWatched(db, cfg).
+ * Fehler werden abgefangen und geloggt, damit der Server nicht abstuerzt.
+ */
+export function startScheduler() {
+  const run = async () => {
+    try {
+      const cfg = getConfig(db.get());
+      if (!isConfigured(cfg)) return; // Emby nicht eingerichtet -> nichts tun
+      const bindings = db.get().prepare('SELECT user_id, emby_user_id FROM media_user_emby').all();
+      if (!bindings.length) {
+        await syncWatched(db.get(), cfg);
+        return;
+      }
+      for (const b of bindings) {
+        try {
+          await syncWatched(db.get(), cfg, { jujuUserId: b.user_id, embyUserId: b.emby_user_id });
+        } catch (err) {
+          log.error(`Emby sync for user ${b.user_id} failed:`, err?.message || err);
+        }
+      }
+    } catch (err) {
+      log.error('Emby watched sync scheduler run failed:', err?.message || err);
+    }
+  };
+  // Erster Lauf kurz nach dem Start (10 s), danach jede Stunde.
+  setTimeout(run, 10_000).unref();
+  setInterval(run, EMBY_SYNC_INTERVAL_MS).unref();
+  log.info('Emby watched sync scheduler active (every 60 min).');
+}
+
 /**
  * Importiert den Emby-Wiedergabeverlauf als neue media_item-Eintraege.
  * Status-Mapping: Played -> finished; PlayedPercentage/PlayedItemCount > 0
@@ -226,8 +309,8 @@ export async function syncWatched(db, cfg) {
  * vorhandene Eintraege werden uebersprungen, es wird nur ergaenzt.
  * cover_url bleibt leer; Jahr/Quelle landen in metadata_json.
  */
-export async function importHistory(db, cfg, creatorUid) {
-  const userId = await resolveUserId(cfg);
+export async function importHistory(db, cfg, creatorUid, opts = {}) {
+  const userId = opts.embyUserId || (await resolveUserId(cfg));
   const limit = 500;
   const items = [];
   for (let page = 0; page < 20; page++) {
@@ -583,4 +666,4 @@ export async function handleEmbyWebhook(req, res) {
   return res.json({ ok: true, created: info.lastInsertRowid, status: applyStatus });
 }
 
-export { getConfig, isConfigured, trimUrl };
+export { getConfig, isConfigured, trimUrl, embyStatusOf };

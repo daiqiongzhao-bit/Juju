@@ -179,6 +179,13 @@ router.get('/status', (req, res) => {
 
   const enabled = Number(user.totp_enabled) === 1;
   const entries = readRecoveryCodes(user);
+  // Selbstheilung wie in /verify: 2FA ist in der DB aus, die Session hat
+  // aber noch einen pending-Rest (z. B. Reload direkt nach dem Abschalten).
+  // Ohne das Aufräumen zeigt die Login-Seite ewig den Code-Schritt.
+  if (!enabled && req.session?.pending2fa) {
+    delete req.session.pending2fa;
+    delete req.session.pending2faSince;
+  }
   res.json({
     data: {
       enabled,
@@ -186,8 +193,9 @@ router.get('/status', (req, res) => {
       // Es liegt ein Secret, aber 2FA ist noch nicht aktiv → Schritt 2 fehlt.
       has_pending_setup: !enabled && readSecret(user) !== null,
       recovery_codes_remaining: enabled ? totp.remainingRecoveryCodes(entries) : 0,
-      // „pending" = Passwort stimmte, zweiter Faktor fehlt noch.
-      two_factor_pending: Boolean(req.session?.pending2fa),
+      // „pending" = Passwort stimmte, zweiter Faktor fehlt noch. Nur wahr,
+      // wenn die DB dem zustimmt — ein Session-Rest allein genügt nicht.
+      two_factor_pending: Boolean(req.session?.pending2fa) && enabled,
     },
   });
 });
@@ -296,6 +304,12 @@ router.post('/disable', twoFactorLimiter, async (req, res) => {
     db.get()
       .prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_enabled_at = NULL, totp_recovery_codes = NULL WHERE id = ?')
       .run(user.id);
+
+    // Pending-Session aufräumen: ein Reload nach dem Abschalten soll nicht
+    // wieder im Code-Schritt der Login-Seite landen (express-session
+    // persistiert die Änderung automatisch mit der Antwort).
+    delete req.session?.pending2fa;
+    delete req.session?.pending2faSince;
 
     log.info('2FA disabled', { userId: user.id });
     res.json({ data: { enabled: false } });

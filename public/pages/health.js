@@ -38,6 +38,7 @@ import {
   predictCycle, cycleStats, buildCycleCalendar, cycleRing,
 } from '/utils/health-cycle.js';
 import { HEALTH_ROUTES, renderHealthTabsBar } from '/utils/health-tabs.js';
+import { mountCabinet, openCabinetMedModal } from '/utils/health-cabinet.js';
 
 let _container = null;
 
@@ -207,6 +208,13 @@ const PANELS = () => [
     emptyDescKey: 'health.meds.emptyDesc',
   },
   {
+    route: '/health/cabinet',
+    icon: 'briefcase-medical',
+    titleKey: 'health.cabinet.title',
+    emptyTitleKey: 'health.cabinet.emptyTitle',
+    emptyDescKey: 'health.cabinet.emptyDesc',
+  },
+  {
     route: '/health/labs',
     icon: 'flask-conical',
     titleKey: 'health.labs.title',
@@ -240,6 +248,8 @@ function panelMarkup(panel, activeRoute) {
     ? '<div class="health-cycle" data-cycle-root></div>'
     : panel.route === '/health/meds'
     ? '<div class="health-meds" data-meds-root></div>'
+    : panel.route === '/health/cabinet'
+    ? '<div class="health-cabinet" data-cabinet-root></div>'
     : panel.route === '/health/labs'
     ? '<div class="health-labs" data-labs-root></div>'
     : panel.route === '/health/activity'
@@ -301,6 +311,8 @@ function updateHealthFab(activeRoute) {
       setPageFabAction(_fab, { hidden: !isOwnCycleView(), label: t('health.cycle.add'), onClick: () => openPeriodModal(null) }); break;
     case '/health/meds':
       setPageFabAction(_fab, { hidden: !canEditFor(meds.personId, meds.meId), label: t('health.meds.add'), onClick: () => openMedModal(null) }); break;
+    case '/health/cabinet':
+      setPageFabAction(_fab, { hidden: false, label: t('health.cabinet.add'), onClick: () => openCabinetMedModal(null) }); break;
     case '/health/labs':
       setPageFabAction(_fab, { hidden: !canEditFor(labs.personId, labs.meId), label: t('health.labs.add'), onClick: () => openLabModal(null) }); break;
     case '/health/activity':
@@ -364,6 +376,7 @@ export async function render(container, ctx = {}) {
   maybeMountVitals(activeRoute);
   maybeMountCycle(activeRoute);
   maybeMountMeds(activeRoute);
+  maybeMountCabinet(activeRoute);
   maybeMountLabs(activeRoute);
   maybeMountActivity(activeRoute);
 }
@@ -383,6 +396,7 @@ export async function update({ path, user } = {}) {
   maybeMountVitals(activeRoute);
   maybeMountCycle(activeRoute);
   maybeMountMeds(activeRoute);
+  maybeMountCabinet(activeRoute);
   maybeMountLabs(activeRoute);
   maybeMountActivity(activeRoute);
   return true;
@@ -1273,6 +1287,13 @@ const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 // Literale direkt aus Übersetzungsaufrufen; ein konkatenierter Präfix würde als
 // fehlender Key beanstandet, daher hier die kompletten Keys vorberechnen.
 const WEEKDAY_LABEL_KEYS = WEEKDAY_KEYS.map((k) => `health.meds.weekday.${k}`);
+
+function maybeMountCabinet(activeRoute) {
+  if (activeRoute !== '/health/cabinet') return;
+  const root = _container?.querySelector('[data-cabinet-root]');
+  if (!root) return;
+  mountCabinet(root, { meId: meds.meId });
+}
 
 function maybeMountMeds(activeRoute) {
   if (activeRoute !== '/health/meds') return;

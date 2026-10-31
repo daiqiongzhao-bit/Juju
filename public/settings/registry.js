@@ -278,6 +278,16 @@ export const SETTINGS_LEAVES = freezeEntries([
     loader: () => import('/settings/pages/admin-ai.js'),
   },
   {
+    id: 'admin-license',
+    domainId: 'admin',
+    path: '/settings/admin/license',
+    labelKey: 'settings.pageLicense',
+    descriptionKey: 'settings.pageLicenseDescription',
+    icon: 'key',
+    adminOnly: true,
+    loader: () => import('/settings/pages/admin-license.js'),
+  },
+  {
     id: 'admin-email',
     domainId: 'admin',
     path: '/settings/admin/email',

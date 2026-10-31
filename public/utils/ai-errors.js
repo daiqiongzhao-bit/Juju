@@ -24,6 +24,13 @@ const ERROR_KEYS = new Map([
   ['prompt_too_long', 'ai.errorPromptTooLong'],
   ['empty_response', 'ai.errorEmptyResponse'],
   ['unexpected', 'ai.errorUnexpected'],
+  // 模型清单动态拉取（GET /api/v1/ai/models）。NO_KEY / NO_CONFIG / AUTH_FAILED
+  // 复用既有的文案 key；UPSTREAM_ERROR / UNSUPPORTED_PROVIDER 为本次新增。
+  ['NO_CONFIG', 'ai.errorNoConfig'],
+  ['NO_KEY', 'ai.errorNoKey'],
+  ['AUTH_FAILED', 'ai.errorAuth'],
+  ['UPSTREAM_ERROR', 'ai.errorUpstream'],
+  ['UNSUPPORTED_PROVIDER', 'ai.errorUnsupportedProvider'],
 ]);
 
 /**

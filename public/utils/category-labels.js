@@ -1,4 +1,4 @@
-const BUDGET_CATEGORY_LABEL_KEYS = {
+export const BUDGET_CATEGORY_LABEL_KEYS = {
   income: 'budget.categoryIncome',
   housing: 'budget.categoryHousing',
   food: 'budget.categoryFood',
@@ -28,8 +28,16 @@ export function budgetCategoryLabelKey(category) {
 }
 
 export function budgetCategoryLabel(category, fallback = '', translate = null) {
-  const labelKey = budgetCategoryLabelKey(category);
-  if (labelKey && typeof translate === 'function') return translate(labelKey);
   const key = String(category || '').trim();
+  const labelKey = budgetCategoryLabelKey(key);
+  if (labelKey && typeof translate === 'function') {
+    const localized = translate(labelKey);
+    // t() liefert bei fehlendem Schlüssel den Schlüssel selbst zurück -
+    // dann ist die Locale-Datei unvollständig und wir zeigen den Fallback
+    // (DB-Name) an, nie den nackten i18n-Schlüssel.
+    if (typeof localized === 'string' && localized && localized !== labelKey) {
+      return localized;
+    }
+  }
   return fallback || key;
 }

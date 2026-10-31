@@ -17,7 +17,7 @@ import express from 'express';
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
 import { str, oneOf, num, date, id as idParam, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT } from '../middleware/validate.js';
-import { normalizePantryUnit, normalizePantryQuantity } from '../../public/utils/pantry-units.js';
+import { normalizePantryQuantity, PANTRY_UNITS, DEFAULT_PANTRY_UNIT } from '../../public/utils/pantry-units.js';
 
 const log = createLogger('Pantry');
 const router = express.Router();
@@ -25,6 +25,19 @@ const router = express.Router();
 // --------------------------------------------------------
 // Hilfsfunktionen
 // --------------------------------------------------------
+
+/**
+ * 家庭库存（一级模块）/ 菜谱推荐预留字段：ingredient_key = 归一化食材名。
+ * 规则：trim → 内部空白折叠为单空格 → 小写。后续"根据库存推荐菜谱"用它和
+ * recipe_ingredients.name（做同样归一化）做匹配，避免 "鸡蛋" 与 " 鸡蛋 "
+ * 因空白/大小写差异匹配不上。与 Migration 169 的回填逻辑保持一致。
+ * @param {string} name
+ * @returns {string|null} 归一化 key；空名返回 null。
+ */
+function normalizeIngredientKey(name) {
+  const key = String(name ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return key || null;
+}
 
 function loadLocations() {
   return db.get().prepare('SELECT * FROM pantry_locations ORDER BY sort_order ASC, id ASC').all();
@@ -36,6 +49,18 @@ function loadCategories() {
 
 function validCategoryNames() {
   return loadCategories().map((c) => c.name);
+}
+
+// Einheiten sind seit v157 benutzerverwaltbar (pantry_units). Die Tabelle ist
+// die Quelle der Wahrheit; die kanonische Liste bleibt als Fallback, damit ein
+// frisch migrierter Bestand nie ohne Einheiten dasteht.
+function loadUnits() {
+  return db.get().prepare('SELECT * FROM pantry_units ORDER BY sort_order ASC, id ASC').all();
+}
+
+function validUnitNames() {
+  const names = loadUnits().map((u) => u.name);
+  return names.length ? names : [...PANTRY_UNITS];
 }
 
 function getItem(itemId) {
@@ -89,9 +114,16 @@ function validateItemFields(body, { partial = false, current = null } = {}) {
       : normalizePantryQuantity(vQty.value, { fallback: 1 });
   }
 
-  // Einheit normalisiert statt validiert - siehe pantry-units.js.
+  // Einheit gegen die benutzerverwaltete Liste prüfen (v157). Unbekannte
+  // Einheiten werden als Fehler gemeldet statt still auf 'pcs' zurückzufallen -
+  // sonst würde ein Tippfehler im Formular unbemerkt die Menge entwerten.
   if (!partial || body.unit !== undefined) {
-    values.unit = normalizePantryUnit(body.unit ?? current?.unit);
+    const fallback = current?.unit ?? DEFAULT_PANTRY_UNIT;
+    const requested = String(body.unit ?? fallback).trim() || fallback;
+    if (!validUnitNames().includes(requested)) {
+      results.push({ error: 'Unbekannte Einheit.' });
+    }
+    values.unit = requested;
   }
 
   if (!partial || body.location_id !== undefined) {
@@ -282,6 +314,145 @@ router.delete('/locations/:locId', (req, res) => {
 });
 
 // --------------------------------------------------------
+// GET /api/v1/pantry/units
+// Benutzerverwaltete Mengeneinheiten in Sortierreihenfolge (v157).
+// Response: { data: PantryUnit[] }
+// --------------------------------------------------------
+router.get('/units', (_req, res) => {
+  try {
+    res.json({ data: loadUnits() });
+  } catch (err) {
+    log.error('GET /units error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// POST /api/v1/pantry/units
+// Body: { name }
+// Response: { data: PantryUnit }
+// --------------------------------------------------------
+router.post('/units', (req, res) => {
+  try {
+    const vName = str(req.body.name, 'Einheit', { max: MAX_SHORT });
+    if (vName.error) return res.status(400).json({ error: vName.error, code: 400 });
+
+    const existing = db.get()
+      .prepare('SELECT id FROM pantry_units WHERE name = ? COLLATE NOCASE')
+      .get(vName.value);
+    if (existing) return res.status(409).json({ error: 'Unit already exists.', code: 409 });
+
+    const maxOrder = db.get()
+      .prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM pantry_units')
+      .get().m;
+
+    const result = db.get()
+      .prepare('INSERT INTO pantry_units (name, sort_order) VALUES (?, ?)')
+      .run(vName.value, maxOrder + 1);
+
+    res.status(201).json({
+      data: db.get().prepare('SELECT * FROM pantry_units WHERE id = ?').get(result.lastInsertRowid),
+    });
+  } catch (err) {
+    log.error('POST /units error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// PATCH /api/v1/pantry/units/reorder
+// Body: { order: number[] }
+// --------------------------------------------------------
+router.patch('/units/reorder', (req, res) => {
+  try {
+    const { order } = req.body;
+    if (!Array.isArray(order) || order.length === 0)
+      return res.status(400).json({ error: 'order must be a non-empty array of IDs.', code: 400 });
+
+    const update = db.get().prepare('UPDATE pantry_units SET sort_order = ? WHERE id = ?');
+    db.get().transaction(() => {
+      order.forEach((unitId, idx) => update.run(idx, unitId));
+    })();
+
+    res.json({ data: loadUnits() });
+  } catch (err) {
+    log.error('PATCH /units/reorder error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// PUT /api/v1/pantry/units/:unitId
+// Umbenennen schreibt die Artikelzeilen mit (unit ist Klartext, kein FK).
+// Response: { data: PantryUnit, updated: number }
+// --------------------------------------------------------
+router.put('/units/:unitId', (req, res) => {
+  try {
+    const vId = idParam(req.params.unitId, 'Einheit-ID');
+    if (vId.error) return res.status(400).json({ error: vId.error, code: 400 });
+
+    const unit = db.get().prepare('SELECT * FROM pantry_units WHERE id = ?').get(vId.value);
+    if (!unit) return res.status(404).json({ error: 'Unit not found.', code: 404 });
+
+    const vName = str(req.body.name, 'Einheit', { max: MAX_SHORT });
+    if (vName.error) return res.status(400).json({ error: vName.error, code: 400 });
+
+    const conflict = db.get()
+      .prepare('SELECT id FROM pantry_units WHERE name = ? COLLATE NOCASE AND id != ?')
+      .get(vName.value, unit.id);
+    if (conflict) return res.status(409).json({ error: 'Unit already exists.', code: 409 });
+
+    let updated = 0;
+    db.get().transaction(() => {
+      db.get().prepare('UPDATE pantry_units SET name = ? WHERE id = ?').run(vName.value, unit.id);
+      updated = db.get()
+        .prepare('UPDATE pantry_items SET unit = ? WHERE unit = ?')
+        .run(vName.value, unit.name).changes;
+    })();
+
+    res.json({
+      data: db.get().prepare('SELECT * FROM pantry_units WHERE id = ?').get(unit.id),
+      updated,
+    });
+  } catch (err) {
+    log.error('PUT /units/:unitId error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// DELETE /api/v1/pantry/units/:unitId
+// Nur ohne Verwendung: sonst wäre der Bestand nicht mehr darstellbar.
+// Response: { ok: true }
+// --------------------------------------------------------
+router.delete('/units/:unitId', (req, res) => {
+  try {
+    const vId = idParam(req.params.unitId, 'Einheit-ID');
+    if (vId.error) return res.status(400).json({ error: vId.error, code: 400 });
+
+    const unit = db.get().prepare('SELECT * FROM pantry_units WHERE id = ?').get(vId.value);
+    if (!unit) return res.status(404).json({ error: 'Unit not found.', code: 404 });
+
+    const used = db.get()
+      .prepare('SELECT COUNT(*) AS c FROM pantry_items WHERE unit = ?')
+      .get(unit.name).c;
+    if (used > 0) {
+      return res.status(409).json({
+        error: `Unit is used by ${used} item(s) and cannot be deleted.`,
+        code: 409,
+        used,
+      });
+    }
+
+    db.get().prepare('DELETE FROM pantry_units WHERE id = ?').run(unit.id);
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('DELETE /units/:unitId error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
 // POST /api/v1/pantry/import-shopping
 // Übernimmt abgehakte Artikel einer Einkaufsliste in den Vorrat.
 // Body: { list_id, items: [{ shopping_item_id, quantity?, unit?, location_id?, expires_on? }] }
@@ -311,6 +482,9 @@ router.post('/import-shopping', (req, res) => {
     const userId = req.authUserId || req.session.userId;
     const categoryNames = validCategoryNames();
     const fallbackCategory = categoryNames[categoryNames.length - 1] ?? 'Sonstiges';
+    // Einheiten aus der Benutzerliste (v157); unbekannte Einkaufs-Einheiten
+    // fallen auf die Standardeinheit zurück, statt den Import zu blockieren.
+    const unitNames = validUnitNames();
 
     const result = db.get().transaction(() => {
       const findMatch = db.get().prepare(`
@@ -323,8 +497,8 @@ router.post('/import-shopping', (req, res) => {
       `);
       const bump = db.get().prepare('UPDATE pantry_items SET quantity = ? WHERE id = ?');
       const insert = db.get().prepare(`
-        INSERT INTO pantry_items (name, quantity, unit, location_id, category, expires_on, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO pantry_items (name, quantity, unit, location_id, category, expires_on, created_by, ingredient_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       let added = 0, merged = 0, skipped = 0;
@@ -335,7 +509,8 @@ router.post('/import-shopping', (req, res) => {
         if (!source) { skipped += 1; continue; }
 
         const quantity = normalizePantryQuantity(entry.quantity, { fallback: 1 });
-        const unit = normalizePantryUnit(entry.unit);
+        const requestedUnit = String(entry.unit ?? '').trim();
+        const unit = unitNames.includes(requestedUnit) ? requestedUnit : DEFAULT_PANTRY_UNIT;
         const locationId = entry.location_id ? Number(entry.location_id) || null : null;
         const expiresOn = /^\d{4}-\d{2}-\d{2}$/.test(String(entry.expires_on ?? '')) ? String(entry.expires_on) : null;
         const category = categoryNames.includes(source.category) ? source.category : fallbackCategory;
@@ -348,7 +523,8 @@ router.post('/import-shopping', (req, res) => {
           bump.run(normalizePantryQuantity(Number(match.quantity) + quantity, { fallback: quantity }), match.id);
           merged += 1;
         } else {
-          insert.run(source.name, quantity, unit, locationId, category, expiresOn, userId);
+          insert.run(source.name, quantity, unit, locationId, category, expiresOn, userId,
+                     normalizeIngredientKey(source.name));
           added += 1;
         }
       }
@@ -372,7 +548,12 @@ router.post('/import-shopping', (req, res) => {
 // --------------------------------------------------------
 router.get('/', (_req, res) => {
   try {
-    res.json({ data: loadItems(), locations: loadLocations(), categories: loadCategories() });
+    res.json({
+      data: loadItems(),
+      locations: loadLocations(),
+      categories: loadCategories(),
+      units: loadUnits(),
+    });
   } catch (err) {
     log.error('GET / error:', err);
     res.status(500).json({ error: 'Internal server error.', code: 500 });
@@ -391,12 +572,13 @@ router.post('/', (req, res) => {
 
     const result = db.get().prepare(`
       INSERT INTO pantry_items
-        (name, quantity, unit, location_id, category, expires_on, min_quantity, notes, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (name, quantity, unit, location_id, category, expires_on, min_quantity, notes, created_by, ingredient_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       values.name, values.quantity, values.unit, values.location_id,
       values.category, values.expires_on, values.min_quantity, values.notes,
-      req.authUserId || req.session.userId
+      req.authUserId || req.session.userId,
+      normalizeIngredientKey(values.name)
     );
 
     res.status(201).json({ data: getItem(result.lastInsertRowid) });
@@ -425,11 +607,12 @@ router.put('/:itemId', (req, res) => {
     db.get().prepare(`
       UPDATE pantry_items
       SET name = ?, quantity = ?, unit = ?, location_id = ?, category = ?,
-          expires_on = ?, min_quantity = ?, notes = ?
+          expires_on = ?, min_quantity = ?, notes = ?, ingredient_key = ?
       WHERE id = ?
     `).run(
       values.name, values.quantity, values.unit, values.location_id,
-      values.category, values.expires_on, values.min_quantity, values.notes, item.id
+      values.category, values.expires_on, values.min_quantity, values.notes,
+      normalizeIngredientKey(values.name), item.id
     );
 
     res.json({ data: getItem(item.id) });
@@ -460,6 +643,12 @@ router.patch('/:itemId', (req, res) => {
     // validateItemFields, nicht aus dem Request-Body - kein Injection-Pfad.
     const fields = Object.keys(values);
     if (!fields.length) return res.json({ data: item });
+
+    // Name ändert sich → derived ingredient_key mitziehen (Migration 169).
+    if (fields.includes('name')) {
+      values.ingredient_key = normalizeIngredientKey(values.name);
+      fields.push('ingredient_key');
+    }
 
     db.get().prepare(`
       UPDATE pantry_items SET ${fields.map((f) => `${f} = ?`).join(', ')} WHERE id = ?

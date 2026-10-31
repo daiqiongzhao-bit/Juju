@@ -16,7 +16,7 @@ import { renderPageSearch, wirePageSearch } from '/utils/page-search.js';
 import { openModal, closeModal, confirmModal, confirmOverModal } from '/components/modal.js';
 import { wireTablist } from '/utils/tablist.js';
 
-const RELATION_TYPES = ['family', 'friend', 'partner', 'spouse', 'child', 'colleague', 'neighbor', 'acquaintance', 'knows', 'met-through'];
+const RELATION_TYPES = ['family', 'friend', 'partner', 'spouse', 'child', 'colleague', 'neighbor', 'acquaintance', 'knows', 'met-through', 'self'];
 const INTERACTION_TYPES = ['note', 'call', 'meeting', 'message', 'gift', 'other'];
 
 let _container = null;
@@ -74,6 +74,8 @@ function relColor(type) {
     acquaintance: 'var(--_module-reminders)',
     knows: 'var(--color-text-tertiary)',
     'met-through': 'var(--color-text-tertiary)',
+    // 自己：用模块主色 + 描边区分（人际树虚拟根也复用此色）。
+    self: 'var(--module-relationships)',
   };
   return map[type] || 'var(--module-relationships)';
 }
@@ -147,8 +149,10 @@ async function ensureOptions() {
   } catch { /* defaults already set */ }
 }
 
-async function ensureContacts() {
-  if (state.contacts.length) return;
+async function ensureContacts(force = false) {
+  // force=true：忽略会话内缓存，静默重新拉取并覆盖（D3 根因1：联系人跨模块
+  // 新建/编辑后，people tab 必须能刷新出来，且每次进入 people tab 都重新同步）。
+  if (!force && state.contacts.length) return;
   try {
     const res = await api.get('/contacts');
     const all = Array.isArray(res?.data) ? res.data : [];
@@ -315,9 +319,36 @@ function focusNode(svg, id, zoom = true) {
   state.focusedId = id;
 }
 
+// 视图缩放：通过 viewBox 实现，节点坐标仍然是 800×520 的逻辑坐标，
+// 因此拖拽/搜索的坐标换算完全不受影响。
+const GRAPH_BASE_VIEW = { x: 0, y: 0, w: 800, h: 520 };
+let _graphView = { ...GRAPH_BASE_VIEW };
+
+function applyGraphView(svg) {
+  svg.setAttribute('viewBox', `${_graphView.x} ${_graphView.y} ${_graphView.w} ${_graphView.h}`);
+}
+
+/** factor > 1 放大；cx/cy 为缩放中心（逻辑坐标），缺省为视图中心。 */
+function zoomGraphAt(svg, factor, cx, cy) {
+  if (!svg) return;
+  const v = _graphView;
+  const nextW = Math.max(180, Math.min(2400, v.w / factor));
+  const scale = nextW / v.w;
+  const px = cx ?? v.x + v.w / 2;
+  const py = cy ?? v.y + v.h / 2;
+  _graphView = {
+    x: px - (px - v.x) * scale,
+    y: py - (py - v.y) * scale,
+    w: nextW,
+    h: v.h * scale,
+  };
+  applyGraphView(svg);
+}
+
 function resetGraphView(svg) {
   if (!svg) return;
-  svg.setAttribute('viewBox', '0 0 800 520');
+  _graphView = { ...GRAPH_BASE_VIEW };
+  applyGraphView(svg);
   svg.querySelectorAll('.rel-node--found').forEach((el) => el.classList.remove('rel-node--found'));
   state.focusedId = null;
 }
@@ -459,6 +490,8 @@ async function renderNetwork() {
         <div class="rel-graph-actions">
           ${renderPageSearch({ id: 'rel-search', label: t('relationships.searchPerson'), placeholder: t('relationships.searchPlaceholder'), clearLabel: t('common.searchClear'), className: 'rel-graph__search' })}
           <button class="btn btn--secondary btn--sm" data-action="rel-search-go">${t('relationships.searchPerson')}</button>
+          <button class="btn btn--secondary btn--sm" data-action="rel-zoom-out" aria-label="${t('relationships.zoomOut')}">－</button>
+          <button class="btn btn--secondary btn--sm" data-action="rel-zoom-in" aria-label="${t('relationships.zoomIn')}">＋</button>
           <button class="btn btn--secondary btn--sm" data-action="rel-reset">${t('relationships.resetView')}</button>
           <button class="btn btn--secondary btn--sm" data-action="rel-undo">${t('relationships.undo')}</button>
           <button class="btn btn--secondary btn--sm" data-action="rel-redo">${t('relationships.redo')}</button>
@@ -484,6 +517,17 @@ async function renderNetwork() {
     if (input) input.value = '';
     resetGraphView(svg);
   });
+  panel.querySelector('[data-action="rel-zoom-in"]').addEventListener('click', () => zoomGraphAt(svg, 1.2));
+  panel.querySelector('[data-action="rel-zoom-out"]').addEventListener('click', () => zoomGraphAt(svg, 1 / 1.2));
+  if (svg.dataset.zoomWired !== '1') {
+    svg.dataset.zoomWired = '1';
+    // 桌面：滚轮缩放（以指针位置为中心）
+    svg.addEventListener('wheel', (ev) => {
+      ev.preventDefault();
+      const pt = svgPoint(svg, ev);
+      zoomGraphAt(svg, ev.deltaY < 0 ? 1.12 : 1 / 1.12, pt.x, pt.y);
+    }, { passive: false });
+  }
   const searchInput = panel.querySelector('#rel-search');
   const doSearch = () => searchAndFocus(svg, searchInput.value);
   panel.querySelector('[data-action="rel-search-go"]').addEventListener('click', doSearch);
@@ -567,6 +611,19 @@ function drawGraph(svg, graph, reseed = false) {
     edgeEls.set(`${e.contact_a}-${e.contact_b}`, line);
   }
 
+  // 连线上的关系文字（Feedback 2026-10-25）：只画有类型的边，
+  // 文字底色用描边模拟，避免被线条穿过。
+  const edgeLabelEls = new Map();
+  for (const e of edges) {
+    if (!e.relation_type) continue;
+    const label = document.createElementNS(NS, 'text');
+    label.setAttribute('class', 'rel-edge__label');
+    label.setAttribute('text-anchor', 'middle');
+    label.textContent = relLabel(e.relation_type);
+    edgeLayer.appendChild(label);
+    edgeLabelEls.set(`${e.contact_a}-${e.contact_b}`, label);
+  }
+
   const nodeEls = new Map();
   for (const n of nodes) {
     const r = 16 + Math.min(n.degree, 8) * 2.2;
@@ -596,7 +653,7 @@ function drawGraph(svg, graph, reseed = false) {
       const c = contactById(n.id) || n;
       openContactModal(c);
     });
-    g.addEventListener('pointerdown', (ev) => startDrag(ev, n.id, pos, svg, edgeEls, nodeEls, W, H));
+    g.addEventListener('pointerdown', (ev) => startDrag(ev, n.id, pos, svg, edgeEls, nodeEls, W, H, edgeLabelEls));
   }
 
   const paintEdges = () => {
@@ -606,6 +663,11 @@ function drawGraph(svg, graph, reseed = false) {
       if (a && b && line) {
         line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
         line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+        const lbl = edgeLabelEls.get(`${e.contact_a}-${e.contact_b}`);
+        if (lbl) {
+          lbl.setAttribute('x', (a.x + b.x) / 2);
+          lbl.setAttribute('y', (a.y + b.y) / 2 - 4);
+        }
       }
     }
   };
@@ -621,7 +683,7 @@ function drawGraph(svg, graph, reseed = false) {
   }
 }
 
-function startDrag(ev, id, pos, svg, edgeEls, nodeEls, W, H) {
+function startDrag(ev, id, pos, svg, edgeEls, nodeEls, W, H, edgeLabelEls) {
   ev.preventDefault();
   const pt = svgPoint(svg, ev);
   const start = { ...pos.get(id) };
@@ -644,6 +706,11 @@ function startDrag(ev, id, pos, svg, edgeEls, nodeEls, W, H) {
         const pa = pos.get(a); const pb = pos.get(b);
         line.setAttribute('x1', pa.x); line.setAttribute('y1', pa.y);
         line.setAttribute('x2', pb.x); line.setAttribute('y2', pb.y);
+        const lbl = edgeLabelEls?.get(key);
+        if (lbl) {
+          lbl.setAttribute('x', (pa.x + pb.x) / 2);
+          lbl.setAttribute('y', (pa.y + pb.y) / 2 - 4);
+        }
       }
     });
   };
@@ -697,7 +764,8 @@ async function renderPeople() {
   });
   panel.querySelector('#rel-people-manage-groups')
     .addEventListener('click', () => openManageGroupsModal());
-  await ensureContacts();
+  // 每次进入 people tab 都强制重新拉取联系人（D3 根因1：跨模块改动后保持同步）。
+  await ensureContacts(true);
   await ensureGroupMap();
   paintGroupChips();
   paintPeople();
@@ -1042,6 +1110,15 @@ function paintTreeBody(panel, tree, sharedIds) {
 const GEN_LAYOUT_KEY = 'juju-rel-gen-layout';
 const genState = { layout: 'top', rootId: null, zoom: 1, linkMode: false, linkFirst: null };
 
+// 虚拟根：登录用户“自己”。人际树默认以它为根，把森林里所有顶层联系人
+// 挂到它下面（D2）。用 0 作为 id——真实联系人 id 从 1 起，不会冲突。
+const SELF_ROOT_ID = 0;
+
+// 显示名：优先昵称/用户名，回退到本地化“我”。
+function selfDisplayName() {
+  return _user?.display_name || _user?.username || _user?.name || t('relationships.me');
+}
+
 async function renderGenealogy() {
   // 人际树：把整张关系网自动排成树（按连通分量生成一棵/多棵树），不限定血缘关系。
   const panel = _container.querySelector('#rel-panel-genealogy');
@@ -1062,7 +1139,19 @@ async function renderGenealogy() {
     return;
   }
 
-  const forest = buildRelForest(graph);
+  // 原始关系网排成的森林（每棵树的根是某个顶层联系人）。
+  const rawForest = buildRelForest(graph);
+  // D2：建一个虚拟根“自己”，把整片森林挂到它下面，形成以登录用户为根的
+  // 单棵人际树。视觉上通过 rel-rtree__node--self 与普通节点区分。
+  const selfNode = {
+    id: SELF_ROOT_ID,
+    name: selfDisplayName(),
+    photo: _user?.photo || null,
+    relationship_type: null,
+    isSelf: true,
+  };
+  nodeMap.set(SELF_ROOT_ID, selfNode);
+  const forest = [{ id: SELF_ROOT_ID, children: rawForest, edgeType: null, isSelf: true }];
   const hasChildren = new Set();
   const markHas = (node) => {
     if ((node.children || []).length) hasChildren.add(node.id);
@@ -1106,6 +1195,11 @@ const rtreeState = { zoom: 1, collapsed: new Set() };
 
 function buildRelForest(graph) {
   const nodes = graph.nodes || [];
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  // “自己”类型的联系人在树里视为透明节点：登录用户已由虚拟根“自己”代表，
+  // 再画一个同名联系人节点只会让人以为出现了两个自己（Feedback 2026-10-23）。
+  // 数据不动，仅渲染时把其下级直接升一层。
+  const isSelfNode = (id) => nodeById.get(id)?.relationship_type === 'self';
   const adj = new Map();
   const addAdj = (a, b, rt) => {
     if (!adj.has(a)) adj.set(a, []);
@@ -1122,20 +1216,32 @@ function buildRelForest(graph) {
   const trees = [];
   for (const n of ordered) {
     if (visited.has(n.id)) continue;
-    const root = { id: n.id, children: [], edgeType: null };
     visited.add(n.id);
-    const queue = [root];
+    // BFS 展开一个连通分量。queue 项的 attach 指向“新发现的邻居应该挂进去
+    // 的孩子数组”：普通节点挂在自己的 children 下；遇到透明的“自己”节点
+    // 则不生成节点，其邻居直接挂到与它相同的那一层。
+    const collected = [];
+    const queue = [{ id: n.id, attach: collected }];
     while (queue.length) {
-      const cur = queue.shift();
-      for (const nb of adj.get(cur.id) || []) {
+      const { id, attach } = queue.shift();
+      for (const nb of adj.get(id) || []) {
         if (visited.has(nb.to)) continue;
         visited.add(nb.to);
+        if (isSelfNode(nb.to)) {
+          queue.push({ id: nb.to, attach });
+          continue;
+        }
         const child = { id: nb.to, children: [], edgeType: nb.rt };
-        cur.children.push(child);
-        queue.push(child);
+        attach.push(child);
+        queue.push({ id: nb.to, attach: child.children });
       }
     }
-    trees.push(root);
+    if (isSelfNode(n.id)) {
+      // 连通分量的根是“自己”联系人：它本身不出现，其下级升为树顶。
+      trees.push(...collected);
+    } else {
+      trees.push({ id: n.id, children: collected, edgeType: null });
+    }
   }
   return trees;
 }
@@ -1207,6 +1313,8 @@ function paintRelForest(panel, forest, nodeMap, hasChildren) {
 
   canvas.querySelectorAll('.rel-rtree__node').forEach((el) => {
     const id = Number(el.dataset.id);
+    // 虚拟根“自己”没有对应联系人，点击不打开弹窗。
+    if (id === SELF_ROOT_ID) return;
     const open = () => { const c = contactById(id); if (c) openContactModal(c); };
     el.addEventListener('click', (e) => {
       if (e.target.closest('.rel-rtree__toggle')) return;
@@ -1246,25 +1354,40 @@ function buildRtreeSvg(lay, nodeMap, hasChildren, W, H) {
     const b = lay.pos.get(l.to);
     if (!a || !b) continue;
     const x1 = a.x + W / 2, y1 = a.y + H, x2 = b.x + W / 2, y2 = b.y;
-    const ym = (y1 + y2) / 2;
+    // 三次贝塞尔：父节点底边中点 → 子节点顶边中点，控制点分别竖直向下/向上到中线。
+    // 每条连线是独立曲线，多子节点时不再共用一条水平总线而互相重叠。
+    const midY = (y1 + y2) / 2;
     const path = document.createElementNS(NS, 'path');
     path.setAttribute('class', 'rel-rtree__link');
     path.setAttribute('stroke', relColor(l.rt));
-    path.setAttribute('d', `M ${x1} ${y1} L ${x1} ${ym} L ${x2} ${ym} L ${x2} ${y2}`);
+    path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
     edgeLayer.appendChild(path);
     const lbl = document.createElementNS(NS, 'text');
     lbl.setAttribute('class', 'rel-rtree__edge-label');
+    // 标签放在各自贝塞尔曲线 t=0.5 的中点：x=(x1+x2)/2, y=midY。
+    // 不同连线的曲线中点横向错开，标签随曲线位置自然分布，不再堆叠在同一水平线上。
     lbl.setAttribute('x', (x1 + x2) / 2);
-    lbl.setAttribute('y', ym - 3);
+    lbl.setAttribute('y', midY);
     lbl.setAttribute('text-anchor', 'middle');
-    lbl.textContent = relLabel(l.rt);
+    lbl.setAttribute('dominant-baseline', 'middle');
+    // 自己→顶层联系人的连线没有关系类型（rt 为 null），不画标签。
+    if (l.rt) {
+      lbl.textContent = relLabel(l.rt);
+      // 白色描边光晕（paint-order: stroke 先画描边再画字），让标签在压线处仍清晰可读。
+      lbl.style.paintOrder = 'stroke';
+      lbl.style.stroke = '#fff';
+      lbl.style.strokeWidth = '3px';
+      lbl.style.strokeLinejoin = 'round';
+    }
     labelLayer.appendChild(lbl);
   }
 
   for (const [id, p] of lay.pos) {
     const node = nodeMap.get(id) || { name: '?', photo: null, relationship_type: null };
+    const isSelf = !!node.isSelf;
     const g = document.createElementNS(NS, 'g');
-    g.setAttribute('class', 'rel-rtree__node');
+    // 自己（虚拟根）用专属 class 区分配色，避免与按关系类型上色的普通节点混淆。
+    g.setAttribute('class', isSelf ? 'rel-rtree__node rel-rtree__node--self' : 'rel-rtree__node');
     g.setAttribute('transform', `translate(${p.x},${p.y})`);
     g.setAttribute('data-id', id);
     g.setAttribute('tabindex', '0');
@@ -1277,7 +1400,12 @@ function buildRtreeSvg(lay, nodeMap, hasChildren, W, H) {
     rect.setAttribute('rx', 10);
     rect.setAttribute('ry', 10);
     rect.setAttribute('class', 'rel-rtree__rect');
-    rect.setAttribute('fill', relColor(node.relationship_type));
+    rect.setAttribute('fill', isSelf ? relColor('self') : relColor(node.relationship_type));
+    if (isSelf) {
+      // 描边环让“自己”节点更醒目。
+      rect.setAttribute('stroke', 'var(--color-text-secondary)');
+      rect.setAttribute('stroke-width', '2');
+    }
     g.appendChild(rect);
 
     const name = document.createElementNS(NS, 'text');
@@ -2284,7 +2412,8 @@ async function openContactModal(contact) {
           if (idx !== -1) state.contacts[idx] = { ...state.contacts[idx], ...res.data };
           closeModal({ force: true });
           toast(t('relationships.savedToast'));
-          if (state.activeTab === 'people') paintPeople();
+          // 保存后强制刷新联系人缓存并重绘（D3 根因1：避免跨模块改动后不同步）。
+          if (state.activeTab === 'people') { await ensureContacts(true); paintPeople(); }
           if (state.activeTab === 'network') renderNetwork();
         } catch (err) {
           toast(err.data?.error || t('common.unknownError'), 'danger');

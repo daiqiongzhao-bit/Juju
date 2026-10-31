@@ -479,6 +479,62 @@ export function coerceField(field, raw) {
 }
 
 /**
+ * 模板 CSV 的示例行（每个模块一条「填对了长什么样」的样例）。
+ * 与 IMPORT_MODULES 的字段 key 对齐；缺省字段按空串输出。
+ */
+const TEMPLATE_SAMPLES = Object.freeze({
+  tasks: {
+    title: '倒垃圾', description: '每周三早上', category: '家务', priority: 'high',
+    status: 'open', due_date: '2026-04-01', due_time: '08:00',
+  },
+  contacts: {
+    name: '张三', category: 'misc', phone: '+86 138 0013 8000', email: 'zhang@example.com',
+    address: '北京市朝阳区示例路 1 号', notes: '示例备注', birthday: '1990-01-01',
+    organization: '示例公司', job_title: '工程师', nickname: '小张',
+  },
+  shopping: {
+    list: '采购清单', name: '牛奶', quantity: '2 盒', category: '日用品', notes: '低脂',
+  },
+  recipes: {
+    title: '番茄炒蛋', notes: '1. 打蛋 2. 炒番茄 3. 混合翻炒', recipe_url: 'https://example.com/recipe',
+    meal_types: 'dinner', servings: '2', duration_minutes: '15', tags: '家常菜',
+    ingredients: '番茄|2个|蔬菜',
+  },
+});
+
+/**
+ * CSV 单元格转义：包含逗号/引号/换行/分号的值包双引号，内部引号翻倍。
+ * @param {unknown} value
+ * @returns {string}
+ */
+function csvEscape(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  if (/[",;\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+/**
+ * 生成「导入模板」CSV 文本：表头 = 模块目标字段 key（autoMapHeaders 1:1 命中），
+ * 表头后带 1 行示例。纯函数，无数据库访问。
+ *
+ * @param {string} moduleKey 模块 key
+ * @returns {{ csv: string, fields: string[] }|null} 未知模块返回 null（调用方转 400）
+ */
+export function buildTemplateCsv(moduleKey) {
+  const module = getImportModule(moduleKey);
+  if (!module) return null;
+
+  const fields = module.fields.map((field) => field.key);
+  const sample = TEMPLATE_SAMPLES[moduleKey] ?? {};
+  const lines = [
+    fields.map(csvEscape).join(','),
+    fields.map((key) => csvEscape(sample[key] ?? '')).join(','),
+  ];
+  // CRLF 收尾，Excel 直接打开不串行。
+  return { csv: `${lines.join('\r\n')}\r\n`, fields };
+}
+
+/**
  * 把「原始行」按列映射翻译成一组可校验的记录。
  *
  * 每一行独立处理：某行的某个字段不合法只让**这一行**失败，不会污染其余行，

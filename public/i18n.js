@@ -147,9 +147,10 @@ function resolvePluralKey(key, count) {
  * Parameter soll im Ergebnis sichtbar sein und nicht still weggekürzt werden.
  */
 export function t(key, params = {}) {
-  const str = typeof params.count === 'number'
+  const resolved = typeof params.count === 'number'
     ? resolvePluralKey(key, params.count)
     : resolve(translations, key) ?? resolve(fallbackTranslations, key) ?? key;
+  const str = typeof resolved === 'string' ? resolved : key;
   return str.replace(/\{\{(\w+)\}\}/g, (placeholder, name) => (
     Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : placeholder
   ));

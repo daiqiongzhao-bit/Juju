@@ -133,6 +133,7 @@ const ROUTES = [
   { path: '/recipes',  page: '/pages/recipes.js',   requiresAuth: true, module: 'recipes',   titleKey: 'nav.recipes' },
 
   { path: '/pantry',   page: '/pages/pantry.js',    requiresAuth: true, module: 'pantry',    titleKey: 'nav.pantry' },
+  { path: '/family-inventory', page: '/pages/family-inventory.js', requiresAuth: true, module: 'pantry', titleKey: 'nav.familyInventory' },
 
   { path: '/contacts', page: '/pages/contacts.js',  requiresAuth: true, module: 'contacts',  titleKey: 'nav.contacts' },
 
@@ -811,7 +812,7 @@ let _setupRequired = false;
 
 
 
-const ROUTE_ORDER = ['/', '/calendar', '/tasks', '/meals', '/recipes', '/shopping', '/pantry',
+const ROUTE_ORDER = ['/', '/calendar', '/tasks', '/meals', '/recipes', '/shopping', '/pantry', '/family-inventory',
 
                      '/birthdays', '/notes', '/contacts', '/budget', '/documents', '/housekeeping', '/health', '/settings'];
 
@@ -5392,6 +5393,11 @@ function navItems() {
     { path: '/shopping',  label: t('nav.shopping'),  icon: 'shopping-cart', module: 'shopping', section: NAV_SECTION.household, kitchenGroup: true },
 
     { path: '/pantry',    label: t('nav.pantry'),    icon: 'archive',       module: 'pantry',   section: NAV_SECTION.household, kitchenGroup: true },
+
+    // 家庭库存管理：一级入口（家庭分组，不在厨房四步循环内）。
+    // module 继续挂 'pantry' —— 禁用/权限跟随库存模块，数据同源；
+    // orderId 独立，避免与厨房组内 /pantry 的排序键冲突。
+    { path: '/family-inventory', label: t('nav.familyInventory'), icon: 'boxes', module: 'pantry', orderId: 'family-inventory', section: NAV_SECTION.household },
 
     { path: '/housekeeping', label: t('nav.housekeeping'), icon: 'paintbrush', module: 'housekeeping', section: NAV_SECTION.household },
 

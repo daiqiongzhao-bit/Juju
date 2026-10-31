@@ -30,9 +30,15 @@ export function createInviteService({ db, now = () => Date.now() } = {}) {
   function createInvite({
     email = null, username = null, displayName = null,
     role = 'member', familyRole = 'other', createdBy = null,
+    validDays = null,
   } = {}) {
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = now() + INVITE_TTL_MS;
+    // Selbst gewählte Gültigkeit (Feedback 2026-10-27): 1-365 Tage, Default
+    // bleibt der bisherige 7-Tage-Wert, wenn nichts (oder Unsinn) kommt.
+    const days = Number.isFinite(Number(validDays))
+      ? Math.max(1, Math.min(365, Math.round(Number(validDays))))
+      : null;
+    const expiresAt = now() + (days ?? Math.round(INVITE_TTL_MS / 86400000)) * 86400000;
     const info = getDb().prepare(`
       INSERT INTO invites (token_hash, email, username, display_name, role,
                            family_role, created_by, expires_at)
@@ -85,12 +91,20 @@ export function createInviteService({ db, now = () => Date.now() } = {}) {
   }
 
   /** Offene (nicht eingelöste, nicht widerrufene, nicht abgelaufene) Einladungen. */
+  /**
+   * Ausstehende Einladungen inklusive abgelaufener (Feedback 2026-10-27):
+   * Abgelaufene verschwanden stillschweigend aus der Liste, der Admin sah
+   * weder den Zustand noch konnte er sie aufräumen. Jede Zeile trägt jetzt
+   * `expired`, die UI zeigt einen „Abgelaufen"-Zustand.
+   */
   function listOpen() {
-    return getDb().prepare(`
+    const rows = getDb().prepare(`
       SELECT ${PUBLIC_COLUMNS} FROM invites
-      WHERE accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
-      ORDER BY created_at DESC, id DESC
+      WHERE accepted_at IS NULL AND revoked_at IS NULL
+      ORDER BY (expires_at > ?) DESC, created_at DESC, id DESC
     `).all(now());
+    const t = now();
+    return rows.map((r) => ({ ...r, expired: r.expires_at <= t }));
   }
 
   /**
@@ -101,9 +115,13 @@ export function createInviteService({ db, now = () => Date.now() } = {}) {
    * doch entfernt, hebt die Entscheidung nachträglich auf.
    */
   function cleanupExpired() {
+    // Erst 30 Tage nach Ablauf löschen - vorher bleibt die Zeile in der
+    // Admin-Liste sichtbar („Abgelaufen"), damit der Zustand nicht verschwindet,
+    // bevor ihn jemand gesehen hat.
+    const cutoff = now() - 30 * 86400000;
     const info = getDb().prepare(
       'DELETE FROM invites WHERE expires_at <= ? AND accepted_at IS NULL AND revoked_at IS NULL'
-    ).run(now());
+    ).run(cutoff);
     if (info.changes) log.info(`Cleaned up ${info.changes} expired invite(s)`);
     return info.changes;
   }

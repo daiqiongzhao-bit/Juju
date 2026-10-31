@@ -126,3 +126,87 @@ button.gl-btn.ghost.danger{background:#dc2626;border-color:#dc2626;color:#fff}
 /* ── 嵌入预算 tab（budget-tab-panel--gift-ledger）──────────────────────────
    预算页头已有模块标题，礼金簿自己的 h2 在 tab 内重复 — 隐藏，操作按钮保留。 */
 .budget-tab-panel--gift-ledger .gl-head h2 { display: none; }
+
+/* 方向筛选（收礼/送礼）与方向徽标、结余 KPI —— 2026-10-25 */
+.gl-dir{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 12px}
+.gl-dir-chip{padding:4px 12px;border:1px solid var(--color-border);border-radius:999px;background:var(--color-surface);color:var(--color-text-secondary);cursor:pointer;font-size:var(--text-xs);transition:background var(--transition-fast),color var(--transition-fast)}
+.gl-dir-chip:hover{border-color:var(--color-accent);color:var(--color-accent)}
+.gl-dir-chip.active{background:var(--color-accent);color:#fff;border-color:var(--color-accent)}
+.gl-chip--received{background:color-mix(in srgb, var(--color-success) var(--tint-surface), transparent);color:var(--color-success);font-weight:600}
+.gl-chip--given{background:color-mix(in srgb, var(--color-warning) var(--tint-surface), transparent);color:var(--color-warning);font-weight:600}
+.gl-stat-kpi--in{background:color-mix(in srgb, var(--color-success) 10%, transparent);color:var(--color-success)}
+.gl-stat-kpi--out{background:color-mix(in srgb, var(--color-warning) 12%, transparent);color:var(--color-warning)}
+.gl-stat-kpi--net{background:var(--color-surface-hover);color:var(--color-text-primary)}
+
+/* 分段选择器：代替方框式单选（移动端更紧凑、不折行）—— 2026-10-25 */
+.gl-seg{display:flex;gap:4px;padding:4px;background:var(--color-surface-2);border:1px solid var(--color-border-subtle);border-radius:999px}
+.gl-seg__opt{position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:9px 12px;border-radius:999px;font-size:var(--text-sm);color:var(--color-text-secondary);cursor:pointer;white-space:nowrap;transition:background var(--transition-fast),color var(--transition-fast)}
+.gl-seg__opt input{position:absolute;opacity:0;pointer-events:none}
+.gl-seg__opt:hover{color:var(--color-text-primary)}
+.gl-seg__opt.is-active{background:var(--color-accent);color:#fff;font-weight:600}
+.gl-seg--type .gl-seg__opt.is-active{background:var(--color-text-secondary);color:#fff}
+.gl-seg--type .gl-seg__opt.is-active[data-v="red"]{background:#dc2626;color:#fff}
+.gl-seg--type .gl-seg__opt.is-active[data-v="white"]{background:#64748b;color:#fff}
+
+/* 统计：KPI 行与按人收支列 —— 2026-10-25 */
+.gl-stats-kpis{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.gl-person{align-items:center}
+.gl-person .gl-stat-rel__name{flex:1 1 100%;font-weight:600}
+.gl-person__in,.gl-person__out,.gl-person__net{font-size:var(--text-xs);padding:2px 8px;border-radius:999px;white-space:nowrap}
+.gl-person__in{background:color-mix(in srgb, var(--color-success) 10%, transparent);color:var(--color-success)}
+.gl-person__out{background:color-mix(in srgb, var(--color-warning) 12%, transparent);color:var(--color-warning)}
+.gl-person__net{background:var(--color-surface-hover);color:var(--color-text-secondary)}
+.gl-person__net.is-pos{color:var(--color-success)}
+.gl-person__net.is-neg{color:var(--color-danger)}
+
+/* 统计：移动优先的卡片化布局 —— 2026-10-26 */
+.gl-stats-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.gl-stats-head strong{font-size:var(--text-base)}
+.gl-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.gl-kpi{display:flex;flex-direction:column;gap:2px;padding:10px 10px 8px;border-radius:12px;border:1px solid var(--color-border-subtle);background:var(--color-surface);min-width:0}
+.gl-kpi__label{font-size:11px;color:var(--color-text-tertiary)}
+.gl-kpi__value{font-size:15px;font-weight:700;line-height:1.25;word-break:break-all}
+.gl-kpi__meta{font-size:10px;color:var(--color-text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gl-kpi--in .gl-kpi__value{color:var(--color-success)}
+.gl-kpi--out .gl-kpi__value{color:var(--color-warning)}
+.gl-kpi--net .gl-kpi__value{color:var(--color-text-primary)}
+.gl-kpi--net.is-pos .gl-kpi__value{color:var(--color-success)}
+.gl-kpi--net.is-neg .gl-kpi__value{color:var(--color-danger)}
+.gl-typekpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.gl-typekpi{font-size:11px;padding:4px 10px;border-radius:999px;background:var(--color-surface-hover);color:var(--color-text-secondary)}
+.gl-typekpi--red{background:rgba(220,38,38,.10);color:#dc2626}
+.gl-typekpi--white{background:rgba(100,116,139,.16);color:#64748b}
+
+.gl-person{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px dashed var(--color-border-subtle)}
+.gl-person:last-child{border-bottom:0}
+.gl-person__name{font-weight:600;font-size:var(--text-sm);word-break:break-word}
+.gl-person__figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.gl-person__figures > span{font-size:11px;padding:5px 6px;border-radius:8px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gl-person__in{background:color-mix(in srgb, var(--color-success) 10%, transparent);color:var(--color-success)}
+.gl-person__out{background:color-mix(in srgb, var(--color-warning) 12%, transparent);color:var(--color-warning)}
+.gl-person__net{background:var(--color-surface-hover);color:var(--color-text-secondary)}
+.gl-person__net.is-pos{color:var(--color-success)}
+.gl-person__net.is-neg{color:var(--color-danger)}
+
+/* 关系列表：禁止横向溢出、长名称省略 */
+.gl-stat-rel{display:flex;align-items:center;gap:8px;min-width:0}
+.gl-stat-rel__name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gl-stat-rel__total{white-space:nowrap;flex:0 0 auto}
+.gl-stats-rels{overflow:hidden}
+
+/* 名字与数值左对齐、占满整行（旧规则曾把 .gl-person 子项居中） */
+.gl-person{align-items:stretch;text-align:left}
+.gl-person__name{text-align:left}
+.gl-stats-rels h4{text-align:left}
+
+/* 移动端触控目标与字号（实测 390px：按钮 35px、方向芯片 28px 偏小）—— 2026-10-26 */
+.gl-btn{min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.gl-dir-chip{min-height:36px;padding:8px 14px;font-size:12px}
+.gl-kpi__label{font-size:12px}
+.gl-kpi__meta{font-size:11px}
+.gl-person__figures > span{font-size:12px;padding:6px 6px}
+.gl-typekpi{font-size:12px;padding:5px 11px}
+
+/* 弹窗内输入控件：移动端最小高度 40px（实测 7 个输入框偏矮）—— 2026-10-26 */
+.gl-field input, .gl-field select, .gl-field textarea{min-height:40px}
+.gl-field input[type="checkbox"], .gl-field input[type="radio"]{min-height:auto;width:18px;height:18px}

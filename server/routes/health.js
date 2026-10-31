@@ -34,6 +34,7 @@ import activitiesRouter from './health/activities.js';
 import exportRouter from './health/export.js';
 import cycleRouter from './health/cycle.js';
 import caregiversRouter from './health/caregivers.js';
+import cabinetRouter from './health/cabinet.js';
 
 const router = express.Router();
 
@@ -47,5 +48,8 @@ router.use(activitiesRouter);
 router.use(exportRouter);
 router.use(cycleRouter);
 router.use(caregiversRouter);
+// Vor medications.js? Nein: /cabinet ist präfix-disjunkt zu /medications und
+// /:id-Routen matchen nur ein Segment - die Reihenfolge ist unkritisch.
+router.use(cabinetRouter);
 
 export default router;

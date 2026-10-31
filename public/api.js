@@ -6,7 +6,7 @@
 
 import { clearApiCache } from '/sw-register.js';
 import { setPermissions, clearPermissions } from '/permissions.js';
-import { AUTH_401_KIND, classify401 } from '/utils/auth-401.js';
+import { classify401 } from '/utils/auth-401.js';
 
 const API_BASE = '/api/v1';
 
@@ -61,41 +61,37 @@ async function apiFetch(path, options = {}, _retried = false) {
     // Beim Login-Endpunkt bedeutet 401 "falsche Zugangsdaten", nicht "Session abgelaufen".
     // auth:expired würde die Login-Seite neu rendern und die Fehlermeldung verwerfen.
     if (path !== '/auth/login') {
-      // 401 gibt es in drei fachlich verschiedenen Varianten (R2b, v0.0.34) -
-      // Einordnung via classify401() aus utils/auth-401.js:
-      //   TWO_FACTOR - „pending"-2FA-Session (Passwort ok, zweiter Faktor
-      //                fehlt): KEIN Sitzungsablauf, sondern ein fehlender
-      //                Schritt. Der Server markiert das mit
-      //                `two_factor_required` im Body - das Detail geht mit
-      //                ins Event, damit der Router die richtige Ansage zeigt
-      //                („需要两步验证" statt generischem „Sitzung abgelaufen").
-      //   BUSINESS   - fachliche Absage mit maschinenlesbarem `reason` (z. B.
-      //                `invalid_password` beim 2FA-Passwort-Dialog): KEIN
-      //                auth:expired, fall-through zum generischen
-      //                !response.ok-Handler unten - der ApiError trägt
-      //                `err.data.reason` (twofactor.js message() mapped das
-      //                auf den passenden UI-Text).
-      //   SESSION    - generischer Sitzungsablauf ohne Zusatzinformation.
-      // Reihenfolge: two_factor_required vor reason (siehe classify401).
-      let kind = null;
+      // R2c (v0.0.33-Hotfix): 401 hat drei Ursachen — klassifizieren statt
+      // pauschal redirecten. Body einmalig lesen (clone, damit der Stream für
+      // den generischen Handler unten erhalten bleibt).
+      //   1. two_factor_required („pending"-2FA-Session): global behandeln wie
+      //      bisher — das Detail geht mit ins Event, damit der Router die
+      //      richtige Ansage zeigt („需要两步验证" statt generischem Text).
+      //   2. reason (Business-Fehler bei gültiger Session, z. B.
+      //      invalid_password beim 2FA-Setup): KEIN auth:expired — sonst würde
+      //      ein falsches Passwort den Nutzer aus dem Einstellungsdialog auf
+      //      die Login-Seite werfen (#R2c). Fall-through zum generischen
+      //      Handler: ApiError(message, 401, data) mit data.reason, das
+      //      aufrufende Modul (settings/twofactor.js) zeigt es inline an.
+      //   3. ohne beides: echte Sitzung wäre abgelaufen — auth:expired wie bisher.
+      let body = null;
       try {
-        // Clone lesen: der Ursprungs-Stream bleibt für den generischen
-        // Handler (ApiError mit reason) bzw. den Aufrufer unverbraucht.
-        kind = classify401(response.status, await response.clone().json());
+        body = await response.clone().json();
       } catch {
-        /* nicht JSON oder schon konsumiert - generischer 401 (SESSION) */
+        /* nicht JSON oder schon konsumiert - generischer 401 */
       }
-      if (kind !== AUTH_401_KIND.BUSINESS) {
-        // TWO_FACTOR und SESSION: auth:expired senden und Request beenden.
-        const detail = kind === AUTH_401_KIND.TWO_FACTOR ? { twoFactorRequired: true } : {};
-        window.dispatchEvent(new CustomEvent('auth:expired', { detail }));
+      const kind = classify401(response.status, body);
+      if (kind === 'two_factor') {
+        window.dispatchEvent(new CustomEvent('auth:expired', { detail: { twoFactorRequired: true } }));
         throw new Error('Sitzung abgelaufen.');
       }
-      // BUSINESS: kein Event, fall-through zum generischen !response.ok-Handler
-      // unten - der fachliche Aufrufer sieht den ApiError mit err.data.reason.
+      if (kind === 'session') {
+        window.dispatchEvent(new CustomEvent('auth:expired'));
+        throw new Error('Sitzung abgelaufen.');
+      }
+      // kind === 'business': kein Event, kein Redirect — Fall-through unten.
     }
-    // BUSINESS (außer /auth/login) und /auth/login selbst: fall-through zum
-    // generischen !response.ok-Handler unten.
+    // Für /auth/login und Business-401: fall-through zum generischen !response.ok-Handler unten.
   }
 
   // CSRF-Token-Desync (haeufig nach iOS-PWA-Resume): einmal GET /auth/me
@@ -301,6 +297,7 @@ const aiRecipe = {
   getConfig: () => api.get('/ai/config'),
   saveConfig: (cfg) => api.put('/ai/config', cfg),
   test: () => api.post('/ai/test', {}),
+  fetchModels: () => api.get('/ai/models'),
   generate: (body) => api.post('/ai/recipes/generate', body),
 };
 

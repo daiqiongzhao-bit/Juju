@@ -2292,3 +2292,113 @@ button.cycle-cal__day:not(:disabled):hover { background: var(--color-surface-2);
   color: var(--color-text-secondary);
   white-space: nowrap;
 }
+
+/* --------------------------------------------------------
+ * Haushalts-Medizinschrank (/health/cabinet) — 2026-10-26
+ * Familienweite Bestands-Ansicht: Haltbarkeit im Vordergrund,
+ * dieselbe Optik wie die übrigen Health-Tabs.
+ * -------------------------------------------------------- */
+.cabinet-loading { padding: var(--space-6) 0; text-align: center; color: var(--color-text-secondary); }
+
+.cab-summary {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.cab-filter {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; min-height: 36px;
+  border: 1px solid var(--color-border); border-radius: 999px;
+  background: var(--color-surface); color: var(--color-text-secondary);
+  font-size: var(--text-sm); cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.cab-filter small {
+  font-size: var(--text-xs); padding: 1px 7px; border-radius: 999px;
+  background: var(--color-surface-hover); color: var(--color-text-tertiary);
+}
+.cab-filter.is-active { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+.cab-filter.is-active small { background: rgba(255,255,255,.2); color: #fff; }
+
+.cab-toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.cab-search {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--color-border); border-radius: 12px;
+  background: var(--color-surface); padding: 0 12px;
+}
+.cab-search input {
+  flex: 1; min-height: 42px; border: 0; outline: none; background: transparent;
+  color: var(--color-text-primary); font-size: var(--text-sm);
+}
+.cab-cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.cab-cats::-webkit-scrollbar { display: none; }
+.cab-chip {
+  flex: 0 0 auto; padding: 6px 12px; min-height: 32px;
+  border: 1px solid var(--color-border-subtle); border-radius: 999px;
+  background: var(--color-surface); color: var(--color-text-secondary);
+  font-size: var(--text-xs); cursor: pointer;
+}
+.cab-chip.is-active { border-color: var(--color-accent); color: var(--color-accent); font-weight: 600; }
+
+.cab-list { display: flex; flex-direction: column; gap: 8px; }
+.cab-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border: 1px solid var(--color-border-subtle);
+  border-radius: 14px; background: var(--color-surface); cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.cab-card:hover { border-color: var(--color-accent); box-shadow: var(--shadow-sm); }
+.cab-card__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cab-card__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cab-card__name { font-weight: 600; font-size: var(--text-sm); word-break: break-word; }
+.cab-card__meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: var(--text-xs); color: var(--color-text-tertiary); }
+.cab-card__side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; }
+.cab-owner { font-size: 10px; color: var(--color-text-tertiary); }
+
+.cab-cat {
+  flex: 0 0 auto; font-size: 10px; padding: 2px 8px; border-radius: 999px;
+  background: var(--color-surface-hover); color: var(--color-text-secondary);
+}
+.cab-cat--prescription { background: rgba(220,38,38,.10); color: #dc2626; }
+.cab-cat--children { background: rgba(37,99,235,.10); color: #2563eb; }
+.cab-cat--firstaid { background: rgba(220,38,38,.14); color: #b91c1c; }
+.cab-cat--supplement { background: rgba(22,163,74,.10); color: #16a34a; }
+
+.cab-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; font-weight: 600;
+}
+.cab-badge--expired { background: rgba(220,38,38,.12); color: #dc2626; }
+.cab-badge--soon    { background: rgba(217,119,6,.14); color: #d97706; }
+.cab-badge--low     { background: rgba(100,116,139,.16); color: #64748b; }
+
+.cab-disclaimer { margin-top: 14px; font-size: var(--text-xs); color: var(--color-text-tertiary); }
+
+.cab-scan-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.cab-scan-row .btn { min-height: 40px; }
+.cab-scan-status { flex: 1 1 100%; min-height: 1em; }
+.cab-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cab-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.cab-leaflet-fields { border-top: 1px dashed var(--color-border-subtle); margin-top: 6px; padding-top: 10px; }
+.cab-leaflet__meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: var(--text-xs); color: var(--color-text-secondary); margin: 6px 0 10px; }
+.cab-leaflet__text { margin: 4px 0 0; font-size: var(--text-sm); line-height: 1.55; white-space: pre-wrap; }
+.cab-src { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.cab-src--builtin { background: rgba(22,163,74,.10); color: #16a34a; }
+.cab-src--ai { background: rgba(217,119,6,.14); color: #d97706; }
+
+@media (max-width: 480px) {
+  .cab-grid-3 { grid-template-columns: 1fr 1fr; }
+  .cab-card { padding: 10px 12px; }
+}
+
+/* 药箱：粘贴识别 + 来源对比 */
+.cab-paste-box { margin-bottom: 12px; }
+.cab-paste-box textarea { margin-bottom: 8px; }
+.cab-compare-result:empty { display: none; }
+.cab-compare { margin: 4px 0 14px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); padding: 10px 12px; background: var(--color-surface-raised, rgba(0,0,0,.02)); }
+.cab-cmp-block { padding: 8px 0; border-bottom: 1px dashed var(--color-border-subtle); }
+.cab-cmp-block:last-of-type { border-bottom: none; }
+.cab-cmp-block__label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-secondary); margin-bottom: 6px; }
+.cab-cmp-block__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cab-cmp-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cab-cmp-side__src { font-size: 10px; font-weight: 600; color: var(--color-text-tertiary); }
+.cab-cmp-side__val { font-size: var(--text-sm); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.cab-cmp-empty { color: var(--color-text-tertiary); }
+.cab-compare__all { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }

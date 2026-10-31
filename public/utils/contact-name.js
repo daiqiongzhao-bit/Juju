@@ -33,15 +33,30 @@ export function normalizeNameParts(parts = {}) {
   };
 }
 
+// Han-Schrift (inkl. Erweiterungen und Kompatibilitätsbereich). Namensbestandteile
+// mit diesen Zeichen folgen der ostasiatischen Reihenfolge 姓+名 ohne Leerzeichen.
+const CJK_NAME = /[\u3400-\u9FFF\uF900-\uFAFF]/;
+
 /**
- * Baut den Anzeigenamen aus den Komponenten: immer `Vorname [Zweitname] Nachname`.
- * Titel (Prefix) und Suffix bleiben gespeichert, aber aus der Anzeige heraus —
- * genau das macht die Liste über verschiedene Quellen hinweg einheitlich.
+ * Baut den Anzeigenamen aus den Komponenten.
+ *
+ * Westliche Namen: `Vorname [Zweitname] Nachname`.
+ * Chinesische/japanische/koreanische Namen: `姓 名` ohne Leerzeichen — die
+ * westliche Reihenfolge ergab „定丽 朱" statt „朱定丽" (Feedback 2026-10-25).
+ * Erkannt wird am Vorhandensein von Han-Zeichen, damit auch ein Haushalt mit
+ * gemischten Namen pro Kontakt korrekt bleibt.
+ * Titel (Prefix) und Suffix bleiben gespeichert, aber aus der Anzeige heraus.
  * @param {Object} parts - Rohe oder normalisierte Komponenten
  * @returns {string|null} Anzeigename oder null, wenn keine Komponente gesetzt ist
  */
 export function composeDisplayName(parts = {}) {
   const n = normalizeNameParts(parts);
+  const ordered = [n.lastName, n.firstName, n.middleName].filter(Boolean);
+  // Nur rein ostasiatische Namen umstellen: enthält ein Teil lateinische
+  // Buchstaben (z. B. „Anna 朱"), bleibt die westliche Reihenfolge sinnvoller.
+  const hasCjk = ordered.some((part) => CJK_NAME.test(part));
+  const hasLatin = ordered.some((part) => /[A-Za-z]/.test(part));
+  if (hasCjk && !hasLatin) return ordered.join('');
   const joined = [n.firstName, n.middleName, n.lastName].filter(Boolean).join(' ');
   return joined || null;
 }

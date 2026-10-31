@@ -17,6 +17,8 @@ import './services/sm4-key-guard.js';
 import { createLogger } from './logger.js';
 import * as db from './db.js';
 import { router as authRouter, sessionMiddleware, requireAuth, requireAdmin } from './auth.js';
+import { router as licenseRouter } from './routes/license.js';
+import * as license from './services/license.js';
 import { csrfMiddleware } from './middleware/csrf.js';
 import { buildOpenApiSpec } from './openapi.js';
 import * as googleCalendar from './services/google-calendar.js';
@@ -74,7 +76,7 @@ import mediaRouter from './routes/media.js';
 // 批次三：通用导入（CSV/JSON）与应用内 AI 菜谱生成。
 import importRouter from './routes/import.js';
 import aiRouter from './routes/ai.js';
-import { handleEmbyWebhook } from './services/media-emby.js';
+import { handleEmbyWebhook, startScheduler as startEmbyScheduler } from './services/media-emby.js';
 import memoryRouter from './routes/memory.js';
 import giftLedgerRouter from './routes/gift-ledger.js';
 import inAppNotificationsRouter from './routes/in-app-notifications.js';
@@ -425,6 +427,31 @@ app.use('/api/v1', (req, res, next) => {
   return next();
 });
 app.use('/api/v1', csrfMiddleware);
+app.use('/api/v1/license', licenseRouter);
+// ---- Lizenz-Guard (License enforcement) ----
+// Nur wenn der Server mit JUJU_LICENSE_MASTER gestartet wird, wird die
+// Aktivierung erzwungen. Betrifft ausschließlich Geschäfts-APIs; die
+// Bootstrap-/Auth-/Lizenz-Routen bleiben erreichbar (Anmeldung + Key-Eingabe).
+// Ohne Master-Key: community-Modus — kein Eingriff in bestehende Self-Host-Deploys.
+const LICENSE_WHITELIST = [
+  '/api/v1/auth', '/api/v1/license', '/api/v1/version',
+  '/api/v1/changelog', '/api/v1/health', '/api/v1/onboarding',
+];
+app.use('/api/v1', async (req, res, next) => {
+  if (LICENSE_WHITELIST.some((p) => req.path === p || req.path.startsWith(p + '/'))) return next();
+  try {
+    const st = await license.status();
+    if (st.licensed) return next();
+    return res.status(402).json({
+      error: 'This instance is not activated.',
+      code: 'license-required',
+      reason: st.reason,
+      mode: st.mode,
+    });
+  } catch {
+    return next(); // Fail-open: bei DB-Fehler nicht die ganze App blockieren
+  }
+});
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/tasks', tasksRouter);
 app.use('/api/v1/shopping', shoppingRouter);
@@ -578,6 +605,7 @@ app.listen(PORT, () => {
   startPushScheduler();
   startMedicationScheduler();
   startMealieScheduler();
+  startEmbyScheduler();
 });
 
 export default app;
