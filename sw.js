@@ -15,7 +15,7 @@
  *   → bypassCacheUntil (in-memory + Cache API für SW-Restart-Robustheit)
  */
 
-const APP_RELEASE   = '0.0.69';
+const APP_RELEASE   = '0.0.70';
 const SHELL_CACHE   = `yuvomi-shell-${APP_RELEASE}`;
 const PAGES_CACHE   = `yuvomi-pages-${APP_RELEASE}`;
 const LOCALES_CACHE = `yuvomi-locales-${APP_RELEASE}`;
@@ -77,6 +77,7 @@ const APP_SHELL = [
   '/styles/settings.css',
   '/styles/recipes.css',
   '/styles/pantry.css',
+  '/styles/home-inventory.css',
   '/styles/detail-view.css',
   '/components/juju-install-prompt.js',
   // Geteilte Module. Sie werden von Shell UND Seitenmodulen importiert und
@@ -107,6 +108,7 @@ const APP_SHELL = [
   '/utils/health-tabs.js',
   '/utils/health-vitals.js',
   '/utils/help.js',
+  '/utils/home-inventory-taxonomy.js',
   '/utils/html.js',
   '/utils/ingredient-row.js',
   '/utils/kitchen-tabs.js',
@@ -195,6 +197,7 @@ const PAGE_MODULES = [
   '/pages/login.js',
   '/pages/recipes.js',
   '/pages/pantry.js',
+  '/pages/home-inventory.js',
   '/pages/budget-plans.js',
   '/pages/budget-stats.js',
   '/pages/split-expenses.js',

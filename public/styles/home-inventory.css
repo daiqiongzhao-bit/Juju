@@ -1,0 +1,36 @@
+/**
+ * Modul: 家庭库存（Home Inventory）— Seiten-Stylesheet
+ *
+ * Der Router lädt pro Route genau ein Page-CSS: /styles/<module>.css. Für das
+ * Modul "home-inventory" existierte diese Datei nicht — die Seite lief damit
+ * ohne jede Modul-Grammatik (Badges, Stepper, Filterleiste, Gruppenkopf waren
+ * ungestylt), nur .list-row aus dem globalen list-row.css griff.
+ *
+ * Die Grammatik selbst ist mit dem Küchen-Vorrat identisch (beide sind
+ * Bestandslisten im selben Familiensystem), deshalb wird pantry.css importiert
+ * statt kopiert: eine Quelle, kein Drift. Zusätzlich nur das, was die
+ * Home-Inventory-Seite eigenes braucht.
+ *
+ * Regeln hier sind bewusst NICHT auf .pantry-page gescoped: das Formular lebt
+ * im Modal-Overlay am <body>, nicht in der Seite. Das Stylesheet wird mit der
+ * Route geladen und mit ihr wieder entfernt, die Reichweite bleibt also auf
+ * diese Seite beschränkt.
+ */
+
+@import url('/styles/pantry.css');
+
+/* Hinweistexte im Formular: .form-hint lebt page-scoped in settings.css und
+ * wird auf dieser Route nicht geladen. Ohne die Regel fällt der
+ * "有效期"-Hinweis auf reine Browser-Defaults zurück und liest sich wie Fließtext
+ * mitten im Formular. Dieselben Tokens wie settings.css. */
+.form-hint {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* "同名商品已有 N 个批次" sitzt direkt unter dem Namensfeld und ist ein
+ * Hinweis, kein Fehler — deshalb Warn-Ton statt Rot. */
+#hi-name-hint {
+  color: var(--color-warning-ink, var(--color-text-secondary));
+}

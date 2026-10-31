@@ -5913,6 +5913,26 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_home_inventory_category ON home_inventory_items(category);
     `,
   },
+  {
+    version: 171,
+    description: 'Home inventory: expiry date + storage location (multi-batch support)',
+    up: `
+      -- 有效期（MHD）与存放位置。
+      --
+      -- 日用品大多有保质期（洗护、药品、零食、纸品受潮），"什么时候过期"是
+      -- 补货决策的一部分，缺了它这个模块只能记数量。expires_on 存本地日历日
+      -- 的 YYYY-MM-DD（TEXT，lexikografisch = chronologisch），由
+      -- public/utils/home-inventory-taxonomy.js 的 isValidHomeDateKey 校验；
+      -- 为空表示"无有效期"。
+      --
+      -- 同名商品的多批次：表里没有 UNIQUE(name)，每行就是一个独立批次，各自
+      -- 携带自己的有效期与数量。列表按 (name, expires_on) 排序，先到期的排
+      -- 前面（FEFO），服务端不合并批次 —— 合并了就没法知道"哪一瓶先过期"。
+      ALTER TABLE home_inventory_items ADD COLUMN expires_on TEXT;
+      ALTER TABLE home_inventory_items ADD COLUMN location TEXT NOT NULL DEFAULT '';
+      CREATE INDEX IF NOT EXISTS idx_home_inventory_expires ON home_inventory_items(expires_on);
+    `,
+  },
 ];
 
 /**

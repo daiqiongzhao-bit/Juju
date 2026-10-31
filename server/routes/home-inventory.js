@@ -8,21 +8,28 @@
  * Bewusst GETRENNT vom Kitchen-Pantry (#家庭库存): der Vorrat in der Küche
  * (pantry_items) ist food-only — Einheiten, Kategorien und der Einkaufs-Import
  * sind auf Lebensmittel zugeschnitten. Alltagsartikel haben andere Kategorien
- * (Putzmittel, Papier, Pflege), kein MHD und keinen Lagerort-Manager. Ein
- * eigene Tabelle hält beide Weltteile sauber getrennt; nichts wandert zwischen
- * den Modulen hin und her.
+ * (Putzmittel, Papier, Pflege) und eine andere Haltbarkeitslogik. Eine eigene
+ * Tabelle hält beide Weltteile sauber getrennt; nichts wandert zwischen den
+ * Modulen hin und her.
+ *
+ * EIN DATENSATZ = EIN BATCH. Es gibt bewusst kein UNIQUE(name): wer drei
+ * Flaschen Shampoo mit drei verschiedenen MHDs kauft, legt drei Zeilen an und
+ * jede führt Menge und Datum selbst. Ein zusammengefasster Datensatz könnte
+ * nicht mehr sagen, welche Flasche zuerst weg muss (FEFO), und genau das ist
+ * bei Haushaltswaren die einzige Frage, die eine Liste beantworten muss.
  *
  * Kein Eigentümer-Gate: wie der Küchen-Vorrat Haushaltsbesitz, nicht
  * Privatbesitz. `created_by` bleibt als Herkunftsnachweis erhalten.
  *
- * Routen-Reihenfolge: statische Pfade vor dynamischen (/:itemId) — although
- * hier gibt es (noch) keine Unterressourcen, bleibt die Konvention stehen.
+ * Routen-Reihenfolge: statische Pfade vor dynamischen (/:itemId).
  */
 
 import express from 'express';
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
-import { str, num, id as idParam, collectErrors, MAX_TITLE, MAX_TEXT } from '../middleware/validate.js';
+import {
+  str, num, date as dateField, collectErrors, MAX_TITLE, MAX_TEXT,
+} from '../middleware/validate.js';
 import {
   HOME_INVENTORY_CATEGORIES,
   HOME_INVENTORY_UNITS,
@@ -30,8 +37,10 @@ import {
   DEFAULT_HOME_UNIT,
   isValidHomeCategory,
   isValidHomeUnit,
+  isValidHomeDateKey,
   normalizeHomeQuantity,
   homeCategoryOrder,
+  compareHomeBatches,
 } from '../../public/utils/home-inventory-taxonomy.js';
 
 const log = createLogger('HomeInventory');
@@ -46,9 +55,9 @@ function getItem(itemId) {
 }
 
 /**
- * Anzeigereihenfolge: nach Taxonomie-Kategorien (die Taxonomie-Reihenfolge ist
- * kanonisch — "其他" zuletzt), innerhalb der Kategorie alphabetisch (NOCASE).
- * Dieselbe Gruppierung rendert die Seite; der Client muss nichts nachsortieren.
+ * Anzeigereihenfolge: Taxonomie-Kategorien (kanonisch, "其他" zuletzt), darin
+ * nach Name und — bei mehreren Batches desselben Artikels — nach MHD aufsteigend.
+ * Dieselbe Reihenfolge rendert die Seite; der Client muss nichts nachsortieren.
  */
 function loadItems() {
   const rows = db.get().prepare('SELECT * FROM home_inventory_items').all();
@@ -56,17 +65,17 @@ function loadItems() {
     const ca = homeCategoryOrder(a.category);
     const cb = homeCategoryOrder(b.category);
     if (ca !== cb) return ca - cb;
-    const na = String(a.name).toLowerCase();
-    const nb = String(b.name).toLowerCase();
-    if (na !== nb) return na < nb ? -1 : 1;
-    return a.id - b.id;
+    return compareHomeBatches(a, b);
   });
 }
 
 /**
  * Validiert die Felder eines Artikels. `partial: true` lässt fehlende Felder
- * unangetastet (PATCH für den Mengen-Stepper), sonst gelten die Defaults für
- * ein neues Objekt.
+ * unangetastet (PATCH für den Mengen-Stepper).
+ *
+ * Pflichtfelder beim Anlegen/Ersetzen: name, quantity, unit, category.
+ * Die Menge ist bewusst Pflicht — vorher rutschte ein leeres Feld still auf 1
+ * und die Liste behauptete einen Bestand, den niemand eingetragen hatte.
  * @returns {{ values: object|null, errors: string[] }}
  */
 function validateItemFields(body, { partial = false, current = null } = {}) {
@@ -74,22 +83,25 @@ function validateItemFields(body, { partial = false, current = null } = {}) {
   const results = [];
 
   if (!partial || body.name !== undefined) {
-    const vName = str(body.name, 'Name', { max: MAX_TITLE });
+    const vName = str(body.name, '名称', { max: MAX_TITLE });
     results.push(vName);
     values.name = vName.value;
   }
 
   if (!partial || body.quantity !== undefined) {
-    const vQty = num(body.quantity, '数量');
+    const vQty = num(body.quantity, '数量', { required: !partial });
     results.push(vQty);
     if (vQty.value !== null && vQty.value < 0) {
       results.push({ error: '数量不能为负数。' });
     }
-    // null/leer explizit abfangen: "ohne Mengenangabe" heißt 1, nicht 0.
-    const fallbackQty = partial ? Number(current?.quantity ?? 1) : 1;
-    values.quantity = vQty.value === null
-      ? normalizeHomeQuantity(fallbackQty, { fallback: 1 })
-      : normalizeHomeQuantity(vQty.value, { fallback: 1 });
+    if (vQty.value === null) {
+      // Kein stiller Fallback mehr: fehlt die Menge, gilt der Request als
+      // ungültig (siehe required oben) — der Wert hier ist nur ein Platzhalter,
+      // damit der Aufrufer bei Fehlern nicht in ein NOT-NULL-Feld schreibt.
+      values.quantity = partial ? normalizeHomeQuantity(current?.quantity ?? 0, { fallback: 0 }) : 0;
+    } else {
+      values.quantity = normalizeHomeQuantity(vQty.value, { fallback: 0 });
+    }
   }
 
   // Einheit/Kategorie gegen die feste Taxonomie prüfen. Unbekannte Werte sind
@@ -114,6 +126,25 @@ function validateItemFields(body, { partial = false, current = null } = {}) {
     values.category = requested;
   }
 
+  // 有效期：可选，但一旦填写就必须是真实存在的 YYYY-MM-DD。
+  // dateField() prüft nur das Format, isValidHomeDateKey() zusätzlich den
+  // Kalender (2026-02-30 wäre sonst ein gültiger Lagerwert).
+  if (!partial || body.expires_on !== undefined) {
+    const raw = body.expires_on === null || body.expires_on === '' ? null : body.expires_on;
+    const vDate = dateField(raw, '有效期');
+    results.push(vDate);
+    if (vDate.value !== null && !isValidHomeDateKey(vDate.value)) {
+      results.push({ error: '有效期不是有效的日期。' });
+    }
+    values.expires_on = vDate.value;
+  }
+
+  if (!partial || body.location !== undefined) {
+    const vLocation = str(body.location, '存放位置', { max: MAX_TITLE, required: false });
+    results.push(vLocation);
+    values.location = vLocation.value ?? '';
+  }
+
   if (!partial || body.min_quantity !== undefined) {
     if (body.min_quantity === null || body.min_quantity === '' || body.min_quantity === undefined) {
       values.min_quantity = null;
@@ -130,7 +161,7 @@ function validateItemFields(body, { partial = false, current = null } = {}) {
   if (!partial || body.notes !== undefined) {
     const vNotes = str(body.notes, '备注', { max: MAX_TEXT, required: false });
     results.push(vNotes);
-    values.notes = vNotes.value;
+    values.notes = vNotes.value ?? '';
   }
 
   return { values, errors: collectErrors(results) };
@@ -138,7 +169,7 @@ function validateItemFields(body, { partial = false, current = null } = {}) {
 
 // --------------------------------------------------------
 // GET /api/v1/home-inventory
-// Alle Artikel in Kategorie-Anzeigereihenfolge.
+// Alle Batches in Kategorie-/Namens-/MHD-Reihenfolge.
 // Response: { data: HomeInventoryItem[] }
 // --------------------------------------------------------
 router.get('/', (_req, res) => {
@@ -153,8 +184,7 @@ router.get('/', (_req, res) => {
 // --------------------------------------------------------
 // GET /api/v1/home-inventory/taxonomy
 // Feste Kategorien + Einheiten (Reihenfolge = Anzeigereihenfolge), damit der
-// Client sie nicht hart kodieren muss und künftige benutzerverwaltete Listen
- // ohne Frontend-Breaking austauschbar sind.
+// Client sie nicht hart kodieren muss.
 // Response: { data: { categories: string[], units: string[], defaults: {...} } }
 // --------------------------------------------------------
 router.get('/taxonomy', (_req, res) => {
@@ -175,7 +205,8 @@ router.get('/taxonomy', (_req, res) => {
 
 // --------------------------------------------------------
 // POST /api/v1/home-inventory
-// Body: { name, quantity?, unit?, category?, min_quantity?, notes? }
+// Body: { name, quantity, unit, category, expires_on?, location?, min_quantity?, notes? }
+// Ein POST = ein Batch. Gleicher Name mit anderem MHD ist ein zweiter Batch.
 // Response: { data: HomeInventoryItem }
 // --------------------------------------------------------
 router.post('/', (req, res) => {
@@ -185,11 +216,11 @@ router.post('/', (req, res) => {
 
     const result = db.get().prepare(`
       INSERT INTO home_inventory_items
-        (name, category, quantity, unit, min_quantity, notes, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+        (name, category, quantity, unit, expires_on, location, min_quantity, notes, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       values.name, values.category, values.quantity, values.unit,
-      values.min_quantity, values.notes,
+      values.expires_on, values.location, values.min_quantity, values.notes,
       req.authUserId || req.session.userId
     );
     res.status(201).json({ data: getItem(result.lastInsertRowid) });
@@ -201,7 +232,8 @@ router.post('/', (req, res) => {
 
 // --------------------------------------------------------
 // PUT /api/v1/home-inventory/:itemId
-// Body: wie POST. Ersetzt alle Felder.
+// Body: wie POST. Ersetzt alle Felder (ein Batch bleibt ein Batch: ein neues
+// MHD ist ein neuer Datensatz, kein Überschreiben der Historie).
 // Response: { data: HomeInventoryItem }
 // --------------------------------------------------------
 router.put('/:itemId', (req, res) => {
@@ -214,12 +246,13 @@ router.put('/:itemId', (req, res) => {
 
     db.get().prepare(`
       UPDATE home_inventory_items
-      SET name = ?, category = ?, quantity = ?, unit = ?, min_quantity = ?, notes = ?,
+      SET name = ?, category = ?, quantity = ?, unit = ?, expires_on = ?, location = ?,
+          min_quantity = ?, notes = ?,
           updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
       WHERE id = ?
     `).run(
       values.name, values.category, values.quantity, values.unit,
-      values.min_quantity, values.notes, item.id
+      values.expires_on, values.location, values.min_quantity, values.notes, item.id
     );
     res.json({ data: getItem(item.id) });
   } catch (err) {

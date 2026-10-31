@@ -80,3 +80,106 @@ export function homeCategoryOrder(key) {
   const i = HOME_INVENTORY_CATEGORIES.findIndex((c) => c.key === key);
   return i === -1 ? HOME_INVENTORY_CATEGORIES.length : i;
 }
+
+// --------------------------------------------------------
+// 有效期 / 库存状态
+// --------------------------------------------------------
+
+/**
+ * 提前多少天算"临期"。
+ *
+ * 和厨房（EXPIRY_SOON_DAYS = 7，pantry-status.js）故意不同：食材是"这周要吃掉"，
+ * 日用品是"下次补货时顺手带一瓶"。30 天是补货节奏的长度，7 天对洗衣液没有
+ * 任何可操作的含义。
+ */
+export const HOME_INVENTORY_SOON_DAYS = 30;
+
+const DATE_KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * 校验 YYYY-MM-DD 且必须是真实存在的日历日（拒绝 2026-02-30）。
+ *
+ * 服务端 middleware/validate.js 的 date() 只查格式，不查日历；"2 月 30 日"
+ * 会原样进库，然后在界面上显示成一个不存在的日子。这里补上后半步。
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function isValidHomeDateKey(value) {
+  if (typeof value !== 'string') return false;
+  const m = DATE_KEY_RE.exec(value);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
+
+/** 本地日历日的 YYYY-MM-DD（不用 toISOString：它会滑到前一天/后一天）。 */
+export function localDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** todayKey + n 天（本地日历，跨月/跨年/夏令时都按日历算）。 */
+export function addHomeDays(todayKey, n) {
+  const [y, m, d] = todayKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  return localDateKey(dt);
+}
+
+/**
+ * 一个批次（= 一行）的库存/效期状态。
+ *
+ * out   数量为 0（全部领用完）—— 列表上显示"已用完，需要补货"
+ * low   数量 > 0 但已到/低于低量阈值
+ * expiry 'expired' | 'soon' | null
+ * @param {object} item
+ * @param {string} [todayKey]
+ * @returns {{ out: boolean, low: boolean, expiry: 'expired'|'soon'|null, days: number|null }}
+ */
+export function homeItemStatus(item, todayKey = localDateKey()) {
+  const quantity = Number(item?.quantity ?? 0);
+  const min = item?.min_quantity == null ? null : Number(item.min_quantity);
+
+  const out = !Number.isFinite(quantity) || quantity <= 0;
+  // "快用完"排除"已用完"：后者有更明确的徽章，不该同时挂两个。
+  const low = !out && min !== null && Number.isFinite(min) && quantity <= min;
+
+  let expiry = null;
+  let days = null;
+  const expiresOn = item?.expires_on || null;
+  if (expiresOn && DATE_KEY_RE.test(String(expiresOn))) {
+    days = Math.round(
+      (Date.parse(`${expiresOn}T00:00:00Z`) - Date.parse(`${todayKey}T00:00:00Z`)) / 86_400_000,
+    );
+    if (days < 0) expiry = 'expired';
+    else if (expiresOn <= addHomeDays(todayKey, HOME_INVENTORY_SOON_DAYS)) expiry = 'soon';
+  }
+
+  return { out, low, expiry, days };
+}
+
+/**
+ * 同名批次的归组键（名称 + 单位，大小写不敏感）。
+ * 单位不同的同名商品不是同一批"库存"，不该被算作一个商品的多个批次。
+ */
+export function homeBatchKey(item) {
+  return `${String(item?.name ?? '').trim().toLowerCase()}|${String(item?.unit ?? '')}`;
+}
+
+/**
+ * 批次排序：先按名称，再按有效期升序（无有效期的排最后），最后按 id。
+ * 服务端 loadItems() 用它，客户端也用它把同名列排在一起 —— 一份规则，两处
+ * 一致，免得"先过期"和"后过期"在某处被排反。
+ */
+export function compareHomeBatches(a, b) {
+  const na = String(a?.name ?? '').toLowerCase();
+  const nb = String(b?.name ?? '').toLowerCase();
+  if (na !== nb) return na < nb ? -1 : 1;
+  const ea = a?.expires_on || '9999-12-31';
+  const eb = b?.expires_on || '9999-12-31';
+  if (ea !== eb) return ea < eb ? -1 : 1;
+  return Number(a?.id ?? 0) - Number(b?.id ?? 0);
+}
