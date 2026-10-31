@@ -16,6 +16,12 @@
  * Stepper. Deshalb zeigt die Metazeile bei mehreren Batches "批次 i/n" — ohne
  * diese Angabe sähe man drei identische Zeilen und wüsste nicht, welche zuerst
  * weg muss.
+ *
+ * Kategorien/Einheiten: feste Basisliste (taxonomy.js) + eigene Einträge aus
+ * /home-inventory/taxonomy. Eigene Einträge tragen ihren Namen als Key — es
+ * gibt keinen i18n-Key dafür, also wird der Name direkt angezeigt. Anlegen geht
+ * direkt im Artikelformular ("+ 新增"), Verwalten (umbenennen/löschen) über den
+ * Knopf in der Kopfzeile.
  */
 
 import { api } from '/api.js';
@@ -38,12 +44,36 @@ import {
   DEFAULT_HOME_CATEGORY,
   DEFAULT_HOME_UNIT,
   normalizeHomeQuantity,
+  normalizeHomeOptionName,
+  checkHomeOptionName,
+  homeOptionMaxLength,
   homeItemStatus,
   homeBatchKey,
   compareHomeBatches,
   isValidHomeDateKey,
   localDateKey,
 } from '/utils/home-inventory-taxonomy.js';
+
+/**
+ * Kategorien in Anzeigereihenfolge: feste Liste ohne "其他", dann eigene,
+ * "其他" zuletzt. Dieselbe Regel baut der Server (categoryOrderMap) — so
+ * sortieren Liste und Gruppen identisch, ohne dass der Client nachsortiert.
+ */
+function buildCategoryList(customs) {
+  const base = HOME_INVENTORY_CATEGORIES
+    .filter((c) => c.key !== 'other')
+    .map((c) => ({ key: c.key, icon: c.icon, custom: false, id: null }));
+  const other = HOME_INVENTORY_CATEGORIES.find((c) => c.key === 'other');
+  return [
+    ...base,
+    ...customs,
+    { key: other.key, icon: other.icon, custom: false, id: null },
+  ];
+}
+
+function builtinUnits() {
+  return HOME_INVENTORY_UNITS.map((u) => ({ key: u, custom: false, id: null }));
+}
 
 const state = {
   items: [],
@@ -52,6 +82,9 @@ const state = {
   status: 'all',
   todayKey: '',
   loaded: false,
+  // Wird von loadTaxonomy() mit den eigenen Einträgen ergänzt.
+  categories: buildCategoryList([]),
+  units: builtinUnits(),
 };
 
 let _container = null;
@@ -61,14 +94,34 @@ let _search = null;
 // Helper
 // --------------------------------------------------------
 
-/** Kategorie-Label: i18n-Schlüssel homeInventory.cat.<key>. */
-function catLabel(key) {
-  return t(`homeInventory.cat.${key}`);
+function categoryEntry(key) {
+  return state.categories.find((c) => c.key === key) || null;
 }
 
-/** Einheiten-Label: i18n-Schlüssel homeInventory.unit.<key>. */
+function unitEntry(key) {
+  return state.units.find((u) => u.key === key) || null;
+}
+
+/**
+ * Kategorie-Label: eigene Kategorien zeigen ihren Namen (er IST der Key),
+ * feste Kategorien ihren i18n-Text. Unbekannte Keys (z. B. nach manueller
+ * DB-Pflege) werden roh angezeigt statt zu verschwinden.
+ */
+function catLabel(key) {
+  const entry = categoryEntry(key);
+  if (!entry) return String(key);
+  return entry.custom ? entry.key : t(`homeInventory.cat.${entry.key}`);
+}
+
+function catIcon(key) {
+  return categoryEntry(key)?.icon ?? 'package';
+}
+
+/** Einheiten-Label: gleiche Regel wie bei den Kategorien. */
 function unitLabel(key) {
-  return t(`homeInventory.unit.${key}`);
+  const entry = unitEntry(key);
+  if (!entry) return String(key);
+  return entry.custom ? entry.key : t(`homeInventory.unit.${entry.key}`);
 }
 
 /** 12.5 → "12.5", 12.0 → "12" — REAL ohne Dezimal-Trümmer anzeigen. */
@@ -140,20 +193,46 @@ function batchInfo() {
   return info;
 }
 
-/** Nur nicht-leere Gruppen rendern — Reihenfolge = Taxonomie-Reihenfolge. */
+/**
+ * Nur nicht-leere Gruppen rendern — Reihenfolge = Kategorien-Reihenfolge.
+ * Artikel mit unbekannter Kategorie landen in "其他" statt zu verschwinden.
+ */
 function buildGroups() {
   const visible = visibleItems();
+  const known = new Set(state.categories.map((c) => c.key));
   const groups = [];
-  for (const cat of HOME_INVENTORY_CATEGORIES) {
-    const rows = visible.filter((i) => i.category === cat.key).sort(compareHomeBatches);
+  for (const cat of state.categories) {
+    const rows = visible
+      .filter((i) => (cat.key === 'other'
+        ? i.category === cat.key || !known.has(i.category)
+        : i.category === cat.key))
+      .sort(compareHomeBatches);
     if (rows.length) groups.push({ key: cat.key, icon: cat.icon, items: rows });
   }
-  // Defensiv: Items mit unbekannter Kategorie (z. B. nach manueller DB-Pflege)
-  // dürfen nicht verschwinden — sie rutschen unter "其他".
-  const known = new Set(HOME_INVENTORY_CATEGORIES.map((c) => c.key));
-  const orphans = visible.filter((i) => !known.has(i.category)).sort(compareHomeBatches);
-  if (orphans.length) groups.push({ key: 'other', icon: 'package', items: orphans });
   return groups;
+}
+
+// --------------------------------------------------------
+// Taxonomie laden
+// --------------------------------------------------------
+
+/** Eigene Kategorien/Einheiten vom Server holen; bei Fehler bleibt die Basisliste. */
+async function loadTaxonomy() {
+  try {
+    const res = await api.get('/home-inventory/taxonomy');
+    const data = res.data || {};
+    const categories = (data.customCategories || []).map((c) => ({
+      key: c.name, icon: c.icon || 'tag', custom: true, id: c.id,
+    }));
+    const units = (data.customUnits || []).map((u) => ({
+      key: u.name, custom: true, id: u.id,
+    }));
+    state.categories = buildCategoryList(categories);
+    state.units = [...builtinUnits(), ...units];
+  } catch {
+    // Kein harter Fehler: die feste Basisliste trägt die Seite weiter, eigene
+    // Einträge erscheinen dann in "其他" (Artikel bleiben sichtbar).
+  }
 }
 
 // --------------------------------------------------------
@@ -187,6 +266,10 @@ export async function render(container) {
       })}
     </div>
     <div class="page-toolbar__actions">
+      <button type="button" class="btn btn--secondary" id="hi-manage"
+              title="${esc(t('homeInventory.manage'))}" aria-label="${esc(t('homeInventory.manage'))}">
+        <i data-lucide="sliders-horizontal" class="icon-md" aria-hidden="true"></i>
+      </button>
       <button type="button" class="btn btn--primary" id="hi-add">
         <i data-lucide="plus" class="icon-md" aria-hidden="true"></i>
         ${esc(t('homeInventory.addItem'))}
@@ -214,6 +297,7 @@ export async function render(container) {
   container.replaceChildren(page);
 
   page.querySelector('#hi-add').addEventListener('click', () => openItemModal());
+  page.querySelector('#hi-manage').addEventListener('click', () => openManageModal());
   _search = wirePageSearch(toolbar, {
     id: 'home-inventory-search',
     onQuery: (value) => {
@@ -227,6 +311,9 @@ export async function render(container) {
     list.setAttribute('aria-busy', 'true');
     list.insertAdjacentHTML('beforeend', renderSkeletonList({ rows: 6, lines: 2 }));
     try {
+      // Taxonomie zuerst: die Liste gruppiert nach Kategorien, eigene
+      // Kategorien müssen also bekannt sein, bevor Zeilen entstehen.
+      await loadTaxonomy();
       const res = await api.get('/home-inventory');
       state.items = res.data;
       state.loaded = true;
@@ -321,7 +408,7 @@ function renderFilters() {
   for (const item of pool) {
     counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
   }
-  const cats = HOME_INVENTORY_CATEGORIES.filter((c) => counts.has(c.key));
+  const cats = state.categories.filter((c) => counts.has(c.key));
 
   // Der aktive Chip hat gerade seinen letzten Treffer verloren → zurück auf 全部.
   if (state.category !== 'all' && !cats.some((c) => c.key === state.category)) {
@@ -576,18 +663,30 @@ async function stepQty(item, delta, valueEl) {
   }
 }
 
+/** Auswahlliste für ein Select (Kategorien oder Einheiten). */
+function optionHtml(entry, kind) {
+  const label = kind === 'category' ? catLabel(entry.key) : unitLabel(entry.key);
+  return `<option value="${esc(entry.key)}">${esc(label)}</option>`;
+}
+
 /**
- * Ein Modal für beide Modi (create/edit). Kategorien und Einheiten kommen aus
- * der festen Taxonomie; Labels via i18n (homeInventory.cat.* / unit.*).
+ * Ein Modal für beide Modi (create/edit).
+ *
+ * Aufbau: die Pflichtfelder stehen offen (Name, Menge, Einheit, Kategorie,
+ * 有效期, 存放位置), nur 低量提醒 und 备注 liegen unter "更多设置". 存放位置
+ * stand vorher in den更多设置 — dort wurde es übersehen, obwohl es beim
+ * Einräumen die eigentliche Frage beantwortet ("wohin damit?").
  */
 function openItemModal(item = null) {
   const isEdit = !!item;
-  const catOptions = HOME_INVENTORY_CATEGORIES
-    .map((c) => `<option value="${esc(c.key)}">${esc(catLabel(c.key))}</option>`)
-    .join('');
-  const unitOptions = HOME_INVENTORY_UNITS
-    .map((u) => `<option value="${esc(u)}">${esc(unitLabel(u))}</option>`)
-    .join('');
+  const catOptions = state.categories.map((c) => optionHtml(c, 'category')).join('');
+  const unitOptions = state.units.map((u) => optionHtml(u, 'unit')).join('');
+
+  // Bekannte Lagerorte als Vorschlagsliste: Tippen statt Tippfehler. Die Liste
+  // wächst mit dem, was schon irgendwo steht.
+  const locations = [...new Set(
+    state.items.map((i) => String(i.location || '').trim()).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
 
   openSharedModal({
     title: isEdit ? t('common.editItem') : t('homeInventory.addItem'),
@@ -606,20 +705,50 @@ function openItemModal(item = null) {
                  inputmode="decimal" required>
         </div>
         <div class="form-group">
-          <label class="form-label" for="hi-unit">${esc(t('homeInventory.unitLabel'))}</label>
+          <div class="form-label-row">
+            <label class="form-label" for="hi-unit">${esc(t('homeInventory.unitLabel'))}</label>
+            <button type="button" class="hi-addbtn" id="hi-unit-add">
+              <i data-lucide="plus" class="icon-sm" aria-hidden="true"></i>${esc(t('homeInventory.optAdd'))}
+            </button>
+          </div>
           <select id="hi-unit" class="form-input" required>${unitOptions}</select>
+          <div class="hi-quickadd" id="hi-unit-quick" hidden>
+            <input id="hi-unit-new" class="form-input" type="text"
+                   maxlength="${homeOptionMaxLength('unit')}"
+                   placeholder="${esc(t('homeInventory.optUnitPlaceholder'))}">
+            <button type="button" class="btn btn--secondary hi-quickadd__ok" id="hi-unit-ok">${esc(t('homeInventory.optSave'))}</button>
+          </div>
         </div>
       </div>
       <div class="pantry-form-row">
         <div class="form-group">
-          <label class="form-label" for="hi-category">${esc(t('homeInventory.categoryLabel'))}</label>
+          <div class="form-label-row">
+            <label class="form-label" for="hi-category">${esc(t('homeInventory.categoryLabel'))}</label>
+            <button type="button" class="hi-addbtn" id="hi-category-add">
+              <i data-lucide="plus" class="icon-sm" aria-hidden="true"></i>${esc(t('homeInventory.optAdd'))}
+            </button>
+          </div>
           <select id="hi-category" class="form-input" required>${catOptions}</select>
+          <div class="hi-quickadd" id="hi-category-quick" hidden>
+            <input id="hi-category-new" class="form-input" type="text"
+                   maxlength="${homeOptionMaxLength('category')}"
+                   placeholder="${esc(t('homeInventory.optCatPlaceholder'))}">
+            <button type="button" class="btn btn--secondary hi-quickadd__ok" id="hi-category-ok">${esc(t('homeInventory.optSave'))}</button>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="hi-expires">${esc(t('homeInventory.expiresLabel'))}</label>
           <yuvomi-datepicker id="hi-expires" type="date"
                              value="${esc(isEdit && item.expires_on ? item.expires_on : '')}"></yuvomi-datepicker>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="hi-location">${esc(t('homeInventory.locationLabel'))}</label>
+        <input id="hi-location" class="form-input" type="text" list="hi-location-options"
+               placeholder="${esc(t('homeInventory.locationPlaceholder'))}">
+        <datalist id="hi-location-options">
+          ${locations.map((loc) => `<option value="${esc(loc)}"></option>`).join('')}
+        </datalist>
       </div>
       <p class="form-hint">${esc(t('homeInventory.expiresHint'))}</p>
       ${advancedSection(`
@@ -629,16 +758,11 @@ function openItemModal(item = null) {
           <p class="form-hint">${esc(t('homeInventory.minQuantityHint'))}</p>
         </div>
         <div class="form-group">
-          <label class="form-label" for="hi-location">${esc(t('homeInventory.locationLabel'))}</label>
-          <input id="hi-location" class="form-input" type="text"
-                 placeholder="${esc(t('homeInventory.locationPlaceholder'))}">
-        </div>
-        <div class="form-group">
           <label class="form-label" for="hi-notes">${esc(t('homeInventory.notesLabel'))}</label>
           <textarea id="hi-notes" class="form-input" rows="2"
                     placeholder="${esc(t('homeInventory.notesPlaceholder'))}"></textarea>
         </div>`,
-        { open: isEdit && (item.min_quantity != null || !!item.location || !!item.notes) })}
+        { open: isEdit && (item.min_quantity != null || !!item.notes) })}
       <div class="modal-panel__footer modal-panel__footer--plain">
         ${isEdit ? `<button type="button" class="btn btn--danger-ghost pantry-form__delete" id="hi-delete">${esc(t('common.delete'))}</button>` : ''}
         <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.cancel'))}</button>
@@ -673,6 +797,9 @@ function openItemModal(item = null) {
       nameInput.addEventListener('input', refreshDuplicateHint);
       refreshDuplicateHint();
 
+      wireQuickAdd(panel, 'category');
+      wireQuickAdd(panel, 'unit');
+
       wireBlurValidation(panel);
       panel.querySelector('#hi-save').addEventListener('click', () => saveItem(panel, isEdit, item));
       panel.querySelector('#hi-delete')?.addEventListener('click', async () => {
@@ -682,6 +809,293 @@ function openItemModal(item = null) {
       if (window.lucide) window.lucide.createIcons({ el: panel });
     },
   });
+}
+
+/**
+ * Inline-Anlegen einer eigenen Kategorie/Einheit direkt im Artikelformular.
+ * Kein zweites Modal: das Formular bleibt gefüllt, der neue Eintrag ist danach
+ * sofort ausgewählt.
+ * @param {HTMLElement} panel
+ * @param {'category'|'unit'} kind
+ */
+function wireQuickAdd(panel, kind) {
+  const isCat = kind === 'category';
+  const pick = (sel) => panel.querySelector(sel);
+  const trigger = pick(isCat ? '#hi-category-add' : '#hi-unit-add');
+  const wrap = pick(isCat ? '#hi-category-quick' : '#hi-unit-quick');
+  const input = pick(isCat ? '#hi-category-new' : '#hi-unit-new');
+  const okBtn = pick(isCat ? '#hi-category-ok' : '#hi-unit-ok');
+  const select = pick(isCat ? '#hi-category' : '#hi-unit');
+  const max = homeOptionMaxLength(kind);
+
+  const close = () => {
+    wrap.hidden = true;
+    trigger.hidden = false;
+    input.value = '';
+  };
+
+  trigger.addEventListener('click', () => {
+    trigger.hidden = true;
+    wrap.hidden = false;
+    input.focus();
+  });
+
+  const submit = async () => {
+    const name = normalizeHomeOptionName(input.value);
+    const verdict = checkHomeOptionName(name, kind);
+    if (verdict === 'required') return reportFieldError(input, t('homeInventory.optRequired'));
+    if (verdict === 'too-long') {
+      return reportFieldError(input, t('homeInventory.optTooLong', { max }));
+    }
+    if (verdict === 'reserved') return reportFieldError(input, t('homeInventory.optExists'));
+
+    const list = isCat ? state.categories : state.units;
+    if (list.some((e) => e.key.toLowerCase() === name.toLowerCase())) {
+      return reportFieldError(input, t('homeInventory.optExists'));
+    }
+
+    okBtn.disabled = true;
+    try {
+      const res = await api.post(
+        isCat ? '/home-inventory/categories' : '/home-inventory/units',
+        { name },
+      );
+      const entry = isCat
+        ? { key: res.data.name, icon: res.data.icon || 'tag', custom: true, id: res.data.id }
+        : { key: res.data.name, custom: true, id: res.data.id };
+
+      if (isCat) {
+        // Vor "其他" einhängen — die Liste soll "其他" weiterhin zuletzt zeigen.
+        const otherIndex = state.categories.findIndex((c) => c.key === 'other');
+        state.categories.splice(otherIndex === -1 ? state.categories.length : otherIndex, 0, entry);
+      } else {
+        state.units.push(entry);
+      }
+      // Auswahl neu aufbauen statt nur anzuhängen: die Option soll an derselben
+      // Stelle stehen wie in der Liste (bei Kategorien vor "其他").
+      select.innerHTML = (isCat ? state.categories : state.units)
+        .map((e) => optionHtml(e, kind)).join('');
+      select.value = entry.key;
+      close();
+      window.yuvomi?.showToast(t('homeInventory.optAdded', { name: entry.key }), 'success');
+    } catch (err) {
+      reportFieldError(input, err.data?.error ?? t('common.errorGeneric'));
+    } finally {
+      okBtn.disabled = false;
+    }
+  };
+
+  okBtn.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submit();
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      close();
+    }
+  });
+}
+
+/**
+ * Verwaltung der eigenen Kategorien/Einheiten: umbenennen (zieht Artikel mit),
+ * löschen (nur ohne Verwendung). Feste Einträge stehen hier nicht — sie sind
+ * Teil des Codes und nicht löschbar.
+ * @param {'category'|'unit'} kind
+ */
+function openManageModal() {
+  openSharedModal({
+    title: t('homeInventory.manage'),
+    size: 'md',
+    content: `
+      <p class="form-hint">${esc(t('homeInventory.optManageHint'))}</p>
+      <section class="hi-manage" data-kind="category">
+        <h3 class="hi-manage__title">${esc(t('homeInventory.optCategoryHeading'))}</h3>
+        <div class="hi-manage__list" id="hi-manage-category"></div>
+        <div class="hi-quickadd">
+          <input id="hi-manage-category-new" class="form-input" type="text"
+                 maxlength="${homeOptionMaxLength('category')}"
+                 placeholder="${esc(t('homeInventory.optCatPlaceholder'))}">
+          <button type="button" class="btn btn--secondary hi-quickadd__ok" id="hi-manage-category-add">${esc(t('homeInventory.optAdd'))}</button>
+        </div>
+      </section>
+      <section class="hi-manage" data-kind="unit">
+        <h3 class="hi-manage__title">${esc(t('homeInventory.optUnitHeading'))}</h3>
+        <div class="hi-manage__list" id="hi-manage-unit"></div>
+        <div class="hi-quickadd">
+          <input id="hi-manage-unit-new" class="form-input" type="text"
+                 maxlength="${homeOptionMaxLength('unit')}"
+                 placeholder="${esc(t('homeInventory.optUnitPlaceholder'))}">
+          <button type="button" class="btn btn--secondary hi-quickadd__ok" id="hi-manage-unit-add">${esc(t('homeInventory.optAdd'))}</button>
+        </div>
+      </section>
+      <div class="modal-panel__footer modal-panel__footer--plain">
+        <button type="button" class="btn btn--primary" data-action="close-modal">${esc(t('common.close'))}</button>
+      </div>`,
+    onMount(panel) {
+      renderManageList(panel, 'category');
+      renderManageList(panel, 'unit');
+      wireManageAdd(panel, 'category');
+      wireManageAdd(panel, 'unit');
+      if (window.lucide) window.lucide.createIcons({ el: panel });
+    },
+  });
+}
+
+/** Anzahl Artikel, die einen eigenen Eintrag benutzen (Löschsperre im UI). */
+function usageOf(kind, key) {
+  return state.items.filter((i) => (kind === 'category' ? i.category : i.unit) === key).length;
+}
+
+function renderManageList(panel, kind) {
+  const box = panel.querySelector(`#hi-manage-${kind}`);
+  if (!box) return;
+  const list = (kind === 'category' ? state.categories : state.units).filter((e) => e.custom);
+
+  if (!list.length) {
+    box.innerHTML = `<p class="hi-manage__empty">${esc(t('homeInventory.optNone'))}</p>`;
+    return;
+  }
+
+  box.innerHTML = list.map((entry) => {
+    const used = usageOf(kind, entry.key);
+    return `
+      <div class="hi-option-row" data-id="${esc(entry.id)}" data-key="${esc(entry.key)}">
+        <input class="form-input hi-option-row__input" type="text"
+               maxlength="${homeOptionMaxLength(kind)}" value="${esc(entry.key)}"
+               aria-label="${esc(t(kind === 'category' ? 'homeInventory.optCategoryHeading' : 'homeInventory.optUnitHeading'))}">
+        <span class="hi-option-row__usage">${esc(t('homeInventory.optUsage', { count: used }))}</span>
+        <button type="button" class="hi-iconbtn" data-act="rename"
+                title="${esc(t('common.save'))}" aria-label="${esc(t('common.save'))}">
+          <i data-lucide="check" class="icon-sm" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="hi-iconbtn hi-iconbtn--danger" data-act="delete"
+                title="${esc(used ? t('homeInventory.optInUse', { count: used }) : t('common.delete'))}"
+                aria-label="${esc(t('common.delete'))}"${used ? ' disabled' : ''}>
+          <i data-lucide="trash-2" class="icon-sm" aria-hidden="true"></i>
+        </button>
+      </div>`;
+  }).join('');
+  if (window.lucide) window.lucide.createIcons({ el: box });
+
+  for (const row of box.querySelectorAll('.hi-option-row')) {
+    const id = row.dataset.id;
+    const key = row.dataset.key;
+    row.querySelector('[data-act="rename"]').addEventListener('click', () => {
+      renameOption(panel, kind, id, row);
+    });
+    row.querySelector('[data-act="delete"]').addEventListener('click', () => {
+      deleteOption(panel, kind, id, key);
+    });
+  }
+}
+
+function wireManageAdd(panel, kind) {
+  const isCat = kind === 'category';
+  const input = panel.querySelector(isCat ? '#hi-manage-category-new' : '#hi-manage-unit-new');
+  const btn = panel.querySelector(isCat ? '#hi-manage-category-add' : '#hi-manage-unit-add');
+  const max = homeOptionMaxLength(kind);
+
+  const submit = async () => {
+    const name = normalizeHomeOptionName(input.value);
+    const verdict = checkHomeOptionName(name, kind);
+    if (verdict === 'required') return reportFieldError(input, t('homeInventory.optRequired'));
+    if (verdict === 'too-long') {
+      return reportFieldError(input, t('homeInventory.optTooLong', { max }));
+    }
+    if (verdict === 'reserved') return reportFieldError(input, t('homeInventory.optExists'));
+
+    btn.disabled = true;
+    try {
+      const res = await api.post(
+        isCat ? '/home-inventory/categories' : '/home-inventory/units',
+        { name },
+      );
+      const entry = isCat
+        ? { key: res.data.name, icon: res.data.icon || 'tag', custom: true, id: res.data.id }
+        : { key: res.data.name, custom: true, id: res.data.id };
+      if (isCat) {
+        const otherIndex = state.categories.findIndex((c) => c.key === 'other');
+        state.categories.splice(otherIndex === -1 ? state.categories.length : otherIndex, 0, entry);
+      } else {
+        state.units.push(entry);
+      }
+      input.value = '';
+      renderManageList(panel, kind);
+      renderFilters();
+      renderList();
+      window.yuvomi?.showToast(t('homeInventory.optAdded', { name: entry.key }), 'success');
+    } catch (err) {
+      reportFieldError(input, err.data?.error ?? t('common.errorGeneric'));
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  btn.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submit();
+    }
+  });
+}
+
+async function renameOption(panel, kind, optionId, row) {
+  const oldKey = row.dataset.key;
+  const input = row.querySelector('.hi-option-row__input');
+  const name = normalizeHomeOptionName(input.value);
+  if (name === oldKey) return;
+
+  const max = homeOptionMaxLength(kind);
+  const verdict = checkHomeOptionName(name, kind);
+  if (verdict === 'required') return reportFieldError(input, t('homeInventory.optRequired'));
+  if (verdict === 'too-long') return reportFieldError(input, t('homeInventory.optTooLong', { max }));
+  if (verdict === 'reserved') return reportFieldError(input, t('homeInventory.optExists'));
+
+  try {
+    await api.put(
+      `${kind === 'category' ? '/home-inventory/categories' : '/home-inventory/units'}/${optionId}`,
+      { name },
+    );
+    // Lokal nachziehen: Eintrag + alle Artikel, die ihn benutzen.
+    const list = kind === 'category' ? state.categories : state.units;
+    const entry = list.find((e) => String(e.id) === String(optionId));
+    if (entry) entry.key = name;
+    for (const item of state.items) {
+      if (kind === 'category' ? item.category === oldKey : item.unit === oldKey) {
+        if (kind === 'category') item.category = name;
+        else item.unit = name;
+      }
+    }
+    renderManageList(panel, kind);
+    renderStatusFilters();
+    renderFilters();
+    renderList();
+    window.yuvomi?.showToast(t('homeInventory.optRenamed', { name }), 'success');
+  } catch (err) {
+    reportFieldError(input, err.data?.error ?? t('common.errorGeneric'));
+  }
+}
+
+async function deleteOption(panel, kind, optionId, key) {
+  try {
+    await api.delete(
+      `${kind === 'category' ? '/home-inventory/categories' : '/home-inventory/units'}/${optionId}`,
+    );
+    if (kind === 'category') {
+      state.categories = state.categories.filter((e) => String(e.id) !== String(optionId));
+    } else {
+      state.units = state.units.filter((e) => String(e.id) !== String(optionId));
+    }
+    renderManageList(panel, kind);
+    renderStatusFilters();
+    renderFilters();
+    renderList();
+    window.yuvomi?.showToast(t('homeInventory.optDeleted', { name: key }), 'success');
+  } catch (err) {
+    window.yuvomi?.showToast(err.data?.error ?? t('common.errorGeneric'), 'danger');
+  }
 }
 
 async function saveItem(panel, isEdit, item) {

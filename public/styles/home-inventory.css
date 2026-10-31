@@ -34,3 +34,156 @@
 #hi-name-hint {
   color: var(--color-warning-ink, var(--color-text-secondary));
 }
+
+/* --------------------------------------------------------
+ * Kategorien/Einheiten selbst anlegen (v0.0.71)
+ *
+ * Das Formular lebt im Modal am <body>, nicht in der Seite — dieselbe
+ * Reichweite wie oben, weil das Stylesheet mit der Route kommt und geht.
+ * -------------------------------------------------------- */
+
+/* Label-Zeile mit Aktion rechts: "类别            + 新增".
+ * .form-label bringt `display:block` mit, deshalb hier Flex statt Inline. */
+.form-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.form-label-row .form-label {
+  margin-bottom: 0;
+}
+
+/* Textknopf in der Label-Zeile: bewusst leise — die Hauptaktion des Modals
+ * bleibt "保存", Anlegen ist ein Nebenweg. */
+.hi-addbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-btn-primary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  min-height: var(--target-sm, 28px);
+}
+
+.hi-addbtn:hover {
+  text-decoration: underline;
+}
+
+.hi-addbtn[hidden] {
+  display: none;
+}
+
+/* Inline-Eingabe für den neuen Namen: teilt sich die Zeile mit "保存". */
+.hi-quickadd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.hi-quickadd[hidden] {
+  display: none;
+}
+
+.hi-quickadd .form-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hi-quickadd__ok {
+  flex: 0 0 auto;
+  padding-inline: var(--space-3);
+  min-height: var(--target-md, 40px);
+}
+
+/* Verwaltung eigener Einträge (Kopfzeilen-Knopf "管理类别与单位"). */
+.hi-manage {
+  margin-bottom: var(--space-5);
+}
+
+.hi-manage__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+.hi-manage__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hi-manage__empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.hi-option-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hi-option-row__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Belegung: sagt vor dem Klick, ob Löschen überhaupt erlaubt ist. */
+.hi-option-row__usage {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hi-iconbtn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--target-md, 40px);
+  height: var(--target-md, 40px);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2, rgba(127, 127, 127, 0.08));
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.hi-iconbtn:hover {
+  background: var(--color-surface-3, rgba(127, 127, 127, 0.16));
+}
+
+.hi-iconbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hi-iconbtn--danger {
+  color: var(--color-danger-ink, #c62828);
+}
+
+@media (max-width: 480px) {
+  /* Auf schmalen Geräten darf der Name nicht unter die Buttons rutschen:
+   * Belegung wandert in eine eigene Zeile unter dem Feld. */
+  .hi-option-row {
+    flex-wrap: wrap;
+  }
+
+  .hi-option-row__input {
+    flex: 1 1 100%;
+  }
+
+  .hi-option-row__usage {
+    margin-inline-end: auto;
+  }
+}

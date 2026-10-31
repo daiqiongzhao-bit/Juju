@@ -5933,6 +5933,39 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_home_inventory_expires ON home_inventory_items(expires_on);
     `,
   },
+
+  {
+    version: 172,
+    description: 'Home inventory: user-managed categories and units (home_inventory_options)',
+    up: `
+      -- Eigene Kategorien/Einheiten (Feedback 2026-11-01): die Basisliste in
+      -- public/utils/home-inventory-taxonomy.js ist fest im Code (16 Kategorien,
+      -- 20 Einheiten) und deckt den Haushalt ab, aber jeder Haushalt hat seine
+      -- Sonderfälle ("宠物用品", "桶"). Bis v171 musste dafür der Code geändert
+      -- werden.
+      --
+      -- Nur EIGENE Einträge stehen hier; die Basisliste bleibt im Code, damit
+      -- ihre i18n-Labels in allen 24 Sprachen mitwandern. name ist deshalb
+      -- gleichzeitig der Speicherwert in items.category/unit (ein eigener Name
+      -- hat keinen Übersetzungsschlüssel).
+      --
+      -- COLLATE NOCASE + UNIQUE(kind, name): "宠物用品" und "宠物用品 " bzw.
+      -- unterschiedliche Groß-/Kleinschreibung sind derselbe Eintrag. Das
+      -- Löschen ist serverseitig gesperrt, solange Artikel den Namen benutzen;
+      -- Umbenennen zieht die Artikelzeilen in einer Transaktion mit.
+      CREATE TABLE IF NOT EXISTS home_inventory_options (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind       TEXT    NOT NULL CHECK (kind IN ('category', 'unit')),
+        name       TEXT    NOT NULL COLLATE NOCASE,
+        icon       TEXT    NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE (kind, name)
+      );
+      CREATE INDEX IF NOT EXISTS idx_home_inventory_options_kind
+        ON home_inventory_options(kind, sort_order, id);
+    `,
+  },
 ];
 
 /**

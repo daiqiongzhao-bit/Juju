@@ -1,59 +1,131 @@
 /**
- * Modul: 家庭库存（Home Inventory）— 分类与单位固定清单
+ * Modul: 家庭库存（Home Inventory）— Kategorien & Einheiten
  * Zweck: Isomorphe Taxonomie für das eigenständige 家庭库存-Modul
  * Abhängigkeiten: keine (auch server/routes/home-inventory.js importiert diese
  * Datei — deshalb nur reine Konstanten/Funktionen, kein DOM, kein i18n)
  *
- * Bewusst FIX statt benutzerverwaltet (anders als pantry_locations/
- * pantry_units): 家庭库存管理的是日用品，类别和单位是稳定的小集合（十几个），
- * 先用固定清单把模块立起来；将来要用户自定义时，可以照 v157 的
- * pantry_units 模式迁移，服务端校验只换数据源、路由结构不变。
+ * Zwei Ebenen:
+ *   1. FESTE Basisliste (unten) — deckt den Haushalt ab: Putzmittel, Papier,
+ *      Pflege, Küchenverbrauch, Textil, Snacks, Vorrat, Aufbewahrung, Medizin,
+ *      Baby, Haustier, Büro, Garten, Auto, Festtage. Die Labels kommen via i18n
+ *      (homeInventory.cat.<key> / unit.<key>), damit alle Sprachen sie tragen.
+ *   2. BENUTZERDEFINIERTE Ergänzungen — seit v172 in der Tabelle
+ *      home_inventory_options (kind = 'category' | 'unit'). Deren `name` IST
+ *      zugleich der Speicherwert in home_inventory_items.category/unit, denn ein
+ *      eigener Name hat keinen i18n-Key. Deshalb gilt: custom.key === name.
  *
- * 类别 key 是存储值（DB category 列），标签走 i18n:
- *   homeInventory.cat.<key>（zh/en 已录入，其余语言回退 zh）
- * 单位同理: homeInventory.unit.<key>
+ * Die festen Keys sind damit gleichzeitig geschützte Namen — ein Benutzer kann
+ * keine Kategorie "cleaning" anlegen (das wäre ein zweiter Name für dieselbe
+ * Sache). Der Server prüft das beim Anlegen.
+ *
+ * Sortierung: feste Liste zuerst (Reihenfolge = Anzeige), eigene Einträge
+ * danach in ihrer Anlagereihenfolge. `homeCategoryOrder()` kennt nur die feste
+ * Liste; der Server baut die vollständige Ordnung aus DB + dieser Liste.
  */
 
 export const HOME_INVENTORY_CATEGORIES = Object.freeze([
-  { key: 'cleaning',      icon: 'spray-can' },   // 清洁洗护：洗衣液、清洁剂、消毒液
+  { key: 'cleaning',      icon: 'spray-can' },   // 清洁洗护：洗衣液、洗洁精、消毒液
   { key: 'paper',         icon: 'scroll' },      // 纸品：抽纸、卷纸、湿巾
   { key: 'personal-care', icon: 'droplets' },    // 个护美妆：沐浴露、洗发水、护肤品、备用牙刷
+  { key: 'kitchen-supplies', icon: 'utensils' }, // 厨房耗材：保鲜膜、铝箔、一次性手套
   { key: 'textiles',      icon: 'shirt' },       // 家纺织物：洗毛巾、毛巾、床品
   { key: 'snacks',        icon: 'cookie' },      // 零食饮品：零食、咖啡豆、茶叶
   { key: 'household',     icon: 'lamp' },        // 家居日用：电池、灯泡、垃圾袋
+  { key: 'storage',       icon: 'archive' },     // 收纳整理：收纳盒、衣架、挂钩
   { key: 'firstaid',      icon: 'cross' },       // 医药应急：创可贴、常备药、应急用品
+  { key: 'baby',          icon: 'baby' },        // 母婴用品：纸尿裤、湿巾、奶粉
+  { key: 'pet',           icon: 'paw-print' },   // 宠物用品：猫砂、粮、拾便袋
+  { key: 'stationery',    icon: 'pencil' },      // 文具办公：笔、便签、胶带
+  { key: 'garden',        icon: 'sprout' },      // 园艺绿植：花肥、花盆、种子
+  { key: 'car',           icon: 'car' },         // 车用：玻璃水、香薰、清洁湿巾
+  { key: 'festival',      icon: 'gift' },        // 节庆用品：装饰、礼盒、包装
   { key: 'other',         icon: 'package' },     // 其他
 ]);
 
 export const DEFAULT_HOME_CATEGORY = 'household';
 
 export const HOME_INVENTORY_UNITS = Object.freeze([
-  'pcs',    // 个
-  'bottle', // 瓶
-  'box',    // 盒
-  'pack',   // 包
-  'bag',    // 袋
-  'roll',   // 卷
-  'tube',   // 支
-  'can',    // 罐
-  'pair',   // 双
-  'sheet',  // 片
-  'set',    // 套
+  'pcs',     // 个
+  'bottle',  // 瓶
+  'box',     // 盒
+  'pack',    // 包
+  'bag',     // 袋
+  'roll',    // 卷
+  'tube',    // 支
+  'can',     // 罐
+  'pair',    // 双
+  'sheet',   // 片
+  'set',     // 套
+  'kg',      // 千克（咖啡豆、洗衣粉）
+  'g',       // 克
+  'l',       // 升（大桶洗衣液、柔顺剂）
+  'ml',      // 毫升
+  'meter',   // 米（保鲜膜、铝箔）
+  'bar',     // 块（肥皂、香皂）
+  'capsule', // 粒（洗衣凝珠、药片）
+  'stick',   // 根（牙膏、香）
+  'case',    // 箱
 ]);
 
 export const DEFAULT_HOME_UNIT = 'pcs';
 
+/** Icon für benutzerdefinierte Kategorien (lucide-Name). */
+export const HOME_CUSTOM_CATEGORY_ICON = 'tag';
+
+/** Höchstlängen für eigene Namen — im Formular und im Server identisch. */
+export const HOME_OPTION_MAX = Object.freeze({ category: 20, unit: 8 });
+
 const CATEGORY_KEYS = new Set(HOME_INVENTORY_CATEGORIES.map((c) => c.key));
 const UNIT_KEYS = new Set(HOME_INVENTORY_UNITS);
 
-/** 类别 key 是否合法（服务端 oneOf 校验 + 客户端防御）。 */
+/** Kategorie-Key der festen Liste? (Eigene Kategorien stehen in der DB.) */
 export function isValidHomeCategory(key) {
   return CATEGORY_KEYS.has(String(key));
 }
 
-/** 单位 key 是否合法。 */
+/** Einheiten-Key der festen Liste? (Eigene Einheiten stehen in der DB.) */
 export function isValidHomeUnit(key) {
   return UNIT_KEYS.has(String(key));
+}
+
+/**
+ * Name eines eigenen Kategorie-/Einheiten-Eintrags normalisieren:
+ * Rand- und Mehrfach-Leerzeichen zusammenziehen, Steuerzeichen entfernen.
+ * Der Name ist der Speicherwert — zwei Schreibweisen mit doppeltem Leerzeichen
+ * wären sonst zwei verschiedene Kategorien.
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function normalizeHomeOptionName(value) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Prüft einen eigenen Namen gegen Länge und Kollision mit der festen Liste.
+ * Die Prüfung gegen bereits vorhandene eigene Einträge macht der Server (DB).
+ * @param {string} name normalisierter Name
+ * @param {'category'|'unit'} kind
+ * @returns {'ok'|'required'|'too-long'|'reserved'}
+ */
+export function checkHomeOptionName(name, kind) {
+  const max = HOME_OPTION_MAX[kind] ?? HOME_OPTION_MAX.category;
+  if (!name) return 'required';
+  if (name.length > max) return 'too-long';
+  const reserved = kind === 'unit' ? isValidHomeUnit(name) : isValidHomeCategory(name);
+  if (reserved) return 'reserved';
+  return 'ok';
+}
+
+/**
+ * Anzahl möglicher Zeichen für ein Eingabefeld (maxlength).
+ * @param {'category'|'unit'} kind
+ * @returns {number}
+ */
+export function homeOptionMaxLength(kind) {
+  return HOME_OPTION_MAX[kind] ?? HOME_OPTION_MAX.category;
 }
 
 /**
@@ -71,14 +143,21 @@ export function normalizeHomeQuantity(value, { fallback = 1 } = {}) {
 }
 
 /**
- * 类别在列表中的排序序号（服务端 ORDER BY 和客户端分组共用同一份顺序，
- * 保证"其他"永远垫底）。
+ * Position einer festen Kategorie in der Anzeigereihenfolge („其他" zuletzt).
+ * Unbekannte Keys (= eigene Kategorien) liefern die Länge der festen Liste und
+ * landen damit hinter allen festen Kategorien; für die vollständige Ordnung
+ * inklusive eigener Einträge baut der Server eine Map (siehe Router).
  * @param {string} key
  * @returns {number}
  */
 export function homeCategoryOrder(key) {
   const i = HOME_INVENTORY_CATEGORIES.findIndex((c) => c.key === key);
   return i === -1 ? HOME_INVENTORY_CATEGORIES.length : i;
+}
+
+/** Icon zu einem festen Kategorie-Key (Fallback: Paket). */
+export function homeCategoryIcon(key) {
+  return HOME_INVENTORY_CATEGORIES.find((c) => c.key === key)?.icon ?? 'package';
 }
 
 // --------------------------------------------------------
