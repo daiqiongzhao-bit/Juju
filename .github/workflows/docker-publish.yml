@@ -148,11 +148,15 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      IMAGE_REF: ${{ env.DOCKERHUB_IMAGE }}@${{ needs.build-and-push.outputs.digest }}
 
     steps:
       - uses: actions/checkout@v4
+
+      # Das workflow-weite env ist in der `env:`-Sektion eines Jobs nicht
+      # referenzierbar (GitHub erlaubt den env-Kontext dort nicht) — deshalb
+      # über $GITHUB_ENV, das gilt für alle folgenden Schritte.
+      - name: Image-Referenz (Digest) festlegen
+        run: echo "IMAGE_REF=${DOCKERHUB_IMAGE}@${{ needs.build-and-push.outputs.digest }}" >> "$GITHUB_ENV"
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
