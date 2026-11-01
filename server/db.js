@@ -5966,6 +5966,44 @@ const MIGRATIONS = [
         ON home_inventory_options(kind, sort_order, id);
     `,
   },
+
+  {
+    version: 173,
+    description: 'Home inventory: storage locations as managed options (kind = location)',
+    up: `
+      -- Lagerorte als Auswahlfeld (Feedback 2026-11-01): 存放位置 war ein
+      -- Freitextfeld mit datalist — man konnte tippen, aber nichts anlegen,
+      -- umbenennen oder wiederfinden. Jetzt dieselbe Mechanik wie bei
+      -- Kategorien/Einheiten: feste Orte im Code, eigene in dieser Tabelle.
+      --
+      -- SQLite kann einen CHECK-Ausdruck nicht ändern, deshalb Tabelle neu
+      -- bauen und die vorhandenen Zeilen übernehmen (id bleibt erhalten, damit
+      -- sort_order und Verweise stabil sind).
+      CREATE TABLE home_inventory_options_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind       TEXT    NOT NULL CHECK (kind IN ('category', 'unit', 'location')),
+        name       TEXT    NOT NULL COLLATE NOCASE,
+        icon       TEXT    NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        UNIQUE (kind, name)
+      );
+      INSERT INTO home_inventory_options_new (id, kind, name, icon, sort_order, created_at)
+        SELECT id, kind, name, icon, sort_order, created_at FROM home_inventory_options;
+      DROP TABLE home_inventory_options;
+      ALTER TABLE home_inventory_options_new RENAME TO home_inventory_options;
+      CREATE INDEX IF NOT EXISTS idx_home_inventory_options_kind
+        ON home_inventory_options(kind, sort_order, id);
+
+      -- Bestehende Freitext-Orte zu eigenen Orten machen, damit sie im
+      -- Auswahlfeld auftauchen. Der angezeigte Text bleibt identisch.
+      INSERT OR IGNORE INTO home_inventory_options (kind, name, icon, sort_order)
+        SELECT 'location', TRIM(location), '', 0
+          FROM home_inventory_items
+         WHERE TRIM(COALESCE(location, '')) <> ''
+         GROUP BY TRIM(location);
+    `,
+  },
 ];
 
 /**

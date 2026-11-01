@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.72] - 2026-11-01
+
+### 家庭库存：存放位置可下拉/新增，修复「新增」无响应
+- **修复弹窗内所有按钮失效**：弹窗组件的回调名是 `onSave(panel)`，家庭库存页面
+  两处都写成了 `onMount(panel)`，该回调从未被调用 —— 添加物品弹窗里的「+ 新增」、
+  保存按钮，以及「管理类别与单位」里的列表全部没有绑定事件，所以点击毫无反应，
+  之前新建的类别/单位也没有真正提交。两处已改为 `onSave`。
+- **存放位置改为下拉 + 新增**：内置 10 个家用位置（卫生间、厨房、阳台、储物间、
+  洗衣区、卧室、客厅、玄关、冰箱、车库），与类别/单位一样支持「+ 新增」自建；
+  「管理类别与单位」扩成三节，自定义位置可改名、可删除（有物品在用时锁定）。
+- **旧数据不丢**：Migration 173 放开 `home_inventory_options.kind` 限制，并把已有
+  物品上的自由文本位置自动登记为自定义位置；接口在保存未知位置时也会自动建条目。
+- **表单项对齐**：数量/单位、类别/有效期两列的标签行统一为 20px 高，「+ 新增」
+  不再把相邻控件顶偏，日期框与下拉框回到同一水平线。
+
 ## [0.0.71] - 2026-11-01
 
 ### 家庭库存：自定义类别/单位，存放位置前置

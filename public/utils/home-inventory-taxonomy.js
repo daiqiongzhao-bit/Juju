@@ -69,14 +69,34 @@ export const HOME_INVENTORY_UNITS = Object.freeze([
 
 export const DEFAULT_HOME_UNIT = 'pcs';
 
+/**
+ * Feste Lagerorte im Haushalt — dieselbe Bauart wie Kategorien/Einheiten:
+ * gespeichert wird der Schlüssel, angezeigt der übersetzte Text. Eigene Orte
+ * stehen in home_inventory_options (kind = 'location') und tragen ihren Namen
+ * als Wert. Ein leerer Wert heißt „kein Ort angegeben" und ist erlaubt.
+ */
+export const HOME_INVENTORY_LOCATIONS = Object.freeze([
+  'bathroom',  // 卫生间
+  'kitchen',   // 厨房
+  'balcony',   // 阳台
+  'storage',   // 储物间
+  'laundry',   // 洗衣区
+  'bedroom',   // 卧室
+  'living',    // 客厅
+  'entryway',  // 玄关
+  'fridge',    // 冰箱
+  'garage',    // 车库
+]);
+
 /** Icon für benutzerdefinierte Kategorien (lucide-Name). */
 export const HOME_CUSTOM_CATEGORY_ICON = 'tag';
 
 /** Höchstlängen für eigene Namen — im Formular und im Server identisch. */
-export const HOME_OPTION_MAX = Object.freeze({ category: 20, unit: 8 });
+export const HOME_OPTION_MAX = Object.freeze({ category: 20, unit: 8, location: 20 });
 
 const CATEGORY_KEYS = new Set(HOME_INVENTORY_CATEGORIES.map((c) => c.key));
 const UNIT_KEYS = new Set(HOME_INVENTORY_UNITS);
+const LOCATION_KEYS = new Set(HOME_INVENTORY_LOCATIONS);
 
 /** Kategorie-Key der festen Liste? (Eigene Kategorien stehen in der DB.) */
 export function isValidHomeCategory(key) {
@@ -86,6 +106,11 @@ export function isValidHomeCategory(key) {
 /** Einheiten-Key der festen Liste? (Eigene Einheiten stehen in der DB.) */
 export function isValidHomeUnit(key) {
   return UNIT_KEYS.has(String(key));
+}
+
+/** Lagerort-Key der festen Liste? (Eigene Orte stehen in der DB.) */
+export function isValidHomeLocation(key) {
+  return LOCATION_KEYS.has(String(key));
 }
 
 /**
@@ -107,21 +132,25 @@ export function normalizeHomeOptionName(value) {
  * Prüft einen eigenen Namen gegen Länge und Kollision mit der festen Liste.
  * Die Prüfung gegen bereits vorhandene eigene Einträge macht der Server (DB).
  * @param {string} name normalisierter Name
- * @param {'category'|'unit'} kind
+ * @param {'category'|'unit'|'location'} kind
  * @returns {'ok'|'required'|'too-long'|'reserved'}
  */
 export function checkHomeOptionName(name, kind) {
   const max = HOME_OPTION_MAX[kind] ?? HOME_OPTION_MAX.category;
   if (!name) return 'required';
   if (name.length > max) return 'too-long';
-  const reserved = kind === 'unit' ? isValidHomeUnit(name) : isValidHomeCategory(name);
+  const reserved = kind === 'unit'
+    ? isValidHomeUnit(name)
+    : kind === 'location'
+      ? isValidHomeLocation(name)
+      : isValidHomeCategory(name);
   if (reserved) return 'reserved';
   return 'ok';
 }
 
 /**
  * Anzahl möglicher Zeichen für ein Eingabefeld (maxlength).
- * @param {'category'|'unit'} kind
+ * @param {'category'|'unit'|'location'} kind
  * @returns {number}
  */
 export function homeOptionMaxLength(kind) {

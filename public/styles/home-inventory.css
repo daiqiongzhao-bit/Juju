@@ -29,6 +29,18 @@
   color: var(--color-text-secondary);
 }
 
+/* Zweispaltige Zeilen im Artikelformular: beide Spalten beginnen auf derselben
+ * Kante. Ohne `start` würde eine Spalte mit höherem Inhalt (z. B. die
+ * Inline-Eingabe nach "+ 新增") die Nachbarspalte vertikal zentrieren und damit
+ * verschieben. */
+.pantry-form-row {
+  align-items: start;
+}
+
+.pantry-form-row > .form-group {
+  min-width: 0;
+}
+
 /* "同名商品已有 N 个批次" sitzt direkt unter dem Namensfeld und ist ein
  * Hinweis, kein Fehler — deshalb Warn-Ton statt Rot. */
 #hi-name-hint {
@@ -36,40 +48,55 @@
 }
 
 /* --------------------------------------------------------
- * Kategorien/Einheiten selbst anlegen (v0.0.71)
+ * Kategorien/Einheiten/Lagerorte selbst anlegen (ab v0.0.71)
  *
  * Das Formular lebt im Modal am <body>, nicht in der Seite — dieselbe
  * Reichweite wie oben, weil das Stylesheet mit der Route kommt und geht.
  * -------------------------------------------------------- */
 
 /* Label-Zeile mit Aktion rechts: "类别            + 新增".
- * .form-label bringt `display:block` mit, deshalb hier Flex statt Inline. */
+ * .form-label bringt `display:block` mit, deshalb hier Flex statt Inline.
+ *
+ * FESTE HÖHE ist der Punkt: im zweispaltigen Formular steht links eine
+ * Label-Zeile mit Knopf und rechts eine ohne. Ohne feste Höhe würde der Knopf
+ * (28px Zielgröße) die linke Spalte nach unten schieben — die beiden Felder
+ * einer Zeile stünden nicht mehr auf einer Kante. Beide Spalten benutzen
+ * deshalb diese Zeile, und beide sind genau 20px hoch. */
 .form-label-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  height: 20px;
   margin-bottom: var(--space-1);
 }
 
 .form-label-row .form-label {
   margin-bottom: 0;
+  line-height: 20px;
 }
 
 /* Textknopf in der Label-Zeile: bewusst leise — die Hauptaktion des Modals
- * bleibt "保存", Anlegen ist ein Nebenweg. */
+ * bleibt "保存", Anlegen ist ein Nebenweg. Höhe = Labelhöhe, damit die Zeile
+ * nicht wächst (siehe oben). */
 .hi-addbtn {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  height: 20px;
   padding: 0;
   border: 0;
   background: none;
   color: var(--color-btn-primary);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
   cursor: pointer;
-  min-height: var(--target-sm, 28px);
+}
+
+.hi-addbtn .icon-sm {
+  width: 12px;
+  height: 12px;
 }
 
 .hi-addbtn:hover {

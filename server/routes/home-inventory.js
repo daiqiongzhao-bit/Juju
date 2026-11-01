@@ -40,11 +40,13 @@ import {
 import {
   HOME_INVENTORY_CATEGORIES,
   HOME_INVENTORY_UNITS,
+  HOME_INVENTORY_LOCATIONS,
   DEFAULT_HOME_CATEGORY,
   DEFAULT_HOME_UNIT,
   HOME_CUSTOM_CATEGORY_ICON,
   isValidHomeCategory,
   isValidHomeUnit,
+  isValidHomeLocation,
   isValidHomeDateKey,
   normalizeHomeQuantity,
   normalizeHomeOptionName,
@@ -64,7 +66,7 @@ function getItem(itemId) {
   return db.get().prepare('SELECT * FROM home_inventory_items WHERE id = ?').get(itemId);
 }
 
-/** Eigene Kategorien/Einheiten in Anlagereihenfolge. */
+/** Eigene Kategorien/Einheiten/Lagerorte in Anlagereihenfolge. */
 function loadOptions(kind) {
   return db.get().prepare(
     'SELECT id, name, icon FROM home_inventory_options WHERE kind = ? ORDER BY sort_order ASC, id ASC'
@@ -84,6 +86,35 @@ function categoryExists(name) {
 
 function unitExists(name) {
   return isValidHomeUnit(name) || optionExists('unit', name);
+}
+
+function locationExists(name) {
+  return isValidHomeLocation(name) || optionExists('location', name);
+}
+
+/**
+ * Lagerort beim Speichern eines Artikels übernehmen. Ein fester Schlüssel oder
+ * ein bereits eigener Ort bleibt unverändert; alles andere (Freitext aus der Zeit
+ * vor dem Auswahlfeld) wird als eigener Ort angelegt, damit derselbe Ort beim
+ * nächsten Mal in der Liste steht und nicht erneut getippt werden muss.
+ * @param {string} name bereits normalisierter Wert
+ * @returns {string} der zu speichernde Wert ('' = kein Ort)
+ */
+function ensureLocationOption(name) {
+  if (!name) return '';
+  if (locationExists(name)) return name;
+  if (checkHomeOptionName(name, 'location') !== 'ok') return '';
+  const next = db.get().prepare(
+    'SELECT COALESCE(MAX(sort_order), -1) AS m FROM home_inventory_options WHERE kind = ?'
+  ).get('location').m + 1;
+  try {
+    db.get().prepare(
+      'INSERT INTO home_inventory_options (kind, name, icon, sort_order) VALUES (?, ?, ?, ?)'
+    ).run('location', name, '', next);
+  } catch {
+    // UNIQUE(kind, name): paralleler Request hat den Ort schon angelegt — kein Fehler.
+  }
+  return name;
 }
 
 /**
@@ -191,10 +222,16 @@ function validateItemFields(body, { partial = false, current = null } = {}) {
     values.expires_on = vDate.value;
   }
 
+  // 存放位置：可选。Wert ist ein fester Lagerort-Schlüssel oder der Name eines
+  // eigenen Ortes. Unbekannter Freitext (Altdaten aus der Zeit vor dem
+  // Auswahlfeld) wird beim Speichern zu einem eigenen Ort — siehe
+  // ensureLocationOption() im Handler.
   if (!partial || body.location !== undefined) {
-    const vLocation = str(body.location, '存放位置', { max: MAX_TITLE, required: false });
-    results.push(vLocation);
-    values.location = vLocation.value ?? '';
+    const raw = normalizeHomeOptionName(body.location);
+    if (raw.length > homeOptionMaxLength('location')) {
+      results.push({ error: `存放位置最多 ${homeOptionMaxLength('location')} 个字符。` });
+    }
+    values.location = raw;
   }
 
   if (!partial || body.min_quantity !== undefined) {
@@ -219,38 +256,43 @@ function validateItemFields(body, { partial = false, current = null } = {}) {
   return { values, errors: collectErrors(results) };
 }
 
+/** Bezeichnung je Optionstyp — für Fehlermeldungen und Spaltenzuordnung. */
+const OPTION_KINDS = Object.freeze({
+  category: { label: '类别', column: 'category' },
+  unit: { label: '单位', column: 'unit' },
+  location: { label: '存放位置', column: 'location' },
+});
+
 /**
- * Gemeinsame Prüfung für POST/PUT von /categories und /units.
+ * Gemeinsame Prüfung für POST/PUT von /categories, /units und /locations.
  * @returns {{ name: string|null, error: { code: number, message: string }|null }}
  */
 function validateOptionName(body, kind) {
+  const label = OPTION_KINDS[kind]?.label ?? '名称';
   const name = normalizeHomeOptionName(body?.name);
   const check = checkHomeOptionName(name, kind);
   if (check === 'required') {
-    return { name: null, error: { code: 400, message: kind === 'unit' ? '请填写单位名称。' : '请填写类别名称。' } };
+    return { name: null, error: { code: 400, message: `请填写${label}名称。` } };
   }
   if (check === 'too-long') {
     const max = homeOptionMaxLength(kind);
     return {
       name: null,
-      error: {
-        code: 400,
-        message: kind === 'unit' ? `单位名称最多 ${max} 个字符。` : `类别名称最多 ${max} 个字符。`,
-      },
+      error: { code: 400, message: `${label}名称最多 ${max} 个字符。` },
     };
   }
   if (check === 'reserved') {
     return { name: null, error: { code: 409, message: '该名称已被内置选项占用。' } };
   }
   if (optionExists(kind, name)) {
-    return { name: null, error: { code: 409, message: kind === 'unit' ? '该单位已存在。' : '该类别已存在。' } };
+    return { name: null, error: { code: 409, message: `该${label}已存在。` } };
   }
   return { name, error: null };
 }
 
 /** Anzahl Artikel, die einen eigenen Eintrag benutzen (Löschsperre). */
 function usageCount(kind, name) {
-  const column = kind === 'unit' ? 'unit' : 'category';
+  const column = OPTION_KINDS[kind]?.column ?? 'category';
   return db.get().prepare(
     `SELECT COUNT(*) AS c FROM home_inventory_items WHERE ${column} = ?`
   ).get(name).c;
@@ -274,8 +316,8 @@ router.get('/', (_req, res) => {
 // GET /api/v1/home-inventory/taxonomy
 // Basisliste + eigene Einträge (Reihenfolge = Anzeigereihenfolge), damit der
 // Client nichts hart kodieren muss.
-// Response: { data: { categories, categoryIcons, units, customCategories,
-//                     customUnits, defaults } }
+// Response: { data: { categories, categoryIcons, units, locations, customCategories,
+//                     customUnits, customLocations, defaults } }
 // --------------------------------------------------------
 router.get('/taxonomy', (_req, res) => {
   try {
@@ -284,8 +326,10 @@ router.get('/taxonomy', (_req, res) => {
         categories: HOME_INVENTORY_CATEGORIES.map((c) => c.key),
         categoryIcons: Object.fromEntries(HOME_INVENTORY_CATEGORIES.map((c) => [c.key, c.icon])),
         units: [...HOME_INVENTORY_UNITS],
+        locations: [...HOME_INVENTORY_LOCATIONS],
         customCategories: loadOptions('category').map((o) => ({ id: o.id, name: o.name, icon: o.icon })),
         customUnits: loadOptions('unit').map((o) => ({ id: o.id, name: o.name })),
+        customLocations: loadOptions('location').map((o) => ({ id: o.id, name: o.name })),
         defaults: { category: DEFAULT_HOME_CATEGORY, unit: DEFAULT_HOME_UNIT },
       },
     });
@@ -296,188 +340,119 @@ router.get('/taxonomy', (_req, res) => {
 });
 
 // --------------------------------------------------------
-// POST /api/v1/home-inventory/categories
-// Body: { name, icon? } — eigener Kategoriename (ist zugleich der Speicherwert)
-// Response: { data: { id, name, icon } }
+// Eigene Optionen: Kategorien, Einheiten, Lagerorte
+//
+// Alle drei liegen in derselben Tabelle (home_inventory_options, unterschieden
+// über `kind`) und unterscheiden sich nur in der Artikel-Spalte und im
+// Anzeigenamen. Ein gemeinsamer Handler-Satz statt dreimal derselbe Code:
+//   POST   /<pfad>            Body: { name, icon? } → { data: { id, name, icon? } }
+//   PUT    /<pfad>/:optionId  Body: { name, icon? } → benennt um, zieht Artikel mit
+//   DELETE /<pfad>/:optionId  nur ohne Verwendung   → 204
 // --------------------------------------------------------
-router.post('/categories', (req, res) => {
-  try {
-    const { name, error } = validateOptionName(req.body, 'category');
-    if (error) return res.status(error.code).json({ error: error.message, code: error.code });
+function registerOptionRoutes(kind, path) {
+  const { label, column } = OPTION_KINDS[kind];
 
-    const icon = resolveCategoryIcon(req.body?.icon);
-    const max = db.get().prepare(
-      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM home_inventory_options WHERE kind = ?'
-    ).get('category').m;
-    const info = db.get().prepare(
-      'INSERT INTO home_inventory_options (kind, name, icon, sort_order) VALUES (?, ?, ?, ?)'
-    ).run('category', name, icon, max + 1);
-    res.status(201).json({ data: { id: info.lastInsertRowid, name, icon } });
-  } catch (err) {
-    log.error('POST /categories error:', err);
-    res.status(500).json({ error: 'Internal server error.', code: 500 });
-  }
-});
+  router.post(`/${path}`, (req, res) => {
+    try {
+      const { name, error } = validateOptionName(req.body, kind);
+      if (error) return res.status(error.code).json({ error: error.message, code: error.code });
 
-// --------------------------------------------------------
-// PUT /api/v1/home-inventory/categories/:optionId
-// Body: { name, icon? } — Umbenennen zieht die Artikelzeilen mit (Transaktion),
-// damit kein Artikel auf einen Namen zeigt, den es nicht mehr gibt.
-// Response: { data: { id, name, icon } }
-// --------------------------------------------------------
-router.put('/categories/:optionId', (req, res) => {
-  try {
-    const opt = db.get().prepare(
-      "SELECT * FROM home_inventory_options WHERE id = ? AND kind = 'category'"
-    ).get(req.params.optionId);
-    if (!opt) return res.status(404).json({ error: '类别不存在。', code: 404 });
+      const icon = kind === 'category' ? resolveCategoryIcon(req.body?.icon) : '';
+      const next = db.get().prepare(
+        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM home_inventory_options WHERE kind = ?'
+      ).get(kind).m + 1;
+      const info = db.get().prepare(
+        'INSERT INTO home_inventory_options (kind, name, icon, sort_order) VALUES (?, ?, ?, ?)'
+      ).run(kind, name, icon, next);
 
-    const requested = normalizeHomeOptionName(req.body?.name);
-    const check = checkHomeOptionName(requested, 'category');
-    if (check === 'required') return res.status(400).json({ error: '请填写类别名称。', code: 400 });
-    if (check === 'too-long') {
-      return res.status(400).json({
-        error: `类别名称最多 ${homeOptionMaxLength('category')} 个字符。`, code: 400,
+      res.status(201).json({
+        data: kind === 'category'
+          ? { id: info.lastInsertRowid, name, icon }
+          : { id: info.lastInsertRowid, name },
       });
+    } catch (err) {
+      log.error(`POST /${path} error:`, err);
+      res.status(500).json({ error: 'Internal server error.', code: 500 });
     }
-    if (check === 'reserved') {
-      return res.status(409).json({ error: '该名称已被内置选项占用。', code: 409 });
-    }
-    const clash = db.get().prepare(
-      'SELECT id FROM home_inventory_options WHERE kind = ? AND name = ? AND id != ?'
-    ).get('category', requested, opt.id);
-    if (clash) return res.status(409).json({ error: '该类别已存在。', code: 409 });
+  });
 
-    const icon = req.body?.icon === undefined ? opt.icon : resolveCategoryIcon(req.body.icon);
-    const tx = db.get().transaction(() => {
-      db.get().prepare(
-        'UPDATE home_inventory_items SET category = ?, updated_at = strftime(\'%Y-%m-%dT%H:%M:%SZ\', \'now\') WHERE category = ?'
-      ).run(requested, opt.name);
-      db.get().prepare('UPDATE home_inventory_options SET name = ?, icon = ? WHERE id = ?')
-        .run(requested, icon, opt.id);
-    });
-    tx();
-    res.json({ data: { id: opt.id, name: requested, icon } });
-  } catch (err) {
-    log.error('PUT /categories/:optionId error:', err);
-    res.status(500).json({ error: 'Internal server error.', code: 500 });
-  }
-});
+  router.put(`/${path}/:optionId`, (req, res) => {
+    try {
+      const opt = db.get().prepare(
+        'SELECT * FROM home_inventory_options WHERE id = ? AND kind = ?'
+      ).get(req.params.optionId, kind);
+      if (!opt) return res.status(404).json({ error: `该${label}不存在。`, code: 404 });
 
-// --------------------------------------------------------
-// DELETE /api/v1/home-inventory/categories/:optionId
-// Nur ohne Verwendung. Response: 204
-// --------------------------------------------------------
-router.delete('/categories/:optionId', (req, res) => {
-  try {
-    const opt = db.get().prepare(
-      "SELECT * FROM home_inventory_options WHERE id = ? AND kind = 'category'"
-    ).get(req.params.optionId);
-    if (!opt) return res.status(404).json({ error: '类别不存在。', code: 404 });
+      const requested = normalizeHomeOptionName(req.body?.name);
+      const check = checkHomeOptionName(requested, kind);
+      if (check === 'required') {
+        return res.status(400).json({ error: `请填写${label}名称。`, code: 400 });
+      }
+      if (check === 'too-long') {
+        return res.status(400).json({
+          error: `${label}名称最多 ${homeOptionMaxLength(kind)} 个字符。`, code: 400,
+        });
+      }
+      if (check === 'reserved') {
+        return res.status(409).json({ error: '该名称已被内置选项占用。', code: 409 });
+      }
+      const clash = db.get().prepare(
+        'SELECT id FROM home_inventory_options WHERE kind = ? AND name = ? AND id != ?'
+      ).get(kind, requested, opt.id);
+      if (clash) return res.status(409).json({ error: `该${label}已存在。`, code: 409 });
 
-    const used = usageCount('category', opt.name);
-    if (used > 0) {
-      return res.status(409).json({
-        error: `该类别下还有 ${used} 件物品，请先把它们改到其他类别再删除。`, code: 409,
+      const icon = kind !== 'category'
+        ? ''
+        : req.body?.icon === undefined ? opt.icon : resolveCategoryIcon(req.body.icon);
+
+      // Umbenennen zieht die Artikel mit — sonst zeigt eine Zeile auf einen
+      // Namen, den es nicht mehr gibt.
+      const tx = db.get().transaction(() => {
+        db.get().prepare(
+          `UPDATE home_inventory_items SET ${column} = ?,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE ${column} = ?`
+        ).run(requested, opt.name);
+        db.get().prepare('UPDATE home_inventory_options SET name = ?, icon = ? WHERE id = ?')
+          .run(requested, icon, opt.id);
       });
-    }
-    db.get().prepare('DELETE FROM home_inventory_options WHERE id = ?').run(opt.id);
-    res.status(204).end();
-  } catch (err) {
-    log.error('DELETE /categories/:optionId error:', err);
-    res.status(500).json({ error: 'Internal server error.', code: 500 });
-  }
-});
+      tx();
 
-// --------------------------------------------------------
-// POST /api/v1/home-inventory/units
-// Body: { name } — eigener Einheitenname (ist zugleich der Speicherwert)
-// Response: { data: { id, name } }
-// --------------------------------------------------------
-router.post('/units', (req, res) => {
-  try {
-    const { name, error } = validateOptionName(req.body, 'unit');
-    if (error) return res.status(error.code).json({ error: error.message, code: error.code });
-
-    const max = db.get().prepare(
-      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM home_inventory_options WHERE kind = ?'
-    ).get('unit').m;
-    const info = db.get().prepare(
-      'INSERT INTO home_inventory_options (kind, name, icon, sort_order) VALUES (?, ?, ?, ?)'
-    ).run('unit', name, '', max + 1);
-    res.status(201).json({ data: { id: info.lastInsertRowid, name } });
-  } catch (err) {
-    log.error('POST /units error:', err);
-    res.status(500).json({ error: 'Internal server error.', code: 500 });
-  }
-});
-
-// --------------------------------------------------------
-// PUT /api/v1/home-inventory/units/:optionId
-// Body: { name } — Umbenennen zieht die Artikelzeilen mit.
-// Response: { data: { id, name } }
-// --------------------------------------------------------
-router.put('/units/:optionId', (req, res) => {
-  try {
-    const opt = db.get().prepare(
-      "SELECT * FROM home_inventory_options WHERE id = ? AND kind = 'unit'"
-    ).get(req.params.optionId);
-    if (!opt) return res.status(404).json({ error: '单位不存在。', code: 404 });
-
-    const requested = normalizeHomeOptionName(req.body?.name);
-    const check = checkHomeOptionName(requested, 'unit');
-    if (check === 'required') return res.status(400).json({ error: '请填写单位名称。', code: 400 });
-    if (check === 'too-long') {
-      return res.status(400).json({
-        error: `单位名称最多 ${homeOptionMaxLength('unit')} 个字符。`, code: 400,
+      res.json({
+        data: kind === 'category'
+          ? { id: opt.id, name: requested, icon }
+          : { id: opt.id, name: requested },
       });
+    } catch (err) {
+      log.error(`PUT /${path}/:optionId error:`, err);
+      res.status(500).json({ error: 'Internal server error.', code: 500 });
     }
-    if (check === 'reserved') {
-      return res.status(409).json({ error: '该名称已被内置选项占用。', code: 409 });
+  });
+
+  router.delete(`/${path}/:optionId`, (req, res) => {
+    try {
+      const opt = db.get().prepare(
+        'SELECT * FROM home_inventory_options WHERE id = ? AND kind = ?'
+      ).get(req.params.optionId, kind);
+      if (!opt) return res.status(404).json({ error: `该${label}不存在。`, code: 404 });
+
+      const used = usageCount(kind, opt.name);
+      if (used > 0) {
+        return res.status(409).json({
+          error: `还有 ${used} 件物品使用该${label}，请先改成其他${label}再删除。`, code: 409,
+        });
+      }
+      db.get().prepare('DELETE FROM home_inventory_options WHERE id = ?').run(opt.id);
+      res.status(204).end();
+    } catch (err) {
+      log.error(`DELETE /${path}/:optionId error:`, err);
+      res.status(500).json({ error: 'Internal server error.', code: 500 });
     }
-    const clash = db.get().prepare(
-      'SELECT id FROM home_inventory_options WHERE kind = ? AND name = ? AND id != ?'
-    ).get('unit', requested, opt.id);
-    if (clash) return res.status(409).json({ error: '该单位已存在。', code: 409 });
+  });
+}
 
-    const tx = db.get().transaction(() => {
-      db.get().prepare(
-        'UPDATE home_inventory_items SET unit = ?, updated_at = strftime(\'%Y-%m-%dT%H:%M:%SZ\', \'now\') WHERE unit = ?'
-      ).run(requested, opt.name);
-      db.get().prepare('UPDATE home_inventory_options SET name = ? WHERE id = ?').run(requested, opt.id);
-    });
-    tx();
-    res.json({ data: { id: opt.id, name: requested } });
-  } catch (err) {
-    log.error('PUT /units/:optionId error:', err);
-    res.status(500).json({ error: 'Internal server error.', code: 500 });
-  }
-});
-
-// --------------------------------------------------------
-// DELETE /api/v1/home-inventory/units/:optionId
-// Nur ohne Verwendung. Response: 204
-// --------------------------------------------------------
-router.delete('/units/:optionId', (req, res) => {
-  try {
-    const opt = db.get().prepare(
-      "SELECT * FROM home_inventory_options WHERE id = ? AND kind = 'unit'"
-    ).get(req.params.optionId);
-    if (!opt) return res.status(404).json({ error: '单位不存在。', code: 404 });
-
-    const used = usageCount('unit', opt.name);
-    if (used > 0) {
-      return res.status(409).json({
-        error: `还有 ${used} 件物品使用该单位，请先把它们改到其他单位再删除。`, code: 409,
-      });
-    }
-    db.get().prepare('DELETE FROM home_inventory_options WHERE id = ?').run(opt.id);
-    res.status(204).end();
-  } catch (err) {
-    log.error('DELETE /units/:optionId error:', err);
-    res.status(500).json({ error: 'Internal server error.', code: 500 });
-  }
-});
+registerOptionRoutes('category', 'categories');
+registerOptionRoutes('unit', 'units');
+registerOptionRoutes('location', 'locations');
 
 // --------------------------------------------------------
 // POST /api/v1/home-inventory
@@ -489,6 +464,7 @@ router.post('/', (req, res) => {
   try {
     const { values, errors } = validateItemFields(req.body);
     if (errors.length) return res.status(400).json({ error: errors[0], code: 400 });
+    values.location = ensureLocationOption(values.location);
 
     const result = db.get().prepare(`
       INSERT INTO home_inventory_items
@@ -519,6 +495,7 @@ router.put('/:itemId', (req, res) => {
 
     const { values, errors } = validateItemFields(req.body, { current: item });
     if (errors.length) return res.status(400).json({ error: errors[0], code: 400 });
+    values.location = ensureLocationOption(values.location);
 
     db.get().prepare(`
       UPDATE home_inventory_items
