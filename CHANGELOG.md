@@ -46,11 +46,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   原先任意接口都能塞 160 MB，属于内存放大面。
 
 ### 数据库
-- **迁移 175**：补回 v25 / v98 两次表重建时丢失的 `tasks(due_date)` 索引（此前任务列表
-  每次都是全表排序）；新增开放任务部分索引、`notes(pinned, updated_at)`、
-  `reminders` 待推送部分索引、`in_app_notifications(user_id, created_at)`，
-  以及三个表达式索引覆盖 `DATE()` / `strftime()` / `substr()` 形式的日期过滤
-  （用 `EXPLAIN QUERY PLAN` 实测已从 SCAN 变 SEARCH）；迁移末尾 `ANALYZE`。
+- **迁移 175**：补回 v25 / v98 两次表重建时丢失的 `tasks(due_date)` 索引。实测（5000 条
+  任务）：它让「按日期范围取任务」（日程、ICS 导出、到期提醒）从全表扫描变成索引查找
+  （0.89 ms → 0.54 ms）。**任务列表本身的排序仍是临时 B 树** —— 该查询的 `ORDER BY`
+  以 `CASE t.status` 表达式开头，索引无法满足，这一点没有改变。
+  另外新增 `notes(pinned, updated_at)`、`reminders` 待推送部分索引、
+  `in_app_notifications(user_id, created_at)`，以及三个表达式索引覆盖
+  `DATE()` / `strftime()` / `substr()` 形式的日期过滤
+  （`EXPLAIN QUERY PLAN` 实测已从 SCAN 变 SEARCH）；迁移末尾 `ANALYZE`。
+  迁移里还建了 `idx_tasks_open`（部分索引，本意是覆盖开放任务列表）——实测规划器
+  不会选它（同一个 ORDER BY 表达式的原因），保留不影响正确性，下次发布可删除。
 - 连接显式设置 `busy_timeout=10s`（原先依赖默认 5s，备份并发时可能直接报 BUSY）。
 - 周期记账的批量生成包进单个事务：原先每行一次提交，中途失败会留下半个账月。
 
