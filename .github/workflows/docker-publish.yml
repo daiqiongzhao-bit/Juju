@@ -1,8 +1,17 @@
 name: Docker Publish
 
+# Einziger Image-Builder des Projekts.
+#
+# Warum ausschließlich Tags (Lehre aus v0.0.74): Ein main-Push löste den
+# CI-Build aus, während parallel das lokal gebaute Image mit `buildx --push`
+# hochgeladen wurde. Beide schrieben denselben Tag — getestet wurde sha
+# 49459ab6, ausgeliefert a7c33848. Seitdem gilt:
+#   * lokal wird NIE gepusht (siehe docs/releasing.md),
+#   * nur ein v*-Tag startet einen Build,
+#   * das ausgelieferte Image ist das hier verifizierte (verify-image prüft
+#     exakt den Digest, den build-and-push gerade erzeugt hat).
 on:
   push:
-    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
@@ -16,12 +25,67 @@ env:
   DOCKERHUB_IMAGE: daiqiongzhao/juju
 
 jobs:
-  build-and-push:
-    name: Build & Push Image
+  # Gate 1: Der getaggte Commit muss grün sein. Bewusst dieselben Prüfungen wie
+  # ci.yml (dort nur auf main/PR) — ein Tag kann auch auf einen Commit zeigen,
+  # der nie durch CI lief.
+  test:
+    name: Gate (i18n, lint, tests)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: '1'
+      SESSION_SECRET: ci-only-not-a-real-secret
+      NODE_ENV: test
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # Häufigster Release-Fehler: Tag gesetzt, Bump vergessen (oder umgekehrt).
+      # Das Image trägt die Version aus package.json — weichen beide ab, zeigt
+      # die App eine andere Version als der Tag verspricht.
+      - name: Tag und package.json müssen übereinstimmen
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/v}"
+            pkg="$(node -p "require('./package.json').version")"
+            echo "Tag: v${tag} | package.json: ${pkg}"
+            if [[ "${tag}" != "${pkg}" ]]; then
+              echo "::error::Tag v${tag} passt nicht zu package.json ${pkg} — Version-Bump oder Tag falsch."
+              exit 1
+            fi
+          else
+            echo "Kein Tag-Build (${GITHUB_REF}) — Versionsprüfung übersprungen."
+          fi
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: i18n key check
+        run: npm run check:i18n
+
+      - name: Lint (errors only)
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+  build-and-push:
+    name: Build & Push Image
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -30,7 +94,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Docker Hub（可选用法：Secrets 未配置时登录失败即跳过推送该仓库）
+      # Docker Hub ist der Auslieferungskanal (docker-compose der Nutzer zeigt
+      # dorthin). Fehlende Secrets lassen den Job absichtlich scheitern: ein
+      # „still ohne Hub"-Lauf würde ein Release vortäuschen, das niemand ziehen
+      # kann.
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
         with:
@@ -42,17 +109,16 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          # 双仓库发布：ghcr.io/<owner>/<repo> + docker.io/<user>/juju
+          # Doppelte Veröffentlichung: ghcr.io/<owner>/<repo> + docker.io/<user>/juju
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
             ${{ env.DOCKERHUB_IMAGE }}
           tags: |
-            type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            # main 分支每次推送都刷新 latest —— 否则只有打 v* tag 时 latest
-            # 才会动，日常发版没打 tag 时用户拉到的 latest 永远是旧的。
-            type=raw,value=latest,enable={{is_default_branch}}
+            # latest bewegt sich nur noch mit einem v*-Tag — genau ein Release
+            # entspricht genau einem latest. (Früher zusätzlich bei jedem
+            # main-Push, was den Tag still überschreiben konnte.)
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=sha
 
@@ -62,7 +128,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build and push
+      - id: push
+        name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -72,3 +139,110 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max,ignore-error=true
+
+  # Gate 2: Nicht „irgendein" Image prüfen, sondern genau das eben gepushte —
+  # adressiert über den Digest, nicht über den Tag. Damit ist ausgeschlossen,
+  # dass zwischen Build und Prüfung etwas anderes unter dem Tag landet.
+  verify-image:
+    name: Verify published image
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IMAGE_REF: ${{ env.DOCKERHUB_IMAGE }}@${{ needs.build-and-push.outputs.digest }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Pull genau diesen Digest
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE_REF"
+          docker image inspect "$IMAGE_REF" --format 'Size: {{.Size}} bytes'
+          echo "$IMAGE_REF"
+
+      - name: Version im Image gegen package.json prüfen
+        run: |
+          set -euo pipefail
+          expected="$(node -p "require('./package.json').version")"
+          actual="$(docker run --rm --entrypoint node "$IMAGE_REF" -p "require('/app/package.json').version")"
+          echo "Image: ${actual} | Repository: ${expected}"
+          if [[ "${actual}" != "${expected}" ]]; then
+            echo "::error::Image meldet ${actual}, Repository ${expected} — falsche Quelle gebaut."
+            exit 1
+          fi
+
+      # Kaltstart mit leerem /data: Schlüssel werden erzeugt, alle Migrationen
+      # laufen gegen eine frische DB. Genau der Pfad, den eine Neuinstallation
+      # nimmt — und der einzige, der die Migrationskette im Image prüft.
+      #
+      # DB_PATH ist Pflicht: ohne den Wert schreibt die App nach /app/yuvomi.db
+      # (nicht beschreibbar für den node-User) und stirbt mit SQLITE_CANTOPEN.
+      # Die Compose-Dateien setzen ihn ebenfalls, ein nacktes `docker run`
+      # bildet also nicht den realen Startpfad ab.
+      - name: Kaltstart und Health-Check
+        run: |
+          set -euo pipefail
+          expected="$(node -p "require('./package.json').version")"
+          docker run -d --name juju-verify -p 3000:3000 \
+            -e NODE_ENV=production \
+            -e DB_PATH=/data/yuvomi.db \
+            -e BACKUP_DIR=/backups \
+            -v juju-verify-data:/data \
+            -v juju-verify-backups:/backups \
+            "$IMAGE_REF"
+
+          ok=0
+          for i in $(seq 1 90); do
+            if curl -fsS -o /dev/null http://127.0.0.1:3000/health 2>/dev/null; then ok=1; echo "healthy nach ~$((i*2))s"; break; fi
+            sleep 2
+          done
+          if [[ "$ok" != "1" ]]; then
+            echo "::error::Container wurde nicht healthy"
+            docker logs juju-verify || true
+            exit 1
+          fi
+
+          echo "— /health —"; curl -fsS http://127.0.0.1:3000/health; echo
+          echo "— /api/v1/version —"; curl -fsS http://127.0.0.1:3000/api/v1/version | tee version.json; echo
+          python3 -c "import json,sys; d=json.load(open('version.json')); sys.exit(0 if d.get('setup_required') is True else 'unerwarteter Bootstrap-Zustand: %s' % d)"
+
+          docker logs juju-verify 2>&1 | tee container.log
+          grep -F "Version ${expected}" container.log || { echo "::error::Startlog enthält nicht 'Version ${expected}'"; exit 1; }
+          # Beweist, dass die komplette Migrationskette gegen eine leere DB lief.
+          grep -qE 'Schema v[0-9]+' container.log || { echo "::error::Keine Schema-Zeile im Log — Migrationen nicht durchgelaufen"; exit 1; }
+
+      - name: Logs bei Fehler
+        if: failure()
+        run: docker logs juju-verify 2>&1 | tail -100 || true
+
+      - name: Aufräumen
+        if: always()
+        run: |
+          docker rm -f juju-verify 2>/dev/null || true
+          docker volume rm juju-verify-data juju-verify-backups 2>/dev/null || true
+
+      # Der Digest ist die Deploy-Angabe: nur damit ist garantiert, dass die
+      # Produktion dieselben Bytes fährt, die dieser Lauf geprüft hat.
+      - name: Deploy-Hinweis ins Job-Summary
+        if: success()
+        run: |
+          {
+            echo "### Image verifiziert"
+            echo ""
+            echo '```'
+            echo "${IMAGE_REF}"
+            echo '```'
+            echo ""
+            echo "Deployment (Digest pinnen):"
+            echo '```'
+            echo "docker run -d --name juju --restart unless-stopped ${IMAGE_REF}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
