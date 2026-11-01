@@ -19,6 +19,7 @@ import { normalizeRecipeMealTypes, recipeSupportsMealType } from '/utils/recipe-
 import { mountEmptyState, mountLoadError, emptyStateEl } from '/utils/empty-state.js';
 import { mealPayloadFromRecipe } from '/utils/recipe-to-meal.js';
 import { findPageFab } from '/utils/fab.js';
+import { safeHttpUrl } from '/utils/url-safety.js';
 
 // --------------------------------------------------------
 // Konstanten
@@ -597,6 +598,8 @@ function renderSlot(date, type, mealsForDay, dayCol, typeRow) {
   const cardsHTML = meals.map((meal) => {
     const ownCount    = meal.ingredients?.length ?? 0;
     const ingDone     = meal.ingredients?.filter((i) => i.on_shopping_list).length ?? 0;
+    // recipe_url ist Freitext (auch aus dem CSV-Import) — nur http(s) verlinken.
+    const mealHref    = safeHttpUrl(meal.recipe_url);
     // Aus einem Rezept geplante Mahlzeiten haben noch keine eigenen Zutaten;
     // der Server liefert dafür die Zahl aus dem Rezept mit. Sonst bliebe der
     // Einkaufslisten-Button genau dort aus, wo die Zutaten längst bekannt sind
@@ -621,9 +624,9 @@ function renderSlot(date, type, mealsForDay, dayCol, typeRow) {
           <span class="meal-card__ingredients-count">${ingLabel}${esc(ingDoneLabel)}</span>
         </div>` : ''}
         <div class="meal-card__actions">
-          ${meal.recipe_url ? `<a class="meal-card__action-btn meal-card__action-btn--recipe"
+          ${mealHref ? `<a class="meal-card__action-btn meal-card__action-btn--recipe"
             data-action="open-recipe"
-            href="${esc(meal.recipe_url)}"
+            href="${esc(mealHref)}"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="${t('meals.openRecipe')}"

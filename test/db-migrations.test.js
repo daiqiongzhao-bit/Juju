@@ -19,8 +19,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/** 期望的最新迁移版本（v167：条码查询配置表）。 */
-const EXPECTED_LATEST = 168;
+/**
+ * 期望的最新迁移版本（v175：Index-Rückgewinnung + Ausdrucks-Indizes）。
+ *
+ * Bewusst eine feste Zahl und kein `MIGRATIONS.length`: der Wert ist ein
+ * Snapshot, der bei jeder neuen Migration absichtlich mitgezogen werden muss.
+ * Genau das wurde ab v169 vergessen — der Test stand seit 0.0.73 dauerhaft
+ * rot, weil ihn vor dem Release niemand ausführte. Mit der CI (npm test bei
+ * jedem Push) fällt das jetzt sofort auf.
+ */
+const EXPECTED_LATEST = 175;
 /** v152 落到 users 表上的四个列。 */
 const TOTP_COLUMNS = ['totp_secret', 'totp_enabled', 'totp_enabled_at', 'totp_recovery_codes'];
 

@@ -7,6 +7,7 @@
 import { createLogger } from '../logger.js';
 const log = createLogger('CardDAV');
 
+import { safeHttpUrl } from '../../public/utils/url-safety.js';
 import * as db from '../db.js';
 import { composeDisplayName, normalizeNameParts } from '../../public/utils/contact-name.js';
 import { toE164, defaultCountryFromConfig } from '../utils/phone.js';
@@ -227,8 +228,12 @@ function parseVCard(vCardText) {
         break;
 
       case 'URL':
-        // Take first URL if multiple exist
-        if (!vcard.website) vcard.website = value;
+        // Take first URL if multiple exist.
+        // Nur http(s) übernehmen: der Wert wird im Kontakt-Detail als <a href>
+        // gerendert, ein fremder CardDAV-Server könnte hier ein
+        // javascript:-URI hinterlegen (gespeicherter XSS). Unsichere Werte
+        // werden verworfen, damit ein zweites, sauberes URL-Feld greifen kann.
+        if (!vcard.website) vcard.website = safeHttpUrl(value);
         break;
 
       case 'BDAY':

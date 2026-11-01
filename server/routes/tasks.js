@@ -15,6 +15,7 @@ import {
   flushOutbound, markTodoOutbound, queueTodoDeletion,
 } from '../services/caldav-todo-outbound.js';
 import { uniqueKey } from '../utils/category-slug.js';
+import { parsePaging, pagingMeta, PAGE_DEFAULTS } from '../utils/paging.js';
 import { serverTimeZone, utcToWall } from '../utils/timezone.js';
 import {
   allTags, applyTagChanges, loadTags, loadTagsFor, normalizeTags,
@@ -614,8 +615,20 @@ router.get('/', (req, res) => {
         t.created_at DESC
     `;
 
-    const rows = db.get().prepare(sql).all(...params).map(task => ({ ...task, subtasks: JSON.parse(task.subtasks || '[]') })).map(addAssignedUsers);
-    res.json({ data: attachTags(attachDocumentCounts(rows, me)) });
+    // Deckel statt "alle": Die Abfrage trägt pro Zeile drei Unterabfragen
+    // (Unteraufgaben-Zähler plus json_group_array). Ohne Grenze wächst der
+    // Response bei Datenmüll linear mit — und die Kanban-Ansicht bekäme
+    // ohnehin nie mehr als ein paar Hundert Karten sinnvoll angezeigt.
+    const paging = parsePaging(req.query, PAGE_DEFAULTS.tasks);
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(paging.limit + 1, paging.offset);
+
+    const raw  = db.get().prepare(sql).all(...params);
+    const hasMore = raw.length > paging.limit;
+    if (hasMore) raw.length = paging.limit;
+
+    const rows = raw.map(task => ({ ...task, subtasks: JSON.parse(task.subtasks || '[]') })).map(addAssignedUsers);
+    res.json({ data: attachTags(attachDocumentCounts(rows, me)), page: pagingMeta(paging, hasMore) });
   } catch (err) {
     log.error('GET / error:', err);
     res.status(500).json({ error: 'Internal server error.', code: 500 });

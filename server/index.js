@@ -144,7 +144,17 @@ app.use(compression());
 // --------------------------------------------------------
 // Request-Parsing
 // --------------------------------------------------------
-app.use(express.json({ limit: '160mb', verify: (req, _res, buf) => { if (buf && buf.length) req.rawBody = buf; } }));
+// Request-Body-Parsing.
+//
+// Der große Puffer war ursprünglich global (160 MB) und damit für JEDEN
+// Endpunkt verfügbar - ein einzelner Request konnte so viel Heap belegen, ohne
+// dass irgendein Handler diese Größe braucht. Tatsächlich groß sind nur die
+// Dokument-Uploads: sie kommen als base64-Data-URL im JSON-Body
+// (routes/documents.js, MAX_FILE_BYTES 100 MB → base64 ≈ 134 MB). Deshalb
+// bekommt nur dieser Präfix den großen Puffer, alles andere 16 MB.
+const rawBodyVerify = (req, _res, buf) => { if (buf && buf.length) req.rawBody = buf; };
+app.use('/api/v1/documents', express.json({ limit: '140mb', verify: rawBodyVerify }));
+app.use(express.json({ limit: '16mb', verify: rawBodyVerify }));
 app.use(express.urlencoded({ extended: true, limit: '7mb' }));
 
 // JSON-Parse-Fehler abfangen (gibt sonst HTML zurück)
@@ -153,7 +163,13 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ error: 'Invalid JSON in request body.', code: 400 });
   }
   if (err.type === 'entity.too.large') {
-    return res.status(413).json({ error: 'Request body too large (max. 7 MB).', code: 413 });
+    // Grenze pro Präfix nennen statt einer pauschalen Zahl: 16 MB im Normalfall,
+    // 140 MB für Dokument-Uploads (siehe Parser oben).
+    const isDoc = req.path.startsWith('/api/v1/documents');
+    return res.status(413).json({
+      error: `Request body too large (max. ${isDoc ? 140 : 16} MB).`,
+      code: 413,
+    });
   }
   next(err);
 });

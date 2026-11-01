@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.0.74] - 2026-11-01
+
+### 修复
+- **日历重复事件会整体消失**：一个 2019 年开始的「每天」系列，展开时要从 DTSTART
+  逐步推进到今天（2500 多步），而 `MAX_ITER = 1000` 的保险丝在半路就熔断——循环
+  提前 break，该事件在日历、首页「即将到来」和 ICS 导出里**一条实例都不剩**。
+  每周系列从 2006 年之前开始也会踩到。现在先用 `fastForwardOccurrences()` 粗跳到
+  窗口前最多一个周期，剩余几步仍由原循环完成，BYDAY / EXDATE / COUNT / UNTIL 的
+  语义不变（有 COUNT 的系列不跳，避免打乱计数）。附带收益：老系列不再每帧空转
+  上千次日期运算。
+
+### 性能
+- **读接口不再写库**：`GET /birthdays`、`GET /birthdays/upcoming`、
+  `GET /reminders/pending` 每次都会跑一遍「全部生日 → 同步日历事件与提醒」，
+  即每次页面加载都写 SQLite、写 WAL。改为每用户最多 60 秒一次；写路径本来就同步
+  调用单条同步，后台 `processDueNotifications()` 也每 60 秒兜底，行为无可感知变化。
+- **列表加上限**：`notes` / `tasks` / `documents` 支持 `?limit=` / `?offset=`，
+  并在响应里返回 `page: { limit, offset, has_more }`。默认值（1000 / 2000 / 1000）
+  远高于家庭实际用量，只有数据异常堆积时才会触发——那时它挡住的是把整张表
+  序列化进内存。
+
+### 数据一致性
+- 日历剪枝（外部日历清空时批量 DELETE）、药品每日剂量生成、Emby 首次同步的批量
+  状态回写，都包进了单个事务。此前每行一次提交，中途失败会留下「删了一半」
+  「生成了一半」「同步了一半」的中间态。
+
+### 安全
+- **外部链接协议白名单**：食谱/餐次的来源链接、联系人网站这类值来自自由文本或外部
+  CardDAV 同步，之前只按长度校验。`esc()` 挡得住引号，挡不住 `javascript:`。新增
+  `public/utils/url-safety.js`（`safeHttpUrl()`，裸域名会自动补 `https://`），
+  服务端 `recipes` / `meals` 路由改用 `validate.url()`，CardDAV 同步时过滤 vCard 的
+  URL 字段，前端三处渲染改成"不安全就按纯文本显示"。
+- **补齐 5 处属性转义**：日历周/日视图的 `cal_name`（同一行的月视图本来是对的）、
+  预算账户的 `aria-label`、笔记空态的搜索词与创建者名（`t()` 的参数不转义）、
+  生日头像 `src`。
+- **请求体上限收窄**：全局 JSON 从 160 MB 降到 16 MB，仅文档上传前缀保留 140 MB。
+  原先任意接口都能塞 160 MB，属于内存放大面。
+
+### 数据库
+- **迁移 175**：补回 v25 / v98 两次表重建时丢失的 `tasks(due_date)` 索引（此前任务列表
+  每次都是全表排序）；新增开放任务部分索引、`notes(pinned, updated_at)`、
+  `reminders` 待推送部分索引、`in_app_notifications(user_id, created_at)`，
+  以及三个表达式索引覆盖 `DATE()` / `strftime()` / `substr()` 形式的日期过滤
+  （用 `EXPLAIN QUERY PLAN` 实测已从 SCAN 变 SEARCH）；迁移末尾 `ANALYZE`。
+- 连接显式设置 `busy_timeout=10s`（原先依赖默认 5s，备份并发时可能直接报 BUSY）。
+- 周期记账的批量生成包进单个事务：原先每行一次提交，中途失败会留下半个账月。
+
+### 工程
+- **i18n 键校验** `scripts/check-i18n.mjs`：扫描全部 `t('...')` 与 `en.json` 比对。
+  首次运行就查出 5 个会被直接显示成原始键的缺失文案（联系人导出提示、药箱来源标签、
+  两步验证剩余恢复码、关系类型标签），已补齐中英。
+- **ESLint**（flat config，只开真正会出错的规则）+ **GitHub Actions CI**
+  （i18n → lint → test 三道门）。
+- 修正 `test/db-migrations.test.js` 中停在 v168 的期望值——该测试自 0.0.73 起一直是红的，
+  因为发布前没有跑测试；现在 CI 会拦住这类漂移。
+
+### 镜像
+- **1.09 GB → 609 MB**：
+  - `googleapis` 全量包（204 MB，实际只用到 calendar/drive）换成
+    `@googleapis/calendar` + `@googleapis/drive`，连同依赖共 17 MB；
+  - build 阶段裁掉 better-sqlite3 其他平台的 prebuild 与 SQLite 源码（运行时不读）；
+  - apt 加 `--no-install-recommends` 并清理文档/manpage，镜像内不再保留 npm/corepack。
+- 顺手修掉 `entity.too.large` 的错误提示：原先写死 "max. 7 MB"，与实际限制不符。
+
+### 家庭库存
+- **常用物品模板默认折叠**：新建物品弹窗里的 16 个模板改成可展开区块
+  （`<details>` + 自定义 chevron），收起时只占一行，名称/数量这些每次都要填的
+  字段不再被模板挤到首屏之外；点任意模板填好骨架后区块自动收起。
+
 ## [0.0.73] - 2026-11-01
 
 ### 家庭库存：与购物清单打通、出入库流水、条码、模板、批量操作

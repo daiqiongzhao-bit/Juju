@@ -17,6 +17,7 @@ import { composeDisplayName, contactSortKey, splitDisplayName } from '/utils/con
 import { getPhoneFormatter, createAsYouType, countryFromRegion } from '/utils/phone.js';
 import '/components/category-manager.js';
 import { findPageFab } from '/utils/fab.js';
+import { safeHttpUrl } from '/utils/url-safety.js';
 
 // --------------------------------------------------------
 // Konstanten
@@ -705,6 +706,18 @@ function onPanelToggle(e) {
  * Baut ausschließlich über die DOM-API - `textContent` statt Markup, damit
  * Kontaktdaten aus CardDAV nirgends als HTML landen können.
  */
+/**
+ * Kontakt-Links kommen teilweise aus fremden vCard-Quellen (CardDAV-Sync).
+ * Nur die hier tatsächlich vorkommenden Schemata verlinken: http(s), mailto, tel.
+ * Alles andere (javascript:, data:, file: …) wird als Text ohne href gerendert.
+ */
+function contactHrefOrNull(href) {
+  const s = String(href ?? '').trim();
+  if (!s) return null;
+  if (/^(mailto:|tel:)/i.test(s)) return s;
+  return safeHttpUrl(s);
+}
+
 function contactLinksNode(entries) {
   // Leere Gruppe → kein Knoten. detailRowEl wirft die Zeile dann selbst weg;
   // ein leeres <div> wäre ein gültiges Element und ließe eine Zeile mit
@@ -719,7 +732,11 @@ function contactLinksNode(entries) {
 
     const a = document.createElement('a');
     a.className = 'contact-detail__link';
-    a.href = href;
+    // contactHrefOrNull(): website stammt aus dem vCard-URL-Feld eines fremden
+    // CardDAV-Servers. Ohne Schema-Prüfung würde ein dort hinterlegtes
+    // "javascript:…" beim Klick ausgeführt (gespeicherter XSS).
+    const safeHref = contactHrefOrNull(href);
+    if (safeHref) a.href = safeHref;
     a.textContent = text;
     // enhancePhones() ersetzt danach nur den Anzeigetext; der Rohwert im href
     // und im data-Attribut bleibt unberührt.

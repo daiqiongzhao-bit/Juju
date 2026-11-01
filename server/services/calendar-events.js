@@ -5,7 +5,7 @@
  * Abhängigkeiten: server/services/recurrence.js
  */
 
-import { nextOccurrence, parseRRule, matchesRRuleByday } from './recurrence.js';
+import { nextOccurrence, parseRRule, matchesRRuleByday, fastForwardOccurrences } from './recurrence.js';
 import { visibilityWhere } from './visibility.js';
 import { localToUTC, utcToWall } from '../utils/timezone.js';
 
@@ -89,6 +89,16 @@ export function expandRecurringEvents(events, from, to, exceptionsByEvent = null
     // (RFC 5545): ausgenommene Vorkommen zählen mit, erzeugen aber keine Instanz (#513).
     const maxCount   = parseRRule(event.recurrence_rule)?.count ?? null;
     let   occurrence = 0;
+
+    // Serien können Jahre vor dem Fenster beginnen. Ohne diesen Sprung läuft
+    // eine tägliche Serie aus 2019 erst 2500 Schritte bis zu diesem Monat — die
+    // Notbremse MAX_ITER greift vorher, die Schleife bricht ab und der Termin
+    // taucht im Kalender gar nicht mehr auf. Der Sprung landet höchstens eine
+    // Periode vor `from`; die Feinarbeit (BYDAY, EXDATE, COUNT) macht weiterhin
+    // die Schleife unten.
+    const skipped = fastForwardOccurrences(currentDate, event.recurrence_rule, from);
+    if (skipped === null) continue; // UNTIL endet vor dem Fenster
+    currentDate = skipped;
 
     while (currentDate <= to && iterations < MAX_ITER) {
       iterations++;

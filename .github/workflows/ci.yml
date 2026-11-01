@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Puppeteer lädt sonst Chromium (~180 MB) bei jedem CI-Lauf.
+      PUPPETEER_SKIP_DOWNLOAD: '1'
+      SESSION_SECRET: ci-only-not-a-real-secret
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Reihenfolge nach Aussagekraft: i18n findet sofort nutzersichtbare
+      # Fehler, Lint findet Programmierfehler, erst danach die Tests.
+      - name: i18n key check
+        run: npm run check:i18n
+
+      - name: Lint (errors only)
+        run: npm run lint
+
+      - name: Tests
+        run: npm test

@@ -1,6 +1,9 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { google } from 'googleapis';
+// Nur das Drive-Subpaket importieren, nicht das Monolith-Paket `googleapis`:
+// das zieht die Discovery-Dokumente aller Google-APIs mit (~200 MB im Image,
+// gebraucht werden hier zwei Endpunkte).
+import { drive as driveApi, auth as googleAuth } from '@googleapis/drive';
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
 
@@ -16,9 +19,9 @@ const MAX_READ_BYTES = 100 * 1024 * 1024;
 
 const defaultGoogleApiFactory = {
   createOAuth2: (clientId, clientSecret, redirectUri) => (
-    new google.auth.OAuth2(clientId, clientSecret, redirectUri)
+    new googleAuth.OAuth2(clientId, clientSecret, redirectUri)
   ),
-  createDrive: (auth) => google.drive({ version: 'v3', auth }),
+  createDrive: (auth) => driveApi({ version: 'v3', auth }),
 };
 let googleApiFactory = defaultGoogleApiFactory;
 

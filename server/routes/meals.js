@@ -7,7 +7,8 @@
 import { createLogger } from '../logger.js';
 import express from 'express';
 import * as db from '../db.js';
-import { str, oneOf, date, num, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT, DATE_RE } from '../middleware/validate.js';
+import { str, oneOf, date, num, url, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT, DATE_RE } from '../middleware/validate.js';
+import { normalizeUrlInput } from '../../public/utils/url-safety.js';
 import { addDays, mealWeekday, datesForTemplateInRange } from '../services/meal-recurrence.js';
 
 const log = createLogger('Meals');
@@ -295,7 +296,8 @@ router.post('/', (req, res) => {
     const vType       = oneOf(req.body.meal_type, VALID_MEAL_TYPES, 'Mahlzeit-Typ');
     const vTitle      = str(req.body.title, 'Titel', { max: MAX_TITLE });
     const vNotes      = str(req.body.notes, 'Notizen', { max: MAX_TEXT, required: false });
-    const vRecipeUrl  = str(req.body.recipe_url, 'Rezept-URL', { max: MAX_TEXT, required: false });
+    // url() statt str(): siehe recipes.js — derselbe Wert wird als <a href> gerendert.
+    const vRecipeUrl  = url(normalizeUrlInput(req.body.recipe_url), 'Rezept-URL');
     const vRecipeId   = num(req.body.recipe_id, 'Rezept-ID', { required: false });
     const repeatWeekly = req.body.repeat_weekly === true;
     // Leeres/fehlendes repeat_until heißt „ohne Ende" - die Serie bleibt dann

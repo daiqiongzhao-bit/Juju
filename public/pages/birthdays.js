@@ -87,7 +87,7 @@ function countdownChip(birthday) {
 
 function photoAvatar(birthday, extraClass = '') {
   if (birthday.photo_data) {
-    return `<img class="birthday-avatar ${extraClass}" src="${birthday.photo_data}" alt="${esc(birthday.name)}">`;
+    return `<img class="birthday-avatar ${extraClass}" src="${esc(birthday.photo_data)}" alt="${esc(birthday.name)}">`;
   }
   return `<span class="birthday-avatar birthday-avatar--fallback ${extraClass}">${esc(initials(birthday.name))}</span>`;
 }
@@ -321,7 +321,7 @@ function readFileAsDataUrl(file) {
 }
 
 function birthdayPreviewHtml(name, photoData) {
-  if (photoData) return `<img class="birthday-preview__image" src="${photoData}" alt="${esc(name || '')}">`;
+  if (photoData) return `<img class="birthday-preview__image" src="${esc(photoData)}" alt="${esc(name || '')}">`;
   return `<span class="birthday-preview__fallback">${esc(initials(name))}</span>`;
 }
 

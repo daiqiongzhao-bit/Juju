@@ -18,6 +18,7 @@ import crypto from 'node:crypto';
 import * as db from '../db.js';
 import { encryptField, phoneHash } from './sm4.js';
 import { getImportModule } from './import-mapping.js';
+import { safeHttpUrl } from '../../public/utils/url-safety.js';
 import { applyLunarFields } from './lunar-fields.js';
 import { normalizeRecipeMealTypes } from '../../public/utils/recipe-meal-types.js';
 import { createLogger } from '../logger.js';
@@ -256,7 +257,11 @@ function writeRecipe(record, userId) {
   `, [
     record.title,
     record.notes ?? null,
-    record.recipe_url ?? null,
+    // recipe_url kommt aus beliebigen CSV-Spalten (url/link/website/source) und
+    // landet im Frontend als <a href>. Hier wird nicht abgelehnt, sondern
+    // bereinigt: ein unsicherer Link soll nicht die ganze Zeile scheitern
+    // lassen — das Rezept selbst ist ja brauchbar.
+    safeHttpUrl(record.recipe_url),
     normalizeMealTypes(record.meal_types),
     record.servings ?? null,
     record.duration_minutes ?? null,

@@ -63,8 +63,15 @@ export function pruneDeletedEvents(database, {
     return 0;
   }
 
-  const del = database.prepare('DELETE FROM calendar_events WHERE id = ?');
-  for (const ev of stale) del.run(ev.id);
+  // Ein Umschlag für den ganzen Lauf: Der Prune kann einen kompletten
+  // Fremdkalender auf einmal leeren. Ohne Transaktion war jedes DELETE ein
+  // eigener Commit — brach der Lauf in der Mitte ab (Prozess-Neustart,
+  // SQLITE_BUSY), blieb die Hälfte gelöscht und die andere Hälfte stehen.
+  const del   = database.prepare('DELETE FROM calendar_events WHERE id = ?');
+  const purge = database.transaction((victims) => {
+    for (const ev of victims) del.run(ev.id);
+    return victims.length;
+  });
 
-  return stale.length;
+  return purge(stale);
 }

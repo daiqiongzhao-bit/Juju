@@ -8,7 +8,7 @@ import { createLogger } from '../logger.js';
 import express from 'express';
 import * as db from '../db.js';
 import * as v from '../middleware/validate.js';
-import { syncAllBirthdayReminders } from '../services/birthdays.js';
+import { syncAllBirthdayRemindersThrottled } from '../services/birthdays.js';
 
 const log    = createLogger('Reminders');
 const router = express.Router();
@@ -28,7 +28,7 @@ router.get('/pending', (req, res) => {
   try {
     const userId = req.authUserId || req.session.userId;
     const now    = new Date().toISOString();
-    syncAllBirthdayReminders(db.get(), userId, new Date());
+    syncAllBirthdayRemindersThrottled(db.get(), userId, new Date());
 
     const rows = db.get().prepare(`
       SELECT

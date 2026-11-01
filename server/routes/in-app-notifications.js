@@ -20,7 +20,9 @@ router.get('/', (req, res) => {
   try {
     const me = uid(req);
     if (!me) return res.status(401).json({ error: 'Nicht angemeldet', code: 401 });
-    const limit = parseInt(req.query.limit, 10) || 30;
+    // Obergrenze wie in den anderen Listen (media 100, relationships 200):
+    // ?limit=999999 zog sonst den kompletten Posteingang in einem Rutsch.
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 100);
     const unreadOnly = ['1', 'true', 'yes'].includes(String(req.query.unreadOnly || '').toLowerCase());
     res.json({ data: listInApp(me, { limit, unreadOnly }) });
   } catch (err) {

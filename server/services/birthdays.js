@@ -374,11 +374,49 @@ function hydrateBirthday(row, from = new Date()) {
   };
 }
 
+/** Nutzer-ID → Zeitpunkt des letzten Voll-Syncs (siehe syncAllBirthdayRemindersThrottled). */
+const lastFullSyncByUser = new Map();
+
 function syncAllBirthdayReminders(database, userId, from = new Date()) {
   const birthdays = database.prepare(`
     SELECT * FROM birthdays WHERE created_by = ? ORDER BY birth_date ASC
   `).all(userId);
   birthdays.forEach((birthday) => syncBirthdayArtifacts(database, birthday, from));
+}
+
+/**
+ * Wie syncAllBirthdayReminders, aber höchstens einmal pro Nutzer und Intervall.
+ *
+ * Der Voll-Sync lief bisher bei JEDEM GET /birthdays und GET /reminders/pending
+ * mit — also bei jedem Seitenaufbau, pro Nutzer, über alle Geburtstage, mit
+ * mehreren SELECT/UPDATE je Eintrag. Ein reiner Lese-Endpunkt hat dabei
+ * geschrieben (und damit die WAL-Datei wachsen lassen).
+ *
+ * Nötig ist er dort trotzdem: Er ist die Rückfallebene für alles, was ohne
+ * Schreibzugriff veraltet (Datumswechsel, nachträglich geänderte Kalender-Zone).
+ * Die Schreibpfade rufen syncBirthdayArtifacts ohnehin direkt auf, und
+ * processDueNotifications() zieht zusätzlich alle 60 s eine Runde. Ein
+ * Mindestabstand von 60 s ändert am Verhalten also nichts Sichtbares, nimmt
+ * aber die Last von den Lese-Endpunkten.
+ *
+ * @param {object} database
+ * @param {number} userId
+ * @param {Date}   [from]
+ * @param {number} [minIntervalMs] Mindestabstand je Nutzer (Standard 60 s)
+ * @returns {boolean} true, wenn tatsächlich synchronisiert wurde
+ */
+function syncAllBirthdayRemindersThrottled(database, userId, from = new Date(), minIntervalMs = 60_000) {
+  const now = Date.now();
+  const last = lastFullSyncByUser.get(userId) ?? 0;
+  if (now - last < minIntervalMs) return false;
+  // Vor dem Lauf eintragen: Bei einer Ausnahme soll nicht jeder folgende
+  // Aufruf denselben Fehler erneut auslösen.
+  lastFullSyncByUser.set(userId, now);
+  // Der Speicher wächst mit der Zahl der Nutzer — bei einem Haushalt
+  // unkritisch, aber ein Neustart ist billiger als eine unbegrenzte Map.
+  if (lastFullSyncByUser.size > 1000) lastFullSyncByUser.clear();
+  syncAllBirthdayReminders(database, userId, from);
+  return true;
 }
 
 /**
@@ -481,5 +519,6 @@ export {
   nextBirthdayDate,
   retitleBirthdayEvents,
   syncAllBirthdayReminders,
+  syncAllBirthdayRemindersThrottled,
   syncBirthdayArtifacts,
 };

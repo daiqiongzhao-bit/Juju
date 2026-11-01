@@ -7,6 +7,7 @@
 import { createLogger } from '../logger.js';
 import express from 'express';
 import * as db from '../db.js';
+import { parsePaging, pagingMeta, PAGE_DEFAULTS } from '../utils/paging.js';
 import { str, color, collectErrors, MAX_TEXT, MAX_TITLE } from '../middleware/validate.js';
 
 const log = createLogger('Notes');
@@ -20,13 +21,21 @@ const router  = express.Router();
  */
 router.get('/', (req, res) => {
   try {
-    const notes = db.get().prepare(`
+    // Obergrenze statt "alle": Die Liste wuchs bisher unbegrenzt mit. Im
+    // Alltag liegt sie weit unter der Vorgabe, der Deckel greift nur bei
+    // Datenmüll (Import-Schleifen, doppelte Einträge).
+    const paging = parsePaging(req.query, PAGE_DEFAULTS.notes);
+    const rows = db.get().prepare(`
       SELECT n.*, u.display_name AS creator_name, u.avatar_color AS creator_color, u.avatar_data AS creator_avatar
       FROM notes n
       LEFT JOIN users u ON u.id = n.created_by
       ORDER BY n.pinned DESC, n.updated_at DESC
-    `).all();
-    res.json({ data: notes });
+      LIMIT ? OFFSET ?
+    `).all(paging.limit + 1, paging.offset);
+
+    const hasMore = rows.length > paging.limit;
+    if (hasMore) rows.length = paging.limit;
+    res.json({ data: rows, page: pagingMeta(paging, hasMore) });
   } catch (err) {
     log.error('', err);
     res.status(500).json({ error: 'Interner Fehler', code: 500 });

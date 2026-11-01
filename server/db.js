@@ -207,6 +207,12 @@ function init({ plaintextBackup = true } = {}) {
   db.pragma('foreign_keys = ON');
   db.pragma('synchronous = NORMAL');
   db.pragma('temp_store = MEMORY');
+  // Explizit statt sich auf den better-sqlite3-Default (5 s) zu verlassen:
+  // während eines VACUUM INTO (Backup) oder beim Restore schreibt ein zweiter
+  // Prozess auf derselben Datei. Ein SQLITE_BUSY nach 5 s wäre ein harter
+  // Fehler mitten in einer laufenden Anfrage - 10 s deckt den Backup-Fall ab,
+  // ohne dass eine Anfrage bei echter Blockade ewig hängt.
+  db.pragma('busy_timeout = 10000');
 
   migrate();
   reconcileCriticalSchema();
@@ -6079,6 +6085,48 @@ const MIGRATIONS = [
         SELECT 'homeItem', id, COALESCE(name, ''),
                COALESCE(notes, '') || ' ' || COALESCE(location, '')
           FROM home_inventory_items;
+    `,
+  },
+  {
+    version: 175,
+    description: 'Index-Rückgewinnung: tasks.due_date, Notizen-Sortierung, Reminder-Scan, Posteingang + Ausdrucks-Indizes für Datumsfilter',
+    up: `
+      -- ---- 1) tasks: due_date-Index ging bei den Tabellen-Rebuilds verloren --
+      -- v25 (db.js:1219) und v98 (db.js:4394) bauen tasks per DROP TABLE neu auf
+      -- und stellen danach nur status/assigned/parent wieder her. Die Liste
+      -- sortiert aber nach due_date -> seither jedes Mal temporärer B-Baum.
+      CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+      -- Die Liste zeigt nur offene, nicht archivierte Aufgaben; ein Teilindex
+      -- ist kleiner als der über alle Zeilen und deckt genau diese Sortierung.
+      CREATE INDEX IF NOT EXISTS idx_tasks_open ON tasks(due_date)
+        WHERE archived_at IS NULL AND status != 'done';
+
+      -- ---- 2) notes: pinned ist als Einzelspalte fast wertlos -----------------
+      -- Sortiert wird nach (pinned DESC, updated_at DESC); die alte
+      -- idx_notes_pinned(pinned) hat Selektivität ~0 und half nicht.
+      CREATE INDEX IF NOT EXISTS idx_notes_pinned_updated ON notes(pinned DESC, updated_at DESC);
+
+      -- ---- 3) reminders: Scan "fällig und noch nicht gepusht" ----------------
+      CREATE INDEX IF NOT EXISTS idx_reminders_pending ON reminders(remind_at)
+        WHERE dismissed = 0 AND pushed_at IS NULL;
+
+      -- ---- 4) in_app_notifications: Posteingang pro Nutzer -------------------
+      CREATE INDEX IF NOT EXISTS idx_inapp_user_created ON in_app_notifications(user_id, created_at DESC);
+
+      -- ---- 5) Ausdrucks-Indizes für Datumsfilter ----------------------------
+      -- DATE()/strftime()/substr() um die Spalte herum macht den vorhandenen
+      -- Spaltenindex unbrauchbar. Statt die Queries umzubauen (Grenzwert-
+      -- Semantik: '2026-11-01T09:00' <= '2026-11-01' ist false, mit DATE()
+      -- aber true), legen wir den Index auf denselben Ausdruck.
+      CREATE INDEX IF NOT EXISTS idx_calendar_start_date ON calendar_events(DATE(start_datetime));
+      CREATE INDEX IF NOT EXISTS idx_budget_month ON budget_entries(strftime('%Y-%m', date));
+      CREATE INDEX IF NOT EXISTS idx_gift_ledger_year ON gift_ledger(substr(event_date, 1, 4));
+
+      -- Ohne sqlite_stat1 schätzt der Planer Selektivitäten aus Tabellengrößen
+      -- und Default-Annahmen. Da dieses Schema stark auf Teilindizes und
+      -- Ausdrucks-Indizes setzt, ist eine echte Statistik die Voraussetzung
+      -- dafür, dass sie überhaupt gewählt werden.
+      ANALYZE;
     `,
   },
 ];

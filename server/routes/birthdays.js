@@ -6,7 +6,7 @@ import {
   deleteBirthdayArtifacts,
   hydrateBirthday,
   syncBirthdayArtifacts,
-  syncAllBirthdayReminders,
+  syncAllBirthdayRemindersThrottled,
   listBirthdayImportCandidates,
   importBirthdaysFromContacts,
 } from '../services/birthdays.js';
@@ -39,7 +39,7 @@ function sortHydrated(rows) {
 router.get('/', (req, res) => {
   try {
     const userId = req.authUserId || req.session.userId;
-    syncAllBirthdayReminders(db.get(), userId);
+    syncAllBirthdayRemindersThrottled(db.get(), userId);
 
     let sql = 'SELECT * FROM birthdays WHERE 1=1';
     const params = [];
@@ -62,7 +62,7 @@ router.get('/', (req, res) => {
 router.get('/upcoming', (req, res) => {
   try {
     const userId = req.authUserId || req.session.userId;
-    syncAllBirthdayReminders(db.get(), userId);
+    syncAllBirthdayRemindersThrottled(db.get(), userId);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 5, 1), 50);
     const rows = db.get().prepare('SELECT * FROM birthdays ORDER BY name COLLATE NOCASE ASC').all();
     res.json({ data: sortHydrated(rows).slice(0, limit) });

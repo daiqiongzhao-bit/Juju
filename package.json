@@ -1,6 +1,6 @@
 {
   "name": "juju",
-  "version": "0.0.73",
+  "version": "0.0.74",
   "description": "Self-hosted family planner - calendar, tasks, shopping, meal planning, budget and more. Private, open-source, no subscription.",
   "main": "server/index.js",
   "type": "module",
@@ -11,7 +11,11 @@
     "start": "node --import dotenv/config server/index.js",
     "dev": "node --import dotenv/config --watch server/index.js",
     "setup": "node --import dotenv/config setup.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "lint": "eslint . --quiet",
+    "lint:all": "eslint .",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "verify": "npm run check:i18n && npm run lint && npm test"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -31,11 +35,14 @@
     "web-push": "^3.6.7"
   },
   "optionalDependencies": {
-    "googleapis": "^173.0.0",
+    "@googleapis/calendar": "^20.1.0",
+    "@googleapis/drive": "^27.0.0",
     "tsdav": "^2.3.1"
   },
   "license": "MIT",
   "devDependencies": {
+    "eslint": "^9.16.0",
+    "globals": "^15.14.0",
     "puppeteer": "^25.4.0",
     "sharp": "^0.35.3"
   },

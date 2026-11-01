@@ -9,6 +9,7 @@ import * as db from '../db.js';
 import { createLogger } from '../logger.js';
 import { str, collectErrors, id as validateId, MAX_TEXT, MAX_TITLE } from '../middleware/validate.js';
 import { documentVisibleSql } from '../services/document-access.js';
+import { parsePaging, pagingMeta, PAGE_DEFAULTS } from '../utils/paging.js';
 import { getAdapter as defaultGetDmsAdapter } from '../services/dms/index.js';
 import { getStatus as getGoogleDriveStatus } from '../services/google-drive-storage.js';
 import {
@@ -554,7 +555,15 @@ router.get('/', (req, res) => {
     const folderId = req.query.folder_id !== undefined && req.query.folder_id !== ''
       ? Number(req.query.folder_id)
       : null;
-    const params = { userId: userId(req), status, category, folderId };
+    // Deckel statt "alle": Dokumente sind der Posten, der am ehesten wächst
+    // (Scans, Rechnungen). Der Response trug bisher die komplette Liste samt
+    // Zähler-Unterabfragen — im Alltag unauffällig, bei ein paar Tausend
+    // Einträgen aber ein spürbarer Block.
+    const paging = parsePaging(req.query, PAGE_DEFAULTS.documents);
+    const params = {
+      userId: userId(req), status, category, folderId,
+      limit: paging.limit + 1, offset: paging.offset,
+    };
     const rows = db.get().prepare(`
       ${documentSelect()}
       WHERE ${canSeeSql('d')}
@@ -563,8 +572,12 @@ router.get('/', (req, res) => {
         AND (@folderId IS NULL OR d.folder_id = @folderId)
       GROUP BY d.id
       ORDER BY d.updated_at DESC
+      LIMIT @limit OFFSET @offset
     `).all(params);
-    res.json({ data: rows.map(normalizeDocument) });
+
+    const hasMore = rows.length > paging.limit;
+    if (hasMore) rows.length = paging.limit;
+    res.json({ data: rows.map(normalizeDocument), page: pagingMeta(paging, hasMore) });
   } catch (err) {
     log.error('GET / error:', err);
     res.status(500).json({ error: 'Internal server error.', code: 500 });

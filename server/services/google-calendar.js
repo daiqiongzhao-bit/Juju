@@ -15,7 +15,9 @@
 import { createLogger } from '../logger.js';
 const log = createLogger('Google');
 
-import { google } from 'googleapis';
+// Nur das Calendar-Subpaket importieren, nicht das Monolith-Paket `googleapis`:
+// das zieht die Discovery-Dokumente aller Google-APIs mit (~200 MB im Image).
+import { calendar as calendarApi, auth as googleAuth } from '@googleapis/calendar';
 import crypto from 'node:crypto';
 import * as db from '../db.js';
 import * as outbound from './calendar-outbound.js';
@@ -54,7 +56,7 @@ function createClient() {
     throw new Error('[Google] GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI must be set.');
   }
 
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  return new googleAuth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
 // --------------------------------------------------------
@@ -310,7 +312,7 @@ async function flushOutbound() {
   const hasUpdates   = pendingUpdateCount() > 0;
   if (!hasDeletions && !hasUpdates) return idle;
 
-  const calendar = google.calendar({ version: 'v3', auth: loadAuthorizedClient() });
+  const calendar = calendarApi({ version: 'v3', auth: loadAuthorizedClient() });
   const deleted = hasDeletions ? await processPendingDeletions(calendar) : 0;
   const updated = hasUpdates
     ? await processPendingUpdates(calendar, await fetchEventColorMap(calendar), new Map())
@@ -396,7 +398,7 @@ function getSyncToken(calendarId) {
  */
 async function listCalendars() {
   const client   = loadAuthorizedClient();
-  const calendar = google.calendar({ version: 'v3', auth: client });
+  const calendar = calendarApi({ version: 'v3', auth: client });
   const enabledSet = new Set(enabledCalendarIds());
   // Standard-Zuweisung je Kalender (#459) aus der geteilten external_calendars-Tabelle.
   const assigneeMap = new Map(
@@ -537,7 +539,7 @@ function disconnect() {
  */
 async function sync() {
   const client   = loadAuthorizedClient();
-  const calendar = google.calendar({ version: 'v3', auth: client });
+  const calendar = calendarApi({ version: 'v3', auth: client });
 
   // Event-Farbpalette (colorId → Hex) einmalig für den ganzen Sync laden.
   const eventColorMap = await fetchEventColorMap(calendar);

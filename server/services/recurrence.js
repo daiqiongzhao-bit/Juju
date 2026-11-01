@@ -186,6 +186,68 @@ function matchesRRuleByday(dateStr, rrule) {
   return parsed.byday.includes(day.getUTCDay());
 }
 
+const DAY_MS = 86_400_000;
+
+/**
+ * Springt in einer täglichen oder wöchentlichen Serie grob bis kurz vor
+ * `notBeforeStr` vor, statt jeden einzelnen Termin ab DTSTART durchzulaufen.
+ *
+ * Hintergrund: Die Expansion (calendar-events.js) beginnt beim Startdatum des
+ * Masters und tastet sich mit nextOccurrence() vorwärts. Ein täglich
+ * wiederkehrender Termin aus 2019 braucht bis heute über 2500 Schritte; die
+ * dortige Notbremse (MAX_ITER = 1000) greift lange vorher, die Schleife bricht
+ * ab und der Termin erscheint im Kalender überhaupt nicht mehr. Das ist kein
+ * Performance-, sondern ein Sichtbarkeitsfehler.
+ *
+ * Der Sprung bleibt bewusst grob: Er landet höchstens eine Periode vor dem
+ * Ziel, den Rest erledigt weiterhin die normale Expansion. Damit muss BYDAY,
+ * EXDATE oder die Sommerzeit-Verschiebung hier nicht ein zweites Mal
+ * nachgebaut werden.
+ *
+ * Serien mit COUNT werden nicht angefasst — dort zählt die Expansion die
+ * Vorkommen ab DTSTART mit, ein Sprung würde die Zählung verfälschen.
+ *
+ * @param {string} baseDateStr  - Aktuelles Datum der Serie (YYYY-MM-DD)
+ * @param {string} rrule        - RRULE-String
+ * @param {string} notBeforeStr - Ziel: erstes interessantes Datum (YYYY-MM-DD)
+ * @returns {string|null} Datum vor `notBeforeStr`, `baseDateStr` wenn kein Sprung
+ *          sinnvoll ist, oder null wenn die Serie (UNTIL) vorher endet.
+ */
+function fastForwardOccurrences(baseDateStr, rrule, notBeforeStr) {
+  if (!baseDateStr || !notBeforeStr) return baseDateStr;
+  const parsed = parseRRule(rrule);
+  if (!parsed) return baseDateStr;
+  const { freq, interval, byday, count, until } = parsed;
+  if (count !== null) return baseDateStr;
+  // MONTHLY/YEARLY laufen höchstens ein paar Hundert Schritte pro Jahrhundert
+  // auf — der Sonderfall lohnt dort nicht.
+  if (freq !== 'DAILY' && freq !== 'WEEKLY') return baseDateStr;
+
+  // Länge einer Phase in Tagen. Sobald BYDAY im Spiel ist, hängt die Serie am
+  // Wochenraster (BYDAY verteilt sich innerhalb einer Woche), nicht am
+  // Tagesintervall.
+  const periodDays = freq === 'DAILY' && byday.length === 0
+    ? interval
+    : 7 * (freq === 'WEEKLY' ? interval : 1);
+
+  const startMs  = Date.parse(baseDateStr + 'T00:00:00Z');
+  const targetMs = Date.parse(notBeforeStr + 'T00:00:00Z');
+  if (!Number.isFinite(startMs) || !Number.isFinite(targetMs) || targetMs <= startMs) {
+    return baseDateStr;
+  }
+
+  const periodMs = periodDays * DAY_MS;
+  // Eine volle Periode Abstand zum Ziel: so bleibt die Landung garantiert vor
+  // dem Fenster, egal wie grob das Raster ist.
+  const steps = Math.floor((targetMs - startMs) / periodMs) - 1;
+  if (steps < 1) return baseDateStr;
+
+  const landed = new Date(startMs + steps * periodMs).toISOString().slice(0, 10);
+  if (until && new Date(landed + 'T00:00:00Z') > until) return null;
+  return landed;
+}
+
 export {
   parseRRule, nextOccurrence, nextOccurrenceAfter, nextDueAfterCompletion, matchesRRuleByday,
+  fastForwardOccurrences,
 };

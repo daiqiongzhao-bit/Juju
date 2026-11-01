@@ -1074,14 +1074,17 @@ function openItemModal(item = null) {
     title: isEdit ? t('common.editItem') : t('homeInventory.addItem'),
     size: 'md',
     content: `
-      ${isEdit ? '' : `<div class="hi-templates">
-        <p class="hi-templates__title">${esc(t('homeInventory.templatesHeading'))}</p>
+      ${isEdit ? '' : `<details class="hi-templates">
+        <summary class="hi-templates__summary">
+          <span>${esc(t('homeInventory.templatesHeading'))}</span>
+          <i data-lucide="chevron-down" class="hi-templates__chevron" aria-hidden="true"></i>
+        </summary>
         <div class="hi-templates__chips">
           ${HOME_ITEM_TEMPLATES.map((tpl) => `<button type="button" class="filter-chip hi-tpl" data-tpl="${esc(tpl.key)}">
             ${esc(t(`homeInventory.tpl.${tpl.key}`))}
           </button>`).join('')}
         </div>
-      </div>`}
+      </details>`}
       <div class="form-group">
         <div class="form-label-row">
           <label class="form-label" for="hi-name">${esc(t('homeInventory.nameLabel'))}</label>
@@ -1358,6 +1361,7 @@ function wireQuickAdd(panel, kind) {
  * 不该把中文名写死进数据，否则换个语言界面就会得到一堆中文商品。
  */
 function wireTemplates(panel) {
+  const box = panel.querySelector('.hi-templates');
   const chips = panel.querySelectorAll('.hi-tpl');
   for (const btn of chips) {
     btn.addEventListener('click', () => {
@@ -1373,6 +1377,8 @@ function wireTemplates(panel) {
 
       chips.forEach((b) => b.classList.remove('filter-chip--active'));
       btn.classList.add('filter-chip--active');
+      // 选完就收起：模板是"一次性骨架"，填好之后那块列表只是挡路。
+      if (box) box.open = false;
       nameInput.focus({ preventScroll: true });
       nameInput.select?.();
       nameInput.dispatchEvent(new Event('input', { bubbles: true }));

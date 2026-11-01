@@ -1018,7 +1018,8 @@
     "categoryRelatives": "亲戚",
     "categoryFriends": "朋友",
     "categoryWork": "同事",
-    "categoryServices": "服务人员"
+    "categoryServices": "服务人员",
+    "exportSelectedToast": "已导出 {{count}} 个联系人"
   },
   "relationships": {
     "subtitle": "你的人脉网络——连接、共同联系人、重要时刻与纪念日。",
@@ -1263,7 +1264,8 @@
     "typePresetHint": "系统预设的关系类型，直接选择即可，无需自行创建。",
     "me": "我",
     "zoomIn": "放大",
-    "zoomOut": "缩小"
+    "zoomOut": "缩小",
+    "typeLabel": "类型"
   },
   "anniversaries": {
     "calendarEventTitle": "{{title}} · {{name}}",
@@ -2672,7 +2674,8 @@
     "embyMyImportDone": "已导入 {{imported}} 条（跳过 {{skipped}} 条）",
     "embyAutoSyncHint": "绑定后每小时自动同步一次，也可以随时手动同步或补导入历史。",
     "pageLicense": "授权 / License",
-    "pageLicenseDescription": "查看授权状态，或输入 License Key 激活本实例。"
+    "pageLicenseDescription": "查看授权状态，或输入 License Key 激活本实例。",
+    "twoFactorRecoveryRemaining": "剩余 {{count}} 个恢复码"
   },
   "login": {
     "tagline": "欢迎回到您的家庭计划工具。",
@@ -4316,7 +4319,9 @@
       "adoptAllLeft": "全部采用内置",
       "adoptAllRight": "全部采用 AI",
       "batchPrefix": "批号：",
-      "tracePrefix": "追溯码："
+      "tracePrefix": "追溯码：",
+      "srcBuiltin": "内置手册",
+      "srcAi": "AI 生成"
     }
   },
   "rewards": {

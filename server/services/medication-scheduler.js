@@ -100,16 +100,23 @@ export async function processDueMedications({
   const counters = { due: 0, created: 0, notified: 0, sent: 0, failed: 0 };
   const newlyDue = [];
 
-  for (const s of schedules) {
-    if (!scheduleDueOnDate(s, dateKey)) continue;
-    if (s.time_of_day > nowTime) continue; // heute noch nicht fällig
-    const scheduledAt = `${dateKey}T${s.time_of_day}`;
-    counters.due += 1;
-    if (findLog.get(s.medication_id, s.id, scheduledAt)) continue; // schon erzeugt
-    insertLog.run(s.medication_id, s.id, scheduledAt, 'pending', s.dose_qty ?? null);
-    counters.created += 1;
-    newlyDue.push({ ownerId: s.owner_id, medName: s.med_name, medicationId: s.medication_id, scheduledAt });
-  }
+  // Die Erzeugung der fälligen Dosen in einem Umschlag: Sie läuft pro Nutzer
+  // und Tag und kann bei mehreren Präparaten eine Handvoll INSERTs absetzen.
+  // Vorher war jedes davon ein eigener Commit; ein Abbruch dazwischen hinterließ
+  // einen halb gefüllten Tag, und der nächste Lauf legte den Rest daneben.
+  // Der Versand darunter bleibt bewusst draußen (dort wird awaited).
+  activeDb.transaction(() => {
+    for (const s of schedules) {
+      if (!scheduleDueOnDate(s, dateKey)) continue;
+      if (s.time_of_day > nowTime) continue; // heute noch nicht fällig
+      const scheduledAt = `${dateKey}T${s.time_of_day}`;
+      counters.due += 1;
+      if (findLog.get(s.medication_id, s.id, scheduledAt)) continue; // schon erzeugt
+      insertLog.run(s.medication_id, s.id, scheduledAt, 'pending', s.dose_qty ?? null);
+      counters.created += 1;
+      newlyDue.push({ ownerId: s.owner_id, medName: s.med_name, medicationId: s.medication_id, scheduledAt });
+    }
+  })();
 
   for (const dose of newlyDue) {
     const payload = {

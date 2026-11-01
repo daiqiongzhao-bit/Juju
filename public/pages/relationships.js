@@ -2541,7 +2541,7 @@ function openInteractionModal(presetContactId = null) {
       <select class="form-input" id="it-contact">${contactOptionsHtml(presetContactId)}</select>
     </div>
     <div class="form-group">
-      <label class="form-label" for="it-type">${t('relationships.type')}</label>
+      <label class="form-label" for="it-type">${t('relationships.typeLabel')}</label>
       <select class="form-input" id="it-type">
         ${state.options.interactionTypes.map((it) => `<option value="${it}">${esc(relInteractionLabel(it))}</option>`).join('')}
       </select>

@@ -1086,7 +1086,7 @@ function renderAccountsPage() {
     return `
       <div class="budget-account ${a.archived ? 'budget-account--archived' : ''}" style="--account-accent:${accountAccent(a.color)}">
         <button class="budget-account__main" type="button" data-drill="${a.id}"
-                aria-label="${t('budget.viewAccountTransactions', { name: a.name })} · ${t('budget.currentBalance')} ${formatAmount(a.current_balance)}">
+                aria-label="${t('budget.viewAccountTransactions', { name: esc(a.name) })} · ${t('budget.currentBalance')} ${formatAmount(a.current_balance)}">
           <span class="budget-account__icon"><i data-lucide="${icon}" class="icon-md" aria-hidden="true"></i></span>
           <span class="budget-account__body">
             <span class="budget-account__name"><span class="budget-account__name-text">${esc(a.name)}</span>${archivedBadge}</span>

@@ -202,52 +202,58 @@ export async function syncWatched(db, cfg, opts = {}) {
       `)
     : null;
 
-  for (const row of localRows) {
-    const key = normalizeTitle(row.title);
-    const candidates = byTitle.get(key) || [];
-    let hit = null;
-    if (candidates.length === 1) {
-      hit = candidates[0];
-    } else if (candidates.length > 1) {
-      // Mehrere Kandidaten: Jahr aus lokalen Metadaten versuchen (±1 Toleranz).
-      let localYear = null;
-      try {
-        const meta = row.metadata_json ? JSON.parse(row.metadata_json) : null;
-        const y = meta?.year || meta?.releaseDate || meta?.publishDate;
-        localYear = y ? parseInt(String(y).slice(0, 4), 10) : null;
-      } catch { /* ignore */ }
-      hit =
-        (localYear && candidates.find((c) => c.year && Math.abs(c.year - localYear) <= 1)) ||
-        candidates.find((c) => c.status === 'finished') ||
-        candidates[0];
-    }
-    if (!hit) {
-      if (candidates.length === 0) unmatched.push(row.title);
-      continue;
-    }
-    matched++;
-    if (perUser) {
-      // Persönlicher Status: nur vorhandene Emby-Zustände upserten; ein
-      // fehlender Eintrag heißt "keine Aussage" und lässt den gemeinsamen
-      // Status unangetastet.
-      if (hit.status !== 'unplayed') {
-        upsertUserState.run(perUser, row.id, hit.status, hit.progress ?? null);
+  // Ein Umschlag um den Abgleich: Beim Erstimport einer großen Bibliothek
+  // stuft ein einziger Lauf hunderte Zeilen gleichzeitig hoch. Ohne
+  // Transaktion war jedes UPDATE ein eigener Commit samt WAL-Fsync - und ein
+  // Abbruch in der Mitte hinterließ einen halb abgeglichenen Bestand.
+  db.transaction(() => {
+    for (const row of localRows) {
+      const key = normalizeTitle(row.title);
+      const candidates = byTitle.get(key) || [];
+      let hit = null;
+      if (candidates.length === 1) {
+        hit = candidates[0];
+      } else if (candidates.length > 1) {
+        // Mehrere Kandidaten: Jahr aus lokalen Metadaten versuchen (±1 Toleranz).
+        let localYear = null;
+        try {
+          const meta = row.metadata_json ? JSON.parse(row.metadata_json) : null;
+          const y = meta?.year || meta?.releaseDate || meta?.publishDate;
+          localYear = y ? parseInt(String(y).slice(0, 4), 10) : null;
+        } catch { /* ignore */ }
+        hit =
+          (localYear && candidates.find((c) => c.year && Math.abs(c.year - localYear) <= 1)) ||
+          candidates.find((c) => c.status === 'finished') ||
+          candidates[0];
       }
-      continue;
-    }
-    // Emby meldet explizit "nicht gesehen" -> Downgrade (wish), nur wenn aktuell higher.
-    if (hit.status === 'unplayed') {
-      if (row.status === 'finished' || row.status === 'doing') {
-        down.run(row.id);
-        downgraded++;
-        if (downgradedSamples.length < 10) downgradedSamples.push({ title: row.title, from: row.status, to: 'wish' });
+      if (!hit) {
+        if (candidates.length === 0) unmatched.push(row.title);
+        continue;
       }
-    } else if (rank[hit.status] > rank[row.status] && row.status !== 'finished') {
-      upd.run(hit.status, row.id);
-      updated++;
-      if (updatedSamples.length < 10) updatedSamples.push({ title: row.title, from: row.status, to: hit.status });
+      matched++;
+      if (perUser) {
+        // Persönlicher Status: nur vorhandene Emby-Zustände upserten; ein
+        // fehlender Eintrag heißt "keine Aussage" und lässt den gemeinsamen
+        // Status unangetastet.
+        if (hit.status !== 'unplayed') {
+          upsertUserState.run(perUser, row.id, hit.status, hit.progress ?? null);
+        }
+        continue;
+      }
+      // Emby meldet explizit "nicht gesehen" -> Downgrade (wish), nur wenn aktuell higher.
+      if (hit.status === 'unplayed') {
+        if (row.status === 'finished' || row.status === 'doing') {
+          down.run(row.id);
+          downgraded++;
+          if (downgradedSamples.length < 10) downgradedSamples.push({ title: row.title, from: row.status, to: 'wish' });
+        }
+      } else if (rank[hit.status] > rank[row.status] && row.status !== 'finished') {
+        upd.run(hit.status, row.id);
+        updated++;
+        if (updatedSamples.length < 10) updatedSamples.push({ title: row.title, from: row.status, to: hit.status });
+      }
     }
-  }
+  })();
 
   return {
     embyItems: items.length,

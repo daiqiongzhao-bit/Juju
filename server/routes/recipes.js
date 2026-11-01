@@ -7,7 +7,8 @@
 import { createLogger } from '../logger.js';
 import express from 'express';
 import * as db from '../db.js';
-import { str, num, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT } from '../middleware/validate.js';
+import { str, num, url, collectErrors, MAX_TITLE, MAX_TEXT, MAX_SHORT } from '../middleware/validate.js';
+import { normalizeUrlInput } from '../../public/utils/url-safety.js';
 import { normalizeRecipeMealTypes } from '../../public/utils/recipe-meal-types.js';
 import { getAdapter } from '../services/mealie-sync.js';
 
@@ -114,7 +115,12 @@ router.post('/', (req, res) => {
 
     const vTitle = str(req.body.title, 'Titel', { max: MAX_TITLE });
     const vNotes = str(req.body.notes, 'Notizen', { max: MAX_TEXT, required: false });
-    const vRecipeUrl = str(req.body.recipe_url, 'Rezept-URL', { max: MAX_TEXT, required: false });
+    // url() statt str(): nur http(s) speichern. recipe_url landet als <a href>
+    // im Frontend, ein javascript:-Wert wäre dort ausführbarer Code.
+    // normalizeUrlInput() ergänzt nur bei nackten Domains das Schema — ein
+    // javascript:-Wert läuft unverändert in url() und wird dort als Fehler
+    // gemeldet, statt still zu null zu werden.
+    const vRecipeUrl = url(normalizeUrlInput(req.body.recipe_url), 'Rezept-URL');
     const mealTypes = normalizeRecipeMealTypes(req.body.meal_types);
 
     const errors = collectErrors([vTitle, vNotes, vRecipeUrl]);
@@ -170,7 +176,12 @@ router.put('/:id', (req, res) => {
 
     const vTitle = str(req.body.title, 'Titel', { max: MAX_TITLE });
     const vNotes = str(req.body.notes, 'Notizen', { max: MAX_TEXT, required: false });
-    const vRecipeUrl = str(req.body.recipe_url, 'Rezept-URL', { max: MAX_TEXT, required: false });
+    // url() statt str(): nur http(s) speichern. recipe_url landet als <a href>
+    // im Frontend, ein javascript:-Wert wäre dort ausführbarer Code.
+    // normalizeUrlInput() ergänzt nur bei nackten Domains das Schema — ein
+    // javascript:-Wert läuft unverändert in url() und wird dort als Fehler
+    // gemeldet, statt still zu null zu werden.
+    const vRecipeUrl = url(normalizeUrlInput(req.body.recipe_url), 'Rezept-URL');
     const mealTypes = normalizeRecipeMealTypes(req.body.meal_types);
     const errors = collectErrors([vTitle, vNotes, vRecipeUrl]);
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });

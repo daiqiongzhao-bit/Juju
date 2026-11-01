@@ -21,6 +21,7 @@ import '/components/datepicker.js';
 import { renderSkeletonList } from '/utils/skeleton.js';
 import { mountEmptyState, mountLoadError } from '/utils/empty-state.js';
 import { renderPageSearch, wirePageSearch } from '/utils/page-search.js';
+import { safeHttpUrl } from '/utils/url-safety.js';
 
 let _container = null;
 /** Handle des geteilten Suchfelds (setValue/clear), gesetzt in render(). */
@@ -677,10 +678,13 @@ function renderRecipeList() {
         detailActions.appendChild(addToShopping);
       }
 
-      if (recipe.recipe_url) {
+      // safeHttpUrl statt Rohwert: recipe_url ist Freitext (auch über den
+      // CSV-Import befüllbar) — "javascript:" darf kein anklickbarer Link werden.
+      const recipeHref = safeHttpUrl(recipe.recipe_url);
+      if (recipeHref) {
         const link = document.createElement('a');
         link.className = 'btn btn--ghost';
-        link.href = recipe.recipe_url;
+        link.href = recipeHref;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         link.insertAdjacentHTML('beforeend',

@@ -300,41 +300,48 @@ export function generateRecurringInstances(database, month) {
     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
   `);
 
-  for (const orig of originals) {
-    const interval = orig.recurrence_interval || 'monthly';
+  // Ein Umschlag um den ganzen Lauf: vorher war jedes INSERT eine eigene
+  // Transaktion (ein WAL-Fsync pro Zeile), und ein Fehler in der Mitte ließ
+  // den Monat halb materialisiert zurück. Die Idempotenz-Prüfungen oben
+  // bleiben unverändert - sie laufen jetzt nur innerhalb derselben Transaktion.
+  const runMaterialize = database.transaction(() => {
+    for (const orig of originals) {
+      const interval = orig.recurrence_interval || 'monthly';
 
-    // Virtuelle Serien tragen im Original bereits den Monatsanteil: sie kommen in
-    // JEDEM Monat einmal vor, unabhängig vom Rhythmus - auch bei Wochenserien,
-    // deren Anteil sonst über den Monat verstreut läge, ohne dass eine der
-    // Buchungen die Zahlung wäre.
-    const dates = orig.recurrence_virtual
-      ? [`${month}-${String(Math.min(
-          parseInt(orig.date.split('-')[2], 10),
-          new Date(Date.UTC(y, m, 0)).getUTCDate(),
-        )).padStart(2, '0')}`]
-      : occurrenceDatesInMonth(orig.date, interval, orig.recurrence_interval_count, month);
+      // Virtuelle Serien tragen im Original bereits den Monatsanteil: sie kommen in
+      // JEDEM Monat einmal vor, unabhängig vom Rhythmus - auch bei Wochenserien,
+      // deren Anteil sonst über den Monat verstreut läge, ohne dass eine der
+      // Buchungen die Zahlung wäre.
+      const dates = orig.recurrence_virtual
+        ? [`${month}-${String(Math.min(
+            parseInt(orig.date.split('-')[2], 10),
+            new Date(Date.UTC(y, m, 0)).getUTCDate(),
+          )).padStart(2, '0')}`]
+        : occurrenceDatesInMonth(orig.date, interval, orig.recurrence_interval_count, month);
 
-    for (const date of dates) {
-      // Übersprungen (eine gelöschte Instanz) oder schon vorhanden? Beides wird am
-      // Fälligkeitstag geprüft, nicht am Monat: eine Wochenserie hat mehrere pro
-      // Monat, und ein gelöschter Dienstag darf die übrigen nicht mitnehmen.
-      if (skipStmt.get(orig.id, date)) continue;
-      if (existsStmt.get(orig.id, date)) continue;
+      for (const date of dates) {
+        // Übersprungen (eine gelöschte Instanz) oder schon vorhanden? Beides wird am
+        // Fälligkeitstag geprüft, nicht am Monat: eine Wochenserie hat mehrere pro
+        // Monat, und ein gelöschter Dienstag darf die übrigen nicht mitnehmen.
+        if (skipStmt.get(orig.id, date)) continue;
+        if (existsStmt.get(orig.id, date)) continue;
 
-      // Materialisierte Instanz erbt Eigentümer + Sichtbarkeit des Serien-Originals
-      // (#476/#505). Ohne das würde jede Instanz owner_id=NULL + visibility='shared'
-      // (Spalten-Default) bekommen: eine private Serie würde im Haushalt sichtbar und
-      // für die Eigentümer:in in scope=mine unsichtbar.
-      // Verlangt die Serie eine Bestätigung (#637), entsteht die Buchung als
-      // erwartet: sichtbar und planbar, aber in keiner Summe. Der Ursprung
-      // selbst bleibt eine echte Buchung - er wurde von Hand eingetragen.
-      insertStmt.run(
-        orig.title, orig.amount, orig.category, orig.subcategory || '', date,
-        orig.id, orig.created_by, orig.owner_id, orig.visibility || 'shared',
-        orig.recurrence_confirm ? 1 : 0,
-      );
+        // Materialisierte Instanz erbt Eigentümer + Sichtbarkeit des Serien-Originals
+        // (#476/#505). Ohne das würde jede Instanz owner_id=NULL + visibility='shared'
+        // (Spalten-Default) bekommen: eine private Serie würde im Haushalt sichtbar und
+        // für die Eigentümer:in in scope=mine unsichtbar.
+        // Verlangt die Serie eine Bestätigung (#637), entsteht die Buchung als
+        // erwartet: sichtbar und planbar, aber in keiner Summe. Der Ursprung
+        // selbst bleibt eine echte Buchung - er wurde von Hand eingetragen.
+        insertStmt.run(
+          orig.title, orig.amount, orig.category, orig.subcategory || '', date,
+          orig.id, orig.created_by, orig.owner_id, orig.visibility || 'shared',
+          orig.recurrence_confirm ? 1 : 0,
+        );
+      }
     }
-  }
+  });
+  runMaterialize();
 }
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
