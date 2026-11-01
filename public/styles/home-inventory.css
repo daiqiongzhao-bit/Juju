@@ -214,3 +214,199 @@
     margin-inline-end: auto;
   }
 }
+
+/* --------------------------------------------------------
+ * 0.0.73: 模板 / 扫码 / 流水 / 批量选择 / 多批次折叠
+ *
+ * Alles hier ist seitenspezifisch: das Stylesheet kommt mit der Route und geht
+ * mit ihr. Modal-Inhalte liegen zwar am <body>, hängen aber an denselben
+ * Klassennamen — Reichweite passt.
+ * -------------------------------------------------------- */
+
+/* ---- 常用物品模板 ---- */
+.hi-templates {
+  margin-bottom: var(--space-4);
+}
+
+.hi-templates__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.hi-templates__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Chips kommen aus der Filter-Grammatik; im Formular sollen sie etwas
+ * kompakter stehen als die Filterleiste über der Liste. */
+.hi-templates__chips .filter-chip {
+  min-height: var(--target-sm, 30px);
+  padding-inline: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* ---- 扫码 ---- */
+.hi-scan {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.hi-scan__panel {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  color: #fff;
+}
+
+.hi-scan__video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-lg, 14px);
+  background: #000;
+  object-fit: cover;
+}
+
+.hi-scan__hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  text-align: center;
+  opacity: 0.85;
+}
+
+/* ---- 最近变动 ---- */
+.hi-history {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border, rgba(127, 127, 127, 0.18));
+}
+
+.hi-history[hidden] {
+  display: none;
+}
+
+.hi-history__list {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.hi-history__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.hi-history__delta {
+  flex: 0 0 auto;
+  min-width: 3.2em;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-medium);
+}
+
+.hi-history__delta.is-in {
+  color: var(--color-success-ink, #2e7d32);
+}
+
+.hi-history__delta.is-out {
+  color: var(--color-text-secondary);
+}
+
+.hi-history__reason {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hi-history__meta {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 批量选择 ---- */
+.hi-selectbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-surface-2, rgba(127, 127, 127, 0.08));
+}
+
+.hi-selectbar[hidden] {
+  display: none;
+}
+
+.hi-selectbar__count {
+  margin-inline-end: auto;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+/* Auswahl-Kästchen in der Zeile */
+.hi-check {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-inline-end: var(--space-2);
+  border: 1.5px solid var(--color-border-strong, rgba(127, 127, 127, 0.4));
+  border-radius: 6px;
+  color: transparent;
+}
+
+.hi-check--on {
+  border-color: var(--color-btn-primary, #007aff);
+  background: var(--color-btn-primary, #007aff);
+  color: #fff;
+}
+
+/* ---- 多批次 ---- */
+.hi-batches__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+}
+
+/* Zusätzliche Batches: minimal eingerückt, damit sichtbar bleibt, dass sie zu
+ * der Zeile darüber gehören. */
+.pantry-row.hi-batch-extra {
+  padding-inline-start: calc(var(--space-4) + 8px);
+}
+
+.pantry-row.is-selected {
+  background: var(--color-surface-2, rgba(127, 127, 127, 0.08));
+}
+
+/* Pull-to-Refresh: die Liste gibt beim Ziehen sichtbar nach. */
+.pantry-list.hi-pulling {
+  transform: translateY(8px);
+  transition: transform 120ms ease-out;
+}

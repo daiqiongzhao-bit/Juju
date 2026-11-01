@@ -33,6 +33,7 @@ import { startScheduler as startBackupScheduler } from './services/backup-schedu
 import { startScheduler as startSplitExpenseScheduler } from './services/split-expenses-scheduler.js';
 import { startScheduler as startPushScheduler } from './services/push-scheduler.js';
 import { startScheduler as startMedicationScheduler } from './services/medication-scheduler.js';
+import { startScheduler as startHomeInventoryAlerts } from './services/home-inventory-alerts.js';
 import { startScheduler as startMealieScheduler } from './services/mealie-sync.js';
 import { emailService } from './services/email.js';
 import dashboardRouter from './routes/dashboard.js';
@@ -607,6 +608,7 @@ app.listen(PORT, () => {
   startSplitExpenseScheduler();
   startPushScheduler();
   startMedicationScheduler();
+  startHomeInventoryAlerts();
   startMealieScheduler();
   startEmbyScheduler();
 });

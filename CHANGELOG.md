@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.73] - 2026-11-01
+
+### 家庭库存：与购物清单打通、出入库流水、条码、模板、批量操作
+- **补货 → 购物清单**：「需要补货」旁边一个按钮把缺货物品推进购物清单，
+  清单里勾选完成后自动回写库存（Migration 174 增加 `shopping_items.home_inventory_item_id`
+  建立关联），同一个商品不会重复上清单。
+- **每日效期/缺货提醒**：新增 `services/home-inventory-alerts.js`，每天 8 点后把
+  「待补货 / 已过期 / 临期」聚合成一条通知，走既有站内信箱 + Web Push（不再需要
+  打开页面才知道洗衣液用完了）。
+- **出入库流水**：新表 `home_inventory_logs`，每次新建/编辑/加减/采购入库都记一条；
+  编辑弹窗里显示「最近变动」和近 90 天用掉多少，并按实际消耗速度给出「预计还能
+  用 N 天」。
+- **同名批次折叠**：多个有效期仍各自独立成行，但默认只展开最先到期的一批，其余
+  一键展开 —— 列表不会随采购次数无限变长。
+- **条码扫描**：名称旁「扫一扫」用 BarcodeDetector 识别；识别过的条码会记住，
+  下次扫同一件商品自动填好名称、类别、单位和存放位置。
+- **常用物品模板**：新建时一键填入 16 种常见日用品（洗衣液、抽纸、洗发水…）的
+  名称/类别/单位/位置，只需再填数量和效期。
+- **批量操作**：选择模式下多选物品，可批量加入购物清单或批量删除（带确认）。
+- **移动端**：数量步进支持长按连加（请求合并，只发一次），列表支持下拉刷新。
+- **全局搜索接入**：搜索框现在能搜到家庭库存物品（Migration 174 建立 FTS 触发器与
+  索引回填），点击直达对应物品。
+- **工程整理**：删除根目录下与 `public/` 完全重复的 `index.html` / `sw.js`（实际只
+  服务 `public/`，两份曾导致版本号漏改）；新增 `test/home-inventory-taxonomy.test.js`
+  校验内置类别/单位/位置与语言包键一一对应，`npm test` 即可跑。
+
 ## [0.0.72] - 2026-11-01
 
 ### 家庭库存：存放位置可下拉/新增，修复「新增」无响应

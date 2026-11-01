@@ -7,7 +7,7 @@ export function homeInventoryPaths() {
       post: op({ summary: 'Create home inventory item', tag: 'HomeInventory', stateChanging: true, requestBody: jsonBody(null) }),
     },
     '/api/v1/home-inventory/taxonomy': {
-      get: op({ summary: 'List fixed categories/units/locations plus custom entries of the home inventory module', tag: 'HomeInventory' }),
+      get: op({ summary: 'List fixed categories, units and storage locations of the home inventory module', tag: 'HomeInventory' }),
     },
     '/api/v1/home-inventory/categories': {
       post: op({ summary: 'Create a custom category (name is also the stored value)', tag: 'HomeInventory', stateChanging: true, requestBody: jsonBody(null) }),
@@ -24,7 +24,7 @@ export function homeInventoryPaths() {
       delete: op({ summary: 'Delete a custom unit (only while unused)', tag: 'HomeInventory', params: [idParam('optionId', 'Unit ID')], stateChanging: true }),
     },
     '/api/v1/home-inventory/locations': {
-      post: op({ summary: 'Create a custom storage location (name is also the stored value)', tag: 'HomeInventory', stateChanging: true, requestBody: jsonBody(null) }),
+      post: op({ summary: 'Create a custom storage location', tag: 'HomeInventory', stateChanging: true, requestBody: jsonBody(null) }),
     },
     '/api/v1/home-inventory/locations/{optionId}': {
       put: op({ summary: 'Rename a custom storage location (items referencing it are updated)', tag: 'HomeInventory', params: [idParam('optionId', 'Location ID')], stateChanging: true, requestBody: jsonBody(null) }),
@@ -34,6 +34,15 @@ export function homeInventoryPaths() {
       put: op({ summary: 'Replace home inventory item', tag: 'HomeInventory', params: [idParam('itemId', 'Item ID')], stateChanging: true, requestBody: jsonBody(null) }),
       patch: op({ summary: 'Partially update home inventory item (quantity stepper)', tag: 'HomeInventory', params: [idParam('itemId', 'Item ID')], stateChanging: true, requestBody: jsonBody(null) }),
       delete: op({ summary: 'Delete home inventory item', tag: 'HomeInventory', params: [idParam('itemId', 'Item ID')], stateChanging: true }),
+    },
+    '/api/v1/home-inventory/{itemId}/history': {
+      get: op({ summary: 'Stock ledger of one batch (last changes, newest first, plus 90-day consumption)', tag: 'HomeInventory', params: [idParam('itemId', 'Item ID')] }),
+    },
+    '/api/v1/home-inventory/barcode/{code}': {
+      get: op({ summary: 'Look up the last item stored under this barcode', tag: 'HomeInventory' }),
+    },
+    '/api/v1/home-inventory/restock': {
+      post: op({ summary: 'Push items that need restocking onto a shopping list', tag: 'HomeInventory', stateChanging: true, requestBody: jsonBody(null) }),
     },
   };
 }

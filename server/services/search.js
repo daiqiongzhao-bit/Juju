@@ -54,7 +54,7 @@ export function buildMatchQuery(q) {
 export function runSearch(database, q, userId, isAdmin = false) {
   const match = buildMatchQuery(q);
   if (!match) {
-    return { tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [], gifts: [], media: [], documents: [], recipes: [] };
+    return { tasks: [], events: [], notes: [], contacts: [], items: [], meds: [], activities: [], gifts: [], media: [], documents: [], recipes: [], homeItems: [] };
   }
   const limit = SEARCH_LIMIT;
 
@@ -181,5 +181,16 @@ export function runSearch(database, q, userId, isAdmin = false) {
     LIMIT @limit
   `).all({ like: giftLike, limit });
 
-  return { tasks, events, notes, contacts, items, meds, activities, gifts, media, documents, recipes };
+  // 家庭库存: FTS-Treffer (Trigger pflegen den Index) — Name, Notiz und
+  // Lagerort landen im body, damit auch "阳台" die dort liegenden Dinge findet.
+  const homeItems = database.prepare(`
+    SELECT h.id, h.name AS title, h.quantity, h.unit, h.location, h.expires_on
+    FROM search_index s
+    JOIN home_inventory_items h ON h.id = s.entity_id
+    WHERE s.entity = 'homeItem' AND s.search_index MATCH @match
+    ORDER BY h.name ASC
+    LIMIT @limit
+  `).all({ match, limit });
+
+  return { tasks, events, notes, contacts, items, meds, activities, gifts, media, documents, recipes, homeItems };
 }

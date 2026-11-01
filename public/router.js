@@ -5159,13 +5159,13 @@ function renderSearchResults(container, data, onClose) {
 
   container.replaceChildren();
 
-  const { tasks = [], events = [], notes = [], contacts = [], items = [], meds = [], activities = [], gifts = [], media = [], documents = [], recipes = [] } = data;
+  const { tasks = [], events = [], notes = [], contacts = [], items = [], meds = [], activities = [], gifts = [], media = [], documents = [], recipes = [], homeItems = [] } = data;
 
   const total = tasks.length + events.length + notes.length + contacts.length + items.length
 
     + meds.length + activities.length + gifts.length
 
-    + media.length + documents.length + recipes.length;
+    + media.length + documents.length + recipes.length + homeItems.length;
 
 
 
@@ -5311,6 +5311,21 @@ function renderSearchResults(container, data, onClose) {
   makeSection('nav.recipes', recipes, (i) => '/recipes', null,
 
     (i) => (i.notes ? String(i.notes).slice(0, 60) : ''));
+
+  // 家庭库存: Treffer zeigen Menge + Lagerort als Zweitzeile. Der Deep-Link
+  // ?open=<id> öffnet in der Seite direkt den Batch.
+
+
+
+  makeSection('nav.familyInventory', homeItems, (i) => `/family-inventory?open=${i.id}`, null,
+
+
+
+    (i) => [[i.quantity != null ? String(i.quantity) : '', i.unit || ''].filter(Boolean).join(' '),
+
+
+
+      i.location || ''].filter(Boolean).join(' · '));
 
 
 

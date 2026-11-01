@@ -53,6 +53,10 @@ import {
   checkHomeOptionName,
   homeOptionMaxLength,
   compareHomeBatches,
+  normalizeHomeBarcode,
+  isValidHomeBarcode,
+  homeDaysLeft,
+  localDateKey,
 } from '../../public/utils/home-inventory-taxonomy.js';
 
 const log = createLogger('HomeInventory');
@@ -64,6 +68,100 @@ const router = express.Router();
 
 function getItem(itemId) {
   return db.get().prepare('SELECT * FROM home_inventory_items WHERE id = ?').get(itemId);
+}
+
+const userIdOf = (req) => req.authUserId || req.session?.userId || null;
+
+// --------------------------------------------------------
+// Bestandsbuch (v173)
+//
+// Bis v172 war die Menge nur ein Zustand: der Stepper schrieb eine Zahl, die
+// vorherige war danach weg. Damit ließ sich nicht sagen, wer wann etwas
+// entnommen hat, und erst recht nicht, wie schnell ein Artikel zur Neige geht.
+// Jede Mengenänderung schreibt deshalb eine Zeile — Name als Momentaufnahme
+// mitgespeichert, damit ein gelöschter Batch seine Geschichte nicht verliert.
+// --------------------------------------------------------
+
+/**
+ * @param {number} itemId
+ * @param {string} itemName
+ * @param {number} delta Differenz (negativ = entnommen)
+ * @param {number} quantityAfter Bestand nach der Buchung
+ * @param {'create'|'edit'|'adjust'|'shopping'|'restock'} reason
+ * @param {number|null} userId
+ */
+function recordLog(itemId, itemName, delta, quantityAfter, reason, userId) {
+  if (!Number.isFinite(delta) || delta === 0) return;
+  try {
+    db.get().prepare(`
+      INSERT INTO home_inventory_logs (item_id, item_name, delta, quantity_after, reason, user_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(itemId, String(itemName ?? ''), delta, quantityAfter, reason, userId ?? null);
+  } catch (err) {
+    // Das Buch darf einen erfolgreichen Schreibvorgang nie scheitern lassen.
+    log.warn('Bestandsbuch konnte nicht geschrieben werden:', err.message);
+  }
+}
+
+/**
+ * Verbrauch je Artikelname aus den Logs: wie viel pro Tag ging in den letzten
+ * 90 Tagen weg? Grundlage für "noch ~N Tage" und für die Sortierung nach
+ * Dringlichkeit.
+ *
+ * Gerechnet wird über den TATSÄCHLICHEN Beobachtungszeitraum (erster bis
+ * letzter Eintrag der Gruppe), nicht pauschal über 90 Tage: ein Artikel, der
+ * seit drei Tagen geführt wird, hätte sonst eine 30-mal zu kleine Rate.
+ * @returns {Map<string, number>} key = Name in Kleinschreibung → Menge/Tag
+ */
+function consumptionRates() {
+  const rows = db.get().prepare(`
+    SELECT LOWER(TRIM(item_name)) AS key,
+           SUM(CASE WHEN delta < 0 THEN -delta ELSE 0 END) AS consumed,
+           MIN(substr(created_at, 1, 10)) AS first_day,
+           MAX(substr(created_at, 1, 10)) AS last_day
+      FROM home_inventory_logs
+     WHERE created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-90 day')
+     GROUP BY LOWER(TRIM(item_name))
+  `).all();
+
+  const today = Date.parse(`${localDateKey()}T00:00:00Z`);
+  const rates = new Map();
+  for (const row of rows) {
+    const consumed = Number(row.consumed) || 0;
+    if (consumed <= 0) continue;
+    const first = Date.parse(`${row.first_day}T00:00:00Z`);
+    const last = Date.parse(`${row.last_day}T00:00:00Z`);
+    // Mindestens ein Tag Beobachtung — sonst teilte man durch 0 und jede
+    // Entnahme wäre "unendlich schnell".
+    const days = Math.max(1, Math.round(((Number.isFinite(last) ? last : today) - first) / 86_400_000) + 1);
+    rates.set(row.key, consumed / days);
+  }
+  return rates;
+}
+
+/**
+ * Verfügbarkeit als Objekt an jeden Batch hängen, damit die Seite nicht selbst
+ * rechnen muss: `per_day` (Verbrauch/Tag) und `days_left` (Resttage bei
+ * gleichbleibendem Verbrauch). Beides bezieht sich auf den ARTIKEL (alle
+ * Batches zusammen), nicht auf den einzelnen Batch — sonst stünde an jeder
+ * Flasche die halbe Wahrheit.
+ */
+function withUsage(rows) {
+  const rates = consumptionRates();
+  const totals = new Map();
+  for (const row of rows) {
+    const key = String(row.name ?? '').trim().toLowerCase();
+    totals.set(key, (totals.get(key) ?? 0) + (Number(row.quantity) || 0));
+  }
+  return rows.map((row) => {
+    const key = String(row.name ?? '').trim().toLowerCase();
+    const perDay = rates.get(key) ?? null;
+    return {
+      ...row,
+      per_day: perDay,
+      days_left: perDay === null ? null : homeDaysLeft(totals.get(key) ?? 0, perDay),
+    };
+  });
 }
 
 /** Eigene Kategorien/Einheiten/Lagerorte in Anlagereihenfolge. */
@@ -139,12 +237,13 @@ function loadItems() {
   const order = categoryOrderMap();
   const fallback = order.size + 1;
   const rows = db.get().prepare('SELECT * FROM home_inventory_items').all();
-  return rows.sort((a, b) => {
+  rows.sort((a, b) => {
     const ca = order.get(a.category) ?? fallback;
     const cb = order.get(b.category) ?? fallback;
     if (ca !== cb) return ca - cb;
     return compareHomeBatches(a, b);
   });
+  return withUsage(rows);
 }
 
 function resolveCategoryIcon(raw) {
@@ -245,6 +344,17 @@ function validateItemFields(body, { partial = false, current = null } = {}) {
       }
       values.min_quantity = vMin.value === null ? null : normalizeHomeQuantity(vMin.value, { fallback: 0 });
     }
+  }
+
+  // 条码：可选。扫描枪/摄像头给出的值直接存，下次扫同一件商品即可命中。
+  // Ungültige Formen sind ein Fehler (ein versehentlich gescannter Kassenzettel
+  // soll nicht als "Code" in der Datenbank landen).
+  if (!partial || body.barcode !== undefined) {
+    const raw = body.barcode === null || body.barcode === '' ? '' : String(body.barcode).trim();
+    if (raw && !isValidHomeBarcode(raw)) {
+      results.push({ error: '条码格式不正确（4–64 位字母、数字或连字符）。' });
+    }
+    values.barcode = raw ? normalizeHomeBarcode(raw) : null;
   }
 
   if (!partial || body.notes !== undefined) {
@@ -468,13 +578,17 @@ router.post('/', (req, res) => {
 
     const result = db.get().prepare(`
       INSERT INTO home_inventory_items
-        (name, category, quantity, unit, expires_on, location, min_quantity, notes, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (name, category, quantity, unit, expires_on, location, min_quantity, notes, barcode, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       values.name, values.category, values.quantity, values.unit,
       values.expires_on, values.location, values.min_quantity, values.notes,
-      req.authUserId || req.session.userId
+      values.barcode, userIdOf(req)
     );
+    // Anfangsbestand buchen: ohne diese Zeile begänne die Verbrauchsrechnung
+    // erst beim ersten Stepper-Klick und läge damit dauerhaft zu niedrig.
+    recordLog(result.lastInsertRowid, values.name, Number(values.quantity) || 0,
+      Number(values.quantity) || 0, 'create', userIdOf(req));
     res.status(201).json({ data: getItem(result.lastInsertRowid) });
   } catch (err) {
     log.error('POST / error:', err);
@@ -500,13 +614,18 @@ router.put('/:itemId', (req, res) => {
     db.get().prepare(`
       UPDATE home_inventory_items
       SET name = ?, category = ?, quantity = ?, unit = ?, expires_on = ?, location = ?,
-          min_quantity = ?, notes = ?,
+          min_quantity = ?, notes = ?, barcode = ?,
           updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
       WHERE id = ?
     `).run(
       values.name, values.category, values.quantity, values.unit,
-      values.expires_on, values.location, values.min_quantity, values.notes, item.id
+      values.expires_on, values.location, values.min_quantity, values.notes,
+      values.barcode, item.id
     );
+    // Auch das Bearbeiten kann eine Menge ändern (Korrektur nach dem Einkauf) —
+    // die Differenz gehört ins Buch, sonst fehlt sie in der Verbrauchsrechnung.
+    recordLog(item.id, values.name, (Number(values.quantity) || 0) - (Number(item.quantity) || 0),
+      Number(values.quantity) || 0, 'edit', userIdOf(req));
     res.json({ data: getItem(item.id) });
   } catch (err) {
     log.error('PUT /:itemId error:', err);
@@ -538,7 +657,10 @@ router.patch('/:itemId', (req, res) => {
       UPDATE home_inventory_items
       SET ${assignments}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
       WHERE id = ?
-    `).run(...fields.map((f) => values[f]), item.id);
+    `    ).run(...fields.map((f) => values[f]), item.id);
+    recordLog(item.id, values.name ?? item.name,
+      (Number(values.quantity ?? item.quantity) || 0) - (Number(item.quantity) || 0),
+      Number(values.quantity ?? item.quantity) || 0, 'adjust', userIdOf(req));
     res.json({ data: getItem(item.id) });
   } catch (err) {
     log.error('PATCH /:itemId error:', err);
@@ -557,6 +679,154 @@ router.delete('/:itemId', (req, res) => {
     res.status(204).end();
   } catch (err) {
     log.error('DELETE /:itemId error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// GET /api/v1/home-inventory/:itemId/history?limit=20
+// Bestandsbuch eines Batches, neueste zuerst, plus die 90-Tage-Summe.
+// Response: { data: { logs: [...], consumed90, unit } }
+// --------------------------------------------------------
+router.get('/:itemId/history', (req, res) => {
+  try {
+    const item = getItem(req.params.itemId);
+    if (!item) return res.status(404).json({ error: '物品不存在。', code: 404 });
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+    const logs = db.get().prepare(`
+      SELECT l.id, l.delta, l.quantity_after, l.reason, l.created_at,
+             COALESCE(u.display_name, u.username, '') AS user_name
+        FROM home_inventory_logs l
+        LEFT JOIN users u ON u.id = l.user_id
+       WHERE l.item_id = ?
+       ORDER BY l.created_at DESC, l.id DESC
+       LIMIT ?
+    `).all(item.id, limit);
+
+    const consumed = db.get().prepare(`
+      SELECT COALESCE(SUM(CASE WHEN delta < 0 THEN -delta ELSE 0 END), 0) AS c
+        FROM home_inventory_logs
+       WHERE item_id = ?
+         AND created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-90 day')
+    `).get(item.id).c;
+
+    res.json({ data: { logs, consumed90: consumed, unit: item.unit } });
+  } catch (err) {
+    log.error('GET /:itemId/history error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// GET /api/v1/home-inventory/barcode/:code
+// Für den Scanner: gibt es zu diesem Code schon einen Artikel, kennt das
+// Formular Name/Kategorie/Einheit/Lagerort bereits.
+// Response: { data: HomeInventoryItem } | 404
+// --------------------------------------------------------
+router.get('/barcode/:code', (req, res) => {
+  try {
+    const code = normalizeHomeBarcode(req.params.code);
+    if (!code) return res.status(400).json({ error: '条码格式不正确。', code: 400 });
+    const row = db.get().prepare(`
+      SELECT * FROM home_inventory_items WHERE barcode = ?
+       ORDER BY updated_at DESC, id DESC LIMIT 1
+    `).get(code);
+    if (!row) return res.status(404).json({ error: '没有用过这个条码的物品。', code: 404 });
+    res.json({ data: row });
+  } catch (err) {
+    log.error('GET /barcode/:code error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// POST /api/v1/home-inventory/restock
+// Überträgt Artikel in eine Einkaufsliste — der Weg von "leer" zu "gekauft".
+// Body: { ids?: number[], scope?: 'restock'|'all', list_id?: number }
+// Response: { data: { list_id, list_name, added, skipped, ids } }
+//
+// Der Übertrag ist idempotent genug für den Alltag: ein Artikel, der in dieser
+// Liste schon offen liegt, wird nicht doppelt eingetragen (sonst stünde nach
+// drei Klicks dreimal "洗衣液" auf dem Zettel).
+// --------------------------------------------------------
+router.post('/restock', (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const ids = Array.isArray(body.ids)
+      ? [...new Set(body.ids.map(Number).filter(Number.isInteger))]
+      : [];
+
+    let targets;
+    if (ids.length) {
+      const marks = ids.map(() => '?').join(',');
+      targets = db.get().prepare(
+        `SELECT * FROM home_inventory_items WHERE id IN (${marks})`
+      ).all(...ids);
+    } else if (body.scope === 'all') {
+      targets = db.get().prepare('SELECT * FROM home_inventory_items').all();
+    } else {
+      // Standard: alles, was als "需要补货" markiert ist (leer oder unter Schwelle).
+      targets = db.get().prepare(`
+        SELECT * FROM home_inventory_items
+         WHERE quantity <= 0
+            OR (min_quantity IS NOT NULL AND quantity <= min_quantity)
+      `).all();
+    }
+    if (!targets.length) {
+      return res.status(400).json({ error: '没有需要补货的物品。', code: 400 });
+    }
+
+    const list = body.list_id
+      ? db.get().prepare('SELECT id, name FROM shopping_lists WHERE id = ?').get(body.list_id)
+      : db.get().prepare('SELECT id, name FROM shopping_lists ORDER BY id ASC LIMIT 1').get();
+    if (!list) {
+      return res.status(400).json({ error: '还没有购物清单，请先在「购物」里新建一个。', code: 400 });
+    }
+
+    const fallbackCategory = db.get()
+      .prepare("SELECT name FROM shopping_categories ORDER BY sort_order ASC, id ASC LIMIT 1")
+      .get()?.name ?? 'Sonstiges';
+    // Kategorie der Einkaufsliste übernehmen, wenn es sie gibt — sonst die erste.
+    const shoppingCats = db.get().prepare('SELECT name FROM shopping_categories').all()
+      .map((c) => c.name);
+
+    const exists = db.get().prepare(`
+      SELECT 1 FROM shopping_items
+       WHERE list_id = ? AND is_checked = 0 AND home_inventory_item_id = ?
+    `);
+    const insert = db.get().prepare(`
+      INSERT INTO shopping_items (list_id, name, quantity, category, home_inventory_item_id)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    let added = 0;
+    let skipped = 0;
+    const createdIds = [];
+
+    db.get().transaction(() => {
+      for (const item of targets) {
+        if (exists.get(list.id, item.id)) {
+          skipped += 1;
+          continue;
+        }
+        // Menge: bis zur Schwelle auffüllen, mindestens 1. Bei "leer" ist die
+        // Schwelle die beste Schätzung dessen, was wieder ins Haus soll.
+        const need = Math.max(1, Math.ceil(Number(item.min_quantity) || 1));
+        const category = shoppingCats.includes(item.category)
+          ? item.category
+          : fallbackCategory;
+        const info = insert.run(list.id, item.name, String(need), category, item.id);
+        createdIds.push(info.lastInsertRowid);
+        added += 1;
+      }
+    })();
+
+    res.status(added ? 201 : 200).json({
+      data: { list_id: list.id, list_name: list.name, added, skipped, ids: createdIds },
+    });
+  } catch (err) {
+    log.error('POST /restock error:', err);
     res.status(500).json({ error: 'Internal server error.', code: 500 });
   }
 });

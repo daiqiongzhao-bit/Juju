@@ -291,3 +291,67 @@ export function compareHomeBatches(a, b) {
   if (ea !== eb) return ea < eb ? -1 : 1;
   return Number(a?.id ?? 0) - Number(b?.id ?? 0);
 }
+
+// --------------------------------------------------------
+// 常用物品模板 / 条码（v173）
+// --------------------------------------------------------
+
+/**
+ * 常用日用品模板：名字走 i18n（homeInventory.tpl.<key>），类别/单位/位置用
+ * 上面固定的键。点一下即可填好一个常见商品的骨架，剩下的只是数量和效期。
+ *
+ * 为什么放在代码里而不是数据库：这是一份"大多数家庭都有的东西"的清单，
+ * 不是用户数据 —— 它不该被误删，也不该为每个家庭复制一份。用户自己的常用
+ * 商品会随着录入自然出现在历史里（见 page 的 homeItemSuggestions）。
+ */
+export const HOME_ITEM_TEMPLATES = Object.freeze([
+  { key: 'laundry',      category: 'cleaning',      unit: 'bottle', location: 'laundry',  min_quantity: 1 },
+  { key: 'dishSoap',     category: 'cleaning',      unit: 'bottle', location: 'kitchen',  min_quantity: 1 },
+  { key: 'handSoap',     category: 'cleaning',      unit: 'bottle', location: 'bathroom', min_quantity: 1 },
+  { key: 'toiletPaper',  category: 'paper',         unit: 'roll',   location: 'bathroom', min_quantity: 4 },
+  { key: 'facialTissue', category: 'paper',         unit: 'pack',   location: 'living',   min_quantity: 2 },
+  { key: 'wetWipes',     category: 'paper',         unit: 'pack',   location: 'living',   min_quantity: 1 },
+  { key: 'shampoo',      category: 'personal-care', unit: 'bottle', location: 'bathroom', min_quantity: 1 },
+  { key: 'bodyWash',     category: 'personal-care', unit: 'bottle', location: 'bathroom', min_quantity: 1 },
+  { key: 'toothpaste',   category: 'personal-care', unit: 'tube',   location: 'bathroom', min_quantity: 1 },
+  { key: 'toothbrush',   category: 'personal-care', unit: 'pcs',    location: 'bathroom', min_quantity: 2 },
+  { key: 'trashBag',     category: 'household',     unit: 'pack',   location: 'kitchen',  min_quantity: 1 },
+  { key: 'battery',      category: 'household',     unit: 'pack',   location: 'storage',  min_quantity: 1 },
+  { key: 'coffee',       category: 'snacks',        unit: 'bag',    location: 'kitchen',  min_quantity: 1 },
+  { key: 'snack',        category: 'snacks',        unit: 'pack',   location: 'living',   min_quantity: 1 },
+  { key: 'towel',        category: 'textiles',      unit: 'pcs',    location: 'bathroom', min_quantity: 2 },
+  { key: 'catLitter',    category: 'pet',           unit: 'bag',    location: 'balcony',  min_quantity: 1 },
+]);
+
+/**
+ * 条码/二维码的合法形状：4–64 位字母、数字、连字符。EAN-13/UPC-A 是纯数字，
+ * 二维码可能带字母 —— 都收，但拒绝空白与任意符号（它们只可能是误扫）。
+ */
+const BARCODE_RE = /^[A-Za-z0-9-]{4,64}$/;
+
+/** Rohwert eines Scans auf die gespeicherte Form bringen ('' = kein Code). */
+export function normalizeHomeBarcode(value) {
+  const raw = String(value ?? '').trim();
+  return BARCODE_RE.test(raw) ? raw : '';
+}
+
+/** Ist der Wert ein speicherbarer Code? Nur für die Formularprüfung. */
+export function isValidHomeBarcode(value) {
+  return BARCODE_RE.test(String(value ?? '').trim());
+}
+
+/**
+ * 消耗速度 → 预计还能用几天。
+ *
+ * `perDay` kommt aus dem Verbrauch der letzten Tage (Server rechnet ihn aus den
+ * Logs). Ohne Verbrauch gibt es keine Prognose — dann null, nicht "unendlich".
+ * @param {number} quantity
+ * @param {number|null} perDay
+ * @returns {number|null} ganze Tage, oder null wenn keine Rate vorliegt
+ */
+export function homeDaysLeft(quantity, perDay) {
+  const q = Number(quantity);
+  const rate = Number(perDay);
+  if (!Number.isFinite(q) || !Number.isFinite(rate) || rate <= 0) return null;
+  return Math.max(0, Math.floor(q / rate));
+}

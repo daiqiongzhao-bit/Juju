@@ -13,6 +13,7 @@ import * as db from '../db.js';
 import { str, oneOf, url, date, collectErrors, MAX_TITLE, MAX_SHORT, MAX_TEXT } from '../middleware/validate.js';
 import { aggregateMealIngredients } from '../services/shopping-import.js';
 import { loadItemTagsFor } from '../utils/task-tags.js';
+import { restockFromShopping } from '../services/home-inventory-shopping.js';
 import {
   flushOutbound, markTodoOutbound, queueTodoDeletions,
 } from '../services/caldav-todo-outbound.js';
@@ -334,6 +335,16 @@ router.patch('/items/:itemId', (req, res) => {
     const updated = db.get()
       .prepare('SELECT * FROM shopping_items WHERE id = ?')
       .get(req.params.itemId);
+
+    // Aus dem Vorrat übertragener Artikel (#家庭库存): Abhaken bucht die Menge
+    // zurück in den Bestand. Nur der Übergang offen → abgehakt bucht, sonst
+    // würde jedes erneute Speichern den Vorrat erneut erhöhen.
+    if (!item.is_checked && is_checked) {
+      const booked = restockFromShopping(item.id, req.authUserId || req.session?.userId);
+      if (booked) {
+        log.info(`Einkauf zurückgebucht: ${item.name} +${booked.added} → Vorrat #${booked.itemId}`);
+      }
+    }
 
     // Abhaken oder Umbenennen eines gespiegelten Artikels zieht auf dem
     // CalDAV-Server nach (#617).

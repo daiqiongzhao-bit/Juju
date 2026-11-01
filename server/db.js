@@ -6004,6 +6004,83 @@ const MIGRATIONS = [
          GROUP BY TRIM(location);
     `,
   },
+
+  {
+    version: 174,
+    description: 'Home inventory: stock ledger, barcode, shopping link, FTS index, alert state',
+    up: `
+      -- ---- 1) Bestandsbuch ------------------------------------------------
+      -- Bisher war die Menge nur ein Zustand. Jede Änderung schreibt jetzt eine
+      -- Zeile: damit lässt sich der Verbrauch rechnen (Grundlage für "noch ~N
+      -- Tage") und nachvollziehen, wer etwas entnommen hat.
+      -- item_name ist eine Momentaufnahme: ein gelöschter Batch verliert seine
+      -- Geschichte nicht, und die Verbrauchsrechnung gruppiert über den Namen.
+      CREATE TABLE IF NOT EXISTS home_inventory_logs (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id        INTEGER,
+        item_name      TEXT    NOT NULL DEFAULT '',
+        delta          REAL    NOT NULL,
+        quantity_after REAL    NOT NULL DEFAULT 0,
+        reason         TEXT    NOT NULL DEFAULT 'adjust'
+                               CHECK (reason IN ('create', 'edit', 'adjust', 'shopping', 'restock')),
+        user_id        INTEGER,
+        created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_home_inventory_logs_item
+        ON home_inventory_logs(item_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_home_inventory_logs_created
+        ON home_inventory_logs(created_at);
+
+      -- Anfangsfüllung: der heutige Bestand als Startbuchung. Ohne diese Zeile
+      -- läge die erste Rate erst ab der ersten Entnahme vor.
+      INSERT INTO home_inventory_logs (item_id, item_name, delta, quantity_after, reason, user_id)
+        SELECT id, name, quantity, quantity, 'create', created_by
+          FROM home_inventory_items
+         WHERE quantity > 0;
+
+      -- ---- 2) Barcode -----------------------------------------------------
+      ALTER TABLE home_inventory_items ADD COLUMN barcode TEXT;
+      CREATE INDEX IF NOT EXISTS idx_home_inventory_barcode
+        ON home_inventory_items(barcode);
+
+      -- ---- 3) Verknüpfung Einkauf -> Vorrat -------------------------------
+      -- Kein FK: wird ein Batch gelöscht, bleibt der Einkaufsartikel bestehen
+      -- und die Rückbuchung läuft schlicht ins Leere (Code prüft das).
+      ALTER TABLE shopping_items ADD COLUMN home_inventory_item_id INTEGER;
+      CREATE INDEX IF NOT EXISTS idx_shopping_items_home_item
+        ON shopping_items(home_inventory_item_id);
+
+      -- ---- 4) Zustand der täglichen Erinnerung ----------------------------
+      CREATE TABLE IF NOT EXISTS home_inventory_alert_state (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- ---- 5) Volltextsuche ----------------------------------------------
+      -- Die globale Suche kannte das Modul bisher nicht. body nimmt Notiz und
+      -- Lagerort mit, damit auch "阳台" die dort liegenden Dinge findet.
+      CREATE TRIGGER IF NOT EXISTS trg_search_home_items_ai AFTER INSERT ON home_inventory_items BEGIN
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('homeItem', NEW.id, COALESCE(NEW.name, ''),
+                COALESCE(NEW.notes, '') || ' ' || COALESCE(NEW.location, ''));
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_search_home_items_ad AFTER DELETE ON home_inventory_items BEGIN
+        DELETE FROM search_index WHERE entity = 'homeItem' AND entity_id = OLD.id;
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_search_home_items_au AFTER UPDATE ON home_inventory_items BEGIN
+        DELETE FROM search_index WHERE entity = 'homeItem' AND entity_id = OLD.id;
+        INSERT INTO search_index (entity, entity_id, title, body)
+        VALUES ('homeItem', NEW.id, COALESCE(NEW.name, ''),
+                COALESCE(NEW.notes, '') || ' ' || COALESCE(NEW.location, ''));
+      END;
+
+      INSERT INTO search_index (entity, entity_id, title, body)
+        SELECT 'homeItem', id, COALESCE(name, ''),
+               COALESCE(notes, '') || ' ' || COALESCE(location, '')
+          FROM home_inventory_items;
+    `,
+  },
 ];
 
 /**

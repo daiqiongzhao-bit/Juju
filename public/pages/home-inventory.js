@@ -30,6 +30,7 @@ import { esc } from '/utils/html.js';
 import {
   openModal as openSharedModal,
   closeModal as closeSharedModal,
+  confirmModal,
   advancedSection,
   wireBlurValidation,
   reportFieldError,
@@ -42,6 +43,7 @@ import {
   HOME_INVENTORY_CATEGORIES,
   HOME_INVENTORY_UNITS,
   HOME_INVENTORY_LOCATIONS,
+  HOME_ITEM_TEMPLATES,
   DEFAULT_HOME_CATEGORY,
   DEFAULT_HOME_UNIT,
   normalizeHomeQuantity,
@@ -52,6 +54,8 @@ import {
   homeBatchKey,
   compareHomeBatches,
   isValidHomeDateKey,
+  isValidHomeBarcode,
+  normalizeHomeBarcode,
   localDateKey,
 } from '/utils/home-inventory-taxonomy.js';
 
@@ -92,10 +96,16 @@ const state = {
   categories: buildCategoryList([]),
   units: builtinUnits(),
   locations: builtinLocations(),
+  // 多批次折叠：默认只显示"最先到期"的那一批，其余收起。key = homeBatchKey
+  expanded: new Set(),
+  // 批量选择模式（补货/删除一组物品）
+  selectMode: false,
+  selected: new Set(),
 };
 
 let _container = null;
 let _search = null;
+let _deepLinkHandled = false;
 
 // --------------------------------------------------------
 // Helper
@@ -308,6 +318,10 @@ export async function render(container) {
       })}
     </div>
     <div class="page-toolbar__actions">
+      <button type="button" class="btn btn--secondary" id="hi-select"
+              title="${esc(t('homeInventory.selectMode'))}" aria-label="${esc(t('homeInventory.selectMode'))}">
+        <i data-lucide="list-checks" class="icon-md" aria-hidden="true"></i>
+      </button>
       <button type="button" class="btn btn--secondary" id="hi-manage"
               title="${esc(t('homeInventory.manage'))}" aria-label="${esc(t('homeInventory.manage'))}">
         <i data-lucide="sliders-horizontal" class="icon-md" aria-hidden="true"></i>
@@ -331,15 +345,23 @@ export async function render(container) {
   filters.id = 'hi-filters';
   filters.hidden = true;
 
+  // Auswahl-Leiste: erscheint im Mehrfach-Modus über der Liste (补货/删除).
+  const selectBar = document.createElement('div');
+  selectBar.className = 'hi-selectbar';
+  selectBar.id = 'hi-selectbar';
+  selectBar.hidden = true;
+
   const list = document.createElement('div');
   list.className = 'pantry-list';
   list.id = 'hi-list';
 
-  page.append(title, toolbar, statusBar, filters, list);
+  page.append(title, toolbar, statusBar, filters, selectBar, list);
   container.replaceChildren(page);
 
   page.querySelector('#hi-add').addEventListener('click', () => openItemModal());
   page.querySelector('#hi-manage').addEventListener('click', () => openManageModal());
+  page.querySelector('#hi-select').addEventListener('click', () => toggleSelectMode(!state.selectMode));
+  wirePullToRefresh(list);
   _search = wirePageSearch(toolbar, {
     id: 'home-inventory-search',
     onQuery: (value) => {
@@ -377,6 +399,16 @@ export async function render(container) {
   renderFilters();
   renderList();
   if (window.lucide) window.lucide.createIcons({ el: page });
+
+  // Deep-Link aus der globalen Suche: ?open=<id> öffnet genau diesen Batch.
+  if (!_deepLinkHandled) {
+    _deepLinkHandled = true;
+    const openId = new URLSearchParams(window.location.search).get('open');
+    const target = openId
+      ? state.items.find((i) => String(i.id) === String(openId))
+      : null;
+    if (target) openItemModal(target);
+  }
 }
 
 /** Chips: 全部 / 需要补货 / 临期 / 已过期 — nur wenn es etwas zu tun gibt. */
@@ -433,6 +465,21 @@ function renderStatusFilters() {
       renderFilters();
       renderList();
     });
+  }
+
+  // Der Weg von "3 件待补货" zum Einkaufszettel: ein Klick, statt jeden Artikel
+  // einzeln nachzutragen. Im Auswahl-Modus übernimmt das die Auswahl-Leiste.
+  if (counts.restock > 0 && !state.selectMode) {
+    bar.insertAdjacentHTML('beforeend', `
+      <button type="button" class="filter-chip filter-chip--action" id="hi-restock">
+        <i data-lucide="shopping-cart" class="icon-sm" aria-hidden="true"></i>
+        <span>${esc(t('homeInventory.restockToShopping'))}</span>
+      </button>`);
+    if (window.lucide) window.lucide.createIcons({ el: bar });
+    bar.querySelector('#hi-restock')
+      .addEventListener('click', () => restockItems([...new Set([...state.items]
+        .filter((i) => { const s = homeItemStatus(i, state.todayKey); return s.out || s.low; })
+        .map((i) => i.id))]));
   }
 }
 
@@ -538,6 +585,9 @@ function renderList() {
   const list = _container?.querySelector('#hi-list');
   if (!list) return;
 
+  // Die Auswahl-Leiste hängt am Zustand (Modus + Anzahl), nicht an den Daten.
+  renderSelectBar();
+
   if (!state.items.length) {
     list.replaceChildren(emptyListEl());
     if (window.lucide) window.lucide.createIcons({ el: list });
@@ -573,11 +623,200 @@ function renderList() {
 
     const rows = document.createElement('ul');
     rows.className = 'list-rows pantry-rows';
-    for (const item of group.items) rows.appendChild(rowEl(item, batches.get(item.id)));
+    // Ein Artikel = eine Karte. Mehrere MHDs bleiben eigene Zeilen (jede führt
+    // ihre Menge selbst), aber die überzähligen starten eingeklappt: sonst
+    // stehen nach drei Einkäufen drei fast gleiche Zeilen untereinander und die
+    // Liste wächst mit jedem Einkauf.
+    for (const product of groupByProduct(group.items)) {
+      const expanded = state.expanded.has(product.key);
+      product.rows.forEach((item, index) => {
+        rows.appendChild(rowEl(item, batches.get(item.id), {
+          productKey: product.key,
+          batchCount: product.rows.length,
+          primary: index === 0,
+          hidden: index > 0 && !expanded,
+        }));
+      });
+    }
     section.appendChild(rows);
     list.appendChild(section);
   }
   if (window.lucide) window.lucide.createIcons({ el: list });
+}
+
+/** Zeilen nach Artikel gruppieren (Reihenfolge bleibt die der Gruppe). */
+function groupByProduct(items) {
+  const byKey = new Map();
+  for (const item of items) {
+    const key = homeBatchKey(item);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(item);
+  }
+  return [...byKey.entries()].map(([key, rows]) => ({
+    key,
+    rows: [...rows].sort(compareHomeBatches),
+  }));
+}
+
+/** Alle Zeilen eines Artikels ein-/ausklappen. */
+function toggleProduct(key) {
+  if (state.expanded.has(key)) state.expanded.delete(key);
+  else state.expanded.add(key);
+  renderList();
+}
+
+// --------------------------------------------------------
+// Mehrfach-Auswahl: 补货 / 删除 für mehrere Artikel auf einmal
+// --------------------------------------------------------
+
+function toggleSelectMode(on) {
+  state.selectMode = on;
+  state.selected.clear();
+  renderSelectBar();
+  renderStatusFilters();
+  renderList();
+}
+
+function toggleSelected(id) {
+  if (state.selected.has(id)) state.selected.delete(id);
+  else state.selected.add(id);
+  renderSelectBar();
+  // Nur die betroffene Zeile neu zeichnen wäre schneller, aber der Zustand
+  // hängt an Chips und Zählern — ein Neuaufbau ist hier billig und ehrlich.
+  renderList();
+}
+
+function renderSelectBar() {
+  const bar = _container?.querySelector('#hi-selectbar');
+  if (!bar) return;
+  if (!state.selectMode) {
+    bar.hidden = true;
+    bar.replaceChildren();
+    return;
+  }
+
+  bar.hidden = false;
+  const visible = visibleItems();
+  const allSelected = visible.length > 0 && visible.every((i) => state.selected.has(i.id));
+  const count = state.selected.size;
+
+  bar.innerHTML = `
+    <span class="hi-selectbar__count">${esc(t('homeInventory.selectedCount', { count }))}</span>
+    <button type="button" class="btn btn--ghost btn--sm" data-act="all">
+      ${esc(allSelected ? t('homeInventory.selectNone') : t('homeInventory.selectAll'))}
+    </button>
+    <button type="button" class="btn btn--secondary btn--sm" data-act="restock" ${count ? '' : 'disabled'}>
+      ${esc(t('homeInventory.restockToShopping'))}
+    </button>
+    <button type="button" class="btn btn--danger-ghost btn--sm" data-act="delete" ${count ? '' : 'disabled'}>
+      ${esc(t('homeInventory.batchDelete'))}
+    </button>
+    <button type="button" class="btn btn--ghost btn--sm" data-act="cancel">${esc(t('common.cancel'))}</button>`;
+
+  bar.querySelector('[data-act="cancel"]').addEventListener('click', () => toggleSelectMode(false));
+  bar.querySelector('[data-act="all"]').addEventListener('click', () => {
+    if (allSelected) state.selected.clear();
+    else for (const i of visible) state.selected.add(i.id);
+    renderSelectBar();
+    renderList();
+  });
+  bar.querySelector('[data-act="restock"]').addEventListener('click', () => restockItems([...state.selected]));
+  bar.querySelector('[data-act="delete"]').addEventListener('click', () => deleteSelected());
+}
+
+/** Ausgewählte Batches löschen — mit Rückfrage, weil es mehrere sind. */
+async function deleteSelected() {
+  const ids = [...state.selected];
+  if (!ids.length) return;
+  const ok = await confirmModal(t('homeInventory.batchDeleteConfirm', { count: ids.length }), {
+    danger: true,
+    confirmLabel: t('homeInventory.batchDelete'),
+  });
+  if (!ok) return;
+
+  let removed = 0;
+  for (const id of ids) {
+    try {
+      await api.delete(`/home-inventory/${id}`);
+      state.items = state.items.filter((i) => i.id !== id);
+      removed += 1;
+    } catch (err) {
+      window.yuvomi?.showToast(err.data?.error ?? t('common.errorGeneric'), 'danger');
+    }
+  }
+  state.selected.clear();
+  state.selectMode = false;
+  renderStatusFilters();
+  renderFilters();
+  renderList();
+  if (removed) window.yuvomi?.showToast(t('homeInventory.batchDeleted', { count: removed }), 'success');
+}
+
+/**
+ * Artikel in die Einkaufsliste übertragen. Mehrere auf einmal, weil man nach
+ * dem Aufräumen selten genau einen Artikel nachkaufen muss.
+ * @param {number[]|null} ids null = der Server nimmt alles, was Nachschub braucht
+ */
+async function restockItems(ids) {
+  const btn = _container?.querySelector('#hi-restock');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await api.post('/home-inventory/restock', ids?.length ? { ids } : {});
+    const { added, skipped } = res.data;
+    const parts = [t('homeInventory.restockDone', { count: added })];
+    if (skipped) parts.push(t('homeInventory.restockSkipped', { count: skipped }));
+    window.yuvomi?.showToast(parts.join(' · '), added ? 'success' : 'info');
+    if (state.selectMode) toggleSelectMode(false);
+  } catch (err) {
+    window.yuvomi?.showToast(err.data?.error ?? t('common.errorGeneric'), 'danger');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/**
+ * Nach unten ziehen lädt neu — die Geste, die man auf dem Handy erwartet.
+ * Nur am oberen Rand und nur mit Finger: sonst kapert sie das Scrollen.
+ */
+function wirePullToRefresh(listEl) {
+  let startY = null;
+  let pulled = 0;
+
+  listEl.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const scroller = listEl.closest('.page-content') ?? document.scrollingElement;
+    const atTop = !scroller || scroller.scrollTop <= 0;
+    startY = atTop ? e.touches[0].clientY : null;
+    pulled = 0;
+  }, { passive: true });
+
+  listEl.addEventListener('touchmove', (e) => {
+    if (startY === null) return;
+    pulled = Math.max(0, e.touches[0].clientY - startY);
+    if (pulled > 10) listEl.classList.add('hi-pulling');
+  }, { passive: true });
+
+  const end = async () => {
+    if (startY === null) return;
+    const shouldReload = pulled > 70;
+    startY = null;
+    pulled = 0;
+    listEl.classList.remove('hi-pulling');
+    if (!shouldReload) return;
+    try {
+      const res = await api.get('/home-inventory');
+      state.items = res.data;
+      state.todayKey = localDateKey();
+      renderStatusFilters();
+      renderFilters();
+      renderList();
+      window.yuvomi?.showToast(t('homeInventory.refreshed'), 'info');
+    } catch {
+      /* still: das nächste Öffnen lädt ohnehin neu */
+    }
+  };
+  listEl.addEventListener('touchend', end);
+  listEl.addEventListener('touchcancel', end);
 }
 
 /** Badges: Bestand (leer/knapp) und Haltbarkeit (abgelaufen/bald). */
@@ -604,18 +843,33 @@ function expiryBadge(item) {
   return { tone: 'warning', text: t('homeInventory.badgeExpiresDays', { count: s.days }) };
 }
 
-function rowEl(item, batch) {
+function rowEl(item, batch, opts = {}) {
+  const { productKey, batchCount = 1, primary = true, hidden = false } = opts;
   const status = homeItemStatus(item, state.todayKey);
+  const selected = state.selected.has(item.id);
+
   const li = document.createElement('li');
-  li.className = `list-row pantry-row${status.out ? ' pantry-row--out' : ''}`;
+  li.className = `list-row pantry-row${status.out ? ' pantry-row--out' : ''}`
+    + (primary ? '' : ' hi-batch-extra')
+    + (state.selectMode && selected ? ' is-selected' : '');
   li.dataset.id = item.id;
+  li.hidden = hidden;
 
   // Klickfläche: öffnet das Bearbeiten-Formular. Die Stepper-Buttons daneben
-  // sind eigene Stops und dürfen nicht durchschlagen.
+  // sind eigene Stops und dürfen nicht durchschlagen. Im Auswahl-Modus wählt
+  // derselbe Klick aus, statt zu bearbeiten.
   const main = document.createElement('button');
   main.type = 'button';
   main.className = 'list-row__main list-row__main--interactive pantry-row__main';
   main.dataset.action = 'edit';
+
+  if (state.selectMode) {
+    const box = document.createElement('span');
+    box.className = `hi-check${selected ? ' hi-check--on' : ''}`;
+    box.setAttribute('aria-hidden', 'true');
+    box.innerHTML = '<i data-lucide="check" class="icon-sm"></i>';
+    main.appendChild(box);
+  }
 
   // Name und Status in EINER Zeile — dieselbe Grammatik wie die Küchen-Vorräte.
   const headline = document.createElement('span');
@@ -624,7 +878,7 @@ function rowEl(item, batch) {
   name.className = 'list-row__name';
   name.textContent = item.name;
   headline.appendChild(name);
-  for (const badge of [stockBadge(item), expiryBadge(item)].filter(Boolean)) {
+  for (const badge of [stockBadge(item), expiryBadge(item), daysLeftBadge(item, primary)].filter(Boolean)) {
     const el = document.createElement('span');
     el.className = `pantry-badge pantry-badge--${badge.tone}`;
     el.textContent = badge.text;
@@ -655,6 +909,23 @@ function rowEl(item, batch) {
   const actions = document.createElement('div');
   actions.className = 'list-row__actions';
 
+  // Mehrere Batches: die erste Zeile trägt den Schalter für die übrigen.
+  if (primary && batchCount > 1) {
+    const collapsed = !state.expanded.has(productKey);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'pantry-stepper__btn hi-batches__toggle';
+    toggle.dataset.action = 'toggle-batches';
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.setAttribute('aria-label', t(collapsed ? 'homeInventory.batchToggle' : 'homeInventory.batchToggleClose', { count: batchCount - 1 }));
+    toggle.title = toggle.getAttribute('aria-label');
+    toggle.innerHTML = collapsed
+      ? `<i data-lucide="chevron-down" class="icon-sm" aria-hidden="true"></i><span>${batchCount}</span>`
+      : '<i data-lucide="chevron-up" class="icon-sm" aria-hidden="true"></i>';
+    toggle.addEventListener('click', () => toggleProduct(productKey));
+    actions.appendChild(toggle);
+  }
+
   const stepper = document.createElement('div');
   stepper.className = 'pantry-stepper';
   const minus = document.createElement('button');
@@ -680,31 +951,96 @@ function rowEl(item, batch) {
 
   li.append(main, actions);
 
-  main.addEventListener('click', () => openItemModal(item));
+  main.addEventListener('click', () => {
+    if (state.selectMode) toggleSelected(item.id);
+    else openItemModal(item);
+  });
+  // Kurz tippen = ein Schritt, gedrückt halten = durchlaufen. Der Netzaufruf
+  // wird gebündelt (siehe stepQty), damit Halten nicht 30 Requests erzeugt.
   minus.addEventListener('click', () => stepQty(item, -QTY_STEP, value));
   plus.addEventListener('click', () => stepQty(item, +QTY_STEP, value));
+  wireLongPress(minus, () => { if (!minus.disabled) stepQty(item, -QTY_STEP, value); });
+  wireLongPress(plus, () => stepQty(item, +QTY_STEP, value));
   return li;
+}
+
+/**
+ * Gibt es eine Verbrauchsprognose, ist "noch ~N Tage" die nützlichste Zahl auf
+ * der Zeile — sie beantwortet, ob man diese Woche nachkaufen muss. Nur auf der
+ * ersten Zeile eines Artikels: an jedem Batch dieselbe Zahl wäre Rauschen.
+ */
+function daysLeftBadge(item, primary) {
+  if (!primary) return null;
+  const days = item.days_left;
+  if (days == null || days > 60) return null;
+  return { tone: days <= 7 ? 'warning' : 'neutral', text: t('homeInventory.daysLeft', { count: days }) };
+}
+
+/** Gedrückt halten → wiederholen (Handy-Geste für "+5"). */
+function wireLongPress(btn, action) {
+  let delay = null;
+  let repeat = null;
+  const stop = () => {
+    clearTimeout(delay);
+    clearInterval(repeat);
+    delay = null;
+    repeat = null;
+  };
+  btn.addEventListener('pointerdown', (e) => {
+    if (btn.disabled || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    delay = setTimeout(() => {
+      repeat = setInterval(action, 160);
+    }, 450);
+  });
+  for (const evt of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) {
+    btn.addEventListener(evt, stop);
+  }
 }
 
 // --------------------------------------------------------
 // Aktionen
 // --------------------------------------------------------
 
-async function stepQty(item, delta, valueEl) {
-  const next = normalizeHomeQuantity(item.quantity + delta, { fallback: item.quantity });
-  valueEl.textContent = fmtQty(next);
+/** Ausstehende Mengen-Buchungen je Batch — Halten erzeugt genau einen Request. */
+const _stepTimers = new Map();
+
+/**
+ * Menge lokal verändern und gebündelt an den Server schicken.
+ *
+ * Vorher war jeder Klick ein Request: bei "gedrückt halten" wären das dutzende
+ * Aufrufe hintereinander, die sich gegenseitig überholen könnten. Jetzt zeigt
+ * die Zeile sofort den neuen Wert, und 260 ms nach dem letzten Klick geht EIN
+ * PATCH mit dem Endstand raus.
+ */
+function stepQty(item, delta, valueEl) {
+  const next = normalizeHomeQuantity((Number(item.quantity) || 0) + delta, { fallback: item.quantity });
+  item.quantity = next;
+  if (valueEl) valueEl.textContent = fmtQty(next);
+  valueEl?.closest('.pantry-row')?.classList.toggle('pantry-row--out', next <= 0);
+
+  clearTimeout(_stepTimers.get(item.id));
+  _stepTimers.set(item.id, setTimeout(() => {
+    _stepTimers.delete(item.id);
+    commitQty(item);
+  }, 260));
+}
+
+/** Gebuchte Menge festschreiben; bei Fehler den Serverstand zurückholen. */
+async function commitQty(item) {
   try {
-    const res = await api.patch(`/home-inventory/${item.id}`, { quantity: next });
+    const res = await api.patch(`/home-inventory/${item.id}`, { quantity: item.quantity });
     Object.assign(item, res.data);
-    valueEl.textContent = fmtQty(item.quantity);
-    // Statusübertritt (0, Schwelle) ändert Badges und Chips → neu zeichnen.
-    renderStatusFilters();
-    renderFilters();
-    renderList();
   } catch (err) {
-    valueEl.textContent = fmtQty(item.quantity);
+    try {
+      const fresh = await api.get('/home-inventory');
+      state.items = fresh.data;
+    } catch { /* Netzwege gescheitert: alter Stand bleibt stehen */ }
     window.yuvomi?.showToast(err.data?.error ?? t('common.errorGeneric'), 'danger');
   }
+  // Statusübertritt (0, Schwelle) ändert Badges und Chips → neu zeichnen.
+  renderStatusFilters();
+  renderFilters();
+  renderList();
 }
 
 /** Auswahlliste für ein Select (Kategorien, Einheiten oder Lagerorte). */
@@ -738,8 +1074,21 @@ function openItemModal(item = null) {
     title: isEdit ? t('common.editItem') : t('homeInventory.addItem'),
     size: 'md',
     content: `
+      ${isEdit ? '' : `<div class="hi-templates">
+        <p class="hi-templates__title">${esc(t('homeInventory.templatesHeading'))}</p>
+        <div class="hi-templates__chips">
+          ${HOME_ITEM_TEMPLATES.map((tpl) => `<button type="button" class="filter-chip hi-tpl" data-tpl="${esc(tpl.key)}">
+            ${esc(t(`homeInventory.tpl.${tpl.key}`))}
+          </button>`).join('')}
+        </div>
+      </div>`}
       <div class="form-group">
-        <label class="form-label" for="hi-name">${esc(t('homeInventory.nameLabel'))}</label>
+        <div class="form-label-row">
+          <label class="form-label" for="hi-name">${esc(t('homeInventory.nameLabel'))}</label>
+          <button type="button" class="hi-addbtn" id="hi-scan">
+            <i data-lucide="scan-line" class="icon-sm" aria-hidden="true"></i>${esc(t('homeInventory.scanBarcode'))}
+          </button>
+        </div>
         <input id="hi-name" class="form-input" type="text" required
                placeholder="${esc(t('homeInventory.namePlaceholder'))}">
         <p class="form-hint" id="hi-name-hint" hidden></p>
@@ -818,8 +1167,15 @@ function openItemModal(item = null) {
           <label class="form-label" for="hi-notes">${esc(t('homeInventory.notesLabel'))}</label>
           <textarea id="hi-notes" class="form-input" rows="2"
                     placeholder="${esc(t('homeInventory.notesPlaceholder'))}"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="hi-barcode">${esc(t('homeInventory.barcodeLabel'))}</label>
+          <input id="hi-barcode" class="form-input" type="text" inputmode="numeric"
+                 maxlength="64" autocomplete="off">
+          <p class="form-hint">${esc(t('homeInventory.scanHint'))}</p>
         </div>`,
         { open: isEdit && (item.min_quantity != null || !!item.notes) })}
+      ${isEdit ? `<section class="hi-history" id="hi-history" hidden></section>` : ''}
       <div class="modal-panel__footer modal-panel__footer--plain">
         ${isEdit ? `<button type="button" class="btn btn--danger-ghost pantry-form__delete" id="hi-delete">${esc(t('common.delete'))}</button>` : ''}
         <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.cancel'))}</button>
@@ -834,6 +1190,7 @@ function openItemModal(item = null) {
       panel.querySelector('#hi-min').value = isEdit && item.min_quantity != null ? String(item.min_quantity) : '';
       panel.querySelector('#hi-location').value = isEdit && item.location ? item.location : '';
       panel.querySelector('#hi-notes').value = isEdit && item.notes ? item.notes : '';
+      panel.querySelector('#hi-barcode').value = isEdit && item.barcode ? item.barcode : '';
 
       // Hinweis statt Blockade: gleicher Name ist erlaubt (das ist der
       // Batch-Fall), aber der Nutzer soll wissen, dass er einen zweiten
@@ -857,6 +1214,9 @@ function openItemModal(item = null) {
       wireQuickAdd(panel, 'category');
       wireQuickAdd(panel, 'unit');
       wireQuickAdd(panel, 'location');
+      wireTemplates(panel);
+      panel.querySelector('#hi-scan')?.addEventListener('click', () => openScanner(panel));
+      if (isEdit) loadHistory(panel, item);
 
       wireBlurValidation(panel);
       panel.querySelector('#hi-save').addEventListener('click', () => saveItem(panel, isEdit, item));
@@ -989,6 +1349,173 @@ function wireQuickAdd(panel, kind) {
       close();
     }
   });
+}
+
+/**
+ * 常用物品模板：点一下填好骨架。
+ *
+ * 名字来自 i18n（homeInventory.tpl.<key>），类别/单位/位置用固定键 —— 模板
+ * 不该把中文名写死进数据，否则换个语言界面就会得到一堆中文商品。
+ */
+function wireTemplates(panel) {
+  const chips = panel.querySelectorAll('.hi-tpl');
+  for (const btn of chips) {
+    btn.addEventListener('click', () => {
+      const tpl = HOME_ITEM_TEMPLATES.find((x) => x.key === btn.dataset.tpl);
+      if (!tpl) return;
+      const nameInput = panel.querySelector('#hi-name');
+      nameInput.value = t(`homeInventory.tpl.${tpl.key}`);
+      panel.querySelector('#hi-category').value = tpl.category;
+      panel.querySelector('#hi-unit').value = tpl.unit;
+      panel.querySelector('#hi-location').value = tpl.location || '';
+      const minInput = panel.querySelector('#hi-min');
+      if (minInput && !minInput.value) minInput.value = String(tpl.min_quantity ?? 1);
+
+      chips.forEach((b) => b.classList.remove('filter-chip--active'));
+      btn.classList.add('filter-chip--active');
+      nameInput.focus({ preventScroll: true });
+      nameInput.select?.();
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+}
+
+/**
+ * 扫一扫：条码 → 表单。
+ *
+ * Drei Fälle: Gerät kann nicht scannen (Hinweis), Code ist neu (nur den Code
+ * merken, Name bleibt Handarbeit), Code ist bekannt (Name/Kategorie/Einheit/
+ * Lagerort aus dem letzten Datensatz übernehmen — genau die Felder, die man
+ * sonst jedes Mal neu tippt).
+ */
+function openScanner(panel) {
+  if (!('BarcodeDetector' in window)) {
+    window.yuvomi?.showToast(t('homeInventory.scanUnsupported'), 'danger');
+    panel.querySelector('#hi-barcode')?.focus();
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'hi-scan';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML = `
+    <div class="hi-scan__panel">
+      <video class="hi-scan__video" playsinline muted></video>
+      <p class="hi-scan__hint">${esc(t('homeInventory.scanHint'))}</p>
+      <button type="button" class="btn btn--secondary" data-act="close">${esc(t('homeInventory.scanClose'))}</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const video = overlay.querySelector('video');
+  let stream = null;
+  let timer = null;
+  let stopped = false;
+
+  const stop = () => {
+    stopped = true;
+    clearTimeout(timer);
+    stream?.getTracks().forEach((track) => track.stop());
+    overlay.remove();
+  };
+
+  overlay.querySelector('[data-act="close"]').addEventListener('click', stop);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) stop(); });
+
+  const detector = new window.BarcodeDetector({
+    formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
+  });
+
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const codes = await detector.detect(video);
+      if (codes.length && codes[0].rawValue) {
+        const code = codes[0].rawValue;
+        stop();
+        applyScan(panel, code);
+        return;
+      }
+    } catch {
+      // Einzelne Fehlschläge sind normal (Bewegungsunschärfe) — weiter versuchen.
+    }
+    timer = setTimeout(tick, 300);
+  };
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then((s) => {
+      stream = s;
+      video.srcObject = s;
+      video.play().catch(() => {});
+      tick();
+    })
+    .catch(() => {
+      stop();
+      window.yuvomi?.showToast(t('homeInventory.scanUnsupported'), 'danger');
+    });
+}
+
+/** Scan-Ergebnis in das Formular übernehmen. */
+async function applyScan(panel, rawCode) {
+  const code = normalizeHomeBarcode(rawCode);
+  if (!code) {
+    window.yuvomi?.showToast(t('homeInventory.scanFailed'), 'danger');
+    return;
+  }
+  const barcodeInput = panel.querySelector('#hi-barcode');
+  if (barcodeInput) barcodeInput.value = code;
+
+  try {
+    const res = await api.get(`/home-inventory/barcode/${encodeURIComponent(code)}`);
+    const hit = res.data;
+    panel.querySelector('#hi-name').value = hit.name;
+    panel.querySelector('#hi-category').value = hit.category;
+    panel.querySelector('#hi-unit').value = hit.unit;
+    panel.querySelector('#hi-location').value = hit.location || '';
+    if (hit.min_quantity != null) panel.querySelector('#hi-min').value = String(hit.min_quantity);
+    window.yuvomi?.showToast(t('homeInventory.scanMatched', { name: hit.name }), 'success');
+  } catch (err) {
+    if (err?.status === 404) {
+      window.yuvomi?.showToast(t('homeInventory.scanNoMatch'), 'info');
+      panel.querySelector('#hi-name').focus({ preventScroll: true });
+    } else {
+      window.yuvomi?.showToast(err.data?.error ?? t('common.errorGeneric'), 'danger');
+    }
+  }
+}
+
+/** 最近变动：5 条流水 + 90 天用掉多少。 */
+async function loadHistory(panel, item) {
+  const box = panel.querySelector('#hi-history');
+  if (!box) return;
+  try {
+    const res = await api.get(`/home-inventory/${item.id}/history?limit=5`);
+    const { logs = [], consumed90 = 0 } = res.data || {};
+    if (!logs.length) {
+      box.hidden = true;
+      return;
+    }
+    const labels = {
+      create: 'historyCreated',
+      edit: 'historyEdit',
+      adjust: 'historyAdjust',
+      shopping: 'historyShopping',
+      restock: 'historyRestock',
+    };
+    box.hidden = false;
+    box.innerHTML = `
+      <h3 class="hi-manage__title">${esc(t('homeInventory.historyHeading'))}</h3>
+      ${consumed90 ? `<p class="form-hint">${esc(t('homeInventory.consumed90', { count: fmtQty(consumed90) }))}</p>` : ''}
+      <ul class="hi-history__list">
+        ${logs.map((entry) => `<li class="hi-history__row">
+          <span class="hi-history__delta ${entry.delta > 0 ? 'is-in' : 'is-out'}">${entry.delta > 0 ? '+' : ''}${fmtQty(entry.delta)}</span>
+          <span class="hi-history__reason">${esc(t(`homeInventory.${labels[entry.reason] || 'historyAdjust'}`))}</span>
+          <span class="hi-history__meta">${esc(formatDate(entry.created_at))}${entry.user_name ? ` · ${esc(entry.user_name)}` : ''}</span>
+        </li>`).join('')}
+      </ul>`;
+  } catch {
+    box.hidden = true;
+  }
 }
 
 /**
@@ -1208,6 +1735,15 @@ async function saveItem(panel, isEdit, item) {
   }
 
   const minRaw = panel.querySelector('#hi-min').value.trim();
+
+  // 条码只收合法形状：误扫的收据号/网址不该进库，否则下次扫码会命中垃圾数据。
+  const barcodeInput = panel.querySelector('#hi-barcode');
+  const barcodeRaw = barcodeInput ? barcodeInput.value.trim() : '';
+  if (barcodeRaw && !isValidHomeBarcode(barcodeRaw)) {
+    reportFieldError(barcodeInput, t('homeInventory.scanFailed'));
+    return;
+  }
+
   const payload = {
     name,
     quantity: normalizeHomeQuantity(qtyNumber, { fallback: 0 }),
@@ -1217,6 +1753,7 @@ async function saveItem(panel, isEdit, item) {
     location: panel.querySelector('#hi-location').value.trim() || null,
     min_quantity: minRaw === '' ? null : normalizeHomeQuantity(minRaw, { fallback: 0 }),
     notes: panel.querySelector('#hi-notes').value.trim() || null,
+    barcode: barcodeRaw ? normalizeHomeBarcode(barcodeRaw) : null,
   };
 
   saveBtn.disabled = true;
